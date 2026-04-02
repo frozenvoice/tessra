@@ -1,0 +1,15 @@
+.vscode/**
+.claude/**
+src/**
+node_modules/**
+dist/test/**
+test/**
+tsconfig.json
+esbuild.config.js
+CLAUDE.md
+.gitignore
+.git/**
+**/*.map
+**/*.test.js
+**/*.test.ts
+**/*.zip

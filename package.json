@@ -1,0 +1,325 @@
+{
+  "name": "arc-client",
+  "displayName": "Arc Client",
+  "description": "Offline-first REST API client for VS Code — no login required, no cloud dependency",
+  "version": "1.0.0",
+  "publisher": "arc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arc/arc-client"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "arc.newRequest",
+        "title": "Arc: New Request",
+        "icon": "$(add)"
+      },
+      {
+        "command": "arc.createCollection",
+        "title": "Arc: New Collection",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "arc.createFolder",
+        "title": "New Folder",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "arc.rename",
+        "title": "Rename"
+      },
+      {
+        "command": "arc.delete",
+        "title": "Delete"
+      },
+      {
+        "command": "arc.duplicateRequest",
+        "title": "Duplicate"
+      },
+      {
+        "command": "arc.saveRequestAs",
+        "title": "Save As..."
+      },
+      {
+        "command": "arc.clearHistory",
+        "title": "Clear History",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "arc.createEnvironment",
+        "title": "Arc: New Environment",
+        "icon": "$(add)"
+      },
+      {
+        "command": "arc.renameEnvironment",
+        "title": "Rename"
+      },
+      {
+        "command": "arc.deleteEnvironment",
+        "title": "Delete"
+      },
+      {
+        "command": "arc.editEnvironment",
+        "title": "Edit Variables"
+      },
+      {
+        "command": "arc.setActiveEnvironment",
+        "title": "Set Active",
+        "icon": "$(pass-filled)"
+      },
+      {
+        "command": "arc.deactivateEnvironment",
+        "title": "Deactivate",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "arc.switchEnvironment",
+        "title": "Arc: Switch Environment"
+      },
+      {
+        "command": "arc.editDefaultHeaders",
+        "title": "Default Headers",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "arc.importCurl",
+        "title": "Arc: Import cURL",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "arc.importCollection",
+        "title": "Arc: Import Collection",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "arc.collapseAll",
+        "title": "Collapse All",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "arc.filterCollections",
+        "title": "Filter Collections",
+        "icon": "$(search)"
+      },
+      {
+        "command": "arc.clearCollectionFilter",
+        "title": "Clear Filter",
+        "icon": "$(close)"
+      },
+      {
+        "command": "arc.filterHistory",
+        "title": "Filter History",
+        "icon": "$(search)"
+      },
+      {
+        "command": "arc.clearHistoryFilter",
+        "title": "Clear Filter",
+        "icon": "$(close)"
+      },
+      {
+        "command": "arc.copyAsCurl",
+        "title": "Copy as cURL"
+      },
+      {
+        "command": "arc.runCollection",
+        "title": "Run All Requests",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "arc.openGuide",
+        "title": "Arc: Open Guide",
+        "icon": "$(book)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "arc-sidebar",
+          "title": "Arc Client",
+          "icon": "$(pulse)"
+        }
+      ]
+    },
+    "views": {
+      "arc-sidebar": [
+        {
+          "id": "arc.collections",
+          "name": "Collections"
+        },
+        {
+          "id": "arc.environments",
+          "name": "Environments"
+        },
+        {
+          "id": "arc.history",
+          "name": "History"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "arc.newRequest",
+          "when": "view == arc.collections",
+          "group": "navigation"
+        },
+        {
+          "command": "arc.clearCollectionFilter",
+          "when": "view == arc.collections && arc.collectionFilterActive",
+          "group": "navigation"
+        },
+        {
+          "command": "arc.filterCollections",
+          "when": "view == arc.collections",
+          "group": "navigation"
+        },
+        {
+          "command": "arc.createCollection",
+          "when": "view == arc.collections",
+          "group": "navigation"
+        },
+        {
+          "command": "arc.createEnvironment",
+          "when": "view == arc.environments",
+          "group": "navigation"
+        },
+        {
+          "command": "arc.editDefaultHeaders",
+          "when": "view == arc.environments",
+          "group": "navigation"
+        },
+        {
+          "command": "arc.importCurl",
+          "when": "view == arc.collections",
+          "group": "navigation"
+        },
+        {
+          "command": "arc.createCollection",
+          "when": "view == arc.collections",
+          "group": "1_create@1"
+        },
+        {
+          "command": "arc.importCollection",
+          "when": "view == arc.collections",
+          "group": "2_import@1"
+        },
+        {
+          "command": "arc.importCurl",
+          "when": "view == arc.collections",
+          "group": "2_import@2"
+        },
+        {
+          "command": "arc.collapseAll",
+          "when": "view == arc.collections",
+          "group": "3_collapse@1"
+        },
+        {
+          "command": "arc.openGuide",
+          "when": "view == arc.collections",
+          "group": "4_help@1"
+        },
+        {
+          "command": "arc.clearHistoryFilter",
+          "when": "view == arc.history && arc.historyFilterActive",
+          "group": "navigation"
+        },
+        {
+          "command": "arc.filterHistory",
+          "when": "view == arc.history",
+          "group": "navigation"
+        },
+        {
+          "command": "arc.clearHistory",
+          "when": "view == arc.history",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "arc.createFolder",
+          "when": "viewItem == collection || viewItem == folder",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "arc.duplicateRequest",
+          "when": "viewItem == request || viewItem == folder",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "arc.saveRequestAs",
+          "when": "viewItem == request || viewItem == folder",
+          "group": "1_actions@3"
+        },
+        {
+          "command": "arc.copyAsCurl",
+          "when": "viewItem == request",
+          "group": "1_actions@4"
+        },
+        {
+          "command": "arc.runCollection",
+          "when": "viewItem == collection || viewItem == folder",
+          "group": "0_run@1"
+        },
+        {
+          "command": "arc.rename",
+          "when": "viewItem == collection || viewItem == folder || viewItem == request",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "arc.delete",
+          "when": "viewItem == collection || viewItem == folder || viewItem == request",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "arc.setActiveEnvironment",
+          "when": "viewItem == environment",
+          "group": "0_active@1"
+        },
+        {
+          "command": "arc.deactivateEnvironment",
+          "when": "viewItem == environment-active",
+          "group": "0_active@1"
+        },
+        {
+          "command": "arc.renameEnvironment",
+          "when": "viewItem == environment || viewItem == environment-active",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "arc.deleteEnvironment",
+          "when": "viewItem == environment || viewItem == environment-active",
+          "group": "1_edit@2"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "watch": "node esbuild.config.js --watch",
+    "package": "npx vsce package",
+    "pretest": "tsc -p src/test/tsconfig.test.json",
+    "test": "mocha dist/test/test/unit/**/*.test.js --timeout 10000",
+    "test:unit": "mocha dist/test/test/unit/**/*.test.js --timeout 10000"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.74.0",
+    "esbuild": "^0.20.0",
+    "mocha": "^11.7.5",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1"
+  }
+}
