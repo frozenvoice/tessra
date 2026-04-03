@@ -11,6 +11,7 @@ describe('StorageService (파일 기반)', () => {
   let collectionsPath: string;
   let historyPath: string;
   let environmentsPath: string;
+  let activeEnvironmentPath: string;
 
   // readJson / writeJson 헬퍼 (StorageService 내부 로직 재현)
   function readJson<T>(filePath: string, fallback: T): T {
@@ -35,6 +36,7 @@ describe('StorageService (파일 기반)', () => {
     collectionsPath = path.join(tmpDir, 'collections.json');
     historyPath = path.join(tmpDir, 'history.json');
     environmentsPath = path.join(tmpDir, 'environments.json');
+    activeEnvironmentPath = path.join(tmpDir, 'active-environment.json');
   });
 
   after(() => {
@@ -275,6 +277,20 @@ describe('StorageService (파일 기반)', () => {
       const loaded = readJson<Environment[]>(environmentsPath, []);
       assert.strictEqual(loaded.length, 1);
       assert.strictEqual(loaded[0].id, 'env-1');
+    });
+  });
+
+  describe('활성 환경 저장', () => {
+    it('활성 환경 ID 저장 및 로드', () => {
+      writeJson(activeEnvironmentPath, 'env-1');
+      const activeEnvId = readJson<string | null>(activeEnvironmentPath, null);
+      assert.strictEqual(activeEnvId, 'env-1');
+    });
+
+    it('활성 환경 해제 상태 저장', () => {
+      writeJson(activeEnvironmentPath, null);
+      const activeEnvId = readJson<string | null>(activeEnvironmentPath, 'fallback');
+      assert.strictEqual(activeEnvId, null);
     });
   });
 

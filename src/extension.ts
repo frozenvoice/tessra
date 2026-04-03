@@ -4,18 +4,33 @@ import { StorageService } from './services/StorageService';
 import { CollectionTreeProvider, CollectionNode } from './providers/CollectionTreeProvider';
 import { HistoryTreeProvider } from './providers/HistoryTreeProvider';
 import { EnvironmentTreeProvider } from './providers/EnvironmentTreeProvider';
-import { HistoryEntry, Environment } from './models/types';
+import {
+  AuthConfig,
+  Collection,
+  CollectionItem,
+  Environment,
+  HistoryEntry,
+  HttpMethod,
+  KeyValue,
+  Request,
+  RequestBodyType,
+} from './models/types';
 import { CurlService } from './services/CurlService';
 import { GuidePanel } from './panels/GuidePanel';
 
-// 확장 활성화 시 호출
+const VALID_HTTP_METHODS: ReadonlySet<HttpMethod> = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+
+interface ImportStats {
+  skippedCollections: number;
+  skippedItems: number;
+}
+
 export function activate(context: vscode.ExtensionContext) {
   const storage = new StorageService(context);
   const collectionProvider = new CollectionTreeProvider(storage);
   const historyProvider = new HistoryTreeProvider(storage);
   const environmentProvider = new EnvironmentTreeProvider(storage);
 
-  // TreeView 등록 (드래그앤드롭 포함)
   const collectionTreeView = vscode.window.createTreeView('arc.collections', {
     treeDataProvider: collectionProvider,
     showCollapseAll: true,
@@ -25,18 +40,17 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: historyProvider,
     dragAndDropController: historyProvider,
   });
-  vscode.window.createTreeView('arc.environments', {
+  const environmentTreeView = vscode.window.createTreeView('arc.environments', {
     treeDataProvider: environmentProvider,
     dragAndDropController: environmentProvider,
   });
+  context.subscriptions.push(collectionTreeView, historyTreeView, environmentTreeView);
 
-  // RequestPanel에 의존성 주입
   RequestPanel.storage = storage;
   RequestPanel.historyProvider = historyProvider;
   RequestPanel.collectionProvider = collectionProvider;
   RequestPanel.environmentProvider = environmentProvider;
 
-  // === 상태바: 현재 환경 표시 ===
   const envStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   envStatusBar.command = 'arc.switchEnvironment';
   envStatusBar.tooltip = '환경 전환';
@@ -44,58 +58,48 @@ export function activate(context: vscode.ExtensionContext) {
   envStatusBar.show();
   context.subscriptions.push(envStatusBar);
 
-  // --- 커맨드 등록 ---
-
-  // 새 요청 패널 (이미 열려 있으면 새 탭 생성)
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.newRequest', () => {
-      RequestPanel.show(context.extensionUri, /* createNewTab */ !!RequestPanel.currentPanel);
+      RequestPanel.show(context.extensionUri, !!RequestPanel.currentPanel);
     })
   );
 
-  // 컬렉션 생성
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.createCollection', () => {
       collectionProvider.createCollection();
     })
   );
 
-  // 폴더 생성
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.createFolder', (node: CollectionNode) => {
       collectionProvider.createFolder(node);
     })
   );
 
-  // 이름 변경
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.rename', (node: CollectionNode) => {
       collectionProvider.rename(node);
     })
   );
 
-  // 삭제
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.delete', (node: CollectionNode) => {
       collectionProvider.delete(node);
     })
   );
 
-  // 요청 복제
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.duplicateRequest', (node: CollectionNode) => {
       collectionProvider.duplicate(node);
     })
   );
 
-  // 다른 컬렉션으로 복사 저장
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.saveRequestAs', (node: CollectionNode) => {
       collectionProvider.saveAs(node);
     })
   );
 
-  // cURL Import → 새 요청 탭으로 로드
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.importCurl', async () => {
       const input = await vscode.window.showInputBox({
@@ -104,6 +108,7 @@ export function activate(context: vscode.ExtensionContext) {
         ignoreFocusOut: true,
       });
       if (!input) { return; }
+
       try {
         const req = CurlService.parse(input);
         RequestPanel.show(context.extensionUri);
@@ -114,7 +119,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 컬렉션 요청 → Copy as cURL
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.copyAsCurl', (node: CollectionNode) => {
       if (node.kind === 'request' && node.item.request) {
@@ -125,7 +129,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // JSON 파일에서 컬렉션 가져오기
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.importCollection', async () => {
       const uris = await vscode.window.showOpenDialog({
@@ -135,26 +138,22 @@ export function activate(context: vscode.ExtensionContext) {
       });
       if (!uris || uris.length === 0) { return; }
 
+      const collections = storage.getCollections();
+      const stats: ImportStats = { skippedCollections: 0, skippedItems: 0 };
       let imported = 0;
+
       for (const uri of uris) {
         try {
           const raw = await vscode.workspace.fs.readFile(uri);
           const data = JSON.parse(Buffer.from(raw).toString('utf-8'));
-
-          // 배열이면 여러 컬렉션, 아니면 단일 컬렉션
           const items = Array.isArray(data) ? data : [data];
-          const collections = storage.getCollections();
 
           for (const item of items) {
-            if (item.name && Array.isArray(item.items)) {
-              // ID가 없으면 생성
-              if (!item.id) { item.id = Date.now().toString(36) + Math.random().toString(36).substring(2, 8); }
-              collections.push(item);
-              imported++;
-            }
+            const normalized = normalizeImportedCollection(item, stats);
+            if (!normalized) { continue; }
+            collections.push(normalized);
+            imported++;
           }
-
-          storage.saveCollections(collections);
         } catch (err: unknown) {
           vscode.window.showErrorMessage(
             `가져오기 실패 (${uri.fsPath}): ${err instanceof Error ? err.message : String(err)}`
@@ -163,22 +162,25 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       if (imported > 0) {
+        storage.saveCollections(collections);
         collectionProvider.refresh();
-        vscode.window.showInformationMessage(`${imported}개 컬렉션 가져오기 완료`);
+        vscode.window.showInformationMessage(`${imported}개 컬렉션을 가져왔습니다.`);
+      }
+
+      if (stats.skippedCollections > 0 || stats.skippedItems > 0) {
+        vscode.window.showWarningMessage(
+          `가져오는 동안 잘못된 데이터가 있어 컬렉션 ${stats.skippedCollections}개, 항목 ${stats.skippedItems}개를 건너뛰었습니다.`
+        );
       }
     })
   );
 
-  // 컬렉션 모두 접기
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.collapseAll', () => {
       vscode.commands.executeCommand('workbench.actions.treeView.arc.collections.collapseAll');
     })
   );
 
-  // === 검색 필터 ===
-
-  // 컬렉션 검색
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.filterCollections', () => {
       const inputBox = vscode.window.createInputBox();
@@ -196,7 +198,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 컬렉션 검색 초기화
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.clearCollectionFilter', () => {
       collectionProvider.filterText = '';
@@ -205,7 +206,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 히스토리 검색
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.filterHistory', () => {
       const inputBox = vscode.window.createInputBox();
@@ -223,7 +223,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 히스토리 검색 초기화
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.clearHistoryFilter', () => {
       historyProvider.filterText = '';
@@ -232,7 +231,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 히스토리에서 요청 로드
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.loadFromHistory', (entry: HistoryEntry) => {
       RequestPanel.show(context.extensionUri);
@@ -240,7 +238,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 컬렉션에서 요청 로드
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.loadFromCollection', (node: CollectionNode) => {
       if (node.kind === 'request' && node.item.request) {
@@ -250,30 +247,31 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 컬렉션 실행 (Run All Requests)
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.runCollection', (node: CollectionNode) => {
-      // 컬렉션 노드 또는 폴더 노드에서 요청 목록 추출
-      let items: import('./models/types').CollectionItem[] = [];
+      let items: CollectionItem[] = [];
       if (node.kind === 'collection') {
         items = node.collection.items;
       } else if (node.kind === 'folder' && node.item.children) {
         items = node.item.children;
       }
+
       if (items.length === 0) {
         vscode.window.showInformationMessage('실행할 요청이 없습니다.');
         return;
       }
+
       RequestPanel.show(context.extensionUri);
       RequestPanel.currentPanel?.runCollection(node.kind === 'collection' ? node.collection.name : node.item.name, items);
     })
   );
 
-  // 히스토리 초기화
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.clearHistory', async () => {
       const confirm = await vscode.window.showWarningMessage(
-        '히스토리를 모두 삭제하시겠습니까?', { modal: true }, '삭제'
+        '히스토리를 모두 삭제하시겠습니까?',
+        { modal: true },
+        '삭제'
       );
       if (confirm === '삭제') {
         storage.saveHistory([]);
@@ -282,23 +280,18 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // === 환경 커맨드 ===
-
-  // 환경 생성
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.createEnvironment', () => {
       environmentProvider.createEnvironment();
     })
   );
 
-  // 환경 이름 변경
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.renameEnvironment', (env: Environment) => {
       environmentProvider.renameEnvironment(env);
     })
   );
 
-  // 환경 삭제
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.deleteEnvironment', (env: Environment) => {
       environmentProvider.deleteEnvironment(env).then(() => {
@@ -308,7 +301,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 환경 클릭 → 변수 편집만 (활성화 안 함)
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.editEnvironment', (env: Environment) => {
       RequestPanel.show(context.extensionUri);
@@ -316,7 +308,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 기본 헤더 편집
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.editDefaultHeaders', () => {
       RequestPanel.show(context.extensionUri);
@@ -324,7 +315,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 환경 활성화 (우클릭 Set Active)
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.setActiveEnvironment', (env: Environment) => {
       environmentProvider.activeEnvId = env.id;
@@ -334,7 +324,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 환경 비활성화 (우클릭 Deactivate)
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.deactivateEnvironment', () => {
       environmentProvider.activeEnvId = null;
@@ -344,16 +333,15 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 환경 전환 (상태바 QuickPick)
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.switchEnvironment', async () => {
       const envs = storage.getEnvironments();
       const picks: (vscode.QuickPickItem & { envId: string | null })[] = [
         { label: '$(circle-slash) No Environment', envId: null },
-        ...envs.map((e) => ({
-          label: `$(symbol-variable) ${e.name}`,
-          description: e.id === environmentProvider.activeEnvId ? '(active)' : '',
-          envId: e.id,
+        ...envs.map((env) => ({
+          label: `$(symbol-variable) ${env.name}`,
+          description: env.id === environmentProvider.activeEnvId ? '(active)' : '',
+          envId: env.id,
         })),
       ];
 
@@ -367,17 +355,14 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 가이드 열기
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.openGuide', () => {
       GuidePanel.show(context.extensionUri);
     })
   );
 
-  // WebviewPanelSerializer: VS Code 재시작 시 패널 자동 복원
-  vscode.window.registerWebviewPanelSerializer('arc.requestPanel', {
+  const requestPanelSerializer = vscode.window.registerWebviewPanelSerializer('arc.requestPanel', {
     async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
-      // 패널 옵션 재설정
       panel.webview.options = {
         enableScripts: true,
         localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist')],
@@ -385,6 +370,7 @@ export function activate(context: vscode.ExtensionContext) {
       RequestPanel.revive(panel, context.extensionUri);
     },
   });
+  context.subscriptions.push(requestPanelSerializer);
 }
 
 function updateStatusBar(item: vscode.StatusBarItem, provider: EnvironmentTreeProvider): void {
@@ -394,6 +380,174 @@ function updateStatusBar(item: vscode.StatusBarItem, provider: EnvironmentTreePr
   } else {
     item.text = '$(symbol-variable) No Env';
   }
+}
+
+function createImportId(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeImportedMethod(value: unknown): HttpMethod {
+  const method = typeof value === 'string' ? value.toUpperCase() : '';
+  return VALID_HTTP_METHODS.has(method as HttpMethod) ? method as HttpMethod : 'GET';
+}
+
+function normalizeImportedBodyType(value: unknown): RequestBodyType {
+  switch (value) {
+    case 'json':
+    case 'xml':
+    case 'form':
+    case 'raw':
+    case 'none':
+      return value;
+    case 'text':
+      return 'raw';
+    default:
+      return 'none';
+  }
+}
+
+function normalizeImportedKeyValues(value: unknown): KeyValue[] {
+  if (!Array.isArray(value)) { return []; }
+
+  const items: KeyValue[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) { continue; }
+
+    const key = typeof item.key === 'string' ? item.key : '';
+    const itemValue = typeof item.value === 'string' ? item.value : '';
+    if (!key && !itemValue) { continue; }
+
+    items.push({
+      key,
+      value: itemValue,
+      enabled: typeof item.enabled === 'boolean' ? item.enabled : true,
+    });
+  }
+
+  return items;
+}
+
+function normalizeImportedAuthConfig(value: unknown): AuthConfig {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return { type: 'none' };
+  }
+
+  switch (value.type) {
+    case 'basic': {
+      const basic = isRecord(value.basic) ? value.basic : {};
+      return {
+        type: 'basic',
+        basic: {
+          username: typeof basic.username === 'string' ? basic.username : '',
+          password: typeof basic.password === 'string' ? basic.password : '',
+        },
+      };
+    }
+    case 'bearer': {
+      const bearer = isRecord(value.bearer) ? value.bearer : {};
+      return {
+        type: 'bearer',
+        bearer: {
+          token: typeof bearer.token === 'string' ? bearer.token : '',
+        },
+      };
+    }
+    case 'apikey': {
+      const apikey = isRecord(value.apikey) ? value.apikey : {};
+      return {
+        type: 'apikey',
+        apikey: {
+          key: typeof apikey.key === 'string' ? apikey.key : '',
+          value: typeof apikey.value === 'string' ? apikey.value : '',
+          addTo: apikey.addTo === 'query' ? 'query' : 'header',
+        },
+      };
+    }
+    default:
+      return { type: 'none' };
+  }
+}
+
+function normalizeImportedRequest(value: unknown, fallbackName: string): Request | null {
+  if (!isRecord(value)) { return null; }
+
+  return {
+    id: typeof value.id === 'string' && value.id.trim() ? value.id : createImportId(),
+    name: typeof value.name === 'string' && value.name.trim() ? value.name.trim() : fallbackName,
+    method: normalizeImportedMethod(value.method),
+    url: typeof value.url === 'string' ? value.url : '',
+    headers: normalizeImportedKeyValues(value.headers),
+    params: normalizeImportedKeyValues(value.params),
+    body: typeof value.body === 'string' ? value.body : '',
+    bodyType: normalizeImportedBodyType(value.bodyType),
+    auth: normalizeImportedAuthConfig(value.auth),
+  };
+}
+
+function normalizeImportedCollectionItem(value: unknown, stats: ImportStats): CollectionItem | null {
+  if (!isRecord(value)) {
+    stats.skippedItems++;
+    return null;
+  }
+
+  const id = typeof value.id === 'string' && value.id.trim() ? value.id : createImportId();
+  const name = typeof value.name === 'string' ? value.name.trim() : '';
+  const hasChildren = Array.isArray(value.children);
+  const hasRequest = isRecord(value.request);
+
+  if (value.type === 'folder' || (!value.type && hasChildren)) {
+    const childValues = hasChildren ? value.children as unknown[] : [];
+    const children = hasChildren
+      ? childValues
+          .map((child) => normalizeImportedCollectionItem(child, stats))
+          .filter((child): child is CollectionItem => child !== null)
+      : [];
+
+    return {
+      id,
+      type: 'folder',
+      name: name || '가져온 폴더',
+      children,
+    };
+  }
+
+  if (value.type === 'request' || (!value.type && hasRequest)) {
+    const request = normalizeImportedRequest(value.request, name || '가져온 요청');
+    if (!request) {
+      stats.skippedItems++;
+      return null;
+    }
+
+    return {
+      id,
+      type: 'request',
+      name: name || request.name,
+      request,
+    };
+  }
+
+  stats.skippedItems++;
+  return null;
+}
+
+function normalizeImportedCollection(value: unknown, stats: ImportStats): Collection | null {
+  if (!isRecord(value) || typeof value.name !== 'string' || !value.name.trim() || !Array.isArray(value.items)) {
+    stats.skippedCollections++;
+    return null;
+  }
+
+  const itemValues = value.items as unknown[];
+  return {
+    id: typeof value.id === 'string' && value.id.trim() ? value.id : createImportId(),
+    name: value.name.trim(),
+    items: itemValues
+      .map((item) => normalizeImportedCollectionItem(item, stats))
+      .filter((item): item is CollectionItem => item !== null),
+  };
 }
 
 export function deactivate() {}

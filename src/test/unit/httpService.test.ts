@@ -7,6 +7,13 @@ describe('HttpService', () => {
   let server: http.Server;
   let baseUrl: string;
   const httpService = new HttpService();
+  const send = (
+    method: Parameters<HttpService['send']>[0],
+    url: string,
+    headers: Parameters<HttpService['send']>[2],
+    body: string,
+    timeoutSec?: number
+  ) => httpService.send(method, url, headers, body, timeoutSec).promise;
 
   // 테스트용 로컬 HTTP 서버
   before((done) => {
@@ -50,6 +57,11 @@ describe('HttpService', () => {
             res.end('A'.repeat(10000));
             break;
 
+          case '/binary':
+            res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+            res.end(Buffer.from([0, 255, 16, 32, 65, 66, 67]));
+            break;
+
           default:
             res.writeHead(404, { 'Content-Type': 'text/plain' });
             res.end('Not Found');
@@ -70,7 +82,7 @@ describe('HttpService', () => {
 
   describe('GET 요청', () => {
     it('JSON 응답 수신 및 파싱', async () => {
-      const res = await httpService.send('GET', `${baseUrl}/json`, [], '');
+      const res = await send('GET', `${baseUrl}/json`, [], '');
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.statusText, 'OK');
       const parsed = JSON.parse(res.body);
@@ -81,27 +93,33 @@ describe('HttpService', () => {
     });
 
     it('404 응답 처리', async () => {
-      const res = await httpService.send('GET', `${baseUrl}/nonexistent`, [], '');
+      const res = await send('GET', `${baseUrl}/nonexistent`, [], '');
       assert.strictEqual(res.status, 404);
     });
 
     it('다양한 상태 코드 처리', async () => {
       for (const code of [200, 201, 400, 500]) {
-        const res = await httpService.send('GET', `${baseUrl}/status?code=${code}`, [], '');
+        const res = await send('GET', `${baseUrl}/status?code=${code}`, [], '');
         assert.strictEqual(res.status, code);
       }
     });
 
     it('응답 헤더 수신', async () => {
-      const res = await httpService.send('GET', `${baseUrl}/json`, [], '');
+      const res = await send('GET', `${baseUrl}/json`, [], '');
       assert.ok(res.headers['content-type']?.includes('application/json'));
     });
 
     it('큰 응답 body 수신', async () => {
-      const res = await httpService.send('GET', `${baseUrl}/large`, [], '');
+      const res = await send('GET', `${baseUrl}/large`, [], '');
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.body.length, 10000);
       assert.strictEqual(res.size, 10000);
+    });
+
+    it('바이너리 응답은 원본 바이트를 base64로 보존', async () => {
+      const res = await send('GET', `${baseUrl}/binary`, [], '');
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.bodyBase64, Buffer.from([0, 255, 16, 32, 65, 66, 67]).toString('base64'));
     });
   });
 
@@ -111,7 +129,7 @@ describe('HttpService', () => {
       const headers = [
         { key: 'Content-Type', value: 'application/json', enabled: true },
       ];
-      const res = await httpService.send('POST', `${baseUrl}/echo`, headers, body);
+      const res = await send('POST', `${baseUrl}/echo`, headers, body);
       assert.strictEqual(res.status, 200);
       const echo = JSON.parse(res.body);
       assert.strictEqual(echo.method, 'POST');
@@ -123,7 +141,7 @@ describe('HttpService', () => {
         { key: 'X-Custom', value: 'hello', enabled: true },
         { key: 'X-Disabled', value: 'skip', enabled: false },
       ];
-      const res = await httpService.send('POST', `${baseUrl}/echo`, headers, 'data');
+      const res = await send('POST', `${baseUrl}/echo`, headers, 'data');
       const echo = JSON.parse(res.body);
       assert.strictEqual(echo.headers['x-custom'], 'hello');
       // 비활성 헤더는 전송되지 않음
@@ -133,19 +151,19 @@ describe('HttpService', () => {
 
   describe('기타 메서드', () => {
     it('PUT 요청', async () => {
-      const res = await httpService.send('PUT', `${baseUrl}/echo`, [], '{"update":true}');
+      const res = await send('PUT', `${baseUrl}/echo`, [], '{"update":true}');
       const echo = JSON.parse(res.body);
       assert.strictEqual(echo.method, 'PUT');
     });
 
     it('DELETE 요청', async () => {
-      const res = await httpService.send('DELETE', `${baseUrl}/echo`, [], '');
+      const res = await send('DELETE', `${baseUrl}/echo`, [], '');
       const echo = JSON.parse(res.body);
       assert.strictEqual(echo.method, 'DELETE');
     });
 
     it('PATCH 요청', async () => {
-      const res = await httpService.send('PATCH', `${baseUrl}/echo`, [], '{"patch":true}');
+      const res = await send('PATCH', `${baseUrl}/echo`, [], '{"patch":true}');
       const echo = JSON.parse(res.body);
       assert.strictEqual(echo.method, 'PATCH');
     });
@@ -154,7 +172,7 @@ describe('HttpService', () => {
   describe('타임아웃', () => {
     it('타임아웃 초과 시 에러 발생', async () => {
       try {
-        await httpService.send('GET', `${baseUrl}/slow`, [], '', 1);
+        await send('GET', `${baseUrl}/slow`, [], '', 1);
         assert.fail('타임아웃 에러가 발생해야 함');
       } catch (err: any) {
         assert.ok(err.message.includes('타임아웃') || err.code === 'ECONNRESET');
@@ -164,7 +182,7 @@ describe('HttpService', () => {
 
   describe('응답 시간 측정', () => {
     it('time 필드가 0 이상의 밀리초', async () => {
-      const res = await httpService.send('GET', `${baseUrl}/json`, [], '');
+      const res = await send('GET', `${baseUrl}/json`, [], '');
       assert.ok(typeof res.time === 'number');
       assert.ok(res.time >= 0);
     });

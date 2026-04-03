@@ -224,6 +224,16 @@ describe('CurlService', () => {
       assert.ok(curl.includes("'X-API-Key: secret'"));
     });
 
+    it('API Key (query) 인증 생성', () => {
+      const curl = CurlService.generate({
+        method: 'GET',
+        url: 'https://api.example.com',
+        auth: { type: 'apikey', apikey: { key: 'apiKey', value: 'secret', addTo: 'query' } },
+      });
+      assert.ok(curl.includes('apiKey=secret'));
+      assert.ok(!curl.includes("'apiKey: secret'"));
+    });
+
     it('싱글쿼트 이스케이프', () => {
       const curl = CurlService.generate({
         method: 'POST',

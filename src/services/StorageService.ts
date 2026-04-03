@@ -9,6 +9,7 @@ export class StorageService {
   private collectionsPath: string;
   private historyPath: string;
   private environmentsPath: string;
+  private activeEnvironmentPath: string;
   private defaultHeadersPath: string;
   private tabStatePath: string;
 
@@ -17,6 +18,7 @@ export class StorageService {
     this.collectionsPath = path.join(this.storagePath, 'collections.json');
     this.historyPath = path.join(this.storagePath, 'history.json');
     this.environmentsPath = path.join(this.storagePath, 'environments.json');
+    this.activeEnvironmentPath = path.join(this.storagePath, 'active-environment.json');
     this.defaultHeadersPath = path.join(this.storagePath, 'default-headers.json');
     this.tabStatePath = path.join(this.storagePath, 'tab-state.json');
     this.ensureStorageDir();
@@ -95,6 +97,14 @@ export class StorageService {
       env.variables = variables;
       this.saveEnvironments(envs);
     }
+  }
+
+  getActiveEnvironmentId(): string | null {
+    return this.readJson<string | null>(this.activeEnvironmentPath, null);
+  }
+
+  saveActiveEnvironmentId(id: string | null): void {
+    this.writeJson(this.activeEnvironmentPath, id);
   }
 
   // === 기본 헤더 ===

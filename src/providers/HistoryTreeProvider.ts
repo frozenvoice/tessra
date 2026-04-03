@@ -75,6 +75,7 @@ export class HistoryTreeProvider
     if (!raw) { return; }
     const draggedIds: string[] = raw.value;
     if (!draggedIds || draggedIds.length === 0) { return; }
+    if (target && draggedIds.includes(target.id)) { return; }
 
     const history = this.storage.getHistory();
 

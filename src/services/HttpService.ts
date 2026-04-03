@@ -10,12 +10,24 @@ export interface SendHandle {
 
 // Node.js 내장 http/https 모듈로 HTTP 요청 실행
 export class HttpService {
+  private static readonly TEXT_CONTENT_TYPES = new Set([
+    'application/json',
+    'application/xml',
+    'text/xml',
+    'application/javascript',
+    'text/javascript',
+    'application/x-www-form-urlencoded',
+    'application/graphql',
+    'application/ld+json',
+    'application/x-ndjson',
+  ]);
+
   send(
     method: HttpMethod,
     url: string,
     headers: KeyValue[],
     body: string,
-    timeoutSec: number = 30
+    timeoutSec: number = 0
   ): SendHandle {
     const parsedUrl = new URL(url);
     const isHttps = parsedUrl.protocol === 'https:';
@@ -63,11 +75,15 @@ export class HttpService {
             }
           }
 
+          const contentType = responseHeaders['content-type'] ?? '';
+          const isBinary = HttpService.isBinaryContentType(contentType);
+
           resolve({
             status: res.statusCode ?? 0,
             statusText: res.statusMessage ?? '',
             headers: responseHeaders,
             body: buffer.toString('utf-8'),
+            bodyBase64: isBinary ? buffer.toString('base64') : undefined,
             time: elapsed,
             size: buffer.length,
           });
@@ -98,5 +114,14 @@ export class HttpService {
       promise,
       abort: () => { reqRef.destroy(new Error('요청이 취소되었습니다')); },
     };
+  }
+
+  // 파일 저장이 필요한 바이너리 응답만 base64로 함께 보존
+  private static isBinaryContentType(contentType: string): boolean {
+    const mime = contentType.split(';')[0].trim().toLowerCase();
+    if (!mime) { return false; }
+    if (mime.startsWith('text/')) { return false; }
+    if (mime.endsWith('+json') || mime.endsWith('+xml')) { return false; }
+    return !this.TEXT_CONTENT_TYPES.has(mime);
   }
 }

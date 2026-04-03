@@ -5,8 +5,9 @@ import { StorageService } from '../services/StorageService';
 import { CollectionTreeProvider } from '../providers/CollectionTreeProvider';
 import { HistoryTreeProvider } from '../providers/HistoryTreeProvider';
 import { EnvironmentTreeProvider } from '../providers/EnvironmentTreeProvider';
-import { MessageType, Request, AuthConfig, KeyValue, Environment, CollectionItem, Response, TabState } from '../models/types';
+import { MessageType, Request, AuthConfig, KeyValue, Environment, CollectionItem, Response, TabState, RequestBodyType, IncomingWebviewMessage, SendRequestMessage } from '../models/types';
 import { CurlService } from '../services/CurlService';
+import { SendHandle } from '../services/HttpService';
 
 // Webview 요청 패널 관리 (다중 탭 지원)
 export class RequestPanel {
@@ -16,12 +17,30 @@ export class RequestPanel {
   public static collectionProvider: CollectionTreeProvider;
   public static environmentProvider: EnvironmentTreeProvider;
   private static readonly viewType = 'arc.requestPanel';
+  private static readonly INCOMING_MESSAGE_TYPES = new Set<string>([
+    MessageType.SendRequest,
+    MessageType.SaveRequest,
+    MessageType.SaveEnvironmentVars,
+    MessageType.CopyAsCurl,
+    MessageType.CopyResponseBody,
+    MessageType.CopyToClipboard,
+    MessageType.SaveResponseBody,
+    MessageType.SaveDefaultHeaders,
+    MessageType.CancelRequest,
+    MessageType.SaveTabState,
+    MessageType.StopCollectionRun,
+    'webviewReady',
+  ]);
+  private static readonly UNRESOLVED_VAR_PATTERN = /\{\{([^}]+)\}\}/g;
 
   private readonly panel: vscode.WebviewPanel;
   private readonly extensionUri: vscode.Uri;
   private readonly httpService: HttpService;
   private disposables: vscode.Disposable[] = [];
+  private isDisposed = false;
   private collectionRunAbort = false;
+  private currentCollectionRequest: SendHandle | null = null;
+  private canceledRequestTabs = new Set<string>();
   private activeRequests = new Map<string, { abort: () => void }>();
 
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
@@ -52,6 +71,106 @@ export class RequestPanel {
     }
   }
   private pendingRestore: { tabs: TabState[]; activeIndex: number } | null = null;
+
+  private static normalizeBodyType(bodyType: string | undefined): RequestBodyType {
+    switch (bodyType) {
+      case 'json':
+      case 'xml':
+      case 'form':
+      case 'raw':
+      case 'none':
+        return bodyType;
+      case 'text':
+        return 'raw';
+      default:
+        return 'none';
+    }
+  }
+
+  private postMessage(message: unknown): void {
+    if (this.isDisposed) { return; }
+    this.panel.webview.postMessage(message);
+  }
+
+  private cancelActiveRequest(tabId: string): void {
+    const handle = this.activeRequests.get(tabId);
+    if (!handle) { return; }
+    this.canceledRequestTabs.add(tabId);
+    handle.abort();
+  }
+
+  // URL, 헤더, 바디, 인증 설정에서 남아 있는 {{변수}}를 모두 수집
+  private findUnresolvedVariables(
+    url: string,
+    headers: KeyValue[],
+    params: KeyValue[],
+    body: string,
+    auth: AuthConfig,
+    vars: KeyValue[]
+  ): string[] {
+    const names = new Set<string>();
+    this.collectUnresolvedVariableNames(names, url);
+    this.collectUnresolvedFromKeyValues(names, headers);
+    this.collectUnresolvedFromKeyValues(names, params);
+    this.collectUnresolvedVariableNames(names, body);
+
+    switch (auth.type) {
+      case 'basic':
+        if (auth.basic) {
+          this.collectUnresolvedVariableNames(names, VariableService.resolve(auth.basic.username, vars));
+          this.collectUnresolvedVariableNames(names, VariableService.resolve(auth.basic.password, vars));
+        }
+        break;
+      case 'bearer':
+        if (auth.bearer) {
+          this.collectUnresolvedVariableNames(names, VariableService.resolve(auth.bearer.token, vars));
+        }
+        break;
+      case 'apikey':
+        if (auth.apikey) {
+          this.collectUnresolvedVariableNames(names, VariableService.resolve(auth.apikey.key, vars));
+          this.collectUnresolvedVariableNames(names, VariableService.resolve(auth.apikey.value, vars));
+        }
+        break;
+    }
+
+    return [...names];
+  }
+
+  private collectUnresolvedFromKeyValues(target: Set<string>, items: KeyValue[]): void {
+    for (const item of items) {
+      if (item.enabled === false) { continue; }
+      this.collectUnresolvedVariableNames(target, item.key);
+      this.collectUnresolvedVariableNames(target, item.value);
+    }
+  }
+
+  private collectUnresolvedVariableNames(target: Set<string>, text: string): void {
+    if (!text) { return; }
+    for (const match of text.matchAll(RequestPanel.UNRESOLVED_VAR_PATTERN)) {
+      const name = match[1]?.trim();
+      if (name) { target.add(name); }
+    }
+  }
+
+  private createUnresolvedVariableError(names: string[]): string {
+    return `미설정 환경변수: ${names.map((name) => `{{${name}}}`).join(', ')}`;
+  }
+
+  private isIncomingMessage(value: unknown): value is IncomingWebviewMessage {
+    if (!value || typeof value !== 'object') { return false; }
+    const type = (value as { type?: unknown }).type;
+    return typeof type === 'string' && RequestPanel.INCOMING_MESSAGE_TYPES.has(type);
+  }
+
+  private static createNonce(): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let nonce = '';
+    for (let i = 0; i < 32; i++) {
+      nonce += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return nonce;
+  }
 
   // 패널 표시. createNewTab=true이면 새 탭도 생성
   public static show(extensionUri: vscode.Uri, createNewTab: boolean = false) {
@@ -84,18 +203,19 @@ export class RequestPanel {
 
   // Webview에 새 탭 생성 요청
   public newTab() {
-    this.panel.webview.postMessage({ type: 'newTab' });
+    this.postMessage({ type: 'newTab' });
   }
 
   // 외부에서 요청 로드 → Webview에 새 탭으로 전달
   public loadRequest(req: Request) {
-    this.panel.webview.postMessage({
+    this.postMessage({
       type: MessageType.LoadRequest,
       method: req.method,
       url: req.url,
       headers: req.headers ?? [],
       params: req.params ?? [],
       body: req.body ?? '',
+      bodyType: RequestPanel.normalizeBodyType(req.bodyType),
       auth: req.auth ?? { type: 'none' },
       name: req.name || `${req.method} ${req.url}`,
     });
@@ -103,7 +223,7 @@ export class RequestPanel {
 
   // 환경변수 편집 데이터 전송
   public loadEnvironment(env: Environment) {
-    this.panel.webview.postMessage({
+    this.postMessage({
       type: MessageType.LoadEnvironment,
       envId: env.id,
       envName: env.name,
@@ -114,7 +234,7 @@ export class RequestPanel {
   // 기본 헤더 편집 UI 로드
   public loadDefaultHeaders() {
     const headers = RequestPanel.storage.getDefaultHeaders();
-    this.panel.webview.postMessage({
+    this.postMessage({
       type: MessageType.LoadDefaultHeaders,
       headers,
     });
@@ -122,7 +242,7 @@ export class RequestPanel {
 
   // 활성 환경 이름 업데이트
   public updateActiveEnv(envName: string | null) {
-    this.panel.webview.postMessage({
+    this.postMessage({
       type: MessageType.UpdateActiveEnv,
       envName,
     });
@@ -151,7 +271,8 @@ export class RequestPanel {
 
     // Webview에 러너 시작 알림
     this.collectionRunAbort = false;
-    this.panel.webview.postMessage({
+    this.currentCollectionRequest = null;
+    this.postMessage({
       type: MessageType.RunCollectionStart,
       name,
       total: requests.length,
@@ -170,9 +291,16 @@ export class RequestPanel {
       const resolvedHeaders = VariableService.resolveKeyValues(req.headers ?? [], vars);
       const resolvedParams = VariableService.resolveKeyValues(req.params ?? [], vars);
       const resolvedBody = VariableService.resolve(req.body ?? '', vars);
-      const url = this.buildUrl(resolvedUrl, resolvedParams);
+      const unresolvedVariables = this.findUnresolvedVariables(
+        resolvedUrl,
+        resolvedHeaders,
+        resolvedParams,
+        resolvedBody,
+        req.auth ?? { type: 'none' },
+        vars
+      );
       const finalHeaders = [...resolvedHeaders];
-      this.applyAuth(req.auth ?? { type: 'none' }, finalHeaders, vars);
+      const finalParams = [...resolvedParams];
 
       let response: Response | null = null;
       let error: string | null = null;
@@ -180,19 +308,32 @@ export class RequestPanel {
       let statusText = '';
       let time = 0;
 
-      try {
-        response = await this.httpService.send(req.method, url, finalHeaders, resolvedBody, 30);
-        status = response.status;
-        statusText = response.statusText;
-        time = response.time;
-        if (status >= 400) { failed++; } else { passed++; }
-      } catch (err: unknown) {
-        error = err instanceof Error ? err.message : String(err);
+      if (unresolvedVariables.length > 0) {
+        error = this.createUnresolvedVariableError(unresolvedVariables);
         failed++;
+      } else {
+        this.applyAuth(req.auth ?? { type: 'none' }, finalHeaders, finalParams, vars);
+        const url = this.buildUrl(resolvedUrl, finalParams);
+
+        try {
+          const handle = this.httpService.send(req.method, url, finalHeaders, resolvedBody, 0);
+          this.currentCollectionRequest = handle;
+          response = await handle.promise;
+          status = response.status;
+          statusText = response.statusText;
+          time = response.time;
+          if (status >= 400) { failed++; } else { passed++; }
+        } catch (err: unknown) {
+          if (this.collectionRunAbort) { break; }
+          error = err instanceof Error ? err.message : String(err);
+          failed++;
+        } finally {
+          this.currentCollectionRequest = null;
+        }
       }
 
       // 진행 상황 전송
-      this.panel.webview.postMessage({
+      this.postMessage({
         type: MessageType.RunCollectionProgress,
         index: i,
         total: requests.length,
@@ -210,7 +351,7 @@ export class RequestPanel {
     }
 
     // 완료 알림
-    this.panel.webview.postMessage({
+    this.postMessage({
       type: MessageType.RunCollectionDone,
       total: requests.length,
       passed,
@@ -220,19 +361,19 @@ export class RequestPanel {
     });
   }
 
-  private async handleMessage(message: any) {
+  private async handleMessage(message: unknown) {
+    if (!this.isIncomingMessage(message)) { return; }
     // Webview 초기화 완료 → 저장된 탭 복원
     if (message.type === 'webviewReady') {
       if (this.pendingRestore) {
-        this.panel.webview.postMessage({
+        this.postMessage({
           type: MessageType.RestoreTabState,
           tabs: this.pendingRestore.tabs,
           activeIndex: this.pendingRestore.activeIndex,
         });
         this.pendingRestore = null;
       }
-      // 활성 환경변수 목록도 전송 (미치환 변수 경고용)
-      this.sendActiveVarsToWebview();
+      this.updateActiveEnv(RequestPanel.environmentProvider.getActiveEnvironmentName());
       return;
     }
     switch (message.type) {
@@ -240,8 +381,7 @@ export class RequestPanel {
         await this.executeRequest(message);
         break;
       case MessageType.CancelRequest: {
-        const handle = this.activeRequests.get(message.tabId);
-        if (handle) { handle.abort(); }
+        this.cancelActiveRequest(message.tabId);
         break;
       }
       case MessageType.SaveRequest:
@@ -251,6 +391,7 @@ export class RequestPanel {
           headers: message.headers ?? [],
           params: message.params ?? [],
           body: message.body ?? '',
+          bodyType: RequestPanel.normalizeBodyType(message.bodyType),
           auth: message.auth ?? { type: 'none' },
         });
         break;
@@ -275,11 +416,14 @@ export class RequestPanel {
         await vscode.env.clipboard.writeText(message.text ?? '');
         break;
       case MessageType.SaveResponseBody:
-        await this.saveResponseBody(message.body, message.contentType);
+        await this.saveResponseBody(message.body, message.contentType, message.bodyBase64);
         break;
       case MessageType.SaveEnvironmentVars:
         RequestPanel.storage.updateEnvironmentVars(message.envId, message.variables);
         RequestPanel.environmentProvider.refresh();
+        if (message.envId === RequestPanel.environmentProvider.activeEnvId) {
+          this.sendActiveVarsToWebview();
+        }
         break;
       case MessageType.SaveDefaultHeaders:
         RequestPanel.storage.saveDefaultHeaders(message.headers);
@@ -290,6 +434,7 @@ export class RequestPanel {
         break;
       case MessageType.StopCollectionRun:
         this.collectionRunAbort = true;
+        this.currentCollectionRequest?.abort();
         break;
     }
   }
@@ -298,51 +443,27 @@ export class RequestPanel {
   private sendActiveVarsToWebview() {
     const vars = RequestPanel.environmentProvider.getActiveVariables();
     const varKeys = vars.filter(v => v.enabled && v.key).map(v => v.key);
-    this.panel.webview.postMessage({ type: 'activeVarKeys', varKeys });
+    this.postMessage({ type: 'activeVarKeys', varKeys });
   }
 
-  private async executeRequest(message: any) {
+  private async executeRequest(message: SendRequestMessage) {
     const tabId = message.tabId;
     const method = message.method;
     const rawUrl = message.url;
     const rawHeaders: KeyValue[] = message.headers ?? [];
     const rawParams: KeyValue[] = message.params ?? [];
     const rawBody: string = message.body ?? '';
+    const bodyType = RequestPanel.normalizeBodyType(message.bodyType);
     const auth: AuthConfig = message.auth ?? { type: 'none' };
-    const timeout: number = message.timeout ?? 30;
+    const timeout: number = message.timeout ?? 0;
 
     // {{변수}} 치환
     const vars = RequestPanel.environmentProvider.getActiveVariables();
     const resolvedUrl = VariableService.resolve(rawUrl, vars);
 
-    // 미치환 변수 검사 — {{변수}}가 그대로 남아있으면 전송 차단
-    const unresolvedMatch = resolvedUrl.match(/\{\{([^}]+)\}\}/);
-    if (unresolvedMatch) {
-      const varName = unresolvedMatch[1].trim();
-      this.panel.webview.postMessage({
-        type: MessageType.ResponseError,
-        tabId,
-        error: `환경변수 {{${varName}}}이 설정되지 않았습니다. Environment를 활성화해주세요.`,
-      });
-      return;
-    }
-
     const resolvedHeaders = VariableService.resolveKeyValues(rawHeaders, vars);
     const resolvedParams = VariableService.resolveKeyValues(rawParams, vars);
     const resolvedBody = VariableService.resolve(rawBody, vars);
-
-    // 쿼리 파라미터 병합
-    let url: string;
-    try {
-      url = this.buildUrl(resolvedUrl, resolvedParams);
-    } catch {
-      this.panel.webview.postMessage({
-        type: MessageType.ResponseError,
-        tabId,
-        error: `잘못된 URL입니다: ${resolvedUrl}`,
-      });
-      return;
-    }
 
     // 기본 헤더 병합 (개별 요청 헤더가 우선)
     const defaultHeaders = VariableService.resolveKeyValues(
@@ -355,16 +476,46 @@ export class RequestPanel {
       (h) => h.enabled && h.key && !requestKeySet.has(h.key.toLowerCase())
     );
     const finalHeaders = [...mergedDefaults, ...resolvedHeaders];
+    const finalParams = [...resolvedParams];
+    const unresolvedVariables = this.findUnresolvedVariables(
+      resolvedUrl,
+      finalHeaders,
+      finalParams,
+      resolvedBody,
+      auth,
+      vars
+    );
+    if (unresolvedVariables.length > 0) {
+      this.postMessage({
+        type: MessageType.ResponseError,
+        tabId,
+        error: this.createUnresolvedVariableError(unresolvedVariables),
+      });
+      return;
+    }
 
-    // 인증 헤더 주입
-    this.applyAuth(auth, finalHeaders, vars);
+    // 인증 헤더/쿼리 파라미터 주입
+    this.applyAuth(auth, finalHeaders, finalParams, vars);
+
+    // 쿼리 파라미터 병합
+    let url: string;
+    try {
+      url = this.buildUrl(resolvedUrl, finalParams);
+    } catch {
+      this.postMessage({
+        type: MessageType.ResponseError,
+        tabId,
+        error: `잘못된 URL입니다: ${resolvedUrl}`,
+      });
+      return;
+    }
 
     let handle: import('../services/HttpService').SendHandle;
     try {
       handle = this.httpService.send(method, url, finalHeaders, resolvedBody, timeout);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      this.panel.webview.postMessage({
+      this.postMessage({
         type: MessageType.ResponseError,
         tabId,
         error: errorMsg,
@@ -375,9 +526,10 @@ export class RequestPanel {
 
     try {
       const response = await handle.promise;
+      if (this.canceledRequestTabs.delete(tabId)) { return; }
 
       // 히스토리 저장
-      this.saveToHistory(method, rawUrl, rawHeaders, rawParams, rawBody, auth,
+      this.saveToHistory(method, rawUrl, rawHeaders, rawParams, rawBody, bodyType, auth,
         { status: response.status, statusText: response.statusText, time: response.time });
       RequestPanel.historyProvider.refresh();
 
@@ -386,7 +538,7 @@ export class RequestPanel {
         .filter(h => h.enabled && h.key)
         .map(h => ({ key: h.key, value: h.value }));
 
-      this.panel.webview.postMessage({
+      this.postMessage({
         type: MessageType.ReceiveResponse,
         tabId,
         response,
@@ -395,11 +547,14 @@ export class RequestPanel {
       });
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
+      const wasCanceled = this.canceledRequestTabs.delete(tabId);
 
-      this.saveToHistory(method, rawUrl, rawHeaders, rawParams, rawBody, auth, null);
-      RequestPanel.historyProvider.refresh();
+      if (!wasCanceled) {
+        this.saveToHistory(method, rawUrl, rawHeaders, rawParams, rawBody, bodyType, auth, null);
+        RequestPanel.historyProvider.refresh();
+      }
 
-      this.panel.webview.postMessage({
+      this.postMessage({
         type: MessageType.ResponseError,
         tabId,
         error: errorMsg,
@@ -411,7 +566,7 @@ export class RequestPanel {
 
   private saveToHistory(
     method: string, url: string, headers: KeyValue[], params: KeyValue[],
-    body: string, auth: AuthConfig,
+    body: string, bodyType: RequestBodyType, auth: AuthConfig,
     response: { status: number; statusText: string; time: number } | null
   ) {
     RequestPanel.storage.addHistoryEntry({
@@ -419,7 +574,7 @@ export class RequestPanel {
       request: {
         id: '', name: `${method} ${url}`, method: method as any,
         url, headers, params, body,
-        bodyType: body ? 'json' : 'none', auth,
+        bodyType, auth,
       },
       response,
       timestamp: Date.now(),
@@ -440,7 +595,7 @@ export class RequestPanel {
     }
   }
 
-  private applyAuth(auth: AuthConfig, headers: KeyValue[], vars: KeyValue[]): void {
+  private applyAuth(auth: AuthConfig, headers: KeyValue[], params: KeyValue[], vars: KeyValue[]): void {
     switch (auth.type) {
       case 'basic':
         if (auth.basic) {
@@ -457,12 +612,15 @@ export class RequestPanel {
         }
         break;
       case 'apikey':
-        if (auth.apikey && auth.apikey.addTo === 'header') {
-          headers.push({
-            key: VariableService.resolve(auth.apikey.key, vars),
-            value: VariableService.resolve(auth.apikey.value, vars),
-            enabled: true,
-          });
+        if (auth.apikey) {
+          const key = VariableService.resolve(auth.apikey.key, vars);
+          const value = VariableService.resolve(auth.apikey.value, vars);
+          if (!key) { break; }
+          if (auth.apikey.addTo === 'query') {
+            params.push({ key, value, enabled: true });
+          } else {
+            headers.push({ key, value, enabled: true });
+          }
         }
         break;
     }
@@ -494,7 +652,7 @@ export class RequestPanel {
   }
 
   // 응답 바디를 파일로 저장
-  private async saveResponseBody(body: string, contentType: string): Promise<void> {
+  private async saveResponseBody(body: string, contentType: string, bodyBase64?: string): Promise<void> {
     const ext = RequestPanel.contentTypeToExt(contentType);
     // 기본 파일명: response_YYYYMMDD_HHmmss.확장자
     const now = new Date();
@@ -508,7 +666,8 @@ export class RequestPanel {
     });
     if (!uri) { return; }
     try {
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(body, 'utf-8'));
+      const bytes = bodyBase64 ? Buffer.from(bodyBase64, 'base64') : Buffer.from(body, 'utf-8');
+      await vscode.workspace.fs.writeFile(uri, bytes);
       vscode.window.showInformationMessage(`응답 저장 완료: ${uri.fsPath}`);
     } catch (err: unknown) {
       vscode.window.showErrorMessage(`저장 실패: ${err instanceof Error ? err.message : String(err)}`);
@@ -516,7 +675,13 @@ export class RequestPanel {
   }
 
   private dispose() {
+    this.isDisposed = true;
     RequestPanel.currentPanel = undefined;
+    this.collectionRunAbort = true;
+    this.currentCollectionRequest?.abort();
+    for (const tabId of this.activeRequests.keys()) {
+      this.cancelActiveRequest(tabId);
+    }
     // 패널 닫힐 때 마지막으로 저장된 탭 상태 유지 (webview에서 주기적으로 전송)
     for (const d of this.disposables) { d.dispose(); }
     this.disposables = [];
@@ -529,17 +694,26 @@ export class RequestPanel {
     const hljsUri = this.panel.webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'dist', 'hljs.js')
     );
+    const nonce = RequestPanel.createNonce();
+    const csp = [
+      "default-src 'none'",
+      `img-src ${this.panel.webview.cspSource} data:`,
+      `style-src ${this.panel.webview.cspSource} 'unsafe-inline'`,
+      `script-src ${this.panel.webview.cspSource} 'nonce-${nonce}'`,
+      `font-src ${this.panel.webview.cspSource}`,
+    ].join('; ');
     return /*html*/ `<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta http-equiv="Content-Security-Policy" content="${csp}"/>
 <title>Arc Client</title>
-<style>
+<style nonce="${nonce}">
 /* highlight.js vs2015 테마 (인라인) */
 pre code.hljs{display:block;overflow-x:auto;padding:0}code.hljs{padding:0}.hljs{background:transparent;color:#dcdcdc}.hljs-keyword,.hljs-literal,.hljs-name,.hljs-symbol{color:#569cd6}.hljs-link{color:#569cd6;text-decoration:underline}.hljs-built_in,.hljs-type{color:#4ec9b0}.hljs-class,.hljs-number{color:#b8d7a3}.hljs-meta .hljs-string,.hljs-string{color:#d69d85}.hljs-regexp,.hljs-template-tag{color:#9a5334}.hljs-formula,.hljs-function,.hljs-params,.hljs-subst,.hljs-title{color:#dcdcdc}.hljs-comment,.hljs-quote{color:#57a64a;font-style:italic}.hljs-doctag{color:#608b4e}.hljs-meta,.hljs-meta .hljs-keyword,.hljs-tag{color:#9b9b9b}.hljs-template-variable,.hljs-variable{color:#bd63c5}.hljs-attr,.hljs-attribute{color:#9cdcfe}.hljs-section{color:gold}.hljs-emphasis{font-style:italic}.hljs-strong{font-weight:700}.hljs-bullet,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id,.hljs-selector-pseudo,.hljs-selector-tag{color:#d7ba7d}.hljs-addition{background-color:#144212;display:inline-block;width:100%}.hljs-deletion{background-color:#600;display:inline-block;width:100%}
 </style>
-<style>
+<style nonce="${nonce}">
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);color:var(--vscode-foreground);background:var(--vscode-editor-background);display:flex;flex-direction:column;height:100vh;overflow:hidden}
 
@@ -591,9 +765,11 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 
 /* 패널 레이아웃 */
 .split{flex:1;overflow:hidden;display:flex;flex-direction:column}
-.req-area{flex:0 0 auto;max-height:40vh;overflow:auto;padding:4px 10px}
-.divider{height:1px;background:var(--vscode-panel-border,#444);flex-shrink:0}
-.res-area{flex:1;overflow:hidden;display:flex;flex-direction:column;padding:0 10px}
+.req-area{flex:none;min-height:60px;overflow-y:auto;padding:4px 10px}
+.divider{height:5px;background:var(--vscode-panel-border,#444);flex-shrink:0;cursor:row-resize;position:relative;z-index:10}
+.divider:hover,.divider.active{background:var(--vscode-focusBorder)}
+.divider::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:30px;height:1px;background:var(--vscode-foreground);opacity:.25;border-radius:1px}
+.res-area{flex:1;min-height:40px;overflow:hidden;display:flex;flex-direction:column;padding:0 10px}
 
 /* KV 행 */
 .kv-section{padding:3px 0}
@@ -607,7 +783,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 
 /* Body */
 .body-type-select{padding:3px 5px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:2px;font-size:12px;margin-bottom:4px}
-.body-section textarea{width:100%;min-height:70px;padding:5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-family:var(--vscode-editor-font-family,monospace);font-size:12px;resize:vertical}
+.body-section textarea{width:100%;min-height:70px;max-height:50vh;padding:5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-family:var(--vscode-editor-font-family,monospace);font-size:12px;resize:none;overflow-y:auto;field-sizing:content}
 
 /* Auth */
 .auth-section{padding:3px 0}
@@ -789,7 +965,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
   <div class="placeholder" id="emptyPlaceholder">Press + or Ctrl+T to create a new request</div>
 </div>
 
-<script>
+<script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 
 // === 탭 상태 관리 ===
@@ -799,6 +975,12 @@ let tabIdCounter = 0;
 let currentEnvName = null;
 let editingEnvId = null;
 let activeVarKeys = [];  // 활성 환경의 변수 키 목록
+const VALID_BODY_TYPES = ['none', 'json', 'xml', 'form', 'raw'];
+
+function normalizeBodyType(bodyType) {
+  if (VALID_BODY_TYPES.indexOf(bodyType) >= 0) return bodyType;
+  return bodyType === 'text' ? 'raw' : 'none';
+}
 
 // === 탭 바 ===
 const tabBar = document.getElementById('tabBar');
@@ -810,7 +992,7 @@ addTabBtn.addEventListener('click', () => createTab());
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 't') { e.preventDefault(); createTab(); }
   if ((e.ctrlKey || e.metaKey) && e.key === 'w' && activeTabId) { e.preventDefault(); closeTab(activeTabId); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { sendActiveTab(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handlePrimaryAction(); }
 });
 
 function createTab(data) {
@@ -823,9 +1005,9 @@ function createTab(data) {
     headers: data?.headers || [],
     params: data?.params || [],
     body: data?.body || '',
-    bodyType: data?.bodyType || 'none',
+    bodyType: normalizeBodyType(data?.bodyType),
     auth: data?.auth || { type: 'none' },
-    timeout: data?.timeout ?? 30,
+    timeout: data?.timeout ?? 0,
     response: null,
     resolvedUrl: '',
     resolvedHeaders: [],
@@ -841,9 +1023,22 @@ function createTab(data) {
   return id;
 }
 
+function clearTabRequestState(tab) {
+  if (!tab) return;
+  tab.loading = false;
+  tab.progressVisible = false;
+  if (tab._progressTimer) { clearTimeout(tab._progressTimer); tab._progressTimer = null; }
+  if (tab._elapsedTimer) { clearInterval(tab._elapsedTimer); tab._elapsedTimer = null; }
+}
+
 function closeTab(id) {
   const idx = tabs.findIndex(t => t.id === id);
   if (idx < 0) return;
+  const tab = tabs[idx];
+  if (tab?.loading) {
+    clearTabRequestState(tab);
+    vscode.postMessage({ type: 'cancelRequest', tabId: id });
+  }
   tabs.splice(idx, 1);
   if (activeTabId === id) {
     activeTabId = tabs.length > 0 ? tabs[Math.min(idx, tabs.length - 1)].id : null;
@@ -851,6 +1046,16 @@ function closeTab(id) {
   renderTabBar();
   renderContent();
   debouncePersist();
+}
+
+function handlePrimaryAction() {
+  const tab = tabs.find(t => t.id === activeTabId);
+  if (!tab) return;
+  if (tab.loading) {
+    vscode.postMessage({ type: 'cancelRequest', tabId: tab.id });
+    return;
+  }
+  sendActiveTab();
 }
 
 function switchTab(id) {
@@ -906,6 +1111,9 @@ function renderContent() {
     mainContent.innerHTML = '<div class="placeholder">Press + or Ctrl+T to create a new request</div>';
     return;
   }
+  // 리렌더 전 수동 조절된 요청 영역 높이 보존
+  var prevReqArea = mainContent.querySelector('.req-area');
+  var savedHeight = prevReqArea && prevReqArea.dataset.manualHeight ? prevReqArea.style.height : null;
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab) return;
 
@@ -922,8 +1130,12 @@ function renderContent() {
     const r = tab.response;
     const sc = Math.floor(r.status / 100);
     const ct = (r.headers?.['content-type'] || r.headers?.['Content-Type'] || '').toLowerCase();
-    const lang = detectLang(ct, r.body);
-    const rawBodyHtml = highlightBody(r.body, lang);
+    const isBinary = !!r.bodyBase64 && isBinaryContentType(ct);
+    const displayBody = isBinary
+      ? '[바이너리 응답입니다. Save 버튼으로 원본 파일을 저장하세요.]'
+      : r.body;
+    const lang = isBinary ? 'text' : detectLang(ct, displayBody);
+    const rawBodyHtml = isBinary ? escapeHtml(displayBody) : highlightBody(displayBody, lang);
     let hdrText = '';
     for (const [k,v] of Object.entries(r.headers)) hdrText += k + ': ' + v + '\\n';
     const hasFormat = (lang === 'json' || lang === 'xml');
@@ -1003,7 +1215,7 @@ function renderContent() {
         '<div class="var-overlay js-var-overlay hidden"></div>' +
       '</div>' +
       '<button class="btn js-send">Send</button>' +
-      '<div class="timeout-wrap"><span class="timeout-icon">⏱</span><input class="js-timeout timeout-input" type="number" min="0" placeholder="30s" title="Timeout (초, 0=무제한)" value="' + (tab.timeout || '') + '"/></div>' +
+      '<div class="timeout-wrap"><span class="timeout-icon">⏱</span><input class="js-timeout timeout-input" type="number" min="0" placeholder="0" title="Timeout (초, 0=무제한)" value="' + (tab.timeout || '') + '"/></div>' +
       '<span class="url-bar-spacer"></span>' +
       '<button class="btn btn-s js-save">Save</button>' +
       '<button class="btn btn-s js-copy-curl" title="Copy as cURL">cURL</button>' +
@@ -1044,6 +1256,16 @@ function renderContent() {
 
   // 이벤트 바인딩
   bindContentEvents();
+
+  // 수동 조절 높이 복원
+  if (savedHeight) {
+    var newReqArea = mainContent.querySelector('.req-area');
+    if (newReqArea) {
+      newReqArea.style.height = savedHeight;
+      newReqArea.style.flex = 'none';
+      newReqArea.dataset.manualHeight = '1';
+    }
+  }
 }
 
 function bindContentEvents() {
@@ -1073,14 +1295,7 @@ function bindContentEvents() {
   // Send
   const sendBtn = mc.querySelector('.js-send');
   if (sendBtn) {
-    sendBtn.addEventListener('click', () => {
-      const tab = tabs.find(t => t.id === activeTabId);
-      if (tab && tab.loading) {
-        vscode.postMessage({ type: 'cancelRequest', tabId: tab.id });
-      } else {
-        sendActiveTab();
-      }
-    });
+    sendBtn.addEventListener('click', () => handlePrimaryAction());
     // loading 상태면 Cancel 표시 (스피너 포함)
     const tab = tabs.find(t => t.id === activeTabId);
     if (tab && tab.loading) {
@@ -1094,7 +1309,7 @@ function bindContentEvents() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
-    vscode.postMessage({ type: 'saveRequest', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, auth: tab.auth });
+    vscode.postMessage({ type: 'saveRequest', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, auth: tab.auth });
   });
 
   // Copy as cURL
@@ -1134,7 +1349,7 @@ function bindContentEvents() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab?.response) return;
     const ct = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || '';
-    vscode.postMessage({ type: 'saveResponseBody', body: tab.response.body, contentType: ct });
+    vscode.postMessage({ type: 'saveResponseBody', body: tab.response.body, bodyBase64: tab.response.bodyBase64 || '', contentType: ct });
   });
 
   // 요청 탭 전환
@@ -1283,6 +1498,54 @@ function bindContentEvents() {
   // 초기 렌더링 시 auto Content-Type 동기화
   var initBodyType = mc.querySelector('.js-body-type')?.value || 'none';
   if (initBodyType !== 'none') syncAutoContentType(mc, initBodyType);
+
+  // === textarea 자동 높이 조절 ===
+  var bodyTa = mc.querySelector('.js-body');
+  if (bodyTa) {
+    function autoGrow() {
+      bodyTa.style.height = 'auto';
+      bodyTa.style.height = Math.max(70, bodyTa.scrollHeight) + 'px';
+    }
+    bodyTa.addEventListener('input', autoGrow);
+    autoGrow();
+  }
+
+  // === 드래그 구분선 ===
+  var divider = mc.querySelector('.divider');
+  var splitEl = mc.querySelector('.split');
+  var reqArea = mc.querySelector('.req-area');
+  var resArea = mc.querySelector('.res-area');
+  if (divider && splitEl && reqArea && resArea) {
+    var dragging = false;
+    var startY = 0;
+    var startH = 0;
+    divider.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      dragging = true;
+      startY = e.clientY;
+      startH = reqArea.offsetHeight;
+      divider.classList.add('active');
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging) return;
+      var dy = e.clientY - startY;
+      var newH = Math.max(60, startH + dy);
+      var maxH = splitEl.offsetHeight - 40 - divider.offsetHeight;
+      newH = Math.min(newH, maxH);
+      reqArea.style.height = newH + 'px';
+      reqArea.style.flex = 'none';
+      reqArea.dataset.manualHeight = '1';
+    });
+    document.addEventListener('mouseup', function() {
+      if (!dragging) return;
+      dragging = false;
+      divider.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    });
+  }
 }
 
 var BODY_TYPE_CT = {
@@ -1337,6 +1600,7 @@ function sendActiveTab() {
   saveActiveTabState();
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab || !tab.url) return;
+  if (tab.loading) return;
   const mc = mainContent;
 
   // 1) Send 버튼 눌림 효과
@@ -1402,7 +1666,7 @@ function sendActiveTab() {
 
   vscode.postMessage({
     type: 'sendRequest', tabId: tab.id,
-    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, auth: tab.auth, timeout: tab.timeout,
+    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, auth: tab.auth, timeout: tab.timeout,
   });
 }
 
@@ -1523,10 +1787,7 @@ window.addEventListener('message', (event) => {
   if (msg.type === 'receiveResponse' || msg.type === 'responseError') {
     const tab = tabs.find(t => t.id === msg.tabId);
     if (!tab) return;
-    tab.loading = false;
-    if (tab._progressTimer) { clearTimeout(tab._progressTimer); tab._progressTimer = null; }
-    if (tab._elapsedTimer) { clearInterval(tab._elapsedTimer); tab._elapsedTimer = null; }
-    tab.progressVisible = false;
+    clearTabRequestState(tab);
     tab.slideIn = true;
 
     // 네온 펄스 제거
@@ -1717,6 +1978,10 @@ function showRunner(name, total) {
       detail.textContent = 'Error: ' + r.error;
     } else if (r.response) {
       var body = r.response.body || '';
+      var ct = (r.response.headers?.['content-type'] || r.response.headers?.['Content-Type'] || '').toLowerCase();
+      if (r.response.bodyBase64 && isBinaryContentType(ct)) {
+        body = '[바이너리 응답입니다. Save 버튼으로 원본 파일을 저장하세요.]';
+      }
       if (body.length > 2000) body = body.substring(0, 2000) + '\\n... (truncated)';
       detail.textContent = 'Status: ' + r.response.status + ' ' + r.response.statusText +
         '\\nSize: ' + formatSize(r.response.size) + '\\n\\n' + body;
@@ -1860,6 +2125,24 @@ function detectLang(ct, body) {
   return 'text';
 }
 function tryJsonParse(s) { try { JSON.parse(s); return true; } catch { return false; } }
+
+function isBinaryContentType(ct) {
+  var mime = (ct || '').split(';')[0].trim().toLowerCase();
+  if (!mime) return false;
+  if (mime.startsWith('text/')) return false;
+  if (mime.endsWith('+json') || mime.endsWith('+xml')) return false;
+  return [
+    'application/json',
+    'application/xml',
+    'text/xml',
+    'application/javascript',
+    'text/javascript',
+    'application/x-www-form-urlencoded',
+    'application/graphql',
+    'application/ld+json',
+    'application/x-ndjson',
+  ].indexOf(mime) < 0;
+}
 
 function highlightBody(body, lang) {
   // JSON은 pretty-print 후 하이라이팅 (_formatted_json이면 이미 포맷됨)
@@ -2112,7 +2395,7 @@ createTab();
 // webview 준비 신호 전송
 vscode.postMessage({ type: 'webviewReady' });
 </script>
-<script src="${hljsUri}"></script>
+<script nonce="${nonce}" src="${hljsUri}"></script>
 </body>
 </html>`;
   }

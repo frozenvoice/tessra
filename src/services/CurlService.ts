@@ -1,4 +1,4 @@
-import { Request, KeyValue, AuthConfig, HttpMethod } from '../models/types';
+import { Request, KeyValue, AuthConfig, HttpMethod, RequestBodyType } from '../models/types';
 
 // cURL 파싱 및 생성 서비스
 export class CurlService {
@@ -111,8 +111,8 @@ export class CurlService {
 
     // bodyType 추론
     const ctHeader = headers.find((h) => h.key.toLowerCase() === 'content-type');
-    const bodyType = body
-      ? (ctHeader?.value?.includes('json') ? 'json' : 'text')
+    const bodyType: RequestBodyType = body
+      ? this.inferBodyType(ctHeader?.value ?? '')
       : 'none';
 
     return {
@@ -123,7 +123,7 @@ export class CurlService {
       headers,
       params,
       body,
-      bodyType: bodyType as any,
+      bodyType,
       auth,
     };
   }
@@ -188,7 +188,14 @@ export class CurlService {
 
     // URL + 쿼리 파라미터 조합
     let fullUrl = req.url || '';
-    const activeParams = (req.params ?? []).filter((p) => p.enabled && p.key);
+    const activeParams = [...(req.params ?? []).filter((p) => p.enabled && p.key)];
+    if (req.auth?.type === 'apikey' && req.auth.apikey?.addTo === 'query' && req.auth.apikey.key) {
+      activeParams.push({
+        key: req.auth.apikey.key,
+        value: req.auth.apikey.value,
+        enabled: true,
+      });
+    }
     if (activeParams.length > 0) {
       try {
         const urlObj = new URL(fullUrl);
@@ -249,6 +256,14 @@ export class CurlService {
   // 쉘 이스케이프 (싱글쿼트)
   private static shellEscape(s: string): string {
     return s.replace(/'/g, "'\\''");
+  }
+
+  private static inferBodyType(contentType: string): RequestBodyType {
+    const normalized = contentType.toLowerCase();
+    if (normalized.includes('json')) { return 'json'; }
+    if (normalized.includes('xml')) { return 'xml'; }
+    if (normalized.includes('x-www-form-urlencoded')) { return 'form'; }
+    return 'raw';
   }
 
   // 공백/따옴표를 고려한 토크나이저

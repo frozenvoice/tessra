@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { StorageService } from '../services/StorageService';
-import { Collection, CollectionItem } from '../models/types';
+import { Collection, CollectionItem, Request, RequestBodyType } from '../models/types';
 
 // TreeView에서 사용할 노드 타입
 export type CollectionNode =
@@ -146,6 +146,10 @@ export class CollectionTreeProvider
     if (!draggedIds || draggedIds.length === 0) { return; }
 
     const collections = this.storage.getCollections();
+    if (this.isInvalidDropTarget(collections, draggedIds, target)) {
+      vscode.window.showWarningMessage('항목을 자기 자신이나 하위 폴더 안으로 이동할 수 없습니다.');
+      return;
+    }
 
     // 드래그된 항목들 수집 후 원래 위치에서 제거
     const draggedItems: CollectionItem[] = [];
@@ -220,7 +224,15 @@ export class CollectionTreeProvider
   }
 
   async saveRequest(
-    requestData: { method: string; url: string; headers: any[]; params: any[]; body: string; auth: any }
+    requestData: {
+      method: string;
+      url: string;
+      headers: Request['headers'];
+      params: Request['params'];
+      body: string;
+      bodyType: RequestBodyType;
+      auth: Request['auth'];
+    }
   ): Promise<void> {
     const collections = this.storage.getCollections();
     if (collections.length === 0) {
@@ -251,7 +263,7 @@ export class CollectionTreeProvider
         headers: requestData.headers ?? [],
         params: requestData.params ?? [],
         body: requestData.body ?? '',
-        bodyType: requestData.body ? 'json' : 'none',
+        bodyType: requestData.bodyType,
         auth: requestData.auth ?? { type: 'none' },
       },
     };
@@ -397,6 +409,25 @@ export class CollectionTreeProvider
         this.addFolderPicks(item.children ?? [], `${prefix} / ${item.name}`, result);
       }
     }
+  }
+
+  private isInvalidDropTarget(
+    collections: Collection[],
+    draggedIds: string[],
+    target: CollectionNode | undefined
+  ): boolean {
+    if (!target || target.kind === 'collection') { return false; }
+    return draggedIds.some((draggedId) => {
+      if (draggedId === target.item.id) { return true; }
+      const draggedItem = this.findItem(collections, draggedId);
+      return draggedItem ? this.itemContainsId(draggedItem, target.item.id) : false;
+    });
+  }
+
+  // 폴더를 자기 자신/하위 폴더로 이동하는 경우를 차단
+  private itemContainsId(item: CollectionItem, id: string): boolean {
+    if (item.id === id) { return true; }
+    return (item.children ?? []).some((child) => this.itemContainsId(child, id));
   }
 
   private findItem(collections: Collection[], id: string): CollectionItem | undefined {

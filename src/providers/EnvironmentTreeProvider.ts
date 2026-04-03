@@ -15,9 +15,24 @@ export class EnvironmentTreeProvider
   readonly dropMimeTypes = [ENV_MIME];
 
   // 현재 활성 환경 ID
-  activeEnvId: string | null = null;
+  private _activeEnvId: string | null;
 
-  constructor(private storage: StorageService) {}
+  constructor(private storage: StorageService) {
+    const savedId = this.storage.getActiveEnvironmentId();
+    this._activeEnvId = savedId && this.storage.getEnvironment(savedId) ? savedId : null;
+    if (savedId !== this._activeEnvId) {
+      this.storage.saveActiveEnvironmentId(this._activeEnvId);
+    }
+  }
+
+  get activeEnvId(): string | null {
+    return this._activeEnvId;
+  }
+
+  set activeEnvId(value: string | null) {
+    this._activeEnvId = value;
+    this.storage.saveActiveEnvironmentId(value);
+  }
 
   // 드래그 시작: 환경 ID를 전달
   handleDrag(source: readonly Environment[], dataTransfer: vscode.DataTransfer): void {
@@ -30,6 +45,7 @@ export class EnvironmentTreeProvider
     const raw = dataTransfer.get(ENV_MIME);
     if (!raw) { return; }
     const draggedIds: string[] = raw.value;
+    if (target && draggedIds.includes(target.id)) { return; }
 
     const envs = this.storage.getEnvironments();
     // 드래그된 항목 추출

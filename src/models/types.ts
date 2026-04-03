@@ -11,6 +11,9 @@ export interface KeyValue {
 // 인증 타입
 export type AuthType = 'none' | 'basic' | 'bearer' | 'apikey';
 
+// 요청 바디 타입
+export type RequestBodyType = 'none' | 'json' | 'xml' | 'form' | 'raw' | 'text';
+
 export interface AuthConfig {
   type: AuthType;
   basic?: { username: string; password: string };
@@ -26,7 +29,7 @@ export interface TabState {
   headers: KeyValue[];
   params: KeyValue[];
   body: string;
-  bodyType: 'none' | 'json' | 'text';
+  bodyType: RequestBodyType;
   auth: AuthConfig;
   timeout: number;
 }
@@ -40,7 +43,7 @@ export interface Request {
   headers: KeyValue[];
   params: KeyValue[];
   body: string;
-  bodyType: 'none' | 'json' | 'text';
+  bodyType: RequestBodyType;
   auth: AuthConfig;
 }
 
@@ -50,6 +53,7 @@ export interface Response {
   statusText: string;
   headers: Record<string, string>;
   body: string;
+  bodyBase64?: string;
   time: number;
   size: number;
 }
@@ -127,7 +131,9 @@ export interface SendRequestMessage {
   headers: KeyValue[];
   params: KeyValue[];
   body: string;
+  bodyType: RequestBodyType;
   auth: AuthConfig;
+  timeout?: number;
 }
 
 export interface SaveRequestMessage {
@@ -137,6 +143,7 @@ export interface SaveRequestMessage {
   headers: KeyValue[];
   params: KeyValue[];
   body: string;
+  bodyType: RequestBodyType;
   auth: AuthConfig;
 }
 
@@ -144,6 +151,57 @@ export interface SaveEnvironmentVarsMessage {
   type: MessageType.SaveEnvironmentVars;
   envId: string;
   variables: KeyValue[];
+}
+
+export interface CopyAsCurlMessage {
+  type: MessageType.CopyAsCurl;
+  method: HttpMethod;
+  url: string;
+  headers: KeyValue[];
+  params: KeyValue[];
+  body: string;
+  auth: AuthConfig;
+}
+
+export interface CopyResponseBodyMessage {
+  type: MessageType.CopyResponseBody;
+  body: string;
+}
+
+export interface CopyToClipboardMessage {
+  type: MessageType.CopyToClipboard;
+  text: string;
+}
+
+export interface SaveResponseBodyMessage {
+  type: MessageType.SaveResponseBody;
+  body: string;
+  bodyBase64?: string;
+  contentType: string;
+}
+
+export interface SaveDefaultHeadersMessage {
+  type: MessageType.SaveDefaultHeaders;
+  headers: KeyValue[];
+}
+
+export interface CancelRequestMessage {
+  type: MessageType.CancelRequest;
+  tabId: string;
+}
+
+export interface SaveTabStateMessage {
+  type: MessageType.SaveTabState;
+  tabs: TabState[];
+  activeIndex: number;
+}
+
+export interface StopCollectionRunMessage {
+  type: MessageType.StopCollectionRun;
+}
+
+export interface WebviewReadyMessage {
+  type: 'webviewReady';
 }
 
 // Extension에서 Webview로 보내는 응답 메시지
@@ -167,6 +225,7 @@ export interface LoadRequestMessage {
   headers: KeyValue[];
   params: KeyValue[];
   body: string;
+  bodyType: RequestBodyType;
   auth: AuthConfig;
   name: string;
 }
@@ -183,12 +242,25 @@ export interface UpdateActiveEnvMessage {
   envName: string | null;
 }
 
-export type WebviewMessage =
+export type IncomingWebviewMessage =
   | SendRequestMessage
   | SaveRequestMessage
   | SaveEnvironmentVarsMessage
+  | CopyAsCurlMessage
+  | CopyResponseBodyMessage
+  | CopyToClipboardMessage
+  | SaveResponseBodyMessage
+  | SaveDefaultHeadersMessage
+  | CancelRequestMessage
+  | SaveTabStateMessage
+  | StopCollectionRunMessage
+  | WebviewReadyMessage;
+
+export type OutgoingWebviewMessage =
   | ReceiveResponseMessage
   | ResponseErrorMessage
   | LoadRequestMessage
   | LoadEnvironmentMessage
   | UpdateActiveEnvMessage;
+
+export type WebviewMessage = IncomingWebviewMessage | OutgoingWebviewMessage;
