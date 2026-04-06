@@ -175,7 +175,7 @@ export class RequestPanel {
   // 패널 표시. createNewTab=true이면 새 탭도 생성
   public static show(extensionUri: vscode.Uri, createNewTab: boolean = false) {
     if (RequestPanel.currentPanel) {
-      RequestPanel.currentPanel.panel.reveal(vscode.ViewColumn.One);
+      RequestPanel.currentPanel.panel.reveal();
       if (createNewTab) {
         RequestPanel.currentPanel.newTab();
       }
@@ -569,7 +569,8 @@ export class RequestPanel {
     body: string, bodyType: RequestBodyType, auth: AuthConfig,
     response: { status: number; statusText: string; time: number } | null
   ) {
-    RequestPanel.storage.addHistoryEntry({
+    const maxItems = vscode.workspace.getConfiguration('arc-client').get<number>('historyMaxItems', 100);
+    const removed = RequestPanel.storage.addHistoryEntry({
       id: Date.now().toString(36) + Math.random().toString(36).substring(2, 8),
       request: {
         id: '', name: `${method} ${url}`, method: method as any,
@@ -579,6 +580,9 @@ export class RequestPanel {
       response,
       timestamp: Date.now(),
     });
+    if (removed > 0) {
+      vscode.window.setStatusBarMessage(`History: ${removed} old items removed (max ${maxItems})`, 3000);
+    }
   }
 
   private buildUrl(baseUrl: string, params: KeyValue[]): string {
@@ -727,8 +731,17 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .method-GET{color:#4ec94e}.method-POST{color:#e5c07b}.method-PUT{color:#61afef}.method-PATCH{color:#d19a66}.method-DELETE{color:#e06c75}.method-HEAD{color:#abb2bf}.method-OPTIONS{color:#abb2bf}
 .req-tab .close-tab{opacity:.5;cursor:pointer;font-size:12px;padding:0 2px;line-height:1}
 .req-tab .close-tab:hover{opacity:1;color:var(--vscode-errorForeground)}
+.req-tab.pinned{opacity:.85;border-left:2px solid var(--vscode-focusBorder)}
+.req-tab.pinned .close-tab{display:none}
+.req-tab.pinned .pin-icon{display:inline;font-size:11px;margin-right:2px}
+.req-tab .pin-icon{display:none}
 .add-tab{padding:4px 10px;cursor:pointer;opacity:.5;font-size:14px;display:flex;align-items:center}
 .add-tab:hover{opacity:1}
+.tab-ctx-menu{position:fixed;z-index:9999;background:var(--vscode-menu-background,#252526);border:1px solid var(--vscode-menu-border,#454545);border-radius:4px;padding:4px 0;min-width:160px;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:12px}
+.tab-ctx-menu .ctx-item{padding:4px 16px;cursor:pointer;color:var(--vscode-menu-foreground,#ccc)}
+.tab-ctx-menu .ctx-item:hover{background:var(--vscode-menu-selectionBackground,#094771);color:var(--vscode-menu-selectionForeground,#fff)}
+.tab-ctx-menu .ctx-item.disabled{opacity:.4;cursor:default;pointer-events:none}
+.tab-ctx-menu .ctx-sep{height:1px;margin:4px 8px;background:var(--vscode-menu-separatorBackground,#454545)}
 
 /* === 메인 컨텐츠 === */
 .main-content{flex:1;overflow:hidden;display:flex;flex-direction:column}
@@ -991,7 +1004,7 @@ const emptyPlaceholder = document.getElementById('emptyPlaceholder');
 addTabBtn.addEventListener('click', () => createTab());
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 't') { e.preventDefault(); createTab(); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'w' && activeTabId) { e.preventDefault(); closeTab(activeTabId); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'w' && activeTabId) { e.preventDefault(); var at = tabs.find(function(t){return t.id === activeTabId}); if (!at || !at.pinned) closeTab(activeTabId); }
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handlePrimaryAction(); }
 });
 
@@ -1008,6 +1021,7 @@ function createTab(data) {
     bodyType: normalizeBodyType(data?.bodyType),
     auth: data?.auth || { type: 'none' },
     timeout: data?.timeout ?? 0,
+    pinned: data?.pinned || false,
     response: null,
     resolvedUrl: '',
     resolvedHeaders: [],
@@ -1035,6 +1049,7 @@ function closeTab(id) {
   const idx = tabs.findIndex(t => t.id === id);
   if (idx < 0) return;
   const tab = tabs[idx];
+  if (tab?.pinned) return;
   if (tab?.loading) {
     clearTabRequestState(tab);
     vscode.postMessage({ type: 'cancelRequest', tabId: id });
@@ -1088,10 +1103,15 @@ function saveActiveTabState() {
 function renderTabBar() {
   // 기존 탭 요소 제거
   tabBar.querySelectorAll('.req-tab').forEach(el => el.remove());
-  for (const tab of tabs) {
+
+  // pinned 탭을 왼쪽에 고정
+  const sorted = tabs.filter(t => t.pinned).concat(tabs.filter(t => !t.pinned));
+
+  for (const tab of sorted) {
     const el = document.createElement('div');
-    el.className = 'req-tab' + (tab.id === activeTabId ? ' active' : '');
+    el.className = 'req-tab' + (tab.id === activeTabId ? ' active' : '') + (tab.pinned ? ' pinned' : '');
     el.innerHTML =
+      '<span class="pin-icon">\u{1F4CC}</span>' +
       '<span class="method-badge method-' + tab.method + '">' + tab.method + '</span>' +
       '<span class="tab-name">' + escapeHtml(truncate(tab.name, 25)) + '</span>' +
       '<span class="close-tab" data-id="' + tab.id + '">&times;</span>';
@@ -1102,8 +1122,102 @@ function renderTabBar() {
         switchTab(tab.id);
       }
     });
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showTabContextMenu(e.clientX, e.clientY, tab.id);
+    });
     tabBar.insertBefore(el, addTabBtn);
   }
+}
+
+function showTabContextMenu(x, y, tabId) {
+  closeTabContextMenu();
+  const tab = tabs.find(t => t.id === tabId);
+  if (!tab) return;
+
+  const tabIdx = tabs.indexOf(tab);
+  const othersClosable = tabs.filter(t => t.id !== tabId && !t.pinned);
+  const rightClosable = tabs.filter((t, i) => i > tabIdx && !t.pinned);
+  const allClosable = tabs.filter(t => !t.pinned);
+
+  const items = [
+    { label: 'Close', action: 'close', disabled: !!tab.pinned },
+    { label: 'Close Others', action: 'closeOthers', disabled: othersClosable.length === 0 },
+    { label: 'Close All', action: 'closeAll', disabled: allClosable.length === 0 },
+    { label: 'Close to the Right', action: 'closeRight', disabled: rightClosable.length === 0 },
+    { sep: true },
+    tab.pinned
+      ? { label: 'Unpin Tab', action: 'unpin' }
+      : { label: 'Pin Tab', action: 'pin' },
+    { sep: true },
+    { label: 'Duplicate Tab', action: 'duplicate' },
+  ];
+
+  const menu = document.createElement('div');
+  menu.className = 'tab-ctx-menu';
+  menu.id = 'tabCtxMenu';
+  items.forEach(function(it) {
+    if (it.sep) {
+      var sep = document.createElement('div');
+      sep.className = 'ctx-sep';
+      menu.appendChild(sep);
+      return;
+    }
+    var el = document.createElement('div');
+    el.className = 'ctx-item' + (it.disabled ? ' disabled' : '');
+    el.textContent = it.label;
+    el.dataset.action = it.action;
+    menu.appendChild(el);
+  });
+
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  document.body.appendChild(menu);
+
+  // 메뉴가 뷰포트 밖으로 나가면 보정
+  var rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + 'px';
+  if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 4) + 'px';
+
+  menu.addEventListener('click', function(e) {
+    var action = e.target.dataset.action;
+    if (!action) return;
+    closeTabContextMenu();
+    switch (action) {
+      case 'close':
+        closeTab(tabId);
+        break;
+      case 'closeOthers':
+        othersClosable.forEach(function(t) { closeTab(t.id); });
+        break;
+      case 'closeAll':
+        allClosable.forEach(function(t) { closeTab(t.id); });
+        break;
+      case 'closeRight':
+        rightClosable.forEach(function(t) { closeTab(t.id); });
+        break;
+      case 'pin':
+        tab.pinned = true;
+        renderTabBar();
+        debouncePersist();
+        break;
+      case 'unpin':
+        tab.pinned = false;
+        renderTabBar();
+        debouncePersist();
+        break;
+      case 'duplicate':
+        saveActiveTabState();
+        createTab({ name: tab.name, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, auth: tab.auth, timeout: tab.timeout });
+        break;
+    }
+  });
+  setTimeout(function() { document.addEventListener('click', closeTabContextMenu, { once: true }); }, 0);
+}
+
+function closeTabContextMenu() {
+  var m = document.getElementById('tabCtxMenu');
+  if (m) m.remove();
 }
 
 function renderContent() {
@@ -1144,9 +1258,9 @@ function renderContent() {
           '<button class="tb-btn js-fmt-btn">Format ▾</button>' +
           '<div class="fmt-menu js-fmt-menu">' +
             '<div class="fmt-menu-label">Style</div>' +
-            '<div class="fmt-menu-item js-fmt-style" data-style="pretty"><span class="check">✓</span>Pretty</div>' +
+            '<div class="fmt-menu-item js-fmt-style" data-style="pretty"><span class="check">' + (lang === 'xml' ? ' ' : '✓') + '</span>Pretty</div>' +
             '<div class="fmt-menu-item js-fmt-style" data-style="compact"><span class="check"> </span>Compact</div>' +
-            (lang === 'xml' ? '<div class="fmt-menu-item js-fmt-style" data-style="inline"><span class="check"> </span>Inline Children</div>' : '') +
+            (lang === 'xml' ? '<div class="fmt-menu-item js-fmt-style" data-style="inline"><span class="check">✓</span>Inline Children</div>' : '') +
             '<div class="fmt-menu-sep"></div>' +
             '<div class="fmt-menu-label">Indent</div>' +
             '<div class="fmt-menu-item js-fmt-indent" data-indent="2"><span class="check">✓</span>2 spaces</div>' +
@@ -1456,6 +1570,12 @@ function bindContentEvents() {
         applyFormat(mc);
       });
     });
+  }
+
+  // XML/JSON 초기 포맷 적용 (응답 수신 시 즉시 포맷팅)
+  if (mc.querySelector('.js-res-body-toolbar')) {
+    console.log('[arc-client] 초기 포맷 적용 호출');
+    applyFormat(mc);
   }
 
   // JSON 트리 초기 렌더링
@@ -2180,6 +2300,7 @@ function getFormatOptions(mc) {
 
 function applyFormat(mc) {
   var opts = getFormatOptions(mc);
+  console.log('[arc-client] applyFormat 호출, opts:', opts);
   if (!opts) return;
   var tab = tabs.find(function(t) { return t.id === activeTabId; });
   if (!tab || !tab.response) return;
@@ -2218,6 +2339,7 @@ function formatJson(body, style, indent) {
 
 // === XML 포맷터 (정규식 기반, 외부 라이브러리 없음) ===
 function formatXml(xml, style, indent) {
+  console.log('[arc-client] formatXml 호출, style:', style, 'indent:', JSON.stringify(indent));
   // 선행 공백/줄바꿈 정규화
   xml = xml.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
 
@@ -2376,7 +2498,7 @@ function checkUnresolvedVars() {
 function persistTabState() {
   saveActiveTabState();
   var tabData = tabs.map(function(t) {
-    return { name: t.name, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, auth: t.auth, timeout: t.timeout };
+    return { name: t.name, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, auth: t.auth, timeout: t.timeout, pinned: t.pinned || false };
   });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
   vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx) });

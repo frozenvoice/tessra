@@ -32,6 +32,7 @@ export interface TabState {
   bodyType: RequestBodyType;
   auth: AuthConfig;
   timeout: number;
+  pinned?: boolean;
 }
 
 // HTTP 요청 정의
@@ -64,6 +65,7 @@ export interface HistoryEntry {
   request: Request;
   response: { status: number; statusText: string; time: number } | null;
   timestamp: number;
+  pinned?: boolean;
 }
 
 // 컬렉션 내 항목 (요청 또는 폴더)

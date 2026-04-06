@@ -28,7 +28,7 @@ export class GuidePanel {
 
   public static show(extensionUri: vscode.Uri): void {
     if (GuidePanel.currentPanel) {
-      GuidePanel.currentPanel.panel.reveal(vscode.ViewColumn.One);
+      GuidePanel.currentPanel.panel.reveal();
       return;
     }
 

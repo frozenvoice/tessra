@@ -18,6 +18,18 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Arc Client",
+      "properties": {
+        "arc-client.historyMaxItems": {
+          "type": "number",
+          "default": 100,
+          "minimum": 10,
+          "maximum": 1000,
+          "description": "히스토리 최대 보관 개수. 초과 시 pinned 되지 않은 오래된 항목부터 자동 삭제됩니다."
+        }
+      }
+    },
     "commands": [
       {
         "command": "arc.newRequest",
@@ -54,6 +66,21 @@
         "command": "arc.clearHistory",
         "title": "Clear History",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "arc.pinHistory",
+        "title": "Pin",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "arc.unpinHistory",
+        "title": "Unpin",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "arc.deletePinnedHistory",
+        "title": "Delete (Pinned)",
+        "icon": "$(trash)"
       },
       {
         "command": "arc.createEnvironment",
@@ -299,6 +326,21 @@
           "command": "arc.deleteEnvironment",
           "when": "viewItem == environment || viewItem == environment-active",
           "group": "1_edit@2"
+        },
+        {
+          "command": "arc.pinHistory",
+          "when": "viewItem == history",
+          "group": "inline"
+        },
+        {
+          "command": "arc.unpinHistory",
+          "when": "viewItem == history-pinned",
+          "group": "inline"
+        },
+        {
+          "command": "arc.deletePinnedHistory",
+          "when": "viewItem == history-pinned",
+          "group": "2_delete@1"
         }
       ]
     }

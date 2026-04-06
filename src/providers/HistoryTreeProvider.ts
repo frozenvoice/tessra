@@ -22,10 +22,16 @@ export class HistoryTreeProvider
     this.refresh();
   }
 
+  // 뷰 타이틀 갱신 콜백 (extension.ts에서 설정)
+  onCountChanged: ((count: number) => void) | undefined;
+
   constructor(private storage: StorageService) {}
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
+    // 개수 갱신 알림
+    const count = this.storage.getHistory().length;
+    this.onCountChanged?.(count);
   }
 
   getTreeItem(entry: HistoryEntry): vscode.TreeItem {
@@ -35,10 +41,12 @@ export class HistoryTreeProvider
     const time = entry.response ? `${entry.response.time}ms` : '';
     const label = `${method} ${url}`;
 
-    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+    const pinLabel = entry.pinned ? '📌 ' : '';
+    const item = new vscode.TreeItem(pinLabel + label, vscode.TreeItemCollapsibleState.None);
     item.description = `${status} ${time}`;
-    item.tooltip = `${method} ${entry.request.url}\n${status} ${time}\n${new Date(entry.timestamp).toLocaleString()}`;
+    item.tooltip = `${entry.pinned ? '[고정] ' : ''}${method} ${entry.request.url}\n${status} ${time}\n${new Date(entry.timestamp).toLocaleString()}`;
     item.iconPath = this.getMethodIcon(method);
+    item.contextValue = entry.pinned ? 'history-pinned' : 'history';
 
     item.command = {
       command: 'arc.loadFromHistory',
@@ -50,16 +58,21 @@ export class HistoryTreeProvider
   }
 
   getChildren(): HistoryEntry[] {
-    const entries = this.storage.getHistory();
+    let entries = this.storage.getHistory();
     const q = this._filterText.toLowerCase();
-    if (!q) { return entries; }
+    if (q) {
+      entries = entries.filter((e) => {
+        const method = e.request.method.toLowerCase();
+        const url = e.request.url.toLowerCase();
+        const status = e.response ? String(e.response.status) : 'err';
+        return method.includes(q) || url.includes(q) || status.includes(q);
+      });
+    }
 
-    return entries.filter((e) => {
-      const method = e.request.method.toLowerCase();
-      const url = e.request.url.toLowerCase();
-      const status = e.response ? String(e.response.status) : 'err';
-      return method.includes(q) || url.includes(q) || status.includes(q);
-    });
+    // pinned 항목을 최상단에 고정 (각 그룹 내 순서는 유지)
+    const pinned = entries.filter((e) => e.pinned);
+    const unpinned = entries.filter((e) => !e.pinned);
+    return [...pinned, ...unpinned];
   }
 
   // === 드래그앤드롭 ===

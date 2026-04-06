@@ -40,6 +40,18 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: historyProvider,
     dragAndDropController: historyProvider,
   });
+
+  // 히스토리 뷰 타이틀 갱신 (개수 + 필터 표시)
+  function updateHistoryDescription(): void {
+    const count = storage.getHistory().length;
+    const filter = historyProvider.filterText;
+    const parts: string[] = [];
+    if (count > 0) { parts.push(`(${count})`); }
+    if (filter) { parts.push(filter); }
+    historyTreeView.description = parts.length > 0 ? parts.join(' ') : undefined;
+  }
+  historyProvider.onCountChanged = () => updateHistoryDescription();
+  updateHistoryDescription();
   const environmentTreeView = vscode.window.createTreeView('arc.environments', {
     treeDataProvider: environmentProvider,
     dragAndDropController: environmentProvider,
@@ -214,7 +226,7 @@ export function activate(context: vscode.ExtensionContext) {
       inputBox.title = 'Filter History';
       inputBox.onDidChangeValue((value) => {
         historyProvider.filterText = value;
-        historyTreeView.description = value || undefined;
+        updateHistoryDescription();
         vscode.commands.executeCommand('setContext', 'arc.historyFilterActive', !!value);
       });
       inputBox.onDidAccept(() => inputBox.hide());
@@ -226,7 +238,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.clearHistoryFilter', () => {
       historyProvider.filterText = '';
-      historyTreeView.description = undefined;
+      updateHistoryDescription();
       vscode.commands.executeCommand('setContext', 'arc.historyFilterActive', false);
     })
   );
@@ -267,14 +279,52 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.clearHistory', async () => {
+    vscode.commands.registerCommand('arc.pinHistory', (entry: HistoryEntry) => {
+      storage.setHistoryPin(entry.id, true);
+      historyProvider.refresh();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('arc.unpinHistory', (entry: HistoryEntry) => {
+      storage.setHistoryPin(entry.id, false);
+      historyProvider.refresh();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('arc.deletePinnedHistory', async (entry: HistoryEntry) => {
       const confirm = await vscode.window.showWarningMessage(
-        '히스토리를 모두 삭제하시겠습니까?',
+        `고정된 항목을 삭제하시겠습니까?\n${entry.request.method} ${entry.request.url}`,
         { modal: true },
         '삭제'
       );
       if (confirm === '삭제') {
-        storage.saveHistory([]);
+        const history = storage.getHistory().filter((e) => e.id !== entry.id);
+        storage.saveHistory(history);
+        historyProvider.refresh();
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('arc.clearHistory', async () => {
+      const history = storage.getHistory();
+      const pinned = history.filter((e) => e.pinned);
+      const unpinnedCount = history.length - pinned.length;
+
+      if (unpinnedCount === 0) {
+        vscode.window.showInformationMessage('삭제할 항목이 없습니다. (모두 Pin 상태)');
+        return;
+      }
+
+      const msg = pinned.length > 0
+        ? `Pin된 ${pinned.length}개 항목은 유지됩니다. 나머지 ${unpinnedCount}개를 삭제하시겠습니까?`
+        : `히스토리 ${unpinnedCount}개를 모두 삭제하시겠습니까?`;
+
+      const confirm = await vscode.window.showWarningMessage(msg, { modal: true }, '삭제');
+      if (confirm === '삭제') {
+        storage.saveHistory(pinned);
         historyProvider.refresh();
       }
     })

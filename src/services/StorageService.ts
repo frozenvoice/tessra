@@ -67,13 +67,38 @@ export class StorageService {
     this.writeJson(this.historyPath, history);
   }
 
-  addHistoryEntry(entry: HistoryEntry): void {
+  addHistoryEntry(entry: HistoryEntry): number {
     const history = this.getHistory();
     history.unshift(entry);
-    if (history.length > 200) {
-      history.length = 200;
-    }
+    const removed = this.pruneHistory(history);
     this.saveHistory(history);
+    return removed;
+  }
+
+  // 히스토리 자동 정리: maxItems 초과 시 pinned 아닌 오래된 항목부터 삭제
+  // 삭제된 개수를 반환
+  pruneHistory(history: HistoryEntry[]): number {
+    const maxItems = vscode.workspace.getConfiguration('arc-client').get<number>('historyMaxItems', 100);
+    if (history.length <= maxItems) { return 0; }
+
+    let removed = 0;
+    // 뒤(오래된 것)부터 순회하며 pinned 아닌 항목 삭제
+    for (let i = history.length - 1; i >= 0 && history.length > maxItems; i--) {
+      if (!history[i].pinned) {
+        history.splice(i, 1);
+        removed++;
+      }
+    }
+    return removed;
+  }
+
+  setHistoryPin(id: string, pinned: boolean): void {
+    const history = this.getHistory();
+    const entry = history.find((e) => e.id === id);
+    if (entry) {
+      entry.pinned = pinned;
+      this.saveHistory(history);
+    }
   }
 
   // === 환경변수 ===
