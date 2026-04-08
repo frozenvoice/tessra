@@ -92,10 +92,10 @@ export class EnvironmentTreeProvider
     );
     item.contextValue = isActive ? 'environment-active' : 'environment';
 
-    // 클릭 시 변수 편집 (활성화는 우클릭 Set Active로)
+    // 싱글클릭: 변수 편집, 더블클릭: 활성/비활성 토글
     item.command = {
-      command: 'arc.editEnvironment',
-      title: '변수 편집',
+      command: 'arc.onEnvironmentClick',
+      title: '환경 클릭',
       arguments: [env],
     };
 

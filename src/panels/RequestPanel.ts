@@ -206,10 +206,11 @@ export class RequestPanel {
     this.postMessage({ type: 'newTab' });
   }
 
-  // 외부에서 요청 로드 → Webview에 새 탭으로 전달
+  // 외부에서 요청 로드 → Webview에 새 탭으로 전달 (중복 탭 방지용 requestId 포함)
   public loadRequest(req: Request) {
     this.postMessage({
       type: MessageType.LoadRequest,
+      requestId: req.id,
       method: req.method,
       url: req.url,
       headers: req.headers ?? [],
@@ -365,14 +366,17 @@ export class RequestPanel {
     if (!this.isIncomingMessage(message)) { return; }
     // Webview 초기화 완료 → 저장된 탭 복원
     if (message.type === 'webviewReady') {
-      if (this.pendingRestore) {
+      // 매 webviewReady마다 저장소에서 탭 상태를 읽어 복원
+      // (retainContextWhenHidden 없이 복원된 패널은 숨김→표시 시 webview가 재생성됨)
+      const state = this.pendingRestore ?? RequestPanel.storage.getTabState();
+      if (state && state.tabs.length > 0) {
         this.postMessage({
           type: MessageType.RestoreTabState,
-          tabs: this.pendingRestore.tabs,
-          activeIndex: this.pendingRestore.activeIndex,
+          tabs: state.tabs,
+          activeIndex: state.activeIndex,
         });
-        this.pendingRestore = null;
       }
+      this.pendingRestore = null;
       this.updateActiveEnv(RequestPanel.environmentProvider.getActiveEnvironmentName());
       return;
     }
@@ -384,8 +388,8 @@ export class RequestPanel {
         this.cancelActiveRequest(message.tabId);
         break;
       }
-      case MessageType.SaveRequest:
-        await RequestPanel.collectionProvider.saveRequest({
+      case MessageType.SaveRequest: {
+        const saved = await RequestPanel.collectionProvider.saveRequest({
           method: message.method,
           url: message.url,
           headers: message.headers ?? [],
@@ -394,7 +398,9 @@ export class RequestPanel {
           bodyType: RequestPanel.normalizeBodyType(message.bodyType),
           auth: message.auth ?? { type: 'none' },
         });
+        this.postMessage({ type: MessageType.SaveRequestResult, saved: !!saved });
         break;
+      }
       case MessageType.CopyAsCurl: {
         const curl = CurlService.generate({
           method: message.method,
@@ -415,9 +421,11 @@ export class RequestPanel {
       case MessageType.CopyToClipboard:
         await vscode.env.clipboard.writeText(message.text ?? '');
         break;
-      case MessageType.SaveResponseBody:
-        await this.saveResponseBody(message.body, message.contentType, message.bodyBase64);
+      case MessageType.SaveResponseBody: {
+        const bodySaved = await this.saveResponseBody(message.body, message.contentType, message.bodyBase64);
+        this.postMessage({ type: MessageType.SaveResponseBodyResult, saved: bodySaved });
         break;
+      }
       case MessageType.SaveEnvironmentVars:
         RequestPanel.storage.updateEnvironmentVars(message.envId, message.variables);
         RequestPanel.environmentProvider.refresh();
@@ -656,7 +664,7 @@ export class RequestPanel {
   }
 
   // 응답 바디를 파일로 저장
-  private async saveResponseBody(body: string, contentType: string, bodyBase64?: string): Promise<void> {
+  private async saveResponseBody(body: string, contentType: string, bodyBase64?: string): Promise<boolean> {
     const ext = RequestPanel.contentTypeToExt(contentType);
     // 기본 파일명: response_YYYYMMDD_HHmmss.확장자
     const now = new Date();
@@ -668,13 +676,15 @@ export class RequestPanel {
         'All Files': ['*'],
       },
     });
-    if (!uri) { return; }
+    if (!uri) { return false; }
     try {
       const bytes = bodyBase64 ? Buffer.from(bodyBase64, 'base64') : Buffer.from(body, 'utf-8');
       await vscode.workspace.fs.writeFile(uri, bytes);
       vscode.window.showInformationMessage(`응답 저장 완료: ${uri.fsPath}`);
+      return true;
     } catch (err: unknown) {
       vscode.window.showErrorMessage(`저장 실패: ${err instanceof Error ? err.message : String(err)}`);
+      return false;
     }
   }
 
@@ -724,20 +734,21 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 /* === 요청 탭 바 === */
 .tab-bar{display:flex;background:var(--vscode-editorGroupHeader-tabsBackground,var(--vscode-editor-background));border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;overflow-x:auto;scrollbar-width:thin}
 .tab-bar::-webkit-scrollbar{height:3px}
-.req-tab{display:flex;align-items:center;gap:4px;padding:4px 10px;font-size:12px;cursor:pointer;border-right:1px solid var(--vscode-panel-border,#333);white-space:nowrap;opacity:.6;min-width:0;flex-shrink:0;user-select:none}
-.req-tab:hover{opacity:.85}
-.req-tab.active{opacity:1;background:var(--vscode-editor-background);border-bottom:2px solid var(--vscode-focusBorder)}
-.req-tab .method-badge{font-weight:700;font-size:11px;padding:1px 4px;border-radius:2px}
+.req-tab{display:flex;align-items:center;gap:4px;padding:4px 10px;font-size:13px;cursor:pointer;border-right:1px solid var(--vscode-panel-border,#333);white-space:nowrap;opacity:.6;min-width:0;flex-shrink:0;user-select:none;transition:background .15s,opacity .15s;border-bottom:3px solid transparent}
+.req-tab:hover{opacity:.85;background:rgba(255,255,255,.04)}
+.req-tab.active{opacity:1;background:var(--vscode-editor-background);border-bottom:3px solid var(--vscode-focusBorder)}
+.req-tab .method-badge{font-weight:700;font-size:13px;padding:1px 4px;border-radius:2px}
 .method-GET{color:#4ec94e}.method-POST{color:#e5c07b}.method-PUT{color:#61afef}.method-PATCH{color:#d19a66}.method-DELETE{color:#e06c75}.method-HEAD{color:#abb2bf}.method-OPTIONS{color:#abb2bf}
-.req-tab .close-tab{opacity:.5;cursor:pointer;font-size:12px;padding:0 2px;line-height:1}
+.req-tab.active.tab-GET{border-bottom-color:#4ec94e}.req-tab.active.tab-POST{border-bottom-color:#e5c07b}.req-tab.active.tab-PUT{border-bottom-color:#61afef}.req-tab.active.tab-PATCH{border-bottom-color:#d19a66}.req-tab.active.tab-DELETE{border-bottom-color:#e06c75}.req-tab.active.tab-HEAD{border-bottom-color:#abb2bf}.req-tab.active.tab-OPTIONS{border-bottom-color:#abb2bf}
+.req-tab .close-tab{opacity:.5;cursor:pointer;font-size:13px;padding:0 2px;line-height:1}
 .req-tab .close-tab:hover{opacity:1;color:var(--vscode-errorForeground)}
 .req-tab.pinned{opacity:.85;border-left:2px solid var(--vscode-focusBorder)}
 .req-tab.pinned .close-tab{display:none}
-.req-tab.pinned .pin-icon{display:inline;font-size:11px;margin-right:2px}
+.req-tab.pinned .pin-icon{display:inline;font-size:13px;margin-right:2px}
 .req-tab .pin-icon{display:none}
 .add-tab{padding:4px 10px;cursor:pointer;opacity:.5;font-size:14px;display:flex;align-items:center}
 .add-tab:hover{opacity:1}
-.tab-ctx-menu{position:fixed;z-index:9999;background:var(--vscode-menu-background,#252526);border:1px solid var(--vscode-menu-border,#454545);border-radius:4px;padding:4px 0;min-width:160px;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:12px}
+.tab-ctx-menu{position:fixed;z-index:9999;background:var(--vscode-menu-background,#252526);border:1px solid var(--vscode-menu-border,#454545);border-radius:4px;padding:4px 0;min-width:160px;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:13px}
 .tab-ctx-menu .ctx-item{padding:4px 16px;cursor:pointer;color:var(--vscode-menu-foreground,#ccc)}
 .tab-ctx-menu .ctx-item:hover{background:var(--vscode-menu-selectionBackground,#094771);color:var(--vscode-menu-selectionForeground,#fff)}
 .tab-ctx-menu .ctx-item.disabled{opacity:.4;cursor:default;pointer-events:none}
@@ -747,99 +758,130 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .main-content{flex:1;overflow:hidden;display:flex;flex-direction:column}
 
 /* URL 바 */
-.url-bar{display:flex;gap:6px;padding:6px 10px;flex-shrink:0}
-.url-bar select{width:95px;padding:4px 5px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:3px;font-size:12px;font-weight:700}
-.url-bar input{flex:1;padding:4px 8px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:3px;font-size:12px;font-family:var(--vscode-editor-font-family,monospace)}
+.url-bar{display:flex;gap:8px;padding:8px 10px;flex-shrink:0;align-items:center;position:relative;overflow:visible}
+.url-bar select{width:100px;padding:6px 8px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:6px;font-size:13px;font-weight:700}
+.url-bar input{flex:1;padding:6px 10px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:6px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
 .url-bar input:focus{outline:1px solid var(--vscode-focusBorder)}
 .url-input-wrap{position:relative;flex:1;display:flex}
 .url-input-wrap input{flex:1;width:100%}
-.var-overlay{position:absolute;top:0;left:0;right:0;bottom:0;padding:4px 8px;font-size:12px;font-family:var(--vscode-editor-font-family,monospace);pointer-events:none;white-space:nowrap;overflow:hidden;color:transparent}
+.var-overlay{position:absolute;top:0;left:0;right:0;bottom:0;padding:6px 10px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace);pointer-events:none;white-space:nowrap;overflow:hidden;color:transparent}
 .unresolved-var{text-decoration:wavy underline #e06c75;text-decoration-skip-ink:none;color:transparent}
-.btn{padding:4px 12px;background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:3px;font-size:12px;font-weight:600;cursor:pointer}
+.btn{padding:4px 12px;background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}
 .btn:hover{background:var(--vscode-button-hoverBackground)}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btn-s{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
-.btn-cancel{background:#a1260d;color:#fff}
-.btn-cancel:hover{background:#c42b1c}
 .btn-s:hover{background:var(--vscode-button-secondaryHoverBackground)}
-.timeout-wrap{display:flex;align-items:center;gap:0;margin-left:-2px}
-.timeout-icon{font-size:12px;opacity:.45;margin-right:3px;user-select:none}
-.timeout-input{width:50px;padding:4px 3px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:3px;font-size:11px;text-align:center;font-family:var(--vscode-editor-font-family,monospace)}
-.timeout-input:focus{outline:1px solid var(--vscode-focusBorder)}
-.timeout-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-.timeout-suffix{font-size:9px;opacity:.5;margin-left:2px;user-select:none}
+/* Send 버튼 */
+.btn-send{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:5px;padding:6px 16px;background:#0078d4;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s}
+.btn-send:hover{background:#1a8ae8}
+.btn-send svg{flex-shrink:0}
+/* Stop 버튼 (전송 중) */
+.btn-stop{display:inline-flex;align-items:center;gap:5px;padding:6px 16px;background:#c42b1c;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s}
+.btn-stop:hover{background:#e04535}
+.btn-stop .stop-icon{display:inline-block;width:10px;height:10px;background:#fff;border-radius:1px}
 .url-bar-spacer{flex:1}
 
 /* 내부 탭 */
-.tabs{display:flex;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;padding:0 10px}
-.tab{padding:4px 12px;cursor:pointer;border-bottom:2px solid transparent;opacity:.5;font-size:11px;user-select:none;text-transform:uppercase;letter-spacing:.5px}
-.tab:hover{opacity:.75}
-.tab.active{opacity:1;border-bottom-color:var(--vscode-focusBorder)}
+.tabs{display:flex;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;padding:0 10px;gap:2px}
+.tab{padding:6px 14px;cursor:pointer;border-bottom:2px solid transparent;opacity:.45;font-size:13px;user-select:none;text-transform:uppercase;letter-spacing:.5px;transition:opacity .15s}
+.tab:hover{opacity:.8}
+.tab.active{opacity:1;border-bottom-color:#0078d4}
 
 /* 패널 레이아웃 */
 .split{flex:1;overflow:hidden;display:flex;flex-direction:column}
 .req-area{flex:none;min-height:60px;overflow-y:auto;padding:4px 10px}
-.divider{height:5px;background:var(--vscode-panel-border,#444);flex-shrink:0;cursor:row-resize;position:relative;z-index:10}
-.divider:hover,.divider.active{background:var(--vscode-focusBorder)}
-.divider::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:30px;height:1px;background:var(--vscode-foreground);opacity:.25;border-radius:1px}
+.divider{height:5px;background:var(--vscode-panel-border,#444);flex-shrink:0;cursor:row-resize;position:relative;z-index:10;border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(0,0,0,.2)}
+.divider:hover,.divider.active{background:#0078d4}
+.divider::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:2px;background:var(--vscode-foreground);opacity:.2;border-radius:2px}
 .res-area{flex:1;min-height:40px;overflow:hidden;display:flex;flex-direction:column;padding:0 10px}
 
 /* KV 행 */
 .kv-section{padding:3px 0}
 .kv-row{display:flex;gap:3px;margin-bottom:2px;align-items:center}
 .kv-row input[type="checkbox"]{width:14px;height:14px;accent-color:var(--vscode-focusBorder)}
-.kv-row input[type="text"],.kv-row input[type="password"]{flex:1;padding:3px 5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-size:11px;font-family:var(--vscode-editor-font-family,monospace)}
+.kv-row input[type="text"],.kv-row input[type="password"]{flex:1;padding:3px 5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
 .kv-row .rm{background:transparent;border:none;color:var(--vscode-errorForeground,#f44);cursor:pointer;font-size:13px;padding:0 3px;line-height:1}
-.add-btn{background:transparent;border:1px dashed var(--vscode-input-border,#555);color:var(--vscode-foreground);padding:2px 8px;border-radius:2px;cursor:pointer;font-size:12px;opacity:.5;margin-top:2px}
-.auto-badge{font-size:9px;opacity:.4;white-space:nowrap;margin-left:2px;user-select:none}
-.add-btn:hover{opacity:1}
+.add-btn{background:transparent;border:none;color:var(--vscode-textLink-foreground,#3794ff);padding:4px 2px;border-radius:4px;cursor:pointer;font-size:13px;opacity:.7;margin-top:4px}
+.auto-badge{font-size:13px;opacity:.4;white-space:nowrap;margin-left:2px;user-select:none}
+.add-btn:hover{opacity:1;text-decoration:underline}
 
 /* Body */
-.body-type-select{padding:3px 5px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:2px;font-size:12px;margin-bottom:4px}
-.body-section textarea{width:100%;min-height:70px;max-height:50vh;padding:5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-family:var(--vscode-editor-font-family,monospace);font-size:12px;resize:none;overflow-y:auto;field-sizing:content}
+.body-type-select{padding:3px 5px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:2px;font-size:13px;margin-bottom:4px}
+.body-section textarea{width:100%;min-height:70px;max-height:50vh;padding:5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;resize:vertical;overflow-y:auto;field-sizing:content}
 
 /* Auth */
 .auth-section{padding:3px 0}
-.auth-section select{padding:3px 5px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:2px;font-size:11px;margin-bottom:4px}
+.auth-section select{padding:3px 5px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:2px;font-size:13px;margin-bottom:4px}
 .auth-section .auth-fields{display:flex;flex-direction:column;gap:3px}
-.auth-section .auth-fields input,.auth-section .auth-fields select{padding:3px 5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-size:11px}
+.auth-section .auth-fields input,.auth-section .auth-fields select{padding:3px 5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-size:13px}
 .auth-row{display:flex;gap:4px;align-items:center}
-.auth-row label{font-size:11px;opacity:.6;min-width:55px}
+.auth-row label{font-size:13px;opacity:.6;min-width:55px}
+
+/* Settings 패널 */
+.settings-section{padding:8px 4px}
+.settings-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.settings-label{font-size:13px;opacity:.8;min-width:80px;font-weight:600}
+.settings-input{width:80px;padding:4px 8px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:4px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
+.settings-input:focus{outline:1px solid var(--vscode-focusBorder)}
+.settings-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.settings-hint{font-size:13px;opacity:.4}
 
 /* 환경변수 편집 */
 .env-editor{padding:6px 10px;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;background:var(--vscode-sideBar-background,var(--vscode-editor-background))}
-.env-editor-title{font-size:11px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px}
-.env-badge{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);padding:1px 6px;border-radius:8px;font-size:9px}
+.env-editor-title{font-size:13px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.env-badge{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);padding:1px 6px;border-radius:8px;font-size:13px}
+.env-autosave-indicator{font-size:12px;color:var(--vscode-charts-green,#4ec94e);opacity:0;transition:opacity .3s;display:flex;align-items:center;gap:3px}
+.env-autosave-indicator.show{opacity:1}
+.env-dirty-dot{width:6px;height:6px;border-radius:50%;background:var(--vscode-editorWarning-foreground,#cca700);display:none}
+.env-dirty-dot.show{display:inline-block}
 
 /* 응답 */
-.response-meta{display:flex;gap:10px;align-items:center;padding:5px 0;flex-shrink:0;font-size:11px}
+.response-meta{display:flex;gap:10px;align-items:center;padding:5px 0;flex-shrink:0;font-size:13px}
+.res-action-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border:1px solid var(--vscode-input-border,#555);border-radius:6px;background:transparent;color:var(--vscode-foreground);font-size:13px;cursor:pointer;transition:background .15s,transform .1s;user-select:none}
+.res-action-btn:hover{background:var(--vscode-button-secondaryHoverBackground,rgba(255,255,255,.1));transform:scale(1.05)}
+.res-action-btn:active{transform:scale(.92)}
+.res-action-btn svg{flex-shrink:0;color:var(--vscode-foreground)}
 .status{font-weight:700;padding:1px 6px;border-radius:3px}
 .status-2xx{background:#1a3a1a;color:#4ec94e}
 .status-3xx{background:#3a3a1a;color:#c9c94e}
 .status-4xx{background:#3a1a1a;color:#c94e4e}
 .status-5xx{background:#3a1a2a;color:#c94e8e}
 
-.resolved-url{padding:3px 8px;font-size:10px;color:var(--vscode-textLink-foreground,#3794ff);background:var(--vscode-input-background);border-radius:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-family:var(--vscode-editor-font-family,monospace);flex-shrink:0}
+.resolved-url{padding:3px 8px;font-size:13px;color:var(--vscode-textLink-foreground,#3794ff);background:var(--vscode-input-background);border-radius:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-family:var(--vscode-editor-font-family,monospace);flex-shrink:0}
 .resolved-url:hover{text-decoration:underline;opacity:.85}
 .resolved-url.copied{color:#4ec94e}
-.resolved-headers-section{margin-bottom:4px}
-.resolved-headers-title{font-size:10px;font-weight:700;color:var(--vscode-descriptionForeground,#888);text-transform:uppercase;letter-spacing:.5px;padding:2px 0}
-.res-headers-pre pre{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:11px;white-space:pre-wrap;word-break:break-all;margin:0}
+.resolved-headers-section{margin-bottom:8px}
+.resolved-headers-title{font-size:13px;font-weight:700;color:var(--vscode-descriptionForeground,#888);text-transform:uppercase;letter-spacing:.5px;padding:2px 0}
+.res-header-table{width:100%;border-collapse:collapse;font-family:var(--vscode-editor-font-family,monospace);font-size:13px}
+.res-header-table thead th{text-align:left;padding:4px 8px;font-size:13px;font-weight:600;color:var(--vscode-descriptionForeground,#888);text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--vscode-input-border,#555);position:sticky;top:0;background:var(--vscode-editor-background)}
+.res-header-table tbody tr{border-bottom:1px solid var(--vscode-input-border,rgba(85,85,85,.3))}
+.res-header-table tbody tr:hover{background:var(--vscode-list-hoverBackground,rgba(255,255,255,.04))}
+.res-header-table td{padding:3px 8px;vertical-align:top}
+.res-header-key-col{width:200px}
+.res-header-key{font-weight:700;color:var(--vscode-foreground);white-space:nowrap}
+.res-header-value{color:var(--vscode-descriptionForeground,#aaa);max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res-header-value:hover{white-space:normal;word-break:break-all;overflow:visible}
+.res-headers-panel{overflow:auto;flex:1;padding:4px 0}
+.res-cookies-panel{overflow:auto;flex:1;padding:4px 0}
+.res-cookie-table th,.res-cookie-table td{font-size:13px;padding:3px 6px}
+.cookie-badge{display:inline-block;background:var(--vscode-badge-background,#4d4d4d);color:var(--vscode-badge-foreground,#ccc);font-size:13px;padding:0 4px;border-radius:3px;font-weight:600}
+.tab-count{display:inline-block;background:var(--vscode-badge-background,#4d4d4d);color:var(--vscode-badge-foreground,#ccc);font-size:13px;padding:0 5px;border-radius:8px;margin-left:3px;min-width:14px;text-align:center;line-height:15px;vertical-align:middle}
 
-.json-body{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:11px;white-space:pre-wrap;word-break:break-all;overflow:auto;flex:1;line-height:1.45}
+.json-body{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;white-space:pre-wrap;word-break:break-all;overflow:auto;flex:1;line-height:1.45}
 .json-key{color:#9cdcfe}.json-str{color:#ce9178}.json-num{color:#b5cea8}.json-bool{color:#569cd6}.json-null{color:#569cd6}
 
 /* 응답 바디 툴바 */
 .res-body-toolbar{display:flex;align-items:center;gap:4px;padding:2px 0;flex-shrink:0}
 .res-body-toolbar .toggle-group{display:flex;border:1px solid var(--vscode-input-border,#555);border-radius:3px;overflow:hidden;margin-right:4px}
-.res-body-toolbar .toggle-btn{padding:2px 8px;font-size:9px;cursor:pointer;background:transparent;color:var(--vscode-foreground);border:none;opacity:.6;user-select:none}
+.res-body-toolbar .toggle-btn{padding:2px 8px;font-size:13px;cursor:pointer;background:transparent;color:var(--vscode-foreground);border:none;opacity:.6;user-select:none}
 .res-body-toolbar .toggle-btn:hover{opacity:.85}
 .res-body-toolbar .toggle-btn.active{opacity:1;background:var(--vscode-button-secondaryBackground)}
-.res-body-toolbar .tb-btn{padding:2px 6px;font-size:9px;cursor:pointer;background:transparent;color:var(--vscode-foreground);border:1px solid var(--vscode-input-border,#555);border-radius:3px;opacity:.6}
+.res-body-toolbar .tb-btn{position:relative;overflow:hidden;padding:2px 6px;font-size:13px;cursor:pointer;background:transparent;color:var(--vscode-foreground);border:1px solid var(--vscode-input-border,#555);border-radius:3px;opacity:.6;transition:transform .1s}
 .res-body-toolbar .tb-btn:hover{opacity:1}
+.res-body-toolbar .tb-btn:active{transform:scale(.92)}
 
 /* JSON 트리 뷰 */
-.json-tree{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:11px;overflow:auto;flex:1;line-height:1.6;user-select:text}
+.json-tree{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;overflow:auto;flex:1;line-height:1.6;user-select:text}
 .jt-node{padding-left:16px}
 .jt-row{display:flex;align-items:baseline;white-space:nowrap}
 .jt-toggle{display:inline-block;width:14px;cursor:pointer;text-align:center;color:var(--vscode-foreground);opacity:.5;flex-shrink:0;user-select:none}
@@ -852,9 +894,9 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 
 /* Format 드롭다운 */
 .fmt-wrap{position:relative;display:inline-block}
-.fmt-menu{display:none;position:absolute;top:100%;left:0;z-index:100;background:var(--vscode-dropdown-background,#252526);border:1px solid var(--vscode-dropdown-border,#555);border-radius:3px;padding:4px 0;min-width:170px;font-size:9px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.fmt-menu{display:none;position:absolute;top:100%;left:0;z-index:100;background:var(--vscode-dropdown-background,#252526);border:1px solid var(--vscode-dropdown-border,#555);border-radius:3px;padding:4px 0;min-width:170px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .fmt-menu.open{display:block}
-.fmt-menu-label{padding:2px 10px;opacity:.5;font-size:8px;text-transform:uppercase;user-select:none}
+.fmt-menu-label{padding:2px 10px;opacity:.5;font-size:13px;text-transform:uppercase;user-select:none}
 .fmt-menu-item{padding:3px 10px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px}
 .fmt-menu-item:hover{background:var(--vscode-list-hoverBackground)}
 .fmt-menu-item .check{width:12px;text-align:center;opacity:.7}
@@ -862,15 +904,76 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .jt-ellipsis{color:var(--vscode-foreground);opacity:.4;cursor:pointer}
 .jt-comma{opacity:.4}
 
-.res-headers-pre{font-family:var(--vscode-editor-font-family,monospace);font-size:11px;background:var(--vscode-input-background);padding:6px;border-radius:3px;overflow:auto;flex:1}
-.error-msg{color:var(--vscode-errorForeground,#f44);padding:6px;font-size:12px}
+.error-msg{color:var(--vscode-errorForeground,#f44);padding:6px;font-size:13px}
 .hidden{display:none!important}
 .spinner{display:inline-block;width:11px;height:11px;border:2px solid var(--vscode-foreground);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* Send 버튼 클릭 → 눌림 효과 */
-@keyframes btn-press{0%{transform:scale(1)}50%{transform:scale(.95)}100%{transform:scale(1)}}
-.btn.btn-pressed{animation:btn-press .15s ease}
+/* 공통 ripple 버튼 효과 */
+.ripple-btn{position:relative;overflow:hidden;transition:transform .05s ease}
+.ripple-btn .ripple-circle{position:absolute;border-radius:50%;background:rgba(255,255,255,.4);transform:scale(0);animation:ripple-expand .35s ease-out forwards;pointer-events:none}
+@keyframes ripple-expand{0%{transform:scale(0);opacity:1}100%{transform:scale(5);opacity:0}}
+/* 클릭 시 배경색 flash */
+.ripple-btn.btn-flash{background:rgba(255,255,255,.25)!important}
+/* 눌림 → 바운스 → 원래 시퀀스 */
+@keyframes btn-bounce{0%{transform:scale(.85)}40%{transform:scale(.85)}60%{transform:scale(1.05)}100%{transform:scale(1)}}
+.ripple-btn.btn-bouncing{animation:btn-bounce .25s cubic-bezier(.22,.68,0,1.2) forwards}
+
+/* ========== Send 버튼 클릭 이펙트 ========== */
+@keyframes send-click{
+  0%{transform:scale(.82);box-shadow:0 0 25px 6px rgba(0,120,212,.8)}
+  40%{transform:scale(1.05) translateY(-2px);box-shadow:0 0 12px 3px rgba(0,120,212,.4)}
+  70%{transform:scale(1) translateY(0);box-shadow:0 0 4px 1px rgba(0,120,212,.15)}
+  100%{transform:scale(1) translateY(0);box-shadow:none}
+}
+.send-click{animation:send-click .25s cubic-bezier(.22,.68,0,1.2) forwards!important;transition:none!important}
+.send-click-flash{background:#40a0ff!important}
+
+/* ========== 전송 중 총알 로딩 바 ========== */
+.bullet-progress{height:3px;width:100%;background:rgba(255,255,255,.05);overflow:hidden;flex-shrink:0;position:relative;opacity:0;transition:opacity .15s}
+.bullet-progress.active{opacity:1}
+@keyframes bullet-run{
+  0%{left:-60px}
+  100%{left:100%}
+}
+.bullet-progress .bullet-glow{position:absolute;top:0;height:100%;width:60px;background:linear-gradient(90deg,transparent,#4da6ff 30%,#80bfff 60%,transparent);border-radius:2px;animation:bullet-run 1.2s ease-in-out infinite;box-shadow:0 0 8px rgba(77,166,255,.5)}
+/* 완료 시: 총알이 끝까지 달려가며 사라짐 */
+@keyframes bullet-finish{
+  0%{left:var(--pos);opacity:1}
+  100%{left:100%;opacity:0}
+}
+.bullet-progress.finishing .bullet-glow{animation:bullet-finish .2s ease-out forwards}
+.bullet-progress.finishing{transition:opacity .15s .2s;opacity:0}
+
+/* ========== Stop 버튼 타격감 ========== */
+/* stop: transform + box-shadow 하나의 keyframe으로 합침 */
+@keyframes stop-slam{
+  0%{transform:scale(.82);box-shadow:0 0 20px rgba(255,50,50,.8)}
+  40%{transform:scale(.82);box-shadow:0 0 16px rgba(255,50,50,.6)}
+  70%{transform:scale(1.06);box-shadow:0 0 6px rgba(255,50,50,.2)}
+  100%{transform:scale(1);box-shadow:none}
+}
+.btn-stop.stop-slam{animation:stop-slam .35s cubic-bezier(.22,.68,0,1.2) forwards!important;transition:none!important}
+.btn-stop.stop-flash{background:#ff6b6b!important}
+/* Stop vignette flash (화면 빨간 오버레이) */
+@keyframes stop-vignette{0%{opacity:.22}100%{opacity:0}}
+.stop-vignette-flash{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;background:radial-gradient(ellipse at center,transparent 40%,rgba(255,40,40,.35) 100%);animation:stop-vignette .25s ease-out forwards}
+
+/* ========== Send→Stop 전환 ========== */
+@keyframes icon-fade-in{0%{opacity:0}100%{opacity:1}}
+.btn-stop .stop-icon{animation:icon-fade-in .2s ease}
+.btn-send svg{animation:icon-fade-in .2s ease}
+
+/* Send 버튼 빛 줄기 효과 */
+.btn-send .send-streak{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;border-radius:6px;overflow:hidden}
+.btn-send .send-streak::after{content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:none}
+.btn-send.streak-active .send-streak::after{animation:send-streak .5s ease-out forwards}
+@keyframes send-streak{0%{left:-60%}100%{left:120%}}
+
+/* 버튼 피드백 텍스트 */
+.btn-feedback{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);white-space:nowrap;font-size:12px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .15s}
+.btn-feedback.show{opacity:1}
+
 
 /* URL 입력란 빛 줄기 sweep */
 @keyframes url-sweep{0%{background-position:-100% 0}100%{background-position:200% 0}}
@@ -885,59 +988,67 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .btn-sending{pointer-events:auto;position:relative;min-width:58px;animation:btn-slide-in .2s ease}
 .btn-sending .spinner{width:10px;height:10px;border-width:1.5px;margin-right:3px}
 
-/* 2xx 성공: 팡! 터지듯 scale + 초록 글로우 */
-@keyframes badge-pop{0%{transform:scale(1.3);box-shadow:0 0 12px rgba(78,201,78,.8)}100%{transform:scale(1);box-shadow:none}}
-.status.flash-success{animation:badge-pop .25s cubic-bezier(.17,.67,.35,1.5)}
+/* 2xx 성공: 초록 빛 폭발 + scale 바운스 */
+@keyframes badge-pop{0%{transform:scale(1.5);box-shadow:0 0 20px rgba(78,201,78,.9)}40%{transform:scale(.95);box-shadow:0 0 8px rgba(78,201,78,.4)}70%{transform:scale(1.08)}100%{transform:scale(1);box-shadow:none}}
+.status.flash-success{animation:badge-pop .35s cubic-bezier(.17,.67,.35,1.5)}
 
-/* 4xx/5xx 실패: 흔들림 shake */
-@keyframes badge-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-3px)}40%{transform:translateX(3px)}60%{transform:translateX(-2px)}80%{transform:translateX(2px)}}
-.status.flash-error{animation:badge-shake .25s ease}
+/* 4xx/5xx 실패: shake 흔들림 (좌우 3px, 3회) + 빨간 flash */
+@keyframes badge-shake{0%,100%{transform:translateX(0);box-shadow:none}10%{transform:translateX(-3px)}20%{transform:translateX(3px)}30%{transform:translateX(-3px)}40%{transform:translateX(3px)}50%{transform:translateX(-3px)}60%{transform:translateX(3px)}70%{transform:translateX(0)}}
+.status.flash-error{animation:badge-shake .35s ease;box-shadow:0 0 12px rgba(255,50,50,.6)}
 
 /* 4xx/5xx 화면 전체 빨간색 번쩍 */
-@keyframes screen-flash-red{0%{opacity:.15}100%{opacity:0}}
-.screen-flash{position:fixed;top:0;left:0;right:0;bottom:0;background:#c94e4e;pointer-events:none;z-index:9999;animation:screen-flash-red .1s ease forwards}
+@keyframes screen-flash-red{0%{opacity:.18}100%{opacity:0}}
+.screen-flash{position:fixed;top:0;left:0;right:0;bottom:0;background:#c94e4e;pointer-events:none;z-index:9999;animation:screen-flash-red .12s ease forwards}
 
 /* 응답 영역 슬램 (바운스) */
 @keyframes res-slam{0%{opacity:0;transform:translateY(-10px)}60%{opacity:1;transform:translateY(2px)}100%{transform:translateY(0)}}
 .res-area.slide-in{animation:res-slam .25s cubic-bezier(.22,.68,0,1.2)}
 
 /* 프로그레스 바 */
-@keyframes progress-indeterminate{0%{left:-30%}100%{left:100%}}
-.req-progress{height:2px;width:100%;background:var(--vscode-input-background);overflow:hidden;flex-shrink:0;opacity:0;transition:opacity .2s}
-.req-progress.active{opacity:1}
-.req-progress-bar{height:100%;width:30%;background:var(--vscode-progressBar-background,#0e70c0);position:relative;animation:progress-indeterminate 1.2s ease-in-out infinite}
 
 /* PERFECT! 텍스트 */
 @keyframes perfect-pop{0%{opacity:0;transform:scale(.5)}30%{opacity:1;transform:scale(1.1)}60%{transform:scale(.95)}100%{opacity:0;transform:scale(1)}}
 .perfect-badge{position:absolute;top:-18px;right:0;font-size:9px;font-weight:800;color:#4ec94e;letter-spacing:1px;pointer-events:none;animation:perfect-pop .8s ease forwards;text-shadow:0 0 6px rgba(78,201,78,.5)}
 
 /* 경과시간 실시간 표시 */
-.elapsed-timer{font-size:10px;opacity:.6;margin-left:4px;font-variant-numeric:tabular-nums}
+.elapsed-timer{font-size:13px;opacity:.6;margin-left:4px;font-variant-numeric:tabular-nums}
 
-.placeholder{display:flex;align-items:center;justify-content:center;flex:1;opacity:.25;font-size:12px}
+.placeholder{display:flex;align-items:center;justify-content:center;flex:1;opacity:.25;font-size:13px}
+
+/* 스켈레톤 로딩 UI */
+@keyframes skeleton-pulse{0%{opacity:.15}50%{opacity:.3}100%{opacity:.15}}
+.skeleton-loader{padding:12px 10px;display:flex;flex-direction:column;gap:8px}
+.skeleton-line{height:14px;border-radius:4px;background:var(--vscode-foreground,#ccc);animation:skeleton-pulse 1.2s ease-in-out infinite}
+.skeleton-line:nth-child(1){width:85%}
+.skeleton-line:nth-child(2){width:70%;animation-delay:.15s}
+.skeleton-line:nth-child(3){width:55%;animation-delay:.3s}
+.skeleton-line:nth-child(4){width:40%;animation-delay:.45s}
+
+/* 빈 요청 탭 안내 */
+.empty-tab-hint{display:flex;align-items:center;justify-content:center;flex:1;color:var(--vscode-descriptionForeground,#888);font-size:13px;opacity:.5;text-align:center;padding:20px;user-select:none}
 
 /* 컬렉션 러너 */
 .runner-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:var(--vscode-editor-background);z-index:100;display:flex;flex-direction:column;overflow:hidden}
 .runner-header{padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border,#444);display:flex;align-items:center;gap:8px;flex-shrink:0}
-.runner-header h3{font-size:12px;font-weight:600;flex:1;margin:0}
-.runner-progress{padding:4px 12px;font-size:11px;opacity:.7;flex-shrink:0;display:flex;align-items:center;gap:6px}
+.runner-header h3{font-size:13px;font-weight:600;flex:1;margin:0}
+.runner-progress{padding:4px 12px;font-size:13px;opacity:.7;flex-shrink:0;display:flex;align-items:center;gap:6px}
 .runner-bar{flex:1;height:3px;background:var(--vscode-input-background);border-radius:2px;overflow:hidden}
 .runner-bar-fill{height:100%;background:var(--vscode-progressBar-background,#0e70c0);transition:width .2s}
-.runner-summary{padding:6px 12px;font-size:12px;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;display:flex;gap:12px}
+.runner-summary{padding:6px 12px;font-size:13px;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;display:flex;gap:12px}
 .runner-summary .pass{color:#4ec94e}.runner-summary .fail{color:#e06c75}
-.runner-list{flex:1;overflow:auto;font-size:11px}
+.runner-list{flex:1;overflow:auto;font-size:13px}
 .runner-row{padding:4px 12px;display:flex;align-items:center;gap:8px;cursor:pointer;border-bottom:1px solid var(--vscode-panel-border,#222)}
 .runner-row:hover{background:var(--vscode-list-hoverBackground)}
 .runner-row .rr-idx{opacity:.4;width:20px;text-align:right}
 .runner-row .rr-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .runner-row .rr-status{font-weight:700;min-width:44px}
 .runner-row .rr-time{opacity:.5;min-width:40px;text-align:right}
-.runner-row .rr-icon{font-size:12px}
+.runner-row .rr-icon{font-size:13px}
 .runner-row.pass .rr-status{color:#4ec94e}.runner-row.fail .rr-status{color:#e06c75}.runner-row.pending{opacity:.35}
-.runner-detail{padding:6px 12px;background:var(--vscode-input-background);border-bottom:1px solid var(--vscode-panel-border,#333);font-family:var(--vscode-editor-font-family,monospace);font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto}
+.runner-detail{padding:6px 12px;background:var(--vscode-input-background);border-bottom:1px solid var(--vscode-panel-border,#333);font-family:var(--vscode-editor-font-family,monospace);font-size:13px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto}
 
 /* 활성 환경 표시 */
-.env-indicator{font-size:11px;opacity:.6;padding:0 10px 2px;flex-shrink:0}
+.env-indicator{font-size:13px;opacity:.6;padding:0 10px 2px;flex-shrink:0}
 .env-indicator .var-name{color:#dcdcaa}
 </style>
 </head>
@@ -954,7 +1065,8 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
     <span>Environment:</span>
     <span class="env-badge" id="envEditorName"></span>
     <span style="flex:1"></span>
-    <button class="btn btn-s" id="envSaveBtn" style="padding:2px 8px;font-size:11px">Save</button>
+    <span class="env-dirty-dot" id="envDirtyDot" title="Unsaved changes"></span>
+    <span class="env-autosave-indicator" id="envAutoSaved"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M6.27 10.87h.04l4.49-4.49-1.06-1.06-3.47 3.47-1.47-1.47-1.06 1.06 2.53 2.49z"/><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12z"/></svg> Auto-saved</span>
     <span class="rm" id="envCloseBtn" style="cursor:pointer;font-size:14px;opacity:.6">&times;</span>
   </div>
   <div id="envVarRows" class="kv-section"></div>
@@ -966,7 +1078,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
   <div class="env-editor-title">
     <span>Default Headers</span>
     <span style="flex:1"></span>
-    <button class="btn btn-s" id="defaultHeadersSaveBtn" style="padding:2px 8px;font-size:11px">Save</button>
+    <button class="btn btn-s" id="defaultHeadersSaveBtn" style="padding:2px 8px;font-size:13px">Save</button>
     <span class="rm" id="defaultHeadersCloseBtn" style="cursor:pointer;font-size:14px;opacity:.6">&times;</span>
   </div>
   <div id="defaultHeaderRows" class="kv-section"></div>
@@ -988,6 +1100,8 @@ let tabIdCounter = 0;
 let currentEnvName = null;
 let editingEnvId = null;
 let activeVarKeys = [];  // 활성 환경의 변수 키 목록
+let pendingSaveBtn = null;          // Save 버튼 다이얼로그 완료 대기
+let pendingSaveResponseBtn = null;  // Save Response Body 버튼 다이얼로그 완료 대기
 const VALID_BODY_TYPES = ['none', 'json', 'xml', 'form', 'raw'];
 
 function normalizeBodyType(bodyType) {
@@ -1012,6 +1126,7 @@ function createTab(data) {
   const id = 'tab_' + (++tabIdCounter);
   const tab = {
     id,
+    requestId: data?.requestId || null,  // 컬렉션/히스토리 요청 ID (중복 탭 방지)
     name: data?.name || 'New Request',
     method: data?.method || 'GET',
     url: data?.url || '',
@@ -1063,6 +1178,90 @@ function closeTab(id) {
   debouncePersist();
 }
 
+// === 클릭 ripple 이펙트 ===
+function addRipple(btn, e) {
+  const rect = btn.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const size = Math.max(rect.width, rect.height) * 4;
+  const circle = document.createElement('span');
+  circle.className = 'ripple-circle';
+  circle.style.width = circle.style.height = size + 'px';
+  circle.style.left = (x - size / 2) + 'px';
+  circle.style.top = (y - size / 2) + 'px';
+  btn.appendChild(circle);
+  circle.addEventListener('animationend', () => circle.remove());
+}
+
+// 버튼 텍스트 임시 변경 피드백
+function showBtnFeedback(btn, text, duration) {
+  duration = duration || 1500;
+  const origHtml = btn.innerHTML;
+  btn.innerHTML = text;
+  setTimeout(() => { btn.innerHTML = origHtml; }, duration);
+}
+
+// Send 빛 줄기 효과
+function triggerSendStreak(btn) {
+  btn.classList.add('streak-active');
+  setTimeout(() => btn.classList.remove('streak-active'), 400);
+}
+
+// Send 버튼 클릭 이펙트 — 깔끔한 눌림 + 글로우
+// renderContent()가 직후에 DOM을 교체하므로 setTimeout(0)으로 새 버튼에 적용
+function triggerSendSlam(btn) {
+  triggerSendStreak(btn);
+  setTimeout(function() {
+    var newBtn = mainContent.querySelector('.js-send');
+    if (newBtn) {
+      newBtn.classList.add('send-click');
+      newBtn.classList.add('send-click-flash');
+      setTimeout(function() { newBtn.classList.remove('send-click-flash'); }, 100);
+      setTimeout(function() { newBtn.classList.remove('send-click'); }, 300);
+    }
+  }, 0);
+}
+
+// Stop 버튼 타격감 (slam + glow + flash + vignette — 단일 keyframe으로 통합)
+function triggerStopSlam(btn) {
+  console.log('Stop clicked - animation start');
+  // slam 눌림 + 글로우 (하나의 animation으로 통합)
+  btn.classList.remove('stop-slam');
+  void btn.offsetWidth;
+  btn.classList.add('stop-slam');
+  // 배경색 flash (160ms)
+  btn.classList.add('stop-flash');
+  setTimeout(function() { btn.classList.remove('stop-flash'); }, 160);
+  // slam 클래스 정리
+  setTimeout(function() { btn.classList.remove('stop-slam'); }, 400);
+  // vignette flash
+  var vig = document.createElement('div');
+  vig.className = 'stop-vignette-flash';
+  document.body.appendChild(vig);
+  setTimeout(function() { vig.remove(); }, 300);
+}
+
+// 전역 ripple 이벤트 위임 (모든 .ripple-btn 대상) + flash/bounce 효과
+// Send/Stop 버튼은 전용 slam 핸들러가 처리하므로 여기선 ripple만
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.ripple-btn');
+  if (!btn) return;
+  addRipple(btn, e);
+  // Send/Stop 버튼은 전용 효과 사용
+  if (btn.classList.contains('btn-send') || btn.classList.contains('btn-stop')) return;
+  // 배경색 flash (0.1초)
+  btn.classList.add('btn-flash');
+  setTimeout(function() { btn.classList.remove('btn-flash'); }, 100);
+  // 눌림 → 바운스 → 원래 시퀀스
+  btn.classList.remove('btn-bouncing');
+  void btn.offsetWidth;
+  btn.classList.add('btn-bouncing');
+  btn.addEventListener('animationend', function handler() {
+    btn.classList.remove('btn-bouncing');
+    btn.removeEventListener('animationend', handler);
+  });
+});
+
 function handlePrimaryAction() {
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab) return;
@@ -1109,7 +1308,7 @@ function renderTabBar() {
 
   for (const tab of sorted) {
     const el = document.createElement('div');
-    el.className = 'req-tab' + (tab.id === activeTabId ? ' active' : '') + (tab.pinned ? ' pinned' : '');
+    el.className = 'req-tab' + (tab.id === activeTabId ? ' active' : '') + (tab.pinned ? ' pinned' : '') + ' tab-' + tab.method;
     el.innerHTML =
       '<span class="pin-icon">\u{1F4CC}</span>' +
       '<span class="method-badge method-' + tab.method + '">' + tab.method + '</span>' +
@@ -1237,7 +1436,8 @@ function renderContent() {
 
   let resHtml = '';
   if (tab.loading) {
-    resHtml = '<div style="padding:6px"><span class="spinner"></span>요청 전송 중...</div>';
+    resHtml = '<div style="padding:6px"><span class="spinner"></span>요청 전송 중...</div>' +
+      '<div class="skeleton-loader"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>';
   } else if (tab.error) {
     resHtml = '<div class="error-msg">' + escapeHtml(tab.error) + '</div>';
   } else if (tab.response) {
@@ -1250,12 +1450,62 @@ function renderContent() {
       : r.body;
     const lang = isBinary ? 'text' : detectLang(ct, displayBody);
     const rawBodyHtml = isBinary ? escapeHtml(displayBody) : highlightBody(displayBody, lang);
-    let hdrText = '';
-    for (const [k,v] of Object.entries(r.headers)) hdrText += k + ': ' + v + '\\n';
+    // 응답 헤더를 테이블 HTML로 생성
+    const headerEntries = Object.entries(r.headers);
+    const headerCount = headerEntries.length;
+    let headersTableHtml = '<table class="res-header-table">' +
+      '<thead><tr><th class="res-header-key-col">Key</th><th>Value</th></tr></thead><tbody>';
+    for (const [k,v] of headerEntries) {
+      headersTableHtml += '<tr><td class="res-header-key">' + escapeHtml(k) + '</td>' +
+        '<td class="res-header-value" title="' + escapeAttr(String(v)) + '">' + escapeHtml(String(v)) + '</td></tr>';
+    }
+    headersTableHtml += '</tbody></table>';
+
+    // Set-Cookie 파싱하여 쿠키 테이블 생성
+    const cookieHeaders = headerEntries
+      .filter(([k]) => k.toLowerCase() === 'set-cookie')
+      .map(([,v]) => String(v));
+    // 각 Set-Cookie 헤더는 이미 개별 쿠키 하나를 담고 있음. 콤마 분리 하지 않음.
+    // 속성 구분자는 세미콜론(;)이며, expires 날짜에 콤마가 포함될 수 있음.
+    const allCookieStrs = cookieHeaders;
+    const cookieCount = allCookieStrs.length;
+    let cookiesTableHtml = '';
+    if (cookieCount > 0) {
+      cookiesTableHtml = '<table class="res-header-table res-cookie-table">' +
+        '<thead><tr><th>Name</th><th>Value</th><th>Domain</th><th>Path</th><th>Expires</th><th>HttpOnly</th><th>Secure</th></tr></thead><tbody>';
+      for (const cs of allCookieStrs) {
+        const parts = cs.split(';').map(function(s) { return s.trim(); });
+        const nameVal = parts[0] || '';
+        const eqIdx = nameVal.indexOf('=');
+        const cName = eqIdx >= 0 ? nameVal.substring(0, eqIdx) : nameVal;
+        const cValue = eqIdx >= 0 ? nameVal.substring(eqIdx + 1) : '';
+        let domain = '', path = '', expires = '', httpOnly = false, secure = false;
+        for (let i = 1; i < parts.length; i++) {
+          const attr = parts[i];
+          const attrLower = attr.toLowerCase();
+          if (attrLower.startsWith('domain=')) domain = attr.substring(7);
+          else if (attrLower.startsWith('path=')) path = attr.substring(5);
+          else if (attrLower.startsWith('expires=')) expires = attr.substring(8);
+          else if (attrLower.startsWith('max-age=')) { if (!expires) expires = 'max-age=' + attr.substring(8); }
+          else if (attrLower === 'httponly') httpOnly = true;
+          else if (attrLower === 'secure') secure = true;
+        }
+        cookiesTableHtml += '<tr>' +
+          '<td class="res-header-key">' + escapeHtml(cName) + '</td>' +
+          '<td class="res-header-value" title="' + escapeAttr(cValue) + '">' + escapeHtml(cValue) + '</td>' +
+          '<td>' + escapeHtml(domain) + '</td>' +
+          '<td>' + escapeHtml(path) + '</td>' +
+          '<td>' + escapeHtml(expires) + '</td>' +
+          '<td>' + (httpOnly ? '<span class="cookie-badge">Y</span>' : '') + '</td>' +
+          '<td>' + (secure ? '<span class="cookie-badge">Y</span>' : '') + '</td>' +
+        '</tr>';
+      }
+      cookiesTableHtml += '</tbody></table>';
+    }
     const hasFormat = (lang === 'json' || lang === 'xml');
     const fmtMenuHtml = hasFormat
       ? '<div class="fmt-wrap">' +
-          '<button class="tb-btn js-fmt-btn">Format ▾</button>' +
+          '<button class="tb-btn ripple-btn js-fmt-btn">Format ▾</button>' +
           '<div class="fmt-menu js-fmt-menu">' +
             '<div class="fmt-menu-label">Style</div>' +
             '<div class="fmt-menu-item js-fmt-style" data-style="pretty"><span class="check">' + (lang === 'xml' ? ' ' : '✓') + '</span>Pretty</div>' +
@@ -1291,30 +1541,39 @@ function renderContent() {
         '<span class="status status-' + sc + 'xx">' + r.status + ' ' + escapeHtml(r.statusText) + '</span>' +
         '<span>' + r.time + ' ms</span><span>' + formatSize(r.size) + '</span>' +
         '<span style="flex:1"></span>' +
-        (lang !== 'text' ? '<span style="font-size:9px;opacity:.5;text-transform:uppercase">' + lang + '</span>' : '') +
-        '<button class="btn btn-s js-copy-response" title="Copy Response Body" style="padding:2px 8px;font-size:9px">$(copy) Copy</button>' +
-        '<button class="btn btn-s js-save-response" title="Save Response Body" style="padding:2px 8px;font-size:9px">$(file-add) Save</button>' +
+        (lang !== 'text' ? '<span style="font-size:13px;opacity:.5;text-transform:uppercase">' + lang + '</span>' : '') +
+        '<button class="res-action-btn ripple-btn js-copy-response" title="Copy Response Body"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M10 3H4v10h8V5l-2-2zM9 4l2 2H9V4zM3 0h6l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V1a1 1 0 011-1z"/><path d="M1 3v11a1 1 0 001 1h8v-1H2V3H1z"/></svg> Copy</button>' +
+        '<button class="res-action-btn ripple-btn js-save-response" title="Save Response Body"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> Save</button>' +
       '</div>' +
       resolvedUrlDisplay +
       '<div class="tabs js-res-tabs">' +
         '<div class="tab active" data-tab="resBody">Body</div>' +
-        '<div class="tab" data-tab="resHeaders">Headers</div>' +
+        (cookieCount > 0 ? '<div class="tab" data-tab="resCookies">Cookies <span class="tab-count">' + cookieCount + '</span></div>' : '<div class="tab" data-tab="resCookies">Cookies</div>') +
+        '<div class="tab" data-tab="resHeaders">Headers <span class="tab-count">' + headerCount + '</span></div>' +
         (lang === 'html' ? '<div class="tab" data-tab="resPreview">Preview</div>' : '') +
       '</div>' +
       toolbarHtml +
       (lang === 'json' ? '<div class="json-tree js-res-tree js-res-body"></div>' : '') +
       '<div class="json-body js-res-raw js-res-body' + (lang === 'json' ? ' hidden' : '') + '">' + rawBodyHtml + '</div>' +
-      '<div class="res-headers-pre hidden js-res-headers">' +
+      '<div class="res-headers-panel hidden js-res-headers">' +
         (tab.resolvedHeaders && tab.resolvedHeaders.length
-          ? '<div class="resolved-headers-section"><div class="resolved-headers-title">Request Headers (치환 후)</div><pre>' +
-            escapeHtml(tab.resolvedHeaders.map(function(h) { return h.key + ': ' + h.value; }).join('\\n')) +
-            '</pre></div><div class="resolved-headers-title" style="margin-top:8px">Response Headers</div>'
+          ? '<div class="resolved-headers-section"><div class="resolved-headers-title">Request Headers (치환 후)</div>' +
+            '<table class="res-header-table"><thead><tr><th class="res-header-key-col">Key</th><th>Value</th></tr></thead><tbody>' +
+            tab.resolvedHeaders.map(function(h) {
+              return '<tr><td class="res-header-key">' + escapeHtml(h.key) + '</td><td class="res-header-value" title="' + escapeAttr(h.value) + '">' + escapeHtml(h.value) + '</td></tr>';
+            }).join('') +
+            '</tbody></table></div><div class="resolved-headers-title" style="margin-top:8px">Response Headers</div>'
           : '') +
-        '<pre>' + escapeHtml(hdrText) + '</pre>' +
+        headersTableHtml +
+      '</div>' +
+      '<div class="res-cookies-panel hidden js-res-cookies">' +
+        (cookieCount > 0 ? cookiesTableHtml : '<div class="placeholder" style="padding:12px;font-size:13px;opacity:.5">No cookies in response</div>') +
       '</div>' +
       (lang === 'html' ? '<iframe class="res-preview hidden js-res-preview" sandbox="allow-same-origin" style="width:100%;flex:1;border:none;background:#fff"></iframe>' : '');
   } else {
-    resHtml = '<div class="placeholder">Send a request to see the response</div>';
+    resHtml = tab.url
+      ? '<div class="placeholder">Send a request to see the response</div>'
+      : '<div class="empty-tab-hint">Enter a URL and click Send to get started</div>';
   }
 
   mainContent.innerHTML = envLine +
@@ -1328,11 +1587,12 @@ function renderContent() {
         '<input class="js-url" type="text" placeholder="{{baseUrl}}/api/endpoint" spellcheck="false" value="' + escapeAttr(tab.url) + '"/>' +
         '<div class="var-overlay js-var-overlay hidden"></div>' +
       '</div>' +
-      '<button class="btn js-send">Send</button>' +
-      '<div class="timeout-wrap"><span class="timeout-icon">⏱</span><input class="js-timeout timeout-input" type="number" min="0" placeholder="0" title="Timeout (초, 0=무제한)" value="' + (tab.timeout || '') + '"/></div>' +
+      (tab.loading
+        ? '<button class="btn-stop js-send"><span class="stop-icon"></span> Stop</button>'
+        : '<button class="btn-send ripple-btn js-send"><span class="send-streak"></span><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1.5l14 6.5-14 6.5V9l10-1-10-1V1.5z"/></svg> Send</button>') +
       '<span class="url-bar-spacer"></span>' +
-      '<button class="btn btn-s js-save">Save</button>' +
-      '<button class="btn btn-s js-copy-curl" title="Copy as cURL">cURL</button>' +
+      '<button class="res-action-btn ripple-btn js-save"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> Save</button>' +
+      '<button class="res-action-btn ripple-btn js-copy-curl" title="Copy as cURL"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l4.5 4L1 10l1 1.5L7.5 6 2 0.5 1 2zm7 8h7v1.5H8V10z"/></svg> cURL</button>' +
     '</div>' +
     '<div class="split">' +
       '<div class="req-area">' +
@@ -1341,6 +1601,7 @@ function renderContent() {
           '<div class="tab" data-tab="headers">Headers</div>' +
           '<div class="tab" data-tab="body">Body</div>' +
           '<div class="tab" data-tab="auth">Auth</div>' +
+          '<div class="tab" data-tab="settings">Settings</div>' +
         '</div>' +
         '<div class="js-params-panel kv-section">' +
           '<div class="js-param-rows">' + kvRowsHtml(tab.params) + '</div>' +
@@ -1362,9 +1623,16 @@ function renderContent() {
         '<div class="js-auth-panel auth-section hidden">' +
           authHtml(tab.auth) +
         '</div>' +
+        '<div class="js-settings-panel settings-section hidden">' +
+          '<div class="settings-row">' +
+            '<label class="settings-label">Timeout (초)</label>' +
+            '<input class="js-timeout settings-input" type="number" min="0" placeholder="0" title="0 = 무제한" value="' + (tab.timeout || '') + '"/>' +
+            '<span class="settings-hint">0 = 무제한</span>' +
+          '</div>' +
+        '</div>' +
       '</div>' +
       '<div class="divider"></div>' +
-      '<div class="req-progress js-req-progress' + (tab.loading && tab.progressVisible ? ' active' : '') + '"><div class="req-progress-bar"></div></div>' +
+      '<div class="bullet-progress js-bullet-progress' + (tab.loading ? ' active' : '') + '"><div class="bullet-glow"></div></div>' +
       '<div class="res-area' + (tab.response && tab.slideIn ? ' slide-in' : '') + '">' + resHtml + '</div>' +
     '</div>';
 
@@ -1406,36 +1674,39 @@ function bindContentEvents() {
     setTimeout(checkUnresolvedVars, 50);
   }
 
-  // Send
+  // Send / Stop 클릭 타격감
   const sendBtn = mc.querySelector('.js-send');
   if (sendBtn) {
-    sendBtn.addEventListener('click', () => handlePrimaryAction());
-    // loading 상태면 Cancel 표시 (스피너 포함)
-    const tab = tabs.find(t => t.id === activeTabId);
-    if (tab && tab.loading) {
-      sendBtn.innerHTML = '<span class="spinner"></span>Cancel';
-      sendBtn.classList.add('btn-cancel', 'btn-sending');
-    }
+    sendBtn.addEventListener('click', () => {
+      if (sendBtn.classList.contains('btn-send')) {
+        triggerSendSlam(sendBtn);
+      } else if (sendBtn.classList.contains('btn-stop')) {
+        triggerStopSlam(sendBtn);
+      }
+      handlePrimaryAction();
+    });
   }
 
-  // Save
-  mc.querySelector('.js-save')?.addEventListener('click', () => {
+  // Save (다이얼로그 완료 후에만 "Saved ✓" 피드백)
+  mc.querySelector('.js-save')?.addEventListener('click', function() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
+    pendingSaveBtn = this;
     vscode.postMessage({ type: 'saveRequest', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, auth: tab.auth });
   });
 
-  // Copy as cURL
-  mc.querySelector('.js-copy-curl')?.addEventListener('click', () => {
+  // Copy as cURL (+ "Copied!" 피드백)
+  mc.querySelector('.js-copy-curl')?.addEventListener('click', function() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
     vscode.postMessage({ type: 'copyAsCurl', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, auth: tab.auth });
+    showBtnFeedback(this, '✓ Copied!', 1200);
   });
 
-  // Copy Response Body (포맷팅 적용 상태로 복사)
-  mc.querySelector('.js-copy-response')?.addEventListener('click', () => {
+  // Copy Response Body (+ "Copied!" 피드백)
+  mc.querySelector('.js-copy-response')?.addEventListener('click', function() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab?.response) return;
     var opts = getFormatOptions(mc);
@@ -1445,6 +1716,7 @@ function bindContentEvents() {
       else if (opts.lang === 'xml') body = formatXml(body, opts.style, opts.indent);
     }
     vscode.postMessage({ type: 'copyResponseBody', body: body });
+    showBtnFeedback(this, '✓ Copied!', 1200);
   });
 
   // 치환된 URL 클릭 → 클립보드 복사
@@ -1458,11 +1730,12 @@ function bindContentEvents() {
     setTimeout(() => { el.textContent = orig; el.classList.remove('copied'); }, 1200);
   });
 
-  // Save Response Body
-  mc.querySelector('.js-save-response')?.addEventListener('click', () => {
+  // Save Response Body (다이얼로그 완료 후에만 "Saved ✓" 피드백)
+  mc.querySelector('.js-save-response')?.addEventListener('click', function() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab?.response) return;
     const ct = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || '';
+    pendingSaveResponseBtn = this;
     vscode.postMessage({ type: 'saveResponseBody', body: tab.response.body, bodyBase64: tab.response.bodyBase64 || '', contentType: ct });
   });
 
@@ -1472,7 +1745,7 @@ function bindContentEvents() {
     if (!t) return;
     mc.querySelectorAll('.js-req-tabs .tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
-    const panels = { params: '.js-params-panel', headers: '.js-headers-panel', body: '.js-body-panel', auth: '.js-auth-panel' };
+    const panels = { params: '.js-params-panel', headers: '.js-headers-panel', body: '.js-body-panel', auth: '.js-auth-panel', settings: '.js-settings-panel' };
     for (const [k, sel] of Object.entries(panels)) {
       mc.querySelector(sel)?.classList.toggle('hidden', k !== t.dataset.tab);
     }
@@ -1487,30 +1760,43 @@ function bindContentEvents() {
     const sel = t.dataset.tab;
     const isBody = sel === 'resBody';
     const isPreview = sel === 'resPreview';
-    mc.querySelectorAll('.js-res-body').forEach(el => el.classList.toggle('hidden', !isBody));
-    mc.querySelector('.js-res-headers')?.classList.toggle('hidden', sel !== 'resHeaders');
-    // Preview iframe 표시/숨김 + 최초 렌더링
+
+    // 모든 응답 콘텐츠 숨김
+    mc.querySelectorAll('.js-res-body').forEach(el => el.classList.add('hidden'));
+    mc.querySelector('.js-res-headers')?.classList.add('hidden');
+    mc.querySelector('.js-res-cookies')?.classList.add('hidden');
     const preview = mc.querySelector('.js-res-preview');
-    if (preview) {
-      preview.classList.toggle('hidden', !isPreview);
-      if (isPreview && !preview.dataset.loaded) {
+    if (preview) preview.classList.add('hidden');
+    const toolbar = mc.querySelector('.js-res-body-toolbar');
+    if (toolbar) toolbar.classList.add('hidden');
+
+    // 선택된 탭 콘텐츠만 표시
+    if (isBody) {
+      if (toolbar) toolbar.classList.remove('hidden');
+      const tree = mc.querySelector('.js-res-tree');
+      const raw = mc.querySelector('.js-res-raw');
+      if (tree) {
+        // JSON: Tree/Raw 토글 모드 복원
+        const mode = toolbar?.querySelector('.toggle-btn.active')?.dataset.mode || 'tree';
+        tree.classList.toggle('hidden', mode !== 'tree');
+        if (raw) raw.classList.toggle('hidden', mode !== 'raw');
+      } else {
+        // XML, text 등: raw만 표시
+        if (raw) raw.classList.remove('hidden');
+      }
+    } else if (sel === 'resHeaders') {
+      mc.querySelector('.js-res-headers')?.classList.remove('hidden');
+    } else if (sel === 'resCookies') {
+      mc.querySelector('.js-res-cookies')?.classList.remove('hidden');
+    } else if (isPreview && preview) {
+      preview.classList.remove('hidden');
+      if (!preview.dataset.loaded) {
         const tab = tabs.find(tt => tt.id === activeTabId);
         if (tab?.response?.body) {
           preview.srcdoc = tab.response.body;
           preview.dataset.loaded = '1';
         }
       }
-    }
-    // 툴바도 Body일 때만 표시
-    const toolbar = mc.querySelector('.js-res-body-toolbar');
-    if (toolbar) toolbar.classList.toggle('hidden', !isBody);
-    // Tree/Raw 모드 복원
-    if (isBody && toolbar) {
-      const mode = toolbar.querySelector('.toggle-btn.active')?.dataset.mode || 'tree';
-      const tree = mc.querySelector('.js-res-tree');
-      const raw = mc.querySelector('.js-res-raw');
-      if (tree) tree.classList.toggle('hidden', mode !== 'tree');
-      if (raw) raw.classList.toggle('hidden', mode !== 'raw');
     }
   });
 
@@ -1624,9 +1910,13 @@ function bindContentEvents() {
   if (bodyTa) {
     function autoGrow() {
       bodyTa.style.height = 'auto';
-      bodyTa.style.height = Math.max(70, bodyTa.scrollHeight) + 'px';
+      var h = Math.max(100, Math.min(400, bodyTa.scrollHeight));
+      bodyTa.style.height = h + 'px';
     }
     bodyTa.addEventListener('input', autoGrow);
+    bodyTa.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { setTimeout(autoGrow, 0); }
+    });
     autoGrow();
   }
 
@@ -1723,13 +2013,7 @@ function sendActiveTab() {
   if (tab.loading) return;
   const mc = mainContent;
 
-  // 1) Send 버튼 눌림 효과
-  var sendBtn = mc.querySelector('.js-send');
-  if (sendBtn) {
-    sendBtn.classList.remove('btn-pressed');
-    void sendBtn.offsetWidth;
-    sendBtn.classList.add('btn-pressed');
-  }
+  // 1) Send 버튼 눌림 효과 → renderContent에서 Stop으로 전환됨
 
   // 2) URL 입력란 빛 줄기 sweep
   var urlWrap = mc.querySelector('.url-input-wrap');
@@ -1760,8 +2044,6 @@ function sendActiveTab() {
   var progressTimer = setTimeout(function() {
     if (!tab.loading) return;
     tab.progressVisible = true;
-    var bar = mc.querySelector('.js-req-progress');
-    if (bar) bar.classList.add('active');
     // 경과시간 표시 시작
     var timerEl = mc.querySelector('.js-elapsed-timer');
     if (!timerEl) {
@@ -1876,14 +2158,49 @@ const envVarRows = document.getElementById('envVarRows');
 
 document.getElementById('addEnvVarBtn').addEventListener('click', () => addKvRow(envVarRows));
 document.getElementById('envCloseBtn').addEventListener('click', () => envEditor.classList.add('hidden'));
-document.getElementById('envSaveBtn').addEventListener('click', () => {
+
+// 환경변수 자동저장 (debounce 500ms)
+const envDirtyDot = document.getElementById('envDirtyDot');
+const envAutoSaved = document.getElementById('envAutoSaved');
+let envSaveTimer = null;
+let envAutoSavedTimer = null;
+
+function envMarkDirty() {
+  envDirtyDot.classList.add('show');
+  envAutoSaved.classList.remove('show');
+}
+
+function envAutoSave() {
   if (!editingEnvId) return;
   const vars = collectKv(envVarRows);
   vscode.postMessage({ type: 'saveEnvironmentVars', envId: editingEnvId, variables: vars });
+  // 저장 완료 피드백
+  envDirtyDot.classList.remove('show');
+  envAutoSaved.classList.add('show');
+  clearTimeout(envAutoSavedTimer);
+  envAutoSavedTimer = setTimeout(() => envAutoSaved.classList.remove('show'), 2000);
+}
+
+function envScheduleSave() {
+  envMarkDirty();
+  clearTimeout(envSaveTimer);
+  envSaveTimer = setTimeout(envAutoSave, 500);
+}
+
+// 입력 변경 감지 (input, checkbox, blur)
+envVarRows.addEventListener('input', envScheduleSave);
+envVarRows.addEventListener('change', envScheduleSave);
+envVarRows.addEventListener('focusout', () => {
+  if (!editingEnvId) return;
+  clearTimeout(envSaveTimer);
+  envAutoSave();
 });
 
 envVarRows.addEventListener('click', (e) => {
-  if (e.target.classList.contains('rm')) e.target.closest('.kv-row')?.remove();
+  if (e.target.classList.contains('rm')) {
+    e.target.closest('.kv-row')?.remove();
+    envScheduleSave();
+  }
 });
 
 // === 기본 헤더 편집 ===
@@ -1924,38 +2241,52 @@ window.addEventListener('message', (event) => {
       tab.response = null;
     }
     if (activeTabId === msg.tabId) {
-      renderContent();
+      // 총알 로딩 바: 끝까지 달려가며 사라지는 완료 애니메이션
+      var bp = mainContent.querySelector('.js-bullet-progress');
+      if (bp) {
+        var glow = bp.querySelector('.bullet-glow');
+        if (glow) {
+          var glowRect = glow.getBoundingClientRect();
+          var bpRect = bp.getBoundingClientRect();
+          bp.style.setProperty('--pos', (glowRect.left - bpRect.left) + 'px');
+        }
+        bp.classList.add('finishing');
+      }
+      // 완료 애니메이션(0.25초) 후 renderContent
       setTimeout(function() {
-        var sc = tab.response ? Math.floor(tab.response.status / 100) : 0;
-        var isError = (sc >= 4 || !tab.response);
+        renderContent();
+        setTimeout(function() {
+          var sc = tab.response ? Math.floor(tab.response.status / 100) : 0;
+          var isError = (sc >= 4 || !tab.response);
 
-        // 상태코드 배지 효과
-        var badge = mainContent.querySelector('.status');
-        if (badge) {
-          badge.classList.add(isError ? 'flash-error' : 'flash-success');
-        }
-
-        // 4xx/5xx: 화면 전체 빨간색 번쩍
-        if (isError && tab.response) {
-          var flash = document.createElement('div');
-          flash.className = 'screen-flash';
-          document.body.appendChild(flash);
-          setTimeout(function() { flash.remove(); }, 150);
-        }
-
-        // 빠른 응답 (100ms 이하): PERFECT!
-        if (tab.response && tab.response.time <= 100) {
-          var meta = mainContent.querySelector('.response-meta');
-          if (meta) {
-            meta.style.position = 'relative';
-            var perf = document.createElement('span');
-            perf.className = 'perfect-badge';
-            perf.textContent = 'PERFECT!';
-            meta.appendChild(perf);
-            setTimeout(function() { perf.remove(); }, 900);
+          // 상태코드 배지 효과
+          var badge = mainContent.querySelector('.status');
+          if (badge) {
+            badge.classList.add(isError ? 'flash-error' : 'flash-success');
           }
-        }
-      }, 30);
+
+          // 4xx/5xx: 화면 전체 빨간색 번쩍
+          if (isError && tab.response) {
+            var flash = document.createElement('div');
+            flash.className = 'screen-flash';
+            document.body.appendChild(flash);
+            setTimeout(function() { flash.remove(); }, 150);
+          }
+
+          // 빠른 응답 (100ms 이하): PERFECT!
+          if (tab.response && tab.response.time <= 100) {
+            var meta = mainContent.querySelector('.response-meta');
+            if (meta) {
+              meta.style.position = 'relative';
+              var perf = document.createElement('span');
+              perf.className = 'perfect-badge';
+              perf.textContent = 'PERFECT!';
+              meta.appendChild(perf);
+              setTimeout(function() { perf.remove(); }, 900);
+            }
+          }
+        }, 30);
+      }, 250);
     }
     // slide-in은 한 번만 적용
     setTimeout(function() { tab.slideIn = false; }, 300);
@@ -1990,8 +2321,16 @@ window.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'loadRequest') {
-    // 새 탭으로 열기
+    // 중복 탭 방지: requestId가 있으면 기존 탭에서 검색
+    if (msg.requestId) {
+      var existing = tabs.find(function(t) { return t.requestId === msg.requestId; });
+      if (existing) {
+        switchTab(existing.id);
+        return;
+      }
+    }
     createTab({
+      requestId: msg.requestId || null,
       name: msg.name || msg.method + ' ' + msg.url,
       method: msg.method,
       url: msg.url,
@@ -2027,6 +2366,20 @@ window.addEventListener('message', (event) => {
     }
   }
 
+  // === Save 결과 피드백 ===
+  if (msg.type === 'saveRequestResult') {
+    if (msg.saved && pendingSaveBtn) {
+      showBtnFeedback(pendingSaveBtn, '✓ Saved!', 1200);
+    }
+    pendingSaveBtn = null;
+  }
+  if (msg.type === 'saveResponseBodyResult') {
+    if (msg.saved && pendingSaveResponseBtn) {
+      showBtnFeedback(pendingSaveResponseBtn, '✓ Saved!', 1200);
+    }
+    pendingSaveResponseBtn = null;
+  }
+
   // === 컬렉션 러너 메시지 ===
   if (msg.type === 'runCollectionStart') {
     showRunner(msg.name, msg.total);
@@ -2052,8 +2405,8 @@ function showRunner(name, total) {
   runnerOverlay.innerHTML =
     '<div class="runner-header">' +
       '<h3>Run: ' + escapeHtml(name) + '</h3>' +
-      '<button class="btn btn-s js-runner-stop" style="padding:2px 10px;font-size:11px">Stop</button>' +
-      '<button class="btn btn-s js-runner-close hidden" style="padding:2px 10px;font-size:11px">Close</button>' +
+      '<button class="btn btn-s js-runner-stop" style="padding:2px 10px;font-size:13px">Stop</button>' +
+      '<button class="btn btn-s js-runner-close hidden" style="padding:2px 10px;font-size:13px">Close</button>' +
     '</div>' +
     '<div class="runner-progress">' +
       '<span class="js-runner-counter">0/' + total + '</span>' +
@@ -2498,7 +2851,7 @@ function checkUnresolvedVars() {
 function persistTabState() {
   saveActiveTabState();
   var tabData = tabs.map(function(t) {
-    return { name: t.name, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, auth: t.auth, timeout: t.timeout, pinned: t.pinned || false };
+    return { name: t.name, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, auth: t.auth, timeout: t.timeout, pinned: t.pinned || false, requestId: t.requestId || undefined };
   });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
   vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx) });

@@ -383,6 +383,43 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // 환경 클릭: 싱글클릭 → 변수 편집, 더블클릭 → 활성/비활성 토글
+  let envClickTimer: ReturnType<typeof setTimeout> | null = null;
+  let envLastClickId: string | null = null;
+  context.subscriptions.push(
+    vscode.commands.registerCommand('arc.onEnvironmentClick', (env: Environment) => {
+      if (envLastClickId === env.id && envClickTimer) {
+        // 더블클릭: 활성/비활성 토글 + 변수 편집 화면 표시
+        clearTimeout(envClickTimer);
+        envClickTimer = null;
+        envLastClickId = null;
+        if (environmentProvider.activeEnvId === env.id) {
+          environmentProvider.activeEnvId = null;
+          environmentProvider.refresh();
+          updateStatusBar(envStatusBar, environmentProvider);
+          RequestPanel.currentPanel?.updateActiveEnv(null);
+        } else {
+          environmentProvider.activeEnvId = env.id;
+          environmentProvider.refresh();
+          updateStatusBar(envStatusBar, environmentProvider);
+          RequestPanel.currentPanel?.updateActiveEnv(env.name);
+        }
+        RequestPanel.show(context.extensionUri);
+        RequestPanel.currentPanel?.loadEnvironment(env);
+      } else {
+        // 싱글클릭: 대기 후 변수 편집
+        if (envClickTimer) { clearTimeout(envClickTimer); }
+        envLastClickId = env.id;
+        envClickTimer = setTimeout(() => {
+          envClickTimer = null;
+          envLastClickId = null;
+          RequestPanel.show(context.extensionUri);
+          RequestPanel.currentPanel?.loadEnvironment(env);
+        }, 300);
+      }
+    })
+  );
+
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.switchEnvironment', async () => {
       const envs = storage.getEnvironments();

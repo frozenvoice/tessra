@@ -233,23 +233,23 @@ export class CollectionTreeProvider
       bodyType: RequestBodyType;
       auth: Request['auth'];
     }
-  ): Promise<void> {
+  ): Promise<boolean> {
     const collections = this.storage.getCollections();
     if (collections.length === 0) {
       vscode.window.showWarningMessage('컬렉션이 없습니다. 먼저 컬렉션을 생성하세요.');
-      return;
+      return false;
     }
 
     const picks = this.buildPickList(collections);
     const selected = await vscode.window.showQuickPick(picks, { placeHolder: '저장할 위치 선택' });
-    if (!selected) { return; }
+    if (!selected) { return false; }
 
     const name = await vscode.window.showInputBox({
       prompt: '요청 이름',
       placeHolder: requestData.method + ' ' + requestData.url,
       value: requestData.method + ' ' + this.extractPath(requestData.url),
     });
-    if (!name) { return; }
+    if (!name) { return false; }
 
     const newItem: CollectionItem = {
       id: this.generateId(),
@@ -279,6 +279,7 @@ export class CollectionTreeProvider
     this.storage.saveCollections(collections);
     this.refresh();
     vscode.window.showInformationMessage(`"${name}" 저장 완료`);
+    return true;
   }
 
   async rename(node: CollectionNode): Promise<void> {

@@ -34,6 +34,7 @@ async function main() {
       esbuild.context(extensionOptions),
       esbuild.context(webviewOptions),
     ]);
+    console.log('[esbuild] build started');
     await Promise.all([extCtx.watch(), webCtx.watch()]);
     console.log('[esbuild] watching...');
   } else {

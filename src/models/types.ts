@@ -33,6 +33,7 @@ export interface TabState {
   auth: AuthConfig;
   timeout: number;
   pinned?: boolean;
+  requestId?: string;  // 컬렉션/히스토리 요청 ID (중복 탭 방지)
 }
 
 // HTTP 요청 정의
@@ -117,6 +118,8 @@ export enum MessageType {
   LoadEnvironment = 'loadEnvironment',
   UpdateActiveEnv = 'updateActiveEnv',
   LoadDefaultHeaders = 'loadDefaultHeaders',
+  SaveRequestResult = 'saveRequestResult',
+  SaveResponseBodyResult = 'saveResponseBodyResult',
 
   // Extension → Webview (컬렉션 러너)
   RunCollectionStart = 'runCollectionStart',
@@ -222,6 +225,7 @@ export interface ResponseErrorMessage {
 // Extension에서 Webview로 보내는 요청 로드 메시지
 export interface LoadRequestMessage {
   type: MessageType.LoadRequest;
+  requestId?: string;
   method: HttpMethod;
   url: string;
   headers: KeyValue[];
