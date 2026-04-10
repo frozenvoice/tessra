@@ -5,7 +5,7 @@ import { StorageService } from '../services/StorageService';
 import { CollectionTreeProvider } from '../providers/CollectionTreeProvider';
 import { HistoryTreeProvider } from '../providers/HistoryTreeProvider';
 import { EnvironmentTreeProvider } from '../providers/EnvironmentTreeProvider';
-import { MessageType, Request, AuthConfig, KeyValue, Environment, CollectionItem, Response, TabState, RequestBodyType, IncomingWebviewMessage, SendRequestMessage } from '../models/types';
+import { MessageType, Request, AuthConfig, KeyValue, Environment, CollectionItem, Response, TabState, RequestBodyType, IncomingWebviewMessage, SendRequestMessage, CompareResponsesMessage } from '../models/types';
 import { CurlService } from '../services/CurlService';
 import { SendHandle } from '../services/HttpService';
 
@@ -28,6 +28,7 @@ export class RequestPanel {
     MessageType.SaveDefaultHeaders,
     MessageType.CancelRequest,
     MessageType.SaveTabState,
+    MessageType.CompareResponses,
     MessageType.StopCollectionRun,
     'webviewReady',
   ]);
@@ -389,7 +390,8 @@ export class RequestPanel {
         break;
       }
       case MessageType.SaveRequest: {
-        const saved = await RequestPanel.collectionProvider.saveRequest({
+        const result = await RequestPanel.collectionProvider.saveRequest({
+          requestId: message.requestId,
           method: message.method,
           url: message.url,
           headers: message.headers ?? [],
@@ -398,7 +400,12 @@ export class RequestPanel {
           bodyType: RequestPanel.normalizeBodyType(message.bodyType),
           auth: message.auth ?? { type: 'none' },
         });
-        this.postMessage({ type: MessageType.SaveRequestResult, saved: !!saved });
+        this.postMessage({
+          type: MessageType.SaveRequestResult,
+          saved: !!result,
+          requestId: result?.requestId,
+          name: result?.name,
+        });
         break;
       }
       case MessageType.CopyAsCurl: {
@@ -439,6 +446,9 @@ export class RequestPanel {
         break;
       case MessageType.SaveTabState:
         RequestPanel.storage.saveTabState(message.tabs ?? [], message.activeIndex ?? 0);
+        break;
+      case MessageType.CompareResponses:
+        await this.compareResponses(message);
         break;
       case MessageType.StopCollectionRun:
         this.collectionRunAbort = true;
@@ -688,6 +698,73 @@ export class RequestPanel {
     }
   }
 
+  // 두 응답을 임시 파일로 저장하고 VS Code diff 에디터로 비교
+  private async compareResponses(message: CompareResponsesMessage): Promise<void> {
+    const { left, right } = message;
+    const extL = RequestPanel.contentTypeToExt(left.contentType);
+    const extR = RequestPanel.contentTypeToExt(right.contentType);
+    try {
+      // 임시 파일 URI (untitled 스키마 대신 실제 tmp 파일 사용)
+      const basePath = RequestPanel.storage.getStoragePath();
+      const diffDir = vscode.Uri.joinPath(vscode.Uri.file(basePath), '.diff');
+      await vscode.workspace.fs.createDirectory(diffDir);
+      const ts = Date.now().toString(36);
+      const uriL = vscode.Uri.joinPath(diffDir, `resp_left_${ts}.${extL}`);
+      const uriR = vscode.Uri.joinPath(diffDir, `resp_right_${ts}.${extR}`);
+
+      // 이미 webview에서 포맷팅된 경우 그대로 사용, 아니면 기본 포맷팅 적용
+      const bodyL = left.formatted ? left.body : this.formatForDiff(left.body, extL);
+      const bodyR = right.formatted ? right.body : this.formatForDiff(right.body, extR);
+
+      await vscode.workspace.fs.writeFile(uriL, new TextEncoder().encode(bodyL));
+      await vscode.workspace.fs.writeFile(uriR, new TextEncoder().encode(bodyR));
+
+      await vscode.commands.executeCommand('vscode.diff', uriL, uriR, `${left.label} ↔ ${right.label}`);
+    } catch (err: unknown) {
+      vscode.window.showErrorMessage(`응답 비교 실패: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // diff용 본문 포맷팅
+  private formatForDiff(body: string, ext: string): string {
+    if (ext === 'json') {
+      try { return JSON.stringify(JSON.parse(body), null, 2); } catch { /* 파싱 실패 시 원본 반환 */ }
+    }
+    if (ext === 'xml' || ext === 'html') {
+      return RequestPanel.prettyXml(body);
+    }
+    return body;
+  }
+
+  // XML/HTML Pretty 포맷팅 (인덴트 적용)
+  private static prettyXml(xml: string): string {
+    // 기존 공백 정리
+    let formatted = '';
+    let indent = 0;
+    const tab = '  ';
+    // 태그 단위로 분리
+    const parts = xml.replace(/>\s*</g, '><').split(/(<[^>]+>)/);
+    for (const part of parts) {
+      if (!part.trim()) continue;
+      // 닫는 태그
+      if (part.match(/^<\/\w/)) {
+        indent = Math.max(0, indent - 1);
+        formatted += tab.repeat(indent) + part + '\n';
+      // 자기 닫기 태그 또는 선언
+      } else if (part.match(/\/>$/) || part.match(/^<\?/) || part.match(/^<!--/) || part.match(/^<!DOCTYPE/i)) {
+        formatted += tab.repeat(indent) + part + '\n';
+      // 여는 태그
+      } else if (part.match(/^<\w/)) {
+        formatted += tab.repeat(indent) + part + '\n';
+        indent++;
+      // 텍스트 노드
+      } else {
+        formatted += tab.repeat(indent) + part + '\n';
+      }
+    }
+    return formatted.trimEnd();
+  }
+
   private dispose() {
     this.isDisposed = true;
     RequestPanel.currentPanel = undefined;
@@ -746,6 +823,18 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .req-tab.pinned .close-tab{display:none}
 .req-tab.pinned .pin-icon{display:inline;font-size:13px;margin-right:2px}
 .req-tab .pin-icon{display:none}
+.req-tab .dirty-dot{color:var(--vscode-foreground,#ccc);font-size:10px;margin-left:3px;opacity:.85}
+.dirty-confirm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center}
+.dirty-confirm-dialog{background:var(--vscode-editor-background,#1e1e1e);border:1px solid var(--vscode-panel-border,#444);border-radius:6px;padding:20px 24px;min-width:340px;box-shadow:0 4px 24px rgba(0,0,0,.5)}
+.dirty-confirm-msg{font-size:14px;margin-bottom:16px;line-height:1.5}
+.dirty-confirm-actions{display:flex;gap:8px;justify-content:flex-end}
+.dirty-btn{padding:5px 14px;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-family:inherit}
+.dirty-btn-save{background:var(--vscode-button-background,#0078d4);color:var(--vscode-button-foreground,#fff)}
+.dirty-btn-save:hover{background:var(--vscode-button-hoverBackground,#026ec1)}
+.dirty-btn-discard{background:transparent;color:var(--vscode-foreground,#ccc);border:1px solid var(--vscode-panel-border,#444)}
+.dirty-btn-discard:hover{background:var(--vscode-list-hoverBackground,#2a2d2e)}
+.dirty-btn-cancel{background:transparent;color:var(--vscode-foreground,#ccc);border:1px solid var(--vscode-panel-border,#444)}
+.dirty-btn-cancel:hover{background:var(--vscode-list-hoverBackground,#2a2d2e)}
 .add-tab{padding:4px 10px;cursor:pointer;opacity:.5;font-size:14px;display:flex;align-items:center}
 .add-tab:hover{opacity:1}
 .tab-ctx-menu{position:fixed;z-index:9999;background:var(--vscode-menu-background,#252526);border:1px solid var(--vscode-menu-border,#454545);border-radius:4px;padding:4px 0;min-width:160px;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:13px}
@@ -866,6 +955,24 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .res-cookie-table th,.res-cookie-table td{font-size:13px;padding:3px 6px}
 .cookie-badge{display:inline-block;background:var(--vscode-badge-background,#4d4d4d);color:var(--vscode-badge-foreground,#ccc);font-size:13px;padding:0 4px;border-radius:3px;font-weight:600}
 .tab-count{display:inline-block;background:var(--vscode-badge-background,#4d4d4d);color:var(--vscode-badge-foreground,#ccc);font-size:13px;padding:0 5px;border-radius:8px;margin-left:3px;min-width:14px;text-align:center;line-height:15px;vertical-align:middle}
+
+/* 응답 비교 (Pin / Compare) */
+.pin-response-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border:1px solid var(--vscode-input-border,#555);border-radius:6px;background:transparent;color:var(--vscode-foreground);font-size:13px;cursor:pointer;transition:background .15s,transform .1s;user-select:none}
+.pin-response-btn:hover{background:var(--vscode-button-secondaryHoverBackground,rgba(255,255,255,.1));transform:scale(1.05)}
+.pin-response-btn:active{transform:scale(.92)}
+.pin-response-btn.pinned{border-color:var(--vscode-charts-green,#4ec94e);color:var(--vscode-charts-green,#4ec94e)}
+.compare-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border:1px solid var(--vscode-input-border,#555);border-radius:6px;background:transparent;color:var(--vscode-foreground);font-size:13px;cursor:pointer;transition:background .15s,transform .1s;user-select:none}
+.compare-btn:hover:not(:disabled){background:var(--vscode-button-secondaryHoverBackground,rgba(255,255,255,.1));transform:scale(1.05)}
+.compare-btn:active:not(:disabled){transform:scale(.92)}
+.compare-btn:disabled{opacity:.35;cursor:default;transform:none}
+.compare-btn.ready{border-color:var(--vscode-charts-blue,#3794ff);color:var(--vscode-charts-blue,#3794ff)}
+/* 응답 컨텍스트 메뉴 */
+.res-ctx-menu{position:fixed;z-index:9999;min-width:200px;background:var(--vscode-menu-background,#252526);color:var(--vscode-menu-foreground,#ccc);border:1px solid var(--vscode-menu-border,#454545);border-radius:5px;padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,.4);font-size:13px}
+.res-ctx-menu .ctx-item{padding:6px 16px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.res-ctx-menu .ctx-item:hover{background:var(--vscode-menu-selectionBackground,#094771)}
+.res-ctx-menu .ctx-item.disabled{opacity:.35;cursor:default}
+.res-ctx-menu .ctx-item.disabled:hover{background:transparent}
+.res-ctx-menu .ctx-sep{height:1px;margin:4px 0;background:var(--vscode-menu-separatorBackground,#454545)}
 
 .json-body{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;white-space:pre-wrap;word-break:break-all;overflow:auto;flex:1;line-height:1.45}
 .json-key{color:#9cdcfe}.json-str{color:#ce9178}.json-num{color:#b5cea8}.json-bool{color:#569cd6}.json-null{color:#569cd6}
@@ -1102,7 +1209,43 @@ let editingEnvId = null;
 let activeVarKeys = [];  // 활성 환경의 변수 키 목록
 let pendingSaveBtn = null;          // Save 버튼 다이얼로그 완료 대기
 let pendingSaveResponseBtn = null;  // Save Response Body 버튼 다이얼로그 완료 대기
+var _pendingCloseAfterSave = null;  // dirty 탭 닫기 시 저장 후 닫을 탭 ID
 const VALID_BODY_TYPES = ['none', 'json', 'xml', 'form', 'raw'];
+
+// === 응답 비교 (Pin / Compare) ===
+// 최대 2개까지 저장, 3번째 추가 시 가장 오래된 거 덮어쓰기
+var pinnedResponses = [];  // [{ label, body, contentType, timestamp, tabId, formatStyle, formatIndent, formatLang }]
+var lastResponse = null;   // 직전 응답 (빠른 비교용)
+
+// Pin된 응답의 body를 저장된 포맷 스타일로 포맷팅
+function formatPinnedBody(pin) {
+  if (pin.formatLang && pin.formatStyle) {
+    if (pin.formatLang === 'json') return formatJson(pin.body, pin.formatStyle, pin.formatIndent);
+    if (pin.formatLang === 'xml') return formatXml(pin.body, pin.formatStyle, pin.formatIndent);
+  }
+  return pin.body;
+}
+
+// Pin/Compare 버튼 상태 일괄 갱신
+function updatePinCompareButtons(mc) {
+  var pinBtn = mc.querySelector('.js-pin-response');
+  if (pinBtn) {
+    pinBtn.innerHTML = pinSvg + ' Pin' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '');
+  }
+  var cmpBtn = mc.querySelector('.js-compare-responses');
+  if (cmpBtn) {
+    if (pinnedResponses.length >= 2) {
+      cmpBtn.disabled = false;
+      cmpBtn.classList.add('ready');
+    } else {
+      cmpBtn.disabled = true;
+      cmpBtn.classList.remove('ready');
+    }
+    cmpBtn.innerHTML = diffSvg + ' Compare' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '');
+  }
+}
+var pinSvg = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1C8.55228 1 9 1.44772 9 2V7.586L12.707 3.879C13.098 3.488 13.731 3.488 14.121 3.879C14.512 4.269 14.512 4.902 14.121 5.293L9 10.414V14C9 14.5523 8.55228 15 8 15C7.44772 15 7 14.5523 7 14V10.414L1.879 5.293C1.488 4.902 1.488 4.269 1.879 3.879C2.269 3.488 2.902 3.488 3.293 3.879L7 7.586V2C7 1.44772 7.44772 1 8 1Z"/></svg>';
+var diffSvg = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 4h5v1H2V4zm0 3h5v1H2V7zm0 3h5v1H2v-1zm9-6h5v1h-5V4zm0 3h5v1h-5V7zm0 3h5v1h-5v-1zM8 1v14l-1-1V2l1-1z"/></svg>';
 
 function normalizeBodyType(bodyType) {
   if (VALID_BODY_TYPES.indexOf(bodyType) >= 0) return bodyType;
@@ -1118,9 +1261,39 @@ const emptyPlaceholder = document.getElementById('emptyPlaceholder');
 addTabBtn.addEventListener('click', () => createTab());
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 't') { e.preventDefault(); createTab(); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'w' && activeTabId) { e.preventDefault(); var at = tabs.find(function(t){return t.id === activeTabId}); if (!at || !at.pinned) closeTab(activeTabId); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'w' && activeTabId) { e.preventDefault(); closeTab(activeTabId); }
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handlePrimaryAction(); }
 });
+
+// 탭 스냅샷 생성 (dirty 비교용)
+function snapshotTab(tab) {
+  return JSON.stringify({
+    method: tab.method, url: tab.url,
+    headers: tab.headers, params: tab.params,
+    body: tab.body, bodyType: tab.bodyType, auth: tab.auth, timeout: tab.timeout
+  });
+}
+
+// 탭이 dirty 상태인지 판별
+function isTabDirty(tab) {
+  if (!tab) return false;
+  // 새 탭: URL, 헤더, 파라미터, 바디 중 하나라도 입력되면 dirty
+  if (!tab._snapshot) {
+    return !!(tab.url || tab.headers.some(function(h){return h.key||h.value}) || tab.params.some(function(p){return p.key||p.value}) || tab.body);
+  }
+  // 컬렉션에서 불러온 탭: 스냅샷 대비 변경 감지
+  return snapshotTab(tab) !== tab._snapshot;
+}
+
+// dirty 상태 갱신 후 탭 바 리렌더
+function markDirty() {
+  var tab = tabs.find(function(t){return t.id === activeTabId});
+  if (!tab) return;
+  saveActiveTabState();
+  var wasDirty = tab.dirty;
+  tab.dirty = isTabDirty(tab);
+  if (tab.dirty !== wasDirty) renderTabBar();
+}
 
 function createTab(data) {
   const id = 'tab_' + (++tabIdCounter);
@@ -1137,6 +1310,8 @@ function createTab(data) {
     auth: data?.auth || { type: 'none' },
     timeout: data?.timeout ?? 0,
     pinned: data?.pinned || false,
+    dirty: false,
+    _snapshot: null,  // 컬렉션에서 불러온 탭의 원본 스냅샷
     response: null,
     resolvedUrl: '',
     resolvedHeaders: [],
@@ -1146,6 +1321,10 @@ function createTab(data) {
     slideIn: false,
     sendTime: 0,
   };
+  // 컬렉션/히스토리에서 불러온 탭이면 스냅샷 저장
+  if (data?.requestId) {
+    tab._snapshot = snapshotTab(tab);
+  }
   tabs.push(tab);
   switchTab(id);
   if (data) debouncePersist();
@@ -1160,11 +1339,10 @@ function clearTabRequestState(tab) {
   if (tab._elapsedTimer) { clearInterval(tab._elapsedTimer); tab._elapsedTimer = null; }
 }
 
-function closeTab(id) {
+function doCloseTab(id) {
   const idx = tabs.findIndex(t => t.id === id);
   if (idx < 0) return;
   const tab = tabs[idx];
-  if (tab?.pinned) return;
   if (tab?.loading) {
     clearTabRequestState(tab);
     vscode.postMessage({ type: 'cancelRequest', tabId: id });
@@ -1176,6 +1354,109 @@ function closeTab(id) {
   renderTabBar();
   renderContent();
   debouncePersist();
+}
+
+function closeTab(id) {
+  const tab = tabs.find(t => t.id === id);
+  if (!tab) return;
+  if (tab.pinned) return;
+  // dirty 상태면 현재 폼 값 동기화 후 재확인
+  if (id === activeTabId) saveActiveTabState();
+  tab.dirty = isTabDirty(tab);
+  if (tab.dirty) {
+    showDirtyConfirm(id);
+    return;
+  }
+  doCloseTab(id);
+}
+
+// dirty 탭 닫기 확인 다이얼로그
+function showDirtyConfirm(tabId) {
+  // 기존 다이얼로그 제거
+  var old = document.getElementById('dirtyConfirmOverlay');
+  if (old) old.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'dirtyConfirmOverlay';
+  overlay.className = 'dirty-confirm-overlay';
+  overlay.innerHTML =
+    '<div class="dirty-confirm-dialog">' +
+      '<div class="dirty-confirm-msg">저장하지 않은 변경사항이 있습니다. 닫으시겠습니까?</div>' +
+      '<div class="dirty-confirm-actions">' +
+        '<button class="dirty-btn dirty-btn-save" data-action="save">저장</button>' +
+        '<button class="dirty-btn dirty-btn-discard" data-action="discard">저장 안 함</button>' +
+        '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">취소</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e) {
+    var action = e.target.dataset.action;
+    if (!action) return;
+    overlay.remove();
+    if (action === 'save') {
+      // 저장 후 닫기: saveRequest 전송 → 결과에서 탭 닫기
+      var tab = tabs.find(function(t){return t.id === tabId});
+      if (tab && tab.url) {
+        if (tabId === activeTabId) saveActiveTabState();
+        _pendingCloseAfterSave = tabId;
+        vscode.postMessage({ type: 'saveRequest', requestId: tab.requestId || undefined, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, auth: tab.auth });
+      } else {
+        doCloseTab(tabId);
+      }
+    } else if (action === 'discard') {
+      doCloseTab(tabId);
+    }
+    // cancel: 아무것도 안 함
+  });
+}
+
+// 여러 탭 일괄 닫기 (dirty 탭은 하나씩 순차 확인)
+function closeTabs(ids) {
+  if (!ids || ids.length === 0) return;
+  var queue = ids.slice();
+  function next() {
+    while (queue.length > 0) {
+      var id = queue.shift();
+      var tab = tabs.find(function(t){return t.id === id});
+      if (!tab || tab.pinned) continue;
+      if (id === activeTabId) saveActiveTabState();
+      tab.dirty = isTabDirty(tab);
+      if (tab.dirty) {
+        showBatchDirtyConfirm(id, queue);
+        return;
+      }
+      doCloseTab(id);
+    }
+  }
+  next();
+
+  function showBatchDirtyConfirm(tabId, remaining) {
+    var old = document.getElementById('dirtyConfirmOverlay');
+    if (old) old.remove();
+    var tabObj = tabs.find(function(t){return t.id === tabId});
+    var tabLabel = tabObj ? (tabObj.name || 'New Request') : '';
+    var overlay = document.createElement('div');
+    overlay.id = 'dirtyConfirmOverlay';
+    overlay.className = 'dirty-confirm-overlay';
+    overlay.innerHTML =
+      '<div class="dirty-confirm-dialog">' +
+        '<div class="dirty-confirm-msg">"' + escapeHtml(tabLabel) + '"에 저장하지 않은 변경사항이 있습니다.</div>' +
+        '<div class="dirty-confirm-actions">' +
+          '<button class="dirty-btn dirty-btn-discard" data-action="discard">저장 안 함</button>' +
+          '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">취소</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function(e) {
+      var action = e.target.dataset.action;
+      if (!action) return;
+      overlay.remove();
+      if (action === 'discard') {
+        doCloseTab(tabId);
+        next();
+      }
+      // cancel: 나머지도 모두 취소
+    });
+  }
 }
 
 // === 클릭 ripple 이펙트 ===
@@ -1313,6 +1594,7 @@ function renderTabBar() {
       '<span class="pin-icon">\u{1F4CC}</span>' +
       '<span class="method-badge method-' + tab.method + '">' + tab.method + '</span>' +
       '<span class="tab-name">' + escapeHtml(truncate(tab.name, 25)) + '</span>' +
+      (tab.dirty ? '<span class="dirty-dot" title="미저장 변경사항">\u25CF</span>' : '') +
       '<span class="close-tab" data-id="' + tab.id + '">&times;</span>';
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('close-tab')) {
@@ -1387,13 +1669,13 @@ function showTabContextMenu(x, y, tabId) {
         closeTab(tabId);
         break;
       case 'closeOthers':
-        othersClosable.forEach(function(t) { closeTab(t.id); });
+        closeTabs(othersClosable.map(function(t){return t.id}));
         break;
       case 'closeAll':
-        allClosable.forEach(function(t) { closeTab(t.id); });
+        closeTabs(allClosable.map(function(t){return t.id}));
         break;
       case 'closeRight':
-        rightClosable.forEach(function(t) { closeTab(t.id); });
+        closeTabs(rightClosable.map(function(t){return t.id}));
         break;
       case 'pin':
         tab.pinned = true;
@@ -1462,12 +1744,21 @@ function renderContent() {
     headersTableHtml += '</tbody></table>';
 
     // Set-Cookie 파싱하여 쿠키 테이블 생성
-    const cookieHeaders = headerEntries
-      .filter(([k]) => k.toLowerCase() === 'set-cookie')
-      .map(([,v]) => String(v));
-    // 각 Set-Cookie 헤더는 이미 개별 쿠키 하나를 담고 있음. 콤마 분리 하지 않음.
-    // 속성 구분자는 세미콜론(;)이며, expires 날짜에 콤마가 포함될 수 있음.
-    const allCookieStrs = cookieHeaders;
+    // rawSetCookies가 있으면 개별 쿠키 배열 사용 (expires 쉼표 문제 없음)
+    // 없으면 헤더에서 추출 후 정규식으로 쿠키 경계 분리
+    let allCookieStrs = [];
+    if (r.rawSetCookies && r.rawSetCookies.length > 0) {
+      allCookieStrs = r.rawSetCookies;
+    } else {
+      const cookieHeader = headerEntries
+        .filter(([k]) => k.toLowerCase() === 'set-cookie')
+        .map(([,v]) => String(v))
+        .join(', ');
+      if (cookieHeader) {
+        // 쉼표 뒤에 "알파벳+=" 패턴이 오면 새 쿠키 시작 (expires 날짜 쉼표와 구별)
+        allCookieStrs = cookieHeader.split(/,\\s*(?=[A-Za-z_][A-Za-z0-9_]*=)/);
+      }
+    }
     const cookieCount = allCookieStrs.length;
     let cookiesTableHtml = '';
     if (cookieCount > 0) {
@@ -1544,6 +1835,8 @@ function renderContent() {
         (lang !== 'text' ? '<span style="font-size:13px;opacity:.5;text-transform:uppercase">' + lang + '</span>' : '') +
         '<button class="res-action-btn ripple-btn js-copy-response" title="Copy Response Body"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M10 3H4v10h8V5l-2-2zM9 4l2 2H9V4zM3 0h6l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V1a1 1 0 011-1z"/><path d="M1 3v11a1 1 0 001 1h8v-1H2V3H1z"/></svg> Copy</button>' +
         '<button class="res-action-btn ripple-btn js-save-response" title="Save Response Body"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> Save</button>' +
+        '<button class="pin-response-btn ripple-btn js-pin-response" title="Pin Response for Compare">' + pinSvg + ' Pin' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
+        '<button class="compare-btn js-compare-responses' + (pinnedResponses.length >= 2 ? ' ready' : '') + '" title="Compare Pinned Responses"' + (pinnedResponses.length < 2 ? ' disabled' : '') + '>' + diffSvg + ' Compare' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
       '</div>' +
       resolvedUrlDisplay +
       '<div class="tabs js-res-tabs">' +
@@ -1592,6 +1885,7 @@ function renderContent() {
         : '<button class="btn-send ripple-btn js-send"><span class="send-streak"></span><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1.5l14 6.5-14 6.5V9l10-1-10-1V1.5z"/></svg> Send</button>') +
       '<span class="url-bar-spacer"></span>' +
       '<button class="res-action-btn ripple-btn js-save"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> Save</button>' +
+      (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="다른 이름으로 저장">Save As</button>' : '') +
       '<button class="res-action-btn ripple-btn js-copy-curl" title="Copy as cURL"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l4.5 4L1 10l1 1.5L7.5 6 2 0.5 1 2zm7 8h7v1.5H8V10z"/></svg> cURL</button>' +
     '</div>' +
     '<div class="split">' +
@@ -1656,7 +1950,7 @@ function bindContentEvents() {
   // 메서드 변경 시 탭 바 업데이트
   mc.querySelector('.js-method')?.addEventListener('change', (e) => {
     const tab = tabs.find(t => t.id === activeTabId);
-    if (tab) { tab.method = e.target.value; renderTabBar(); }
+    if (tab) { tab.method = e.target.value; markDirty(); renderTabBar(); }
   });
 
   // URL 입력 → 미치환 변수 체크 + 자동 저장
@@ -1664,6 +1958,7 @@ function bindContentEvents() {
   if (urlInputEl) {
     urlInputEl.addEventListener('input', function() {
       checkUnresolvedVars();
+      markDirty();
       debouncePersist();
     });
     urlInputEl.addEventListener('scroll', function() {
@@ -1687,8 +1982,17 @@ function bindContentEvents() {
     });
   }
 
-  // Save (다이얼로그 완료 후에만 "Saved ✓" 피드백)
+  // Save (이미 저장된 탭이면 덮어쓰기, 새 탭이면 위치 선택 다이얼로그)
   mc.querySelector('.js-save')?.addEventListener('click', function() {
+    saveActiveTabState();
+    const tab = tabs.find(t => t.id === activeTabId);
+    if (!tab || !tab.url) return;
+    pendingSaveBtn = this;
+    vscode.postMessage({ type: 'saveRequest', requestId: tab.requestId || undefined, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, auth: tab.auth });
+  });
+
+  // Save As (새 이름/위치로 저장 — requestId 없이 전송하여 새 항목 생성)
+  mc.querySelector('.js-save-as')?.addEventListener('click', function() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
@@ -1737,6 +2041,122 @@ function bindContentEvents() {
     const ct = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || '';
     pendingSaveResponseBtn = this;
     vscode.postMessage({ type: 'saveResponseBody', body: tab.response.body, bodyBase64: tab.response.bodyBase64 || '', contentType: ct });
+  });
+
+  // Pin Response — 현재 응답을 비교용으로 저장 / 토글
+  mc.querySelector('.js-pin-response')?.addEventListener('click', function() {
+    const tab = tabs.find(t => t.id === activeTabId);
+    if (!tab?.response) return;
+    var btn = this;
+    // 이미 핀된 응답인지 확인 (같은 탭 + 같은 body → 해제)
+    var existIdx = pinnedResponses.findIndex(function(p) { return p.tabId === activeTabId && p.body === tab.response.body; });
+    if (existIdx !== -1) {
+      // Pin 해제
+      pinnedResponses.splice(existIdx, 1);
+      btn.innerHTML = 'Unpinned';
+      setTimeout(function() { updatePinCompareButtons(mc); }, 1200);
+    } else {
+      // Pin 추가 — 현재 포맷 스타일도 함께 저장
+      const ct = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || 'text/plain';
+      const envLabel = currentEnvName ? '[' + currentEnvName + ']' : '';
+      const timeLabel = new Date().toLocaleTimeString();
+      const label = (tab.name || tab.method + ' ' + tab.url) + ' ' + envLabel + ' ' + timeLabel;
+      var fmtOpts = getFormatOptions(mc);
+      if (pinnedResponses.length >= 2) {
+        pinnedResponses.shift(); // 가장 오래된 거 제거
+      }
+      pinnedResponses.push({ label: label.trim(), body: tab.response.body, contentType: ct, timestamp: Date.now(), tabId: activeTabId, formatStyle: fmtOpts ? fmtOpts.style : null, formatIndent: fmtOpts ? fmtOpts.indent : null, formatLang: fmtOpts ? fmtOpts.lang : null });
+      btn.innerHTML = '✓ Pinned (' + pinnedResponses.length + '/2)';
+      setTimeout(function() { updatePinCompareButtons(mc); }, 1200);
+    }
+    // Compare 버튼은 즉시 갱신
+    var cmpBtn = mc.querySelector('.js-compare-responses');
+    if (cmpBtn) {
+      if (pinnedResponses.length >= 2) { cmpBtn.disabled = false; cmpBtn.classList.add('ready'); }
+      else { cmpBtn.disabled = true; cmpBtn.classList.remove('ready'); }
+      cmpBtn.innerHTML = diffSvg + ' Compare' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '');
+    }
+  });
+
+  // Compare Responses — 저장된 2개 응답을 각자의 포맷 스타일로 포맷팅하여 비교
+  mc.querySelector('.js-compare-responses')?.addEventListener('click', function() {
+    if (pinnedResponses.length < 2) return;
+    vscode.postMessage({
+      type: 'compareResponses',
+      left: { label: pinnedResponses[0].label, body: formatPinnedBody(pinnedResponses[0]), contentType: pinnedResponses[0].contentType, formatted: true },
+      right: { label: pinnedResponses[1].label, body: formatPinnedBody(pinnedResponses[1]), contentType: pinnedResponses[1].contentType, formatted: true }
+    });
+  });
+
+  // 응답 영역 우클릭 → 컨텍스트 메뉴
+  mc.querySelector('.res-area')?.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    // 기존 메뉴 제거
+    document.querySelectorAll('.res-ctx-menu').forEach(m => m.remove());
+    const tab = tabs.find(t => t.id === activeTabId);
+    if (!tab?.response) return;
+
+    const menu = document.createElement('div');
+    menu.className = 'res-ctx-menu';
+    menu.innerHTML =
+      '<div class="ctx-item js-ctx-compare-last' + (!lastResponse ? ' disabled' : '') + '">⇄ Compare with Last Response</div>' +
+      '<div class="ctx-sep"></div>' +
+      '<div class="ctx-item js-ctx-pin-current">' + pinSvg + ' Pin Current Response</div>' +
+      '<div class="ctx-item js-ctx-clear-pins' + (pinnedResponses.length === 0 ? ' disabled' : '') + '">✕ Clear All Pins' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + ')' : '') + '</div>';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+    document.body.appendChild(menu);
+
+    // 화면 밖으로 나가지 않도록 조정
+    var rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + 'px';
+    if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 4) + 'px';
+
+    // Compare with Last Response — 각자의 포맷 스타일로 포맷팅하여 비교
+    menu.querySelector('.js-ctx-compare-last')?.addEventListener('click', function() {
+      if (!lastResponse || !tab.response) return;
+      var ct = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || 'text/plain';
+      var envLabel = currentEnvName ? '[' + currentEnvName + ']' : '';
+      var curLabel = (tab.name || tab.method + ' ' + tab.url) + ' ' + envLabel + ' (current)';
+      // 현재 응답은 현재 포맷 옵션 사용
+      var curFmt = getFormatOptions(mc);
+      var curBody = tab.response.body;
+      if (curFmt) {
+        if (curFmt.lang === 'json') curBody = formatJson(curBody, curFmt.style, curFmt.indent);
+        else if (curFmt.lang === 'xml') curBody = formatXml(curBody, curFmt.style, curFmt.indent);
+      }
+      // 직전 응답은 저장된 포맷 옵션 사용
+      var lastBody = formatPinnedBody(lastResponse);
+      vscode.postMessage({
+        type: 'compareResponses',
+        left: { label: lastResponse.label, body: lastBody, contentType: lastResponse.contentType, formatted: true },
+        right: { label: curLabel.trim(), body: curBody, contentType: ct, formatted: true }
+      });
+      menu.remove();
+    });
+
+    // Pin Current Response
+    menu.querySelector('.js-ctx-pin-current')?.addEventListener('click', function() {
+      var pinBtn = mc.querySelector('.js-pin-response');
+      if (pinBtn) pinBtn.click();
+      menu.remove();
+    });
+
+    // Clear All Pins — 모든 핀 해제
+    menu.querySelector('.js-ctx-clear-pins')?.addEventListener('click', function() {
+      if (pinnedResponses.length === 0) return;
+      pinnedResponses.length = 0;
+      updatePinCompareButtons(mc);
+      menu.remove();
+    });
+
+    // 다른 곳 클릭 시 메뉴 닫기
+    setTimeout(function() {
+      document.addEventListener('click', function closeCtx() {
+        menu.remove();
+        document.removeEventListener('click', closeCtx);
+      }, { once: true });
+    }, 0);
   });
 
   // 요청 탭 전환
@@ -1878,21 +2298,26 @@ function bindContentEvents() {
   }
 
   // KV 추가
-  mc.querySelector('.js-add-param')?.addEventListener('click', () => addKvRow(mc.querySelector('.js-param-rows')));
-  mc.querySelector('.js-add-header')?.addEventListener('click', () => addKvRow(mc.querySelector('.js-header-rows')));
+  mc.querySelector('.js-add-param')?.addEventListener('click', () => { addKvRow(mc.querySelector('.js-param-rows')); markDirty(); });
+  mc.querySelector('.js-add-header')?.addEventListener('click', () => { addKvRow(mc.querySelector('.js-header-rows')); markDirty(); });
 
   // KV 삭제 이벤트 위임
   mc.querySelectorAll('.js-param-rows, .js-header-rows').forEach(container => {
     container.addEventListener('click', (e) => {
-      if (e.target.classList.contains('rm')) e.target.closest('.kv-row')?.remove();
+      if (e.target.classList.contains('rm')) { e.target.closest('.kv-row')?.remove(); markDirty(); }
     });
+    // KV 입력 변경 감지
+    container.addEventListener('input', markDirty);
   });
 
   // Auth 타입 변경
   mc.querySelector('.js-auth-type')?.addEventListener('change', (e) => {
     const fields = mc.querySelector('.js-auth-fields');
     if (fields) fields.innerHTML = authFieldsHtml(e.target.value);
+    markDirty();
   });
+  // Auth 필드 입력 변경 감지 (이벤트 위임)
+  mc.querySelector('.js-auth-fields')?.addEventListener('input', markDirty);
 
   // Body 타입 변경 → Content-Type 자동 설정
   mc.querySelector('.js-body-type')?.addEventListener('change', (e) => {
@@ -1900,10 +2325,14 @@ function bindContentEvents() {
     const textarea = mc.querySelector('.js-body');
     if (textarea) textarea.style.display = bodyType === 'none' ? 'none' : '';
     syncAutoContentType(mc, bodyType);
+    markDirty();
   });
   // 초기 렌더링 시 auto Content-Type 동기화
   var initBodyType = mc.querySelector('.js-body-type')?.value || 'none';
   if (initBodyType !== 'none') syncAutoContentType(mc, initBodyType);
+
+  // Timeout 입력 변경 감지
+  mc.querySelector('.js-timeout')?.addEventListener('input', markDirty);
 
   // === textarea 자동 높이 조절 ===
   var bodyTa = mc.querySelector('.js-body');
@@ -1913,7 +2342,7 @@ function bindContentEvents() {
       var h = Math.max(100, Math.min(400, bodyTa.scrollHeight));
       bodyTa.style.height = h + 'px';
     }
-    bodyTa.addEventListener('input', autoGrow);
+    bodyTa.addEventListener('input', function() { autoGrow(); markDirty(); });
     bodyTa.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') { setTimeout(autoGrow, 0); }
     });
@@ -2232,6 +2661,13 @@ window.addEventListener('message', (event) => {
     if (neonEl) neonEl.classList.remove('neon-active');
 
     if (msg.type === 'receiveResponse') {
+      // 직전 응답 저장 (빠른 비교용) — 현재 포맷 스타일도 함께 저장
+      if (tab.response) {
+        var prevCt = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || 'text/plain';
+        var prevEnv = currentEnvName ? '[' + currentEnvName + ']' : '';
+        var prevFmt = getFormatOptions(mainContent);
+        lastResponse = { label: (tab.name || tab.method + ' ' + tab.url) + ' ' + prevEnv + ' (previous)', body: tab.response.body, contentType: prevCt, formatStyle: prevFmt ? prevFmt.style : null, formatIndent: prevFmt ? prevFmt.indent : null, formatLang: prevFmt ? prevFmt.lang : null };
+      }
       tab.response = msg.response;
       tab.resolvedUrl = msg.resolvedUrl || '';
       tab.resolvedHeaders = msg.resolvedHeaders || [];
@@ -2337,6 +2773,7 @@ window.addEventListener('message', (event) => {
       headers: msg.headers || [],
       params: msg.params || [],
       body: msg.body || '',
+      bodyType: msg.bodyType || 'none',
       auth: msg.auth || { type: 'none' },
     });
   }
@@ -2368,8 +2805,30 @@ window.addEventListener('message', (event) => {
 
   // === Save 결과 피드백 ===
   if (msg.type === 'saveRequestResult') {
-    if (msg.saved && pendingSaveBtn) {
-      showBtnFeedback(pendingSaveBtn, '✓ Saved!', 1200);
+    if (msg.saved) {
+      // 탭에 컬렉션 요청 ID와 이름 연결 + dirty 초기화
+      var savedTab = _pendingCloseAfterSave
+        ? tabs.find(function(t){return t.id === _pendingCloseAfterSave})
+        : tabs.find(function(t){return t.id === activeTabId});
+      if (savedTab) {
+        if (msg.requestId) savedTab.requestId = msg.requestId;
+        if (msg.name) savedTab.name = msg.name;
+        savedTab._snapshot = snapshotTab(savedTab);
+        savedTab.dirty = false;
+      }
+      renderTabBar();
+      if (pendingSaveBtn) {
+        showBtnFeedback(pendingSaveBtn, '✓ Saved!', 1200);
+      }
+      // dirty 확인 다이얼로그에서 "저장" 선택 후 닫기
+      if (_pendingCloseAfterSave) {
+        doCloseTab(_pendingCloseAfterSave);
+        _pendingCloseAfterSave = null;
+      }
+      debouncePersist();
+    } else {
+      // 저장 취소 시 pendingClose도 취소
+      _pendingCloseAfterSave = null;
     }
     pendingSaveBtn = null;
   }

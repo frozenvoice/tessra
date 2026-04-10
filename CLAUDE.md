@@ -121,6 +121,8 @@ arc-client/
 - 쿠키 파싱 및 표시 (Set-Cookie → 개별 쿠키 분리)
 - 요청 헤더 표시 (변수 치환 후 실제 전송된 헤더)
 - 응답 Body 복사, 파일로 저장 (Content-Type 기반 확장자 추론)
+- 응답 비교 (Diff): Pin Response로 최대 2개 저장 → Compare로 VS Code diff 에디터 비교
+- 빠른 비교: 응답 영역 우클릭 → "Compare with Last Response"로 직전 응답과 즉시 비교
 
 #### Webview UI
 - 멀티탭 인터페이스 (Ctrl+T 새 탭, Ctrl+W 닫기)

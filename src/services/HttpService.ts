@@ -69,9 +69,16 @@ export class HttpService {
 
           // 응답 헤더를 단순 레코드로 변환
           const responseHeaders: Record<string, string> = {};
+          // Set-Cookie는 배열 그대로 보존 (expires 날짜의 쉼표 때문에 join하면 파싱 불가)
+          const rawSetCookies: string[] = [];
           for (const [key, val] of Object.entries(res.headers)) {
             if (val) {
-              responseHeaders[key] = Array.isArray(val) ? val.join(', ') : val;
+              if (key.toLowerCase() === 'set-cookie' && Array.isArray(val)) {
+                rawSetCookies.push(...val);
+                responseHeaders[key] = val.join(', ');
+              } else {
+                responseHeaders[key] = Array.isArray(val) ? val.join(', ') : val;
+              }
             }
           }
 
@@ -82,6 +89,7 @@ export class HttpService {
             status: res.statusCode ?? 0,
             statusText: res.statusMessage ?? '',
             headers: responseHeaders,
+            rawSetCookies: rawSetCookies.length > 0 ? rawSetCookies : undefined,
             body: buffer.toString('utf-8'),
             bodyBase64: isBinary ? buffer.toString('base64') : undefined,
             time: elapsed,

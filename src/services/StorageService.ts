@@ -24,6 +24,11 @@ export class StorageService {
     this.ensureStorageDir();
   }
 
+  // globalStorage 경로 반환 (임시 파일 등에 활용)
+  getStoragePath(): string {
+    return this.storagePath;
+  }
+
   private ensureStorageDir(): void {
     if (!fs.existsSync(this.storagePath)) {
       fs.mkdirSync(this.storagePath, { recursive: true });

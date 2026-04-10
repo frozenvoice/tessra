@@ -54,6 +54,7 @@ export interface Response {
   status: number;
   statusText: string;
   headers: Record<string, string>;
+  rawSetCookies?: string[];  // Set-Cookie 헤더 원본 배열 (쉼표 join 하지 않은 개별 쿠키)
   body: string;
   bodyBase64?: string;
   time: number;
@@ -107,6 +108,9 @@ export enum MessageType {
   CancelRequest = 'cancelRequest',
   SaveTabState = 'saveTabState',
 
+  // Webview → Extension (응답 비교)
+  CompareResponses = 'compareResponses',
+
   // Webview → Extension (컬렉션 러너)
   StopCollectionRun = 'stopCollectionRun',
 
@@ -143,6 +147,7 @@ export interface SendRequestMessage {
 
 export interface SaveRequestMessage {
   type: MessageType.SaveRequest;
+  requestId?: string;  // 기존 컬렉션 요청 ID (있으면 덮어쓰기, 없으면 새로 생성)
   method: HttpMethod;
   url: string;
   headers: KeyValue[];
@@ -199,6 +204,12 @@ export interface SaveTabStateMessage {
   type: MessageType.SaveTabState;
   tabs: TabState[];
   activeIndex: number;
+}
+
+export interface CompareResponsesMessage {
+  type: MessageType.CompareResponses;
+  left: { label: string; body: string; contentType: string; formatted?: boolean };
+  right: { label: string; body: string; contentType: string; formatted?: boolean };
 }
 
 export interface StopCollectionRunMessage {
@@ -259,6 +270,7 @@ export type IncomingWebviewMessage =
   | SaveDefaultHeadersMessage
   | CancelRequestMessage
   | SaveTabStateMessage
+  | CompareResponsesMessage
   | StopCollectionRunMessage
   | WebviewReadyMessage;
 

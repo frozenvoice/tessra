@@ -225,6 +225,7 @@ export class CollectionTreeProvider
 
   async saveRequest(
     requestData: {
+      requestId?: string;  // 기존 요청 ID (있으면 덮어쓰기)
       method: string;
       url: string;
       headers: Request['headers'];
@@ -233,30 +234,50 @@ export class CollectionTreeProvider
       bodyType: RequestBodyType;
       auth: Request['auth'];
     }
-  ): Promise<boolean> {
+  ): Promise<{ requestId: string; name: string } | null> {
     const collections = this.storage.getCollections();
+
+    // 기존 요청 덮어쓰기
+    if (requestData.requestId) {
+      const existing = this.findItemByRequestId(collections, requestData.requestId);
+      if (existing?.request) {
+        existing.request.method = requestData.method as any;
+        existing.request.url = requestData.url;
+        existing.request.headers = requestData.headers ?? [];
+        existing.request.params = requestData.params ?? [];
+        existing.request.body = requestData.body ?? '';
+        existing.request.bodyType = requestData.bodyType;
+        existing.request.auth = requestData.auth ?? { type: 'none' };
+        this.storage.saveCollections(collections);
+        this.refresh();
+        return { requestId: existing.request.id, name: existing.name };
+      }
+    }
+
+    // 새로 저장
     if (collections.length === 0) {
       vscode.window.showWarningMessage('컬렉션이 없습니다. 먼저 컬렉션을 생성하세요.');
-      return false;
+      return null;
     }
 
     const picks = this.buildPickList(collections);
     const selected = await vscode.window.showQuickPick(picks, { placeHolder: '저장할 위치 선택' });
-    if (!selected) { return false; }
+    if (!selected) { return null; }
 
     const name = await vscode.window.showInputBox({
       prompt: '요청 이름',
       placeHolder: requestData.method + ' ' + requestData.url,
       value: requestData.method + ' ' + this.extractPath(requestData.url),
     });
-    if (!name) { return false; }
+    if (!name) { return null; }
 
+    const newRequestId = this.generateId();
     const newItem: CollectionItem = {
       id: this.generateId(),
       type: 'request',
       name,
       request: {
-        id: this.generateId(),
+        id: newRequestId,
         name,
         method: requestData.method as any,
         url: requestData.url,
@@ -279,7 +300,27 @@ export class CollectionTreeProvider
     this.storage.saveCollections(collections);
     this.refresh();
     vscode.window.showInformationMessage(`"${name}" 저장 완료`);
-    return true;
+    return { requestId: newRequestId, name };
+  }
+
+  // request.id로 CollectionItem 검색
+  private findItemByRequestId(collections: Collection[], requestId: string): CollectionItem | undefined {
+    for (const col of collections) {
+      const found = this.findInItemsByRequestId(col.items, requestId);
+      if (found) { return found; }
+    }
+    return undefined;
+  }
+
+  private findInItemsByRequestId(items: CollectionItem[], requestId: string): CollectionItem | undefined {
+    for (const item of items) {
+      if (item.request?.id === requestId) { return item; }
+      if (item.children) {
+        const found = this.findInItemsByRequestId(item.children, requestId);
+        if (found) { return found; }
+      }
+    }
+    return undefined;
   }
 
   async rename(node: CollectionNode): Promise<void> {
