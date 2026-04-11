@@ -23,6 +23,7 @@ import { GuidePanel } from './panels/GuidePanel';
 import { ImportExportService } from './services/ImportExportService';
 import { CodegenService } from './services/CodegenService';
 import { LocalizationService, SUPPORTED_DISPLAY_LANGUAGES } from './services/LocalizationService';
+import { RequestExportService } from './services/RequestExportService';
 
 const VALID_HTTP_METHODS: ReadonlySet<HttpMethod> = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 
@@ -64,6 +65,14 @@ export function activate(context: vscode.ExtensionContext) {
     dragAndDropController: environmentProvider,
   });
   context.subscriptions.push(collectionTreeView, historyTreeView, environmentTreeView);
+
+  function updateLocalizedViewTitles(): void {
+    collectionTreeView.title = t('view.collections');
+    environmentTreeView.title = t('view.environments');
+    historyTreeView.title = t('view.history');
+  }
+
+  updateLocalizedViewTitles();
 
   RequestPanel.storage = storage;
   RequestPanel.historyProvider = historyProvider;
@@ -141,7 +150,9 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.copyAsCurl', (node: CollectionNode) => {
       if (node.kind === 'request' && node.item.request) {
-        const curl = CurlService.generate(node.item.request);
+        const curl = CurlService.generate(
+          RequestExportService.resolve(node.item.request, environmentProvider.getActiveVariables())
+        );
         vscode.env.clipboard.writeText(curl);
         vscode.window.showInformationMessage(t('info.copiedCurl'));
       }
@@ -554,6 +565,7 @@ export function activate(context: vscode.ExtensionContext) {
     if (!event.affectsConfiguration('arc-client.displayLanguage')) { return; }
     envStatusBar.tooltip = t('statusBar.switchEnvironment');
     updateStatusBar(envStatusBar, environmentProvider);
+    updateLocalizedViewTitles();
     collectionProvider.refresh();
     historyProvider.refresh();
     environmentProvider.refresh();

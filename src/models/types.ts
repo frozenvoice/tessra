@@ -48,7 +48,6 @@ export interface RequestSettings {
   stopAfterHeaders?: boolean;
   skipDefaultHeaders?: boolean;
   disableScripts?: boolean;
-  openHtmlPreviewByDefault?: boolean;
 }
 
 export interface ScriptLogEntry {
@@ -98,7 +97,6 @@ export interface TabState {
   stopAfterHeaders?: boolean;
   skipDefaultHeaders?: boolean;
   disableScripts?: boolean;
-  openHtmlPreviewByDefault?: boolean;
   jsonFormatStyle?: 'pretty' | 'compact';
   xmlFormatStyle?: 'pretty' | 'compact' | 'inline';
   formatIndent?: '2' | '4' | 'tab';
@@ -199,6 +197,8 @@ export enum MessageType {
   StopCollectionRun = 'stopCollectionRun',
   PickFile = 'pickFile',
   GenerateCode = 'generateCode',
+  OpenDefaultHeaders = 'openDefaultHeaders',
+  OpenResponseUrl = 'openResponseUrl',
 
   // Extension -> Webview
   RestoreTabState = 'restoreTabState',
@@ -357,6 +357,15 @@ export interface GenerateCodeMessage {
   auth: AuthConfig;
 }
 
+export interface OpenDefaultHeadersMessage {
+  type: MessageType.OpenDefaultHeaders;
+}
+
+export interface OpenResponseUrlMessage {
+  type: MessageType.OpenResponseUrl;
+  url: string;
+}
+
 export interface WebviewReadyMessage {
   type: 'webviewReady';
 }
@@ -423,6 +432,12 @@ export interface UpdateLocalizationMessage {
   dateLocale: string;
 }
 
+export interface LoadDefaultHeadersMessage {
+  type: MessageType.LoadDefaultHeaders;
+  headers: KeyValue[];
+  reveal?: boolean;
+}
+
 export interface PickFileResultMessage {
   type: MessageType.PickFileResult;
   target: 'binary' | 'formdata';
@@ -445,6 +460,8 @@ export type IncomingWebviewMessage =
   | StopCollectionRunMessage
   | PickFileMessage
   | GenerateCodeMessage
+  | OpenDefaultHeadersMessage
+  | OpenResponseUrlMessage
   | WebviewReadyMessage;
 
 export type OutgoingWebviewMessage =
@@ -456,6 +473,7 @@ export type OutgoingWebviewMessage =
   | LoadEnvironmentMessage
   | UpdateActiveEnvMessage
   | UpdateLocalizationMessage
+  | LoadDefaultHeadersMessage
   | PickFileResultMessage;
 
 export type WebviewMessage = IncomingWebviewMessage | OutgoingWebviewMessage;

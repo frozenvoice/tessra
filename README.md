@@ -33,13 +33,14 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - Timeout per tab
 - Follow redirects
 - Save to history toggle
+- Manage workspace default headers from the request toolbar or Headers tab
 - TLS override: `Default`, `Strict`, `Insecure`
 - Maximum response size limit
 - Retry count and retry delay
 - Stop after headers
 - Skip default headers
 - Disable scripts
-- Open HTML preview by default
+- Automatically opens Preview when the response contains meaningful static HTML
 
 ### Body types
 - `none`
@@ -72,7 +73,8 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - History pruning via `arc-client.historyMaxItems`
 
 ### Response viewer
-- Body / Headers / Cookies / Tests / Preview tabs
+- Body / Headers / Cookies / Tests tabs, plus Preview when the response contains meaningful static HTML
+- Dynamic HTML pages stay in Body while `Open URL` remains available for the resolved page
 - JSON tree viewer
 - XML formatting with `Pretty`, `Compact`, and `Inline Children`
 - Content-Type based syntax highlighting
@@ -129,33 +131,9 @@ Header: Authorization: Bearer {{token}}
 Body: {"env":"{{envName}}"}
 ```
 
-## Screenshots
+## In-app guide
 
-Store Marketplace screenshots in [images/marketplace](/E:/Dev/GitHub/arc-client/images/marketplace).
-
-Recommended file names:
-
-- `screenshot-01-request-workflow.png`
-- `screenshot-02-collections-environments-history.png`
-- `screenshot-03-scripts-and-tests.png`
-- `screenshot-04-import-flow.png`
-- `screenshot-05-code-generation.png`
-
-Suggested capture order:
-
-1. Multi-tab request workflow
-2. Collections, environments, and history
-3. Scripts and test results
-4. cURL / Postman import flow
-5. Code generation output
-
-Add images here after capturing them:
-
-```md
-![Multi-tab request workflow](./images/marketplace/screenshot-01-request-workflow.png)
-![Collections, environments, and history](./images/marketplace/screenshot-02-collections-environments-history.png)
-![Scripts and test results](./images/marketplace/screenshot-03-scripts-and-tests.png)
-```
+Run `Arc: Open Guide` to open the user guide inside VS Code.
 
 ## Extension settings
 
@@ -175,7 +153,7 @@ Add images here after capturing them:
 - Default: `en`
 - Supported values: `en`, `ko`, `ja`
 - Controls Arc Client panels, prompts, and notifications
-- The guide falls back to the English README unless a localized guide file exists
+- The in-app guide uses localized guide files when available and falls back to English
 - VS Code locale does not change Arc Client UI anymore
 - You can also run `Arc: Change Display Language` from the Command Palette
 

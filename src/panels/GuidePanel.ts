@@ -49,10 +49,10 @@ export class GuidePanel {
   }
 
   private render(): void {
-    const readmePath = this.resolveReadmePath();
+    const guidePath = this.resolveGuidePath();
     let markdown = '';
     try {
-      markdown = fs.readFileSync(readmePath, 'utf-8');
+      markdown = fs.readFileSync(guidePath, 'utf-8');
     } catch {
       markdown = LocalizationService.t('guide.readmeMissing');
     }
@@ -61,14 +61,25 @@ export class GuidePanel {
     this.panel.webview.html = this.getHtml(markdown);
   }
 
-  private resolveReadmePath(): string {
+  private resolveGuidePath(): string {
     const language = LocalizationService.getDisplayLanguage();
-    const preferred = language === 'ko'
-      ? path.join(this.extensionUri.fsPath, 'README.ko.md')
-      : path.join(this.extensionUri.fsPath, 'README.md');
-    return fs.existsSync(preferred)
-      ? preferred
-      : path.join(this.extensionUri.fsPath, 'README.md');
+    const candidates = language === 'ko'
+      ? [
+          path.join(this.extensionUri.fsPath, 'GUIDE.ko.md'),
+          path.join(this.extensionUri.fsPath, 'GUIDE.md'),
+        ]
+      : [
+          path.join(this.extensionUri.fsPath, `GUIDE.${language}.md`),
+          path.join(this.extensionUri.fsPath, 'GUIDE.md'),
+        ];
+
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+
+    return path.join(this.extensionUri.fsPath, 'GUIDE.md');
   }
 
   private renderMarkdown(md: string): string {

@@ -1,0 +1,47 @@
+import * as assert from 'assert';
+import { RequestExportService } from '../../services/RequestExportService';
+import { KeyValue } from '../../models/types';
+
+describe('RequestExportService', () => {
+  const vars: KeyValue[] = [
+    { key: 'baseUrl', value: 'https://api.example.com', enabled: true },
+    { key: 'token', value: 'abc123', enabled: true },
+    { key: 'user', value: 'demo-user', enabled: true },
+    { key: 'password', value: 'secret', enabled: true },
+    { key: 'uploadPath', value: 'C:/tmp/file.bin', enabled: true },
+  ];
+
+  it('resolves variables across URL, headers, params, body, auth, and file paths', () => {
+    const exported = RequestExportService.resolve({
+      method: 'POST',
+      url: '{{baseUrl}}/items',
+      headers: [{ key: 'Authorization', value: 'Bearer {{token}}', enabled: true }],
+      params: [{ key: 'env', value: '{{user}}', enabled: true }],
+      body: '{"token":"{{token}}"}',
+      bodyType: 'json',
+      formData: [
+        { id: '1', key: 'name', value: '{{user}}', type: 'text', enabled: true },
+        { id: '2', key: 'file', value: '{{uploadPath}}', type: 'file', enabled: true },
+      ],
+      binaryFilePath: '{{uploadPath}}',
+      auth: {
+        type: 'basic',
+        basic: {
+          username: '{{user}}',
+          password: '{{password}}',
+        },
+      },
+    }, vars);
+
+    assert.strictEqual(exported.url, 'https://api.example.com/items');
+    assert.strictEqual(exported.headers?.[0].value, 'Bearer abc123');
+    assert.strictEqual(exported.params?.[0].value, 'demo-user');
+    assert.strictEqual(exported.body, '{"token":"abc123"}');
+    assert.strictEqual(exported.formData?.[0].value, 'demo-user');
+    assert.strictEqual(exported.formData?.[1].value, 'C:/tmp/file.bin');
+    assert.strictEqual(exported.binaryFilePath, 'C:/tmp/file.bin');
+    assert.strictEqual(exported.auth?.type, 'basic');
+    assert.strictEqual(exported.auth?.basic?.username, 'demo-user');
+    assert.strictEqual(exported.auth?.basic?.password, 'secret');
+  });
+});

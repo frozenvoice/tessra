@@ -10,6 +10,15 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.autoSaved': 'Auto-saved',
   'webview.addVariable': '+ Add Variable',
   'webview.defaultHeaders': 'Default Headers',
+  'webview.defaultHeadersApplied': 'Workspace default headers active: {count}',
+  'webview.defaultHeadersAppliedNote': 'Applied before request-specific headers unless the same key is already set in this tab.',
+  'webview.defaultHeadersOverridden': 'Request-specific headers override {count} workspace default header(s).',
+  'webview.defaultHeadersAppliedLabel': 'Applied',
+  'webview.defaultHeadersOverriddenLabel': 'Overridden',
+  'webview.defaultHeadersSkippedState': 'This tab is skipping workspace default headers.',
+  'webview.defaultHeadersSkippedNote': 'Turn off "Skip default headers" in Settings to apply them here.',
+  'webview.defaultHeadersEmptyState': 'No workspace default headers saved yet.',
+  'webview.manage': 'Manage',
   'webview.save': 'Save',
   'webview.addHeader': '+ Add Header',
   'webview.emptyPlaceholder': 'Press + or Ctrl+T to create a new request',
@@ -20,7 +29,14 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.saveToHistory': 'Save to history',
   'webview.skipDefaultHeaders': 'Skip default headers',
   'webview.disableScripts': 'Disable scripts',
-  'webview.openHtmlPreview': 'Open HTML preview by default',
+  'webview.previewOfflineTitle': 'Offline HTML Preview',
+  'webview.previewOfflineCopy': 'This preview stays local. External scripts, styles, images, and other linked assets are blocked, so dynamic pages may only show static HTML.',
+  'webview.previewOfflineSource': 'Source URL',
+  'webview.previewOfflineDescription': 'Description',
+  'webview.previewOfflineBlockedAssets': 'Blocked external assets: {count}',
+  'webview.previewOfflineStaticSnapshot': 'Static snapshot',
+  'webview.previewOfflineNoStatic': 'No meaningful static body content was detected in this response.',
+  'webview.openUrl': 'Open URL',
   'webview.maxSize': 'Max Size (KB)',
   'webview.retryCount': 'Retry Count',
   'webview.retryDelay': 'Retry Delay',
@@ -28,6 +44,9 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.preRequestPlaceholder': 'env.set("token", "123");',
   'webview.testPlaceholder': 'test("status", function () { pm.response.to.have.status(200); });',
   'webview.comparisonSettings': 'Comparison Settings',
+  'webview.discard': 'Discard',
+  'webview.unsavedClosePrompt': 'There are unsaved changes. Close this tab?',
+  'webview.unsavedCloseNamedPrompt': '"{name}" has unsaved changes.',
 };
 
 function readRequestPanelSource(): string {
@@ -176,12 +195,43 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /autoName: !!t\.autoName/);
   });
 
+  it('localizes dirty-close prompts and file picker labels', () => {
+    assert.match(script, /tr\('webview\.unsavedClosePrompt'\)/);
+    assert.match(script, /tf\('webview\.unsavedCloseNamedPrompt', \{ name: tabLabel \}\)/);
+    assert.match(script, /tr\('webview\.discard'\)/);
+    assert.match(source, /openLabel:\s*LocalizationService\.t\('panel\.selectFile'\)/);
+  });
+
+  it('keeps singleton global listeners for format menus and split dragging', () => {
+    assert.match(script, /var activeFormatMenuState = null;/);
+    assert.match(script, /function closeActiveFormatMenu\(\)/);
+    assert.match(script, /document\.addEventListener\('click', function\(e\) \{\s*if \(!activeFormatMenuState\) return;/);
+    assert.match(script, /var splitDragState = null;/);
+    assert.match(script, /function releaseSplitDrag\(\)/);
+    assert.match(script, /document\.addEventListener\('mousemove', function\(e\) \{\s*if \(!splitDragState\) return;/);
+    assert.match(script, /document\.addEventListener\('mouseup', function\(\) \{\s*releaseSplitDrag\(\);/);
+    assert.doesNotMatch(script, /document\.addEventListener\('click', \(\) => fmtMenu\.classList\.remove\('open'\)\)/);
+  });
+
+  it('cancels collection retry delays when stop is requested', () => {
+    assert.match(source, /private async waitForCollectionRetryDelay\(ms: number\): Promise<void>/);
+    assert.match(source, /this\.currentCollectionDelayCancel = cancel;/);
+    assert.match(source, /await this\.waitForCollectionRetryDelay\(settings\.retryDelayMs\);/);
+    assert.match(source, /case MessageType\.StopCollectionRun:[\s\S]*this\.currentCollectionDelayCancel\?\.\(\);[\s\S]*this\.currentCollectionDelayCancel = null;/);
+  });
+
+  it('resolves active environment variables before copying or generating code', () => {
+    assert.match(source, /const exported = RequestExportService\.resolve\(\{/);
+    assert.match(source, /RequestPanel\.environmentProvider\.getActiveVariables\(\)/);
+    assert.match(source, /const curl = CurlService\.generate\(exported\);/);
+    assert.match(source, /CodegenService\.generate\(target\.target, exported\)/);
+  });
+
   it('renders the expanded request settings controls', () => {
     assert.ok(html.includes('Follow redirects'), 'settings tab should include redirect toggle');
     assert.ok(html.includes('Save to history'), 'settings tab should include history toggle');
     assert.ok(html.includes('Skip default headers'), 'settings tab should include default header toggle');
     assert.ok(html.includes('Disable scripts'), 'settings tab should include script toggle');
-    assert.ok(html.includes('Open HTML preview by default'), 'settings tab should include preview toggle');
     assert.ok(html.includes('Max Size (KB)'), 'settings tab should include max response size');
     assert.ok(html.includes('Retry Count'), 'settings tab should include retry count');
     assert.ok(html.includes('Retry Delay'), 'settings tab should include retry delay');
@@ -210,15 +260,41 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /stopAfterHeaders:\s*data\?\.stopAfterHeaders === true/);
     assert.match(script, /skipDefaultHeaders:\s*data\?\.skipDefaultHeaders === true/);
     assert.match(script, /disableScripts:\s*data\?\.disableScripts === true/);
-    assert.match(script, /openHtmlPreviewByDefault:\s*data\?\.openHtmlPreviewByDefault === true/);
     assert.match(script, /buildSaveRequestMessage\(tab/);
     assert.match(script, /followRedirects:\s*!!tab\.followRedirects/);
     assert.match(script, /saveToHistory:\s*tab\.saveToHistory !== false/);
-    assert.match(script, /openHtmlPreviewByDefault:\s*!!tab\.openHtmlPreviewByDefault/);
   });
 
-  it('opens HTML preview automatically when the setting is enabled', () => {
-    assert.match(script, /tab\.responseTab = \(tab\.openHtmlPreviewByDefault && contentType\.indexOf\('html'\) >= 0\) \? 'resPreview' : 'resBody';/);
+  it('opens HTML preview automatically when meaningful static HTML exists', () => {
+    assert.match(script, /function hasMeaningfulStaticPreview\(rawHtml\)/);
+    assert.match(script, /function hasHtmlPreview\(tab\)/);
+    assert.match(script, /tab\.responseTab = \(contentType\.indexOf\('html'\) >= 0 && hasMeaningfulStaticPreview\(msg\.response\.body \|\| ''\)\) \? 'resPreview' : 'resBody';/);
     assert.match(script, /(var|const) tab = tabs\.find\(tt => tt\.id === activeTabId\);[\s\S]*tab\.responseTab = t\.dataset\.tab;/);
+    assert.match(script, /function buildPreviewDocument\(rawHtml, resolvedUrl\)/);
+    assert.match(script, /function syncPreviewFrame\(preview, tab\)/);
+    assert.match(script, /const previewAvailable = lang === 'html' && hasHtmlPreview\(tab\);/);
+    assert.match(script, /\(previewAvailable \? '<div class="tab' \+ \(showPreview \? ' active' : ''\) \+ '" data-tab="resPreview">/);
+    assert.match(script, /<div class="res-preview' \+ \(showPreview \? '' : ' hidden'\) \+ ' js-res-preview"><\/div>/);
+    assert.match(script, /preview\.innerHTML = buildPreviewDocument\(tab\.response\.body \|\| '', tab\.resolvedUrl \|\| tab\.url \|\| ''\);/);
+    assert.match(script, /querySelectorAll\('script, style, noscript, iframe, object, embed, link, source, audio, video, track, base, meta\[http-equiv="refresh"\]'\)/);
+    assert.match(script, /tf\('webview\.previewOfflineBlockedAssets', \{ count: String\(payload\.blockedAssets\) \}\)/);
+    assert.match(script, /js-open-response-url/);
+  });
+
+  it('surfaces workspace default headers directly in the request UI', () => {
+    assert.match(script, /let workspaceDefaultHeaders = \[\];/);
+    assert.match(script, /function renderDefaultHeadersBanner\(tab\)/);
+    assert.match(script, /function refreshDefaultHeadersBanner\(mc\)/);
+    assert.match(script, /function getOverriddenDefaultHeaders\(tab\)/);
+    assert.match(script, /function renderDefaultHeaderKeyGroup\(labelKey, headers, chipClass\)/);
+    assert.match(script, /js-open-default-headers-top/);
+    assert.match(script, /js-default-headers-banner-wrap/);
+    assert.match(script, /vscode\.postMessage\(\{ type: 'openDefaultHeaders' \}\)/);
+    assert.match(script, /workspaceDefaultHeaders = msg\.headers \|\| \[\];/);
+    assert.match(script, /if \(msg\.reveal !== false\)/);
+    assert.match(script, /tf\('webview\.defaultHeadersApplied', \{ count: applied\.length \}\)/);
+    assert.match(script, /tf\('webview\.defaultHeadersOverridden', \{ count: overridden\.length \}\)/);
+    assert.match(script, /renderDefaultHeaderKeyGroup\('webview\.defaultHeadersAppliedLabel', applied, ''\)/);
+    assert.match(script, /renderDefaultHeaderKeyGroup\('webview\.defaultHeadersOverriddenLabel', overridden, ' override'\)/);
   });
 });

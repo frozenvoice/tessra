@@ -33,6 +33,7 @@ import { ScriptRunner, ScriptableRequest } from '../services/ScriptRunner';
 import { CodegenService } from '../services/CodegenService';
 import { ResponseCompareService } from '../services/ResponseCompareService';
 import { LocalizationService } from '../services/LocalizationService';
+import { RequestExportService } from '../services/RequestExportService';
 
 type ResolvedRequestSettings = {
   timeout: number;
@@ -45,7 +46,6 @@ type ResolvedRequestSettings = {
   stopAfterHeaders: boolean;
   skipDefaultHeaders: boolean;
   disableScripts: boolean;
-  openHtmlPreviewByDefault: boolean;
 };
 
 // Webview ?붿껌 ?⑤꼸 愿由?(?ㅼ쨷 ??吏??
@@ -71,6 +71,8 @@ export class RequestPanel {
     MessageType.StopCollectionRun,
     MessageType.PickFile,
     MessageType.GenerateCode,
+    MessageType.OpenDefaultHeaders,
+    MessageType.OpenResponseUrl,
     'webviewReady',
   ]);
   private static readonly UNRESOLVED_VAR_PATTERN = /\{\{([^}]+)\}\}/g;
@@ -82,6 +84,7 @@ export class RequestPanel {
   private isDisposed = false;
   private collectionRunAbort = false;
   private currentCollectionRequest: SendHandle | null = null;
+  private currentCollectionDelayCancel: (() => void) | null = null;
   private canceledRequestTabs = new Set<string>();
   private activeRequests = new Map<string, { abort: () => void }>();
   private webviewReady = false;
@@ -155,7 +158,6 @@ export class RequestPanel {
       stopAfterHeaders: settings?.stopAfterHeaders === true,
       skipDefaultHeaders: settings?.skipDefaultHeaders === true,
       disableScripts: settings?.disableScripts === true,
-      openHtmlPreviewByDefault: settings?.openHtmlPreviewByDefault === true,
     };
   }
 
@@ -181,7 +183,6 @@ export class RequestPanel {
       stopAfterHeaders: settings.stopAfterHeaders,
       skipDefaultHeaders: settings.skipDefaultHeaders,
       disableScripts: settings.disableScripts,
-      openHtmlPreviewByDefault: settings.openHtmlPreviewByDefault,
     };
   }
 
@@ -203,6 +204,18 @@ export class RequestPanel {
         reject(new Error('Request was canceled'));
       });
     });
+  }
+
+  private async waitForCollectionRetryDelay(ms: number): Promise<void> {
+    if (ms <= 0) { return; }
+
+    try {
+      await this.createCancelableDelay(ms, (cancel) => {
+        this.currentCollectionDelayCancel = cancel;
+      });
+    } finally {
+      this.currentCollectionDelayCancel = null;
+    }
   }
 
   private postMessage(message: unknown): void {
@@ -377,7 +390,6 @@ export class RequestPanel {
       stopAfterHeaders: req.stopAfterHeaders === true,
       skipDefaultHeaders: req.skipDefaultHeaders === true,
       disableScripts: req.disableScripts === true,
-      openHtmlPreviewByDefault: req.openHtmlPreviewByDefault === true,
       name: req.name || `${req.method} ${req.url}`,
     });
   }
@@ -392,11 +404,7 @@ export class RequestPanel {
   }
 
   public loadDefaultHeaders() {
-    const headers = RequestPanel.storage.getDefaultHeaders();
-    this.postMessage({
-      type: MessageType.LoadDefaultHeaders,
-      headers,
-    });
+    this.sendDefaultHeadersToWebview(true);
   }
 
   public updateActiveEnv(envName: string | null) {
@@ -405,6 +413,15 @@ export class RequestPanel {
       envName,
     });
     this.sendActiveVarsToWebview();
+  }
+
+  private sendDefaultHeadersToWebview(reveal = false): void {
+    const headers = RequestPanel.storage.getDefaultHeaders();
+    this.postMessage({
+      type: MessageType.LoadDefaultHeaders,
+      headers,
+      reveal,
+    });
   }
 
   // 컬렉션 전체 실행 (재귀적으로 하위 폴더 포함)
@@ -555,12 +572,12 @@ export class RequestPanel {
             if (this.collectionRunAbort || attempt >= settings.retryCount) {
               throw err;
             }
-            await this.createCancelableDelay(settings.retryDelayMs);
+            await this.waitForCollectionRetryDelay(settings.retryDelayMs);
             continue;
           }
 
           if (response && attempt < settings.retryCount && this.shouldRetryResponse(response.status)) {
-            await this.createCancelableDelay(settings.retryDelayMs);
+            await this.waitForCollectionRetryDelay(settings.retryDelayMs);
             response = null;
             continue;
           }
@@ -639,6 +656,7 @@ export class RequestPanel {
       }
       this.pendingRestore = null;
       this.updateActiveEnv(RequestPanel.environmentProvider.getActiveEnvironmentName());
+      this.sendDefaultHeadersToWebview(false);
       return;
     }
     switch (message.type) {
@@ -672,7 +690,6 @@ export class RequestPanel {
           stopAfterHeaders: message.stopAfterHeaders === true,
           skipDefaultHeaders: message.skipDefaultHeaders === true,
           disableScripts: message.disableScripts === true,
-          openHtmlPreviewByDefault: message.openHtmlPreviewByDefault === true,
         });
         this.postMessage({
           type: MessageType.SaveRequestResult,
@@ -683,7 +700,7 @@ export class RequestPanel {
         break;
       }
       case MessageType.CopyAsCurl: {
-        const curl = CurlService.generate({
+        const exported = RequestExportService.resolve({
           method: message.method,
           url: message.url,
           headers: message.headers ?? [],
@@ -693,7 +710,8 @@ export class RequestPanel {
           formData: message.formData ?? [],
           binaryFilePath: message.binaryFilePath ?? '',
           auth: message.auth ?? { type: 'none' },
-        });
+        }, RequestPanel.environmentProvider.getActiveVariables());
+        const curl = CurlService.generate(exported);
         vscode.env.clipboard.writeText(curl);
       vscode.window.showInformationMessage(LocalizationService.t('info.copiedCurl'));
         break;
@@ -719,7 +737,8 @@ export class RequestPanel {
         break;
       case MessageType.SaveDefaultHeaders:
         RequestPanel.storage.saveDefaultHeaders(message.headers);
-      vscode.window.showInformationMessage(LocalizationService.t('panel.savedDefaultHeaders'));
+        this.sendDefaultHeadersToWebview(true);
+        vscode.window.showInformationMessage(LocalizationService.t('panel.savedDefaultHeaders'));
         break;
       case MessageType.SaveTabState:
         RequestPanel.storage.saveTabState(message.tabs ?? [], message.activeIndex ?? 0, message.compareSettings);
@@ -730,11 +749,13 @@ export class RequestPanel {
       case MessageType.StopCollectionRun:
         this.collectionRunAbort = true;
         this.currentCollectionRequest?.abort();
+        this.currentCollectionDelayCancel?.();
+        this.currentCollectionDelayCancel = null;
         break;
       case MessageType.PickFile: {
         const selected = await vscode.window.showOpenDialog({
           canSelectMany: false,
-          openLabel: 'Select File',
+          openLabel: LocalizationService.t('panel.selectFile'),
         });
         this.postMessage({
           type: MessageType.PickFileResult,
@@ -748,6 +769,27 @@ export class RequestPanel {
         await this.generateCode(message);
         break;
       }
+      case MessageType.OpenDefaultHeaders:
+        this.loadDefaultHeaders();
+        break;
+      case MessageType.OpenResponseUrl:
+        await this.openResponseUrl(message.url);
+        break;
+    }
+  }
+
+  private async openResponseUrl(url: string): Promise<void> {
+    try {
+      if (!url) {
+        return;
+      }
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        LocalizationService.t('panel.failedOpenUrl', {
+          message: error instanceof Error ? error.message : String(error),
+        })
+      );
     }
   }
 
@@ -1251,29 +1293,21 @@ export class RequestPanel {
     });
     if (!target) { return; }
 
+    const exported = RequestExportService.resolve({
+      method: message.method,
+      url: message.url,
+      headers: message.headers ?? [],
+      params: message.params ?? [],
+      body: message.body ?? '',
+      bodyType: message.bodyType,
+      formData: message.formData ?? [],
+      binaryFilePath: message.binaryFilePath ?? '',
+      auth: message.auth ?? { type: 'none' },
+    }, RequestPanel.environmentProvider.getActiveVariables());
+
     const code = target.target === 'curl'
-      ? CurlService.generate({
-          method: message.method,
-          url: message.url,
-          headers: message.headers ?? [],
-          params: message.params ?? [],
-          body: message.body ?? '',
-          bodyType: message.bodyType,
-          formData: message.formData ?? [],
-          binaryFilePath: message.binaryFilePath ?? '',
-          auth: message.auth ?? { type: 'none' },
-        })
-      : CodegenService.generate(target.target, {
-          method: message.method,
-          url: message.url,
-          headers: message.headers ?? [],
-          params: message.params ?? [],
-          body: message.body ?? '',
-          bodyType: message.bodyType,
-          formData: message.formData ?? [],
-          binaryFilePath: message.binaryFilePath ?? '',
-          auth: message.auth ?? { type: 'none' },
-        });
+      ? CurlService.generate(exported)
+      : CodegenService.generate(target.target, exported);
 
     await vscode.env.clipboard.writeText(code);
     vscode.window.showInformationMessage(LocalizationService.t('panel.copiedCode', { label: target.label }));
@@ -1313,6 +1347,8 @@ export class RequestPanel {
     RequestPanel.currentPanel = undefined;
     this.collectionRunAbort = true;
     this.currentCollectionRequest?.abort();
+    this.currentCollectionDelayCancel?.();
+    this.currentCollectionDelayCancel = null;
     for (const tabId of this.activeRequests.keys()) {
       this.cancelActiveRequest(tabId);
     }
@@ -1461,6 +1497,25 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .divider:hover,.divider.active{background:#0078d4}
 .divider::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:2px;background:var(--vscode-foreground);opacity:.2;border-radius:2px}
 .res-area{flex:1;min-height:40px;overflow:hidden;display:flex;flex-direction:column;padding:0 10px}
+.res-preview{width:100%;flex:1;overflow:auto;background:#fff;color:#111}
+.preview-shell{max-width:1080px;margin:0 auto;padding:24px}
+.preview-kicker{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6a6f77;margin-bottom:8px}
+.preview-title{font-size:28px;font-weight:800;line-height:1.2;margin:0 0 10px}
+.preview-copy{font-size:14px;line-height:1.65;color:#4b5563;margin:0 0 18px}
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:18px}
+.preview-card{padding:14px 16px;border:1px solid #d9dde3;border-radius:14px;background:#f8fafc}
+.preview-card-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6a6f77;margin-bottom:6px}
+.preview-card-value{font-size:13px;line-height:1.55;color:#111;word-break:break-word}
+.preview-card-value.muted{color:#6b7280}
+.preview-section{margin-top:20px}
+.preview-section-title{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6a6f77;margin-bottom:8px}
+.preview-empty{padding:16px;border:1px dashed #c8cdd4;border-radius:14px;background:#f8fafc;color:#6b7280}
+.preview-snapshot{padding:18px;border:1px solid #d9dde3;border-radius:14px;background:#fff;overflow:auto}
+.preview-snapshot img{max-width:100%;height:auto}
+.preview-snapshot table{border-collapse:collapse;max-width:100%}
+.preview-snapshot th,.preview-snapshot td{border:1px solid #d9dde3;padding:6px 8px;vertical-align:top}
+.preview-snapshot pre{white-space:pre-wrap;word-break:break-word}
+.preview-snapshot code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 
 /* KV ??*/
 .kv-section{padding:3px 0}
@@ -1756,6 +1811,18 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .script-card-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.7;margin-bottom:4px}
 .script-card-note{font-size:12px;line-height:1.45;color:var(--vscode-descriptionForeground,#989898);margin-bottom:8px}
 .script-card textarea{min-height:160px}
+.default-headers-banner{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.025);margin-bottom:10px}
+.default-headers-banner.active{border-color:rgba(78,201,78,.18);background:rgba(78,201,78,.05)}
+.default-headers-banner.warning{border-color:rgba(229,192,123,.18);background:rgba(229,192,123,.06)}
+.default-headers-banner-main{display:flex;flex-direction:column;gap:4px;min-width:0}
+.default-headers-banner-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.7}
+.default-headers-banner-copy{font-size:13px;font-weight:600;line-height:1.45}
+.default-headers-banner-note{font-size:12px;line-height:1.5;color:var(--vscode-descriptionForeground,#989898)}
+.default-headers-key-group{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.default-headers-key-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.62}
+.default-headers-key-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.default-header-chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.06);font-size:12px;font-family:var(--vscode-editor-font-family,monospace)}
+.default-header-chip.override{border-color:rgba(229,192,123,.24);background:rgba(229,192,123,.1);color:#f0c995}
 
 /* 而щ젆???щ꼫 */
 .runner-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:var(--vscode-editor-background);z-index:100;display:flex;flex-direction:column;overflow:hidden}
@@ -1788,6 +1855,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
   .btn-send,.btn-stop{margin-left:auto}
   .settings-grid,.script-editor-grid,.empty-state-grid{grid-template-columns:1fr}
   .response-meta{align-items:flex-start}
+  .default-headers-banner{flex-direction:column}
 }
 </style>
 </head>
@@ -1842,6 +1910,7 @@ let tabIdCounter = 0;
 let currentEnvName = null;
 let editingEnvId = null;
 let activeVarKeys = [];  // ?쒖꽦 ?섍꼍??蹂????紐⑸줉
+let workspaceDefaultHeaders = [];
 let pendingSaveBtn = null;          // Save 踰꾪듉 ?ㅼ씠?쇰줈洹??꾨즺 ?湲?
 let pendingSaveResponseBtn = null;  // Save Response Body 踰꾪듉 ?ㅼ씠?쇰줈洹??꾨즺 ?湲?
 var _pendingCloseAfterSave = null;  // dirty ???リ린 ????????レ쓣 ??ID
@@ -1852,6 +1921,53 @@ const DEFAULT_COMPARE_IGNORE_JSON_PATHS = ['$.timestamp', '$.traceId', '$.reques
 var pinnedResponses = [];
 var lastResponse = null;
 var compareSettings = normalizeCompareSettings();
+var activeFormatMenuState = null;
+var splitDragState = null;
+
+function closeActiveFormatMenu() {
+  if (!activeFormatMenuState) return;
+  if (activeFormatMenuState.menu) activeFormatMenuState.menu.classList.remove('open');
+  activeFormatMenuState = null;
+}
+
+function releaseSplitDrag() {
+  if (!splitDragState) return;
+  if (splitDragState.divider) splitDragState.divider.classList.remove('active');
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+  splitDragState = null;
+}
+
+document.addEventListener('click', function(e) {
+  if (!activeFormatMenuState) return;
+  if (!activeFormatMenuState.menu?.isConnected || !activeFormatMenuState.button?.isConnected) {
+    closeActiveFormatMenu();
+    return;
+  }
+  if (activeFormatMenuState.menu.contains(e.target) || activeFormatMenuState.button.contains(e.target)) {
+    return;
+  }
+  closeActiveFormatMenu();
+});
+
+document.addEventListener('mousemove', function(e) {
+  if (!splitDragState) return;
+  if (!splitDragState.divider?.isConnected || !splitDragState.splitEl?.isConnected || !splitDragState.reqArea?.isConnected) {
+    releaseSplitDrag();
+    return;
+  }
+  var dy = e.clientY - splitDragState.startY;
+  var newH = Math.max(60, splitDragState.startH + dy);
+  var maxH = splitDragState.splitEl.offsetHeight - 40 - splitDragState.divider.offsetHeight;
+  newH = Math.min(newH, maxH);
+  splitDragState.reqArea.style.height = newH + 'px';
+  splitDragState.reqArea.style.flex = 'none';
+  splitDragState.reqArea.dataset.manualHeight = '1';
+});
+
+document.addEventListener('mouseup', function() {
+  releaseSplitDrag();
+});
 
 function tr(key) {
   return Object.prototype.hasOwnProperty.call(i18n, key) ? i18n[key] : key;
@@ -2259,7 +2375,6 @@ function getRequestSettings(data) {
     stopAfterHeaders: data?.stopAfterHeaders === true,
     skipDefaultHeaders: data?.skipDefaultHeaders === true,
     disableScripts: data?.disableScripts === true,
-    openHtmlPreviewByDefault: data?.openHtmlPreviewByDefault === true,
   };
 }
 
@@ -2275,7 +2390,6 @@ function applyRequestSettings(target, data) {
   target.stopAfterHeaders = settings.stopAfterHeaders;
   target.skipDefaultHeaders = settings.skipDefaultHeaders;
   target.disableScripts = settings.disableScripts;
-  target.openHtmlPreviewByDefault = settings.openHtmlPreviewByDefault;
   return target;
 }
 
@@ -2291,7 +2405,6 @@ function requestSettingsSnapshot(tab) {
     stopAfterHeaders: !!tab.stopAfterHeaders,
     skipDefaultHeaders: !!tab.skipDefaultHeaders,
     disableScripts: !!tab.disableScripts,
-    openHtmlPreviewByDefault: !!tab.openHtmlPreviewByDefault,
   };
 }
 
@@ -2349,8 +2462,7 @@ function isTabDirty(tab) {
       tab.retryDelayMs ||
       tab.stopAfterHeaders ||
       tab.skipDefaultHeaders ||
-      tab.disableScripts ||
-      tab.openHtmlPreviewByDefault
+      tab.disableScripts
     );
   }
   // 而щ젆?섏뿉??遺덈윭???? ?ㅻ깄???鍮?蹂寃?媛먯?
@@ -2465,11 +2577,11 @@ function showDirtyConfirm(tabId) {
   overlay.className = 'dirty-confirm-overlay';
   overlay.innerHTML =
     '<div class="dirty-confirm-dialog">' +
-      '<div class="dirty-confirm-msg">There are unsaved changes. Close this tab?</div>' +
+      '<div class="dirty-confirm-msg">' + escapeHtml(tr('webview.unsavedClosePrompt')) + '</div>' +
       '<div class="dirty-confirm-actions">' +
-        '<button class="dirty-btn dirty-btn-save" data-action="save">Save</button>' +
-        '<button class="dirty-btn dirty-btn-discard" data-action="discard">Discard</button>' +
-        '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">Cancel</button>' +
+        '<button class="dirty-btn dirty-btn-save" data-action="save">' + escapeHtml(tr('webview.save')) + '</button>' +
+        '<button class="dirty-btn dirty-btn-discard" data-action="discard">' + escapeHtml(tr('webview.discard')) + '</button>' +
+        '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">' + escapeHtml(tr('webview.cancel')) + '</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(overlay);
@@ -2524,10 +2636,10 @@ function closeTabs(ids) {
     overlay.className = 'dirty-confirm-overlay';
     overlay.innerHTML =
       '<div class="dirty-confirm-dialog">' +
-        '<div class="dirty-confirm-msg">"' + escapeHtml(tabLabel) + '" has unsaved changes.</div>' +
+        '<div class="dirty-confirm-msg">' + escapeHtml(tf('webview.unsavedCloseNamedPrompt', { name: tabLabel })) + '</div>' +
         '<div class="dirty-confirm-actions">' +
-          '<button class="dirty-btn dirty-btn-discard" data-action="discard">Discard</button>' +
-          '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">Cancel</button>' +
+          '<button class="dirty-btn dirty-btn-discard" data-action="discard">' + escapeHtml(tr('webview.discard')) + '</button>' +
+          '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">' + escapeHtml(tr('webview.cancel')) + '</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -2674,7 +2786,6 @@ function saveActiveTabState() {
   tab.stopAfterHeaders = mc.querySelector('.js-stop-after-headers')?.checked === true;
   tab.skipDefaultHeaders = mc.querySelector('.js-skip-default-headers')?.checked === true;
   tab.disableScripts = mc.querySelector('.js-disable-scripts')?.checked === true;
-  tab.openHtmlPreviewByDefault = mc.querySelector('.js-open-html-preview')?.checked === true;
 }
 
 function renderTabBar() {
@@ -2786,7 +2897,7 @@ function showTabContextMenu(x, y, tabId) {
         break;
       case 'duplicate':
         saveActiveTabState();
-        createTab({ name: tab.name, autoName: !!tab.autoName, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, openHtmlPreviewByDefault: tab.openHtmlPreviewByDefault, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent });
+        createTab({ name: tab.name, autoName: !!tab.autoName, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent });
         break;
     }
   });
@@ -2858,7 +2969,246 @@ function renderInlineEmptyState(kicker, title, copy) {
   '</div>';
 }
 
+function getEnabledDefaultHeaders() {
+  return (workspaceDefaultHeaders || []).filter(function(header) {
+    return header && header.enabled !== false && header.key;
+  });
+}
+
+function getAppliedDefaultHeaders(tab) {
+  if (!tab || tab.skipDefaultHeaders) return [];
+  var requestHeaderKeys = new Set((tab.headers || [])
+    .filter(function(header) { return header && header.enabled !== false && header.key; })
+    .map(function(header) { return String(header.key).toLowerCase(); }));
+  return getEnabledDefaultHeaders().filter(function(header) {
+    return !requestHeaderKeys.has(String(header.key).toLowerCase());
+  });
+}
+
+function getOverriddenDefaultHeaders(tab) {
+  if (!tab || tab.skipDefaultHeaders) return [];
+  var requestHeaderKeys = new Set((tab.headers || [])
+    .filter(function(header) { return header && header.enabled !== false && header.key; })
+    .map(function(header) { return String(header.key).toLowerCase(); }));
+  return getEnabledDefaultHeaders().filter(function(header) {
+    return requestHeaderKeys.has(String(header.key).toLowerCase());
+  });
+}
+
+function renderDefaultHeaderKeyGroup(labelKey, headers, chipClass) {
+  if (!headers.length) return '';
+  return '<div class="default-headers-key-group">' +
+    '<div class="default-headers-key-label">' + escapeHtml(tr(labelKey)) + '</div>' +
+    '<div class="default-headers-key-list">' + headers
+      .slice(0, 6)
+      .map(function(header) {
+        return '<span class="default-header-chip' + chipClass + '">' + escapeHtml(header.key) + '</span>';
+      })
+      .join('') +
+      (headers.length > 6 ? '<span class="default-header-chip' + chipClass + '">+' + (headers.length - 6) + '</span>' : '') +
+      '</div>' +
+    '</div>';
+}
+
+function renderDefaultHeadersBanner(tab) {
+  var title = tr('webview.defaultHeaders');
+  var manageLabel = tr('webview.manage');
+  if (tab?.skipDefaultHeaders) {
+    return '<div class="default-headers-banner warning">' +
+      '<div class="default-headers-banner-main">' +
+        '<div class="default-headers-banner-title">' + escapeHtml(title) + '</div>' +
+        '<div class="default-headers-banner-copy">' + escapeHtml(tr('webview.defaultHeadersSkippedState')) + '</div>' +
+        '<div class="default-headers-banner-note">' + escapeHtml(tr('webview.defaultHeadersSkippedNote')) + '</div>' +
+      '</div>' +
+      '<button class="res-action-btn ripple-btn js-open-default-headers" type="button">' + escapeHtml(manageLabel) + '</button>' +
+    '</div>';
+  }
+
+  var enabled = getEnabledDefaultHeaders();
+  if (!enabled.length) {
+    return '<div class="default-headers-banner">' +
+      '<div class="default-headers-banner-main">' +
+        '<div class="default-headers-banner-title">' + escapeHtml(title) + '</div>' +
+        '<div class="default-headers-banner-copy">' + escapeHtml(tr('webview.defaultHeadersEmptyState')) + '</div>' +
+        '<div class="default-headers-banner-note">' + escapeHtml(tr('webview.defaultHeadersAppliedNote')) + '</div>' +
+      '</div>' +
+      '<button class="res-action-btn ripple-btn js-open-default-headers" type="button">' + escapeHtml(manageLabel) + '</button>' +
+    '</div>';
+  }
+
+  var applied = getAppliedDefaultHeaders(tab);
+  var overridden = getOverriddenDefaultHeaders(tab);
+  var headerGroups = renderDefaultHeaderKeyGroup('webview.defaultHeadersAppliedLabel', applied, '') +
+    renderDefaultHeaderKeyGroup('webview.defaultHeadersOverriddenLabel', overridden, ' override');
+
+  return '<div class="default-headers-banner active">' +
+    '<div class="default-headers-banner-main">' +
+      '<div class="default-headers-banner-title">' + escapeHtml(title) + '</div>' +
+      '<div class="default-headers-banner-copy">' + escapeHtml(tf('webview.defaultHeadersApplied', { count: applied.length })) + '</div>' +
+      '<div class="default-headers-banner-note">' + escapeHtml(tr('webview.defaultHeadersAppliedNote')) + '</div>' +
+      (overridden.length
+        ? '<div class="default-headers-banner-note">' + escapeHtml(tf('webview.defaultHeadersOverridden', { count: overridden.length })) + '</div>'
+        : '') +
+      headerGroups +
+    '</div>' +
+    '<button class="res-action-btn ripple-btn js-open-default-headers" type="button">' + escapeHtml(manageLabel) + '</button>' +
+  '</div>';
+}
+
+function refreshDefaultHeadersBanner(mc) {
+  var wrap = mc?.querySelector('.js-default-headers-banner-wrap');
+  var tab = tabs.find(function(t) { return t.id === activeTabId; });
+  if (!wrap || !tab) return;
+
+  var draftHeaders = collectKv(mc.querySelector('.js-header-rows'));
+  var skipDefaultHeadersInput = mc.querySelector('.js-skip-default-headers');
+  var draftTab = Object.assign({}, tab, {
+    headers: draftHeaders,
+    skipDefaultHeaders: skipDefaultHeadersInput ? skipDefaultHeadersInput.checked === true : !!tab.skipDefaultHeaders
+  });
+
+  wrap.innerHTML = renderDefaultHeadersBanner(draftTab);
+}
+
+function isPreviewSafeUrl(value) {
+  return value.startsWith('#') || value.startsWith('data:') || value.startsWith('blob:');
+}
+
+function countPreviewExternalAssets(doc) {
+  var count = 0;
+  doc.querySelectorAll('[src],[href],[srcset],[poster],[action],[formaction]').forEach(function(el) {
+    Array.from(el.attributes).forEach(function(attr) {
+      var name = attr.name.toLowerCase();
+      if (['src', 'href', 'srcset', 'poster', 'action', 'formaction'].indexOf(name) === -1) return;
+      var value = String(attr.value || '').trim();
+      if (!value || isPreviewSafeUrl(value)) return;
+      count += 1;
+    });
+  });
+  return count;
+}
+
+function sanitizePreviewDocument(doc) {
+  doc.querySelectorAll('script, style, noscript, iframe, object, embed, link, source, audio, video, track, base, meta[http-equiv="refresh"]').forEach(function(node) {
+    node.remove();
+  });
+  doc.querySelectorAll('*').forEach(function(el) {
+    Array.from(el.attributes).forEach(function(attr) {
+      var name = attr.name.toLowerCase();
+      var value = String(attr.value || '').trim();
+      if (name.startsWith('on') || name === 'style' || name === 'srcset') {
+        el.removeAttribute(attr.name);
+        return;
+      }
+      if (['src', 'href', 'poster', 'action', 'formaction'].indexOf(name) >= 0 && value && !isPreviewSafeUrl(value)) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+}
+
+function extractPreviewDescription(doc) {
+  var meta = doc.querySelector('meta[name="description"], meta[property="og:description"]');
+  if (meta && meta.getAttribute('content')) {
+    return meta.getAttribute('content').trim();
+  }
+  var bodyText = ((doc.body && doc.body.textContent) || '').replace(/\s+/g, ' ').trim();
+  return bodyText ? truncate(bodyText, 220) : '';
+}
+
+function buildPreviewPayload(rawHtml) {
+  var parser = new DOMParser();
+  var doc = parser.parseFromString(rawHtml || '', 'text/html');
+  var blockedAssets = countPreviewExternalAssets(doc);
+  sanitizePreviewDocument(doc);
+
+  var docLang = (doc.documentElement && doc.documentElement.getAttribute('lang')) || currentDisplayLanguage || 'en';
+  var title = ((doc.querySelector('title') && doc.querySelector('title').textContent) || '').trim() || tr('webview.preview');
+  var description = extractPreviewDescription(doc);
+  var bodyHtml = (doc.body && doc.body.innerHTML ? doc.body.innerHTML.trim() : '');
+  var bodyText = ((doc.body && doc.body.textContent) || '').replace(/\s+/g, ' ').trim();
+  var hasStaticSnapshot = !!bodyHtml && bodyText.length >= 24;
+
+  return {
+    docLang: docLang,
+    title: title,
+    description: description,
+    bodyHtml: bodyHtml,
+    blockedAssets: blockedAssets,
+    hasStaticSnapshot: hasStaticSnapshot,
+  };
+}
+
+function hasMeaningfulStaticPreview(rawHtml) {
+  return buildPreviewPayload(rawHtml).hasStaticSnapshot;
+}
+
+function hasHtmlPreview(tab) {
+  if (!tab?.response) return false;
+  var contentType = ((tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || '') + '').toLowerCase();
+  if (contentType.indexOf('html') < 0) return false;
+  return hasMeaningfulStaticPreview(tab.response.body || '');
+}
+
+function buildPreviewDocument(rawHtml, resolvedUrl) {
+  var payload = buildPreviewPayload(rawHtml);
+  var docLang = payload.docLang;
+  var title = payload.title;
+  var description = payload.description;
+  var bodyHtml = payload.bodyHtml;
+  var hasStaticSnapshot = payload.hasStaticSnapshot;
+  var blockedAssetsLabel = tf('webview.previewOfflineBlockedAssets', { count: String(payload.blockedAssets) });
+
+  return '<div class="preview-shell" lang="' + escapeAttr(docLang) + '">' +
+    '<div class="preview-kicker">' + escapeHtml(tr('webview.previewOfflineTitle')) + '</div>' +
+    '<h1 class="preview-title">' + escapeHtml(title) + '</h1>' +
+    '<p class="preview-copy">' + escapeHtml(tr('webview.previewOfflineCopy')) + '</p>' +
+    '<div class="preview-grid">' +
+      '<div class="preview-card">' +
+        '<div class="preview-card-label">' + escapeHtml(tr('webview.previewOfflineSource')) + '</div>' +
+        '<div class="preview-card-value">' + escapeHtml(resolvedUrl || '') + '</div>' +
+      '</div>' +
+      '<div class="preview-card">' +
+        '<div class="preview-card-label">' + escapeHtml(tr('webview.previewOfflineDescription')) + '</div>' +
+        '<div class="preview-card-value' + (description ? '' : ' muted') + '">' + escapeHtml(description || '-') + '</div>' +
+      '</div>' +
+      '<div class="preview-card">' +
+        '<div class="preview-card-label">' + escapeHtml(blockedAssetsLabel) + '</div>' +
+        '<div class="preview-card-value">' + escapeHtml(String(payload.blockedAssets)) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="preview-section">' +
+      '<div class="preview-section-title">' + escapeHtml(tr('webview.previewOfflineStaticSnapshot')) + '</div>' +
+      (hasStaticSnapshot
+        ? '<div class="preview-snapshot">' + bodyHtml + '</div>'
+        : '<div class="preview-empty">' + escapeHtml(tr('webview.previewOfflineNoStatic')) + '</div>') +
+    '</div>' +
+  '</div>';
+}
+
+function buildPreviewDocKey(tab) {
+  if (!tab || !tab.response) return '';
+  var body = tab.response.body || '';
+  return [
+    tab.response.status || 0,
+    tab.response.size || 0,
+    tab.resolvedUrl || tab.url || '',
+    body.length,
+    body.slice(0, 120)
+  ].join('|');
+}
+
+function syncPreviewFrame(preview, tab) {
+  if (!preview || !tab?.response) return;
+  var key = buildPreviewDocKey(tab);
+  if (preview.dataset.previewKey === key) return;
+  preview.innerHTML = buildPreviewDocument(tab.response.body || '', tab.resolvedUrl || tab.url || '');
+  preview.dataset.previewKey = key;
+}
+
 function renderContent() {
+  closeActiveFormatMenu();
+  releaseSplitDrag();
   if (!activeTabId || tabs.length === 0) {
     mainContent.innerHTML = renderEmptyState(
       tr('webview.empty.hero.kicker'),
@@ -2884,6 +3234,7 @@ function renderContent() {
       '<div class="request-stage stage-' + stage.tone + '"><span class="stage-dot"></span>' + escapeHtml(stage.label) + '</div>' +
       '<div class="request-stage-hint">' + escapeHtml(stage.detail) + '</div>' +
       '<div class="request-topline-right">' +
+        '<button class="res-action-btn ripple-btn js-open-default-headers-top" type="button">' + escapeHtml(tr('webview.defaultHeaders')) + '</button>' +
         (currentEnvName
           ? '<div class="env-indicator-inline"><span class="var-name">{{env}}</span> = ' + escapeHtml(currentEnvName) + '</div>'
           : '<div class="empty-state-badge">' + escapeHtml(tr('webview.offlineWorkspace')) + '</div>') +
@@ -2968,7 +3319,8 @@ function renderContent() {
       }
       cookiesTableHtml += '</tbody></table>';
     }
-    const activeResponseTab = tab.responseTab === 'resPreview' && lang !== 'html'
+    const previewAvailable = lang === 'html' && hasHtmlPreview(tab);
+    const activeResponseTab = tab.responseTab === 'resPreview' && !previewAvailable
       ? 'resBody'
       : tab.responseTab === 'resCookies' && cookieCount === 0
         ? 'resBody'
@@ -3030,6 +3382,9 @@ function renderContent() {
         '<button class="res-action-btn ripple-btn js-copy-response" title="' + escapeAttr(tr('webview.copyResponse')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M10 3H4v10h8V5l-2-2zM9 4l2 2H9V4zM3 0h6l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V1a1 1 0 011-1z"/><path d="M1 3v11a1 1 0 001 1h8v-1H2V3H1z"/></svg> ' + escapeHtml(tr('webview.copy')) + '</button>' +
         '<button class="res-action-btn ripple-btn js-save-response" title="' + escapeAttr(tr('webview.saveResponse')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> ' + escapeHtml(tr('webview.save')) + '</button>' +
         '<button class="pin-response-btn ripple-btn js-pin-response" title="' + escapeAttr(tr('webview.pinResponse')) + '">' + pinSvg + ' ' + escapeHtml(tr('webview.pin')) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
+        ((lang === 'html' && (tab.resolvedUrl || tab.url))
+          ? '<button class="res-action-btn ripple-btn js-open-response-url" title="' + escapeAttr(tr('webview.openUrl')) + '">' + escapeHtml(tr('webview.openUrl')) + '</button>'
+          : '') +
         '<button class="res-action-btn ripple-btn js-compare-last" title="' + escapeAttr(tr('webview.compareLast')) + '"' + (!lastResponse ? ' disabled' : '') + '>' + escapeHtml(tr('webview.last')) + '</button>' +
         '<button class="res-action-btn ripple-btn js-compare-settings" title="' + escapeAttr(tr('webview.comparisonSettings')) + '">' + escapeHtml(tr('webview.mode')) + ': ' + compareModeShort(compareSettings.mode) + '</button>' +
         '<button class="compare-btn js-compare-responses' + (pinnedResponses.length >= 2 ? ' ready' : '') + '" title="' + escapeAttr(tr('webview.comparePinned')) + '"' + (pinnedResponses.length < 2 ? ' disabled' : '') + '>' + diffSvg + ' ' + escapeHtml(tr('webview.compare')) + ' ' + compareModeShort(compareSettings.mode) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
@@ -3042,7 +3397,7 @@ function renderContent() {
         (cookieCount > 0 ? '<div class="tab' + (showCookies ? ' active' : '') + '" data-tab="resCookies">' + escapeHtml(tr('webview.cookies')) + ' <span class="tab-count">' + cookieCount + '</span></div>' : '<div class="tab' + (showCookies ? ' active' : '') + '" data-tab="resCookies">' + escapeHtml(tr('webview.cookies')) + '</div>') +
         '<div class="tab' + (showHeaders ? ' active' : '') + '" data-tab="resHeaders">' + escapeHtml(tr('webview.headers')) + ' <span class="tab-count">' + headerCount + '</span></div>' +
         ((tab.scriptResults?.tests?.length || 0) > 0 ? '<div class="tab' + (showTests ? ' active' : '') + '" data-tab="resTests">' + escapeHtml(tr('webview.tests')) + ' <span class="tab-count">' + tab.scriptResults.tests.length + '</span></div>' : '<div class="tab' + (showTests ? ' active' : '') + '" data-tab="resTests">' + escapeHtml(tr('webview.tests')) + '</div>') +
-        (lang === 'html' ? '<div class="tab' + (showPreview ? ' active' : '') + '" data-tab="resPreview">' + escapeHtml(tr('webview.preview')) + '</div>' : '') +
+        (previewAvailable ? '<div class="tab' + (showPreview ? ' active' : '') + '" data-tab="resPreview">' + escapeHtml(tr('webview.preview')) + '</div>' : '') +
       '</div>' +
       toolbarHtml +
       (lang === 'json' ? '<div class="json-tree js-res-tree js-res-body' + (showBody ? '' : ' hidden') + '"></div>' : '') +
@@ -3079,7 +3434,7 @@ function renderContent() {
               : '')
           : renderInlineEmptyState(tr('webview.inline.tests.none.kicker'), tr('webview.inline.tests.none.title'), tr('webview.inline.tests.none.copy'))) +
       '</div>' +
-      (lang === 'html' ? '<iframe class="res-preview' + (showPreview ? '' : ' hidden') + ' js-res-preview" sandbox="allow-same-origin" srcdoc="' + escapeAttr(tab.response.body || '') + '" style="width:100%;flex:1;border:none;background:#fff"></iframe>' : '');
+      (previewAvailable ? '<div class="res-preview' + (showPreview ? '' : ' hidden') + ' js-res-preview"></div>' : '');
   } else {
     resHtml = tab.url
       ? renderEmptyState(
@@ -3139,6 +3494,7 @@ function renderContent() {
           '<button class="add-btn js-add-param">' + escapeHtml(tr('webview.addParam')) + '</button>' +
         '</div>' +
         '<div class="js-headers-panel kv-section hidden">' +
+          '<div class="js-default-headers-banner-wrap">' + renderDefaultHeadersBanner(tab) + '</div>' +
           '<div class="js-header-rows">' + kvRowsHtml(tab.headers) + '</div>' +
           '<button class="add-btn js-add-header">' + escapeHtml(tr('webview.addHeader')) + '</button>' +
         '</div>' +
@@ -3226,7 +3582,6 @@ function renderContent() {
                   '<label class="settings-toggle"><input class="js-save-history" type="checkbox"' + (tab.saveToHistory !== false ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.saveToHistory')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.saveToHistory.note')) + '</span></span></label>' +
                   '<label class="settings-toggle"><input class="js-skip-default-headers" type="checkbox"' + (tab.skipDefaultHeaders ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.skipDefaultHeaders')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.skipDefaultHeaders.note')) + '</span></span></label>' +
                   '<label class="settings-toggle"><input class="js-disable-scripts" type="checkbox"' + (tab.disableScripts ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.disableScripts')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.disableScripts.note')) + '</span></span></label>' +
-                  '<label class="settings-toggle"><input class="js-open-html-preview" type="checkbox"' + (tab.openHtmlPreviewByDefault ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.openHtmlPreview')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.openHtmlPreview.note')) + '</span></span></label>' +
                 '</div>' +
               '</div>' +
             '</div>' +
@@ -3240,6 +3595,11 @@ function renderContent() {
 
   // ?대깽??諛붿씤??
   bindContentEvents();
+
+  var previewFrame = mainContent.querySelector('.js-res-preview');
+  if (previewFrame) {
+    syncPreviewFrame(previewFrame, tab);
+  }
 
   // ?섎룞 議곗젅 ?믪씠 蹂듭썝
   if (savedHeight) {
@@ -3296,6 +3656,14 @@ function bindContentEvents() {
       handlePrimaryAction();
     });
   }
+
+  mc.querySelector('.js-open-default-headers-top')?.addEventListener('click', function() {
+    vscode.postMessage({ type: 'openDefaultHeaders' });
+  });
+  mc.addEventListener('click', function(e) {
+    if (!e.target.closest('.js-open-default-headers')) return;
+    vscode.postMessage({ type: 'openDefaultHeaders' });
+  });
 
   // Save (?대? ??λ맂 ??씠硫???뼱?곌린, ????씠硫??꾩튂 ?좏깮 ?ㅼ씠?쇰줈洹?
   mc.querySelector('.js-save')?.addEventListener('click', function() {
@@ -3364,6 +3732,14 @@ function bindContentEvents() {
     const ct = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || '';
     pendingSaveResponseBtn = this;
     vscode.postMessage({ type: 'saveResponseBody', body: tab.response.body, bodyBase64: tab.response.bodyBase64 || '', contentType: ct });
+  });
+
+  mc.querySelector('.js-open-response-url')?.addEventListener('click', function() {
+    const tab = tabs.find(t => t.id === activeTabId);
+    const url = tab?.resolvedUrl || tab?.url || '';
+    if (!url) return;
+    vscode.postMessage({ type: 'openResponseUrl', url: url });
+    showBtnFeedback(this, tr('webview.opened'), 1000);
   });
 
   mc.querySelector('.js-pin-response')?.addEventListener('click', function() {
@@ -3486,6 +3862,7 @@ function bindContentEvents() {
     for (const [k, sel] of Object.entries(panels)) {
       mc.querySelector(sel)?.classList.toggle('hidden', k !== t.dataset.tab);
     }
+    if (t.dataset.tab === 'headers') refreshDefaultHeadersBanner(mc);
   });
 
   // ?묐떟 ???꾪솚 (Body / Headers / Preview)
@@ -3535,12 +3912,9 @@ function bindContentEvents() {
         mc.querySelector('.js-res-tests')?.classList.remove('hidden');
       } else if (isPreview && preview) {
       preview.classList.remove('hidden');
-      if (!preview.dataset.loaded) {
-        const tab = tabs.find(tt => tt.id === activeTabId);
-        if (tab?.response?.body) {
-          preview.srcdoc = tab.response.body;
-          preview.dataset.loaded = '1';
-        }
+      const tab = tabs.find(tt => tt.id === activeTabId);
+      if (tab?.response?.body) {
+        syncPreviewFrame(preview, tab);
       }
     }
   });
@@ -3580,9 +3954,14 @@ function bindContentEvents() {
   if (fmtBtn && fmtMenu) {
     fmtBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      fmtMenu.classList.toggle('open');
+      if (activeFormatMenuState && activeFormatMenuState.menu === fmtMenu) {
+        closeActiveFormatMenu();
+        return;
+      }
+      closeActiveFormatMenu();
+      fmtMenu.classList.add('open');
+      activeFormatMenuState = { button: fmtBtn, menu: fmtMenu };
     });
-    document.addEventListener('click', () => fmtMenu.classList.remove('open'));
     fmtMenu.addEventListener('click', (e) => { e.stopPropagation(); });
 
     // ?ㅽ????좏깮
@@ -3623,15 +4002,26 @@ function bindContentEvents() {
 
   // KV 異붽?
   mc.querySelector('.js-add-param')?.addEventListener('click', () => { addKvRow(mc.querySelector('.js-param-rows')); markDirty(); });
-  mc.querySelector('.js-add-header')?.addEventListener('click', () => { addKvRow(mc.querySelector('.js-header-rows')); markDirty(); });
+  mc.querySelector('.js-add-header')?.addEventListener('click', () => {
+    addKvRow(mc.querySelector('.js-header-rows'));
+    markDirty();
+    refreshDefaultHeadersBanner(mc);
+  });
 
   // KV ??젣 ?대깽???꾩엫
   mc.querySelectorAll('.js-param-rows, .js-header-rows').forEach(container => {
     container.addEventListener('click', (e) => {
-      if (e.target.classList.contains('rm')) { e.target.closest('.kv-row')?.remove(); markDirty(); }
+      if (e.target.classList.contains('rm')) {
+        e.target.closest('.kv-row')?.remove();
+        markDirty();
+        refreshDefaultHeadersBanner(mc);
+      }
     });
     // KV ?낅젰 蹂寃?媛먯?
-    container.addEventListener('input', markDirty);
+    container.addEventListener('input', function() {
+      markDirty();
+      if (container.classList.contains('js-header-rows')) refreshDefaultHeadersBanner(mc);
+    });
   });
 
   // Auth ???蹂寃?
@@ -3661,7 +4051,10 @@ function bindContentEvents() {
 
   // Settings ?낅젰 蹂寃?媛먯?
   mc.querySelector('.js-settings-panel')?.addEventListener('input', markDirty);
-  mc.querySelector('.js-settings-panel')?.addEventListener('change', markDirty);
+  mc.querySelector('.js-settings-panel')?.addEventListener('change', function() {
+    markDirty();
+    refreshDefaultHeadersBanner(mc);
+  });
 
   // === textarea ?먮룞 ?믪씠 議곗젅 ===
   var bodyTa = mc.querySelector('.js-body');
@@ -3719,36 +4112,22 @@ function bindContentEvents() {
   var reqArea = mc.querySelector('.req-area');
   var resArea = mc.querySelector('.res-area');
   if (divider && splitEl && reqArea && resArea) {
-    var dragging = false;
-    var startY = 0;
-    var startH = 0;
     divider.addEventListener('mousedown', function(e) {
       e.preventDefault();
-      dragging = true;
-      startY = e.clientY;
-      startH = reqArea.offsetHeight;
+      splitDragState = {
+        divider: divider,
+        splitEl: splitEl,
+        reqArea: reqArea,
+        startY: e.clientY,
+        startH: reqArea.offsetHeight
+      };
       divider.classList.add('active');
       document.body.style.cursor = 'row-resize';
       document.body.style.userSelect = 'none';
     });
-    document.addEventListener('mousemove', function(e) {
-      if (!dragging) return;
-      var dy = e.clientY - startY;
-      var newH = Math.max(60, startH + dy);
-      var maxH = splitEl.offsetHeight - 40 - divider.offsetHeight;
-      newH = Math.min(newH, maxH);
-      reqArea.style.height = newH + 'px';
-      reqArea.style.flex = 'none';
-      reqArea.dataset.manualHeight = '1';
-    });
-    document.addEventListener('mouseup', function() {
-      if (!dragging) return;
-      dragging = false;
-      divider.classList.remove('active');
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    });
   }
+
+  refreshDefaultHeadersBanner(mc);
 }
 
 var BODY_TYPE_CT = {
@@ -3864,7 +4243,7 @@ function sendActiveTab() {
 
   vscode.postMessage({
     type: 'sendRequest', tabId: tab.id,
-    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: !!tab.followRedirects, saveToHistory: tab.saveToHistory !== false, tlsValidation: normalizeTlsValidation(tab.tlsValidation), maxResponseSizeKb: normalizeNumberSetting(tab.maxResponseSizeKb), retryCount: normalizeNumberSetting(tab.retryCount), retryDelayMs: normalizeNumberSetting(tab.retryDelayMs), stopAfterHeaders: !!tab.stopAfterHeaders, skipDefaultHeaders: !!tab.skipDefaultHeaders, disableScripts: !!tab.disableScripts, openHtmlPreviewByDefault: !!tab.openHtmlPreviewByDefault,
+    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: !!tab.followRedirects, saveToHistory: tab.saveToHistory !== false, tlsValidation: normalizeTlsValidation(tab.tlsValidation), maxResponseSizeKb: normalizeNumberSetting(tab.maxResponseSizeKb), retryCount: normalizeNumberSetting(tab.retryCount), retryDelayMs: normalizeNumberSetting(tab.retryDelayMs), stopAfterHeaders: !!tab.stopAfterHeaders, skipDefaultHeaders: !!tab.skipDefaultHeaders, disableScripts: !!tab.disableScripts,
   });
 }
 
@@ -4078,6 +4457,8 @@ document.getElementById('addDefaultHeaderBtn').addEventListener('click', () => a
 document.getElementById('defaultHeadersCloseBtn').addEventListener('click', () => defaultHeadersEditor.classList.add('hidden'));
 document.getElementById('defaultHeadersSaveBtn').addEventListener('click', () => {
   const headers = collectKv(defaultHeaderRows);
+  workspaceDefaultHeaders = headers;
+  refreshDefaultHeadersBanner(mainContent);
   vscode.postMessage({ type: 'saveDefaultHeaders', headers: headers });
 });
 defaultHeaderRows.addEventListener('click', (e) => {
@@ -4133,7 +4514,7 @@ window.addEventListener('message', (event) => {
       tab.resolvedHeaders = msg.resolvedHeaders || [];
       tab.scriptResults = msg.scriptResults || { logs: [], tests: [] };
       var contentType = ((msg.response.headers?.['content-type'] || msg.response.headers?.['Content-Type'] || '') + '').toLowerCase();
-      tab.responseTab = (tab.openHtmlPreviewByDefault && contentType.indexOf('html') >= 0) ? 'resPreview' : 'resBody';
+      tab.responseTab = (contentType.indexOf('html') >= 0 && hasMeaningfulStaticPreview(msg.response.body || '')) ? 'resPreview' : 'resBody';
       tab.error = null;
     } else {
       tab.lastEvent = 'error';
@@ -4254,7 +4635,6 @@ window.addEventListener('message', (event) => {
       stopAfterHeaders: msg.stopAfterHeaders === true,
       skipDefaultHeaders: msg.skipDefaultHeaders === true,
       disableScripts: msg.disableScripts === true,
-      openHtmlPreviewByDefault: msg.openHtmlPreviewByDefault === true,
     });
   }
 
@@ -4283,8 +4663,12 @@ window.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'loadDefaultHeaders') {
-    defaultHeaderRows.innerHTML = kvRowsHtml(msg.headers || []);
-    defaultHeadersEditor.classList.remove('hidden');
+    workspaceDefaultHeaders = msg.headers || [];
+    defaultHeaderRows.innerHTML = kvRowsHtml(workspaceDefaultHeaders);
+    refreshDefaultHeadersBanner(mainContent);
+    if (msg.reveal !== false) {
+      defaultHeadersEditor.classList.remove('hidden');
+    }
   }
 
   if (msg.type === 'updateActiveEnv') {

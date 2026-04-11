@@ -39,7 +39,7 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - headers까지만 받고 종료
 - default headers 건너뛰기
 - scripts 비활성화
-- HTML 응답 시 Preview 기본 열기
+- 의미 있는 정적 HTML이 있으면 Preview를 자동으로 열기
 
 ### Body 타입
 - `none`
@@ -72,7 +72,8 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - `arc-client.historyMaxItems` 기준 자동 정리
 
 ### 응답 뷰어
-- Body / Headers / Cookies / Tests / Preview 탭
+- Body / Headers / Cookies / Tests 탭과, 의미 있는 정적 HTML이 있을 때만 표시되는 Preview 탭
+- 동적인 HTML 페이지는 Body 탭에 남고, 대신 `URL 열기` 액션을 사용할 수 있음
 - JSON 트리 뷰어
 - XML `Pretty`, `Compact`, `Inline Children` 포맷
 - Content-Type 기반 문법 강조
@@ -129,33 +130,9 @@ Header: Authorization: Bearer {{token}}
 Body: {"env":"{{envName}}"}
 ```
 
-## 스크린샷
+## 인앱 가이드
 
-마켓용 스크린샷은 [images/marketplace](/E:/Dev/GitHub/arc-client/images/marketplace)에 두는 것을 권장합니다.
-
-추천 파일명:
-
-- `screenshot-01-request-workflow.png`
-- `screenshot-02-collections-environments-history.png`
-- `screenshot-03-scripts-and-tests.png`
-- `screenshot-04-import-flow.png`
-- `screenshot-05-code-generation.png`
-
-추천 촬영 순서:
-
-1. 멀티 탭 요청 작성과 응답 확인
-2. Collections / environments / history 사이드바
-3. scripts와 test 결과
-4. cURL / Postman import 흐름
-5. 코드 생성 결과
-
-README에는 아래처럼 추가하면 됩니다.
-
-```md
-![Multi-tab request workflow](./images/marketplace/screenshot-01-request-workflow.png)
-![Collections, environments, and history](./images/marketplace/screenshot-02-collections-environments-history.png)
-![Scripts and test results](./images/marketplace/screenshot-03-scripts-and-tests.png)
-```
+VS Code 안에서 사용자 가이드를 보려면 `Arc: Open Guide`를 실행하세요.
 
 ## 확장 설정
 
@@ -175,7 +152,7 @@ README에는 아래처럼 추가하면 됩니다.
 - 기본값: `en`
 - 지원 값: `en`, `ko`, `ja`
 - Arc Client 패널, 프롬프트, 알림 언어를 제어
-- 가이드는 해당 언어 README가 있을 때만 현지화되고, 없으면 영어 README로 폴백
+- 인앱 가이드는 해당 언어 가이드 파일이 있을 때 현지화되고, 없으면 영어 가이드로 폴백
 - 이제 VS Code locale은 Arc Client UI를 직접 바꾸지 않음
 - Command Palette에서 `Arc: Change Display Language`로도 바로 변경 가능
 
