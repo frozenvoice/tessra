@@ -1970,7 +1970,10 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .json-tree{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.018));padding:14px 16px;border-radius:18px;border:1px solid rgba(255,255,255,.08);font-family:var(--vscode-editor-font-family,monospace);font-size:13px;overflow:auto;flex:1;min-height:0;line-height:1.3;user-select:text;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
 .jt-node{padding-left:16px}
 .jt-row{display:flex;align-items:baseline;white-space:nowrap;gap:6px;padding:2px 8px;border-radius:10px;transition:background .12s ease}
+.jt-row[data-copy-path]{cursor:pointer}
 .jt-row:hover{background:rgba(255,255,255,.04)}
+.copy-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(8px);z-index:9999;padding:8px 14px;border-radius:8px;background:rgba(20,24,31,.96);border:1px solid rgba(87,166,255,.35);color:var(--vscode-foreground);font-size:13px;font-family:var(--vscode-editor-font-family,monospace);box-shadow:0 12px 28px rgba(0,0,0,.4),0 0 0 1px rgba(87,166,255,.12);pointer-events:none;opacity:0;transition:opacity .18s ease,transform .18s ease;max-width:80vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.copy-toast.visible{opacity:1;transform:translateX(-50%) translateY(0)}
 .jt-toggle{display:inline-block;width:14px;cursor:pointer;text-align:center;color:var(--vscode-foreground);opacity:.5;flex-shrink:0;user-select:none}
 .jt-toggle:hover{opacity:1}
 .jt-copy-path{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--vscode-descriptionForeground,#bdbdbd);font-size:10px;letter-spacing:.08em;cursor:pointer;opacity:0;transition:opacity .12s ease,transform .12s ease;border:none}
@@ -4654,6 +4657,25 @@ function showBtnFeedback(btn, text, duration) {
   setTimeout(() => { btn.innerHTML = origHtml; }, duration);
 }
 
+// Floating toast (for row-level copy feedback etc.)
+var copyToastEl = null;
+var copyToastTimer = null;
+function showCopyToast(text, duration) {
+  duration = duration || 1600;
+  if (!copyToastEl) {
+    copyToastEl = document.createElement('div');
+    copyToastEl.className = 'copy-toast';
+    document.body.appendChild(copyToastEl);
+  }
+  copyToastEl.textContent = text;
+  void copyToastEl.offsetWidth;
+  copyToastEl.classList.add('visible');
+  if (copyToastTimer) clearTimeout(copyToastTimer);
+  copyToastTimer = setTimeout(function() {
+    if (copyToastEl) copyToastEl.classList.remove('visible');
+  }, duration);
+}
+
 // Send 鍮?以꾧린 ?④낵
 function triggerSendStreak(btn) {
   btn.classList.add('streak-active');
@@ -6682,6 +6704,7 @@ function bindContentEvents() {
       try {
         const parsed = JSON.parse(tab.response.body);
         treeContainer.innerHTML = buildJsonTree(parsed, '', true, '$');
+        treeContainer._jsonData = parsed;
         bindTreeToggles(treeContainer);
       } catch {}
     }
@@ -7845,19 +7868,21 @@ function buildJsonTree(val, key, isLast, path) {
   const comma = isLast ? '' : '<span class="jt-comma">,</span>';
   const keyHtml = key !== '' ? '<span class="jt-key">' + escapeHtml('"' + key + '"') + '</span>: ' : '';
   const copyPath = path || '$';
+  const pathAttr = ' data-copy-path="' + escapeAttr(copyPath) + '"';
+  const rowTitle = ' title="' + escapeAttr(tf('webview.copyJsonPathValue', { path: copyPath })) + '"';
   const copyBtn = '<button class="jt-copy-path" type="button" data-copy-path="' + escapeAttr(copyPath) + '" title="' + escapeAttr(tf('webview.copyJsonPathValue', { path: copyPath })) + '">' + escapeHtml(tr('webview.copyPathShort')) + '</button>';
 
   if (val === null) {
-    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-null">null</span>' + comma + copyBtn + '</div>';
+    return '<div class="jt-row"' + pathAttr + rowTitle + '><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-null">null</span>' + comma + copyBtn + '</div>';
   }
   if (typeof val === 'boolean') {
-    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-bool">' + val + '</span>' + comma + copyBtn + '</div>';
+    return '<div class="jt-row"' + pathAttr + rowTitle + '><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-bool">' + val + '</span>' + comma + copyBtn + '</div>';
   }
   if (typeof val === 'number') {
-    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-num">' + val + '</span>' + comma + copyBtn + '</div>';
+    return '<div class="jt-row"' + pathAttr + rowTitle + '><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-num">' + val + '</span>' + comma + copyBtn + '</div>';
   }
   if (typeof val === 'string') {
-    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-str">' + escapeHtml('"' + val + '"') + '</span>' + comma + copyBtn + '</div>';
+    return '<div class="jt-row"' + pathAttr + rowTitle + '><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-str">' + escapeHtml('"' + val + '"') + '</span>' + comma + copyBtn + '</div>';
   }
 
   const isArr = Array.isArray(val);
@@ -7867,7 +7892,7 @@ function buildJsonTree(val, key, isLast, path) {
   const count = entries.length;
 
   if (count === 0) {
-    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml +
+    return '<div class="jt-row"' + pathAttr + rowTitle + '><span class="jt-toggle"></span>' + keyHtml +
       '<span class="jt-brace">' + open + close + '</span>' + comma + copyBtn + '</div>';
   }
 
@@ -7880,7 +7905,7 @@ function buildJsonTree(val, key, isLast, path) {
 
   const summary = isArr ? count + ' items' : count + ' keys';
 
-  return '<div class="jt-row">' +
+  return '<div class="jt-row"' + pathAttr + rowTitle + '>' +
       '<span class="jt-toggle">-</span>' + keyHtml +
       '<span class="jt-brace">' + open + '</span>' +
       '<span class="jt-ellipsis hidden" title="' + summary + '"> ... ' + summary + ' </span>' +
@@ -7890,33 +7915,115 @@ function buildJsonTree(val, key, isLast, path) {
     '<div class="jt-row"><span class="jt-toggle"></span><span class="jt-brace">' + close + '</span>' + comma + '</div>';
 }
 
+function resolveJsonPath(root, path) {
+  if (!path || path === '$') return root;
+  var rest = path.charAt(0) === '$' ? path.slice(1) : path;
+  var tokenRe = /\\.([^.\\[\\]]+)|\\[(\\d+)\\]|\\["((?:\\\\.|[^"\\\\])*)"\\]/g;
+  var current = root;
+  var match;
+  while ((match = tokenRe.exec(rest)) !== null) {
+    if (current == null) return undefined;
+    if (match[1] !== undefined) {
+      current = current[match[1]];
+    } else if (match[2] !== undefined) {
+      current = current[Number(match[2])];
+    } else if (match[3] !== undefined) {
+      current = current[match[3].replace(/\\\\(.)/g, '$1')];
+    }
+  }
+  return current;
+}
+
+function stringifyJsonValue(value) {
+  if (typeof value === 'string') return value;
+  if (value === undefined) return 'undefined';
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch (err) {
+    return String(value);
+  }
+}
+
+function truncateToastText(text, max) {
+  max = max || 80;
+  var flat = String(text).replace(/\\s+/g, ' ');
+  if (flat.length <= max) return flat;
+  return flat.slice(0, max - 1) + '\u2026';
+}
+
 function bindTreeToggles(container) {
+  var pendingRowClickTimer = null;
+  var cancelPendingRowClick = function() {
+    if (pendingRowClickTimer) {
+      clearTimeout(pendingRowClickTimer);
+      pendingRowClickTimer = null;
+    }
+  };
+
   container.addEventListener('click', (e) => {
     const copyPathBtn = e.target.closest('.jt-copy-path');
     if (copyPathBtn && copyPathBtn.dataset.copyPath) {
       e.preventDefault();
       e.stopPropagation();
-      vscode.postMessage({ type: 'copyToClipboard', text: copyPathBtn.dataset.copyPath });
+      cancelPendingRowClick();
+      const path = copyPathBtn.dataset.copyPath;
+      vscode.postMessage({ type: 'copyToClipboard', text: path });
+      showCopyToast(tf('webview.copiedPath', { path: path }));
       return;
     }
 
     const toggle = e.target.closest('.jt-toggle');
     const ellipsis = e.target.closest('.jt-ellipsis');
-    if (!toggle && !ellipsis) return;
 
-    // ellipsis ?대┃ ?????대떦 ?됱쓽 ?좉?怨??숈씪 ?숈옉
-    const row = (toggle || ellipsis).closest('.jt-row');
-    if (!row) return;
-    const tgl = row.querySelector('.jt-toggle');
-    if (!tgl || !tgl.textContent.trim()) return;
+    // Toggle / ellipsis click => expand/collapse (immediate, no delay)
+    if (toggle || ellipsis) {
+      cancelPendingRowClick();
+      const row = (toggle || ellipsis).closest('.jt-row');
+      if (!row) return;
+      const tgl = row.querySelector('.jt-toggle');
+      if (!tgl || !tgl.textContent.trim()) return;
 
-    const children = row.nextElementSibling;
-    if (!children || !children.classList.contains('jt-children')) return;
+      const children = row.nextElementSibling;
+      if (!children || !children.classList.contains('jt-children')) return;
 
-    const collapsed = children.classList.toggle('collapsed');
-    tgl.textContent = collapsed ? '+' : '-';
-    const ell = row.querySelector('.jt-ellipsis');
-    if (ell) ell.classList.toggle('hidden', !collapsed);
+      const collapsed = children.classList.toggle('collapsed');
+      tgl.textContent = collapsed ? '+' : '-';
+      const ell = row.querySelector('.jt-ellipsis');
+      if (ell) ell.classList.toggle('hidden', !collapsed);
+      return;
+    }
+
+    // Row click anywhere else => copy JSONPath (delayed, so dblclick can cancel it)
+    const row = e.target.closest('.jt-row[data-copy-path]');
+    if (row && row.dataset.copyPath) {
+      const path = row.dataset.copyPath;
+      cancelPendingRowClick();
+      pendingRowClickTimer = setTimeout(function() {
+        pendingRowClickTimer = null;
+        vscode.postMessage({ type: 'copyToClipboard', text: path });
+        showCopyToast(tf('webview.copiedPath', { path: path }));
+      }, 240);
+    }
+  });
+
+  container.addEventListener('dblclick', (e) => {
+    // Ignore when double-clicking expand/collapse affordances
+    if (e.target.closest('.jt-toggle') || e.target.closest('.jt-ellipsis') || e.target.closest('.jt-copy-path')) return;
+    const row = e.target.closest('.jt-row[data-copy-path]');
+    if (!row || !row.dataset.copyPath) return;
+    e.preventDefault();
+    cancelPendingRowClick();
+    // Clear the accidental text selection the double-click creates
+    const sel = window.getSelection && window.getSelection();
+    if (sel && sel.removeAllRanges) sel.removeAllRanges();
+
+    const root = container._jsonData;
+    if (root === undefined) return;
+    const value = resolveJsonPath(root, row.dataset.copyPath);
+    if (value === undefined) return;
+    const text = stringifyJsonValue(value);
+    vscode.postMessage({ type: 'copyToClipboard', text: text });
+    showCopyToast(tf('webview.copiedValue', { value: truncateToastText(text, 80) }));
   });
 }
 
@@ -8267,6 +8374,7 @@ function applyFormat(mc) {
       try {
         var parsed = JSON.parse(body);
         treeEl.innerHTML = buildJsonTree(parsed, '', true, '$');
+        treeEl._jsonData = parsed;
         bindTreeToggles(treeEl);
       } catch {}
     }
