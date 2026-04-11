@@ -196,7 +196,7 @@ VS Code 안에서 사용자 가이드를 보려면 `Arc: Open Guide`를 실행�
 - 기본값: `default`
 - 지원 값: `default`, `minimal-cool`, `product`, `bold-color`
 - Arc Client 요청 패널 webview에 적용할 시각 테마 프리셋을 제어
-- 프리셋: 기본, 미니멀 쿨, 더 글로시, 더 프로덕트 감성, 조금 더 대담한 컬러
+- 프리셋: 기본, 미니멀 쿨, 더 프로덕트 감성, 조금 더 대담한 컬러
 - Command Palette에서 `Arc: Change Request Panel Theme`로도 바로 변경 가능
 
 ### `arc-client.workspaceProfile`

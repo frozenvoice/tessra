@@ -1596,8 +1596,8 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .main-content{flex:1;overflow:hidden;display:flex;flex-direction:column}
 
 /* URL 諛?*/
-.request-topline{display:flex;align-items:center;gap:10px;padding:10px 10px 0;flex-shrink:0;flex-wrap:wrap}
-.request-stage{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font-size:12px;font-weight:700;letter-spacing:.02em;background:rgba(255,255,255,.03)}
+.request-topline{display:flex;align-items:flex-start;gap:14px;padding:12px 10px 0;flex-shrink:0;flex-wrap:wrap}
+.request-stage{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font-size:12px;font-weight:700;letter-spacing:.03em;background:rgba(255,255,255,.03)}
 .request-stage .stage-dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 10px currentColor}
 .request-stage.stage-idle{color:var(--vscode-descriptionForeground,#8d8d8d)}
 .request-stage.stage-ready{color:var(--vscode-charts-blue,#57a6ff)}
@@ -1606,14 +1606,27 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .request-stage.stage-redirect{color:#e5c07b}
 .request-stage.stage-error{color:#ff7a7a}
 .request-stage.stage-canceled{color:#d19a66}
-.request-stage-hint{font-size:12px;color:var(--vscode-descriptionForeground,#9a9a9a);line-height:1.4}
-.request-topline-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-.request-status-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.request-status-chip{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--vscode-descriptionForeground,#c2c2c2);white-space:nowrap;font-family:inherit;appearance:none}
-.request-status-chip.clickable{cursor:pointer;transition:transform .12s ease,background .12s ease,border-color .12s ease}
-.request-status-chip.clickable:hover{transform:translateY(-1px);border-color:rgba(255,255,255,.16);background:rgba(255,255,255,.06)}
-.request-status-chip.info{background:rgba(87,166,255,.08);border-color:rgba(87,166,255,.16);color:#93c8ff}
-.request-status-chip.warning{background:rgba(229,192,123,.08);border-color:rgba(229,192,123,.16);color:#f1cf8a}
+.request-stage-hint{font-size:12px;color:var(--vscode-descriptionForeground,#9a9a9a);line-height:1.5;flex:1 1 220px;max-width:640px}
+.request-topline-right{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:10px;max-width:100%}
+.request-topline-right .res-action-btn{padding:4px 10px;font-size:12px;opacity:.9}
+.request-status-chips{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:100%}
+.request-status-chip,
+.preflight-pill{position:relative;display:inline-flex;align-items:center;gap:8px;min-height:34px;padding:6px 12px 6px 28px;border-radius:999px;font-size:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--vscode-descriptionForeground,#c2c2c2);white-space:nowrap;font-family:inherit;appearance:none;transition:transform .12s ease,background .16s ease,border-color .16s ease,box-shadow .16s ease}
+.request-status-chip::before,
+.preflight-pill::before{content:"";position:absolute;left:12px;top:50%;width:8px;height:8px;border-radius:50%;background:currentColor;transform:translateY(-50%);opacity:.85;box-shadow:0 0 0 4px rgba(255,255,255,.02),0 0 12px currentColor}
+.request-status-chip.clickable,
+.preflight-pill.clickable{cursor:pointer}
+.request-status-chip.clickable::after,
+.preflight-pill.clickable::after{content:"›";margin-left:2px;font-size:14px;line-height:1;opacity:.6;transform:translateX(0);transition:transform .12s ease,opacity .12s ease}
+.request-status-chip.clickable:hover,
+.preflight-pill.clickable:hover{transform:translateY(-1px);border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.065);box-shadow:0 10px 22px rgba(0,0,0,.12)}
+.request-status-chip.clickable:hover::after,
+.preflight-pill.clickable:hover::after{opacity:.9;transform:translateX(2px)}
+.request-status-chip.info,
+.preflight-pill.info{background:rgba(87,166,255,.1);border-color:rgba(87,166,255,.2);color:#93c8ff}
+.request-status-chip.warning,
+.preflight-pill.warning{background:rgba(229,192,123,.1);border-color:rgba(229,192,123,.2);color:#f1cf8a}
+.preflight-pill.accent{background:rgba(78,201,176,.1);border-color:rgba(78,201,176,.22);color:#8ce3d1}
 .request-status-chip.muted{opacity:.78}
 .linked-focus-active{position:relative;animation:linked-focus-pulse 1.9s ease;z-index:0}
 .linked-focus-active::after{content:"";position:absolute;inset:-6px;border-radius:14px;border:1px solid rgba(87,166,255,.58);box-shadow:0 0 0 1px rgba(87,166,255,.22),0 0 0 14px rgba(87,166,255,.08),0 12px 28px rgba(0,0,0,.18);pointer-events:none;z-index:1}
@@ -1627,14 +1640,8 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 }
 .request-status-chip .env-label{opacity:.75;margin-right:4px}
 .request-status-chip .env-name{color:#dcdcaa}
-.request-preflight{display:flex;flex-direction:column;gap:10px;padding:0 10px 8px}
+.request-preflight{display:flex;flex-direction:column;gap:10px;padding:0 10px 10px}
 .request-preflight-pills{display:flex;flex-wrap:wrap;gap:8px}
-.preflight-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--vscode-descriptionForeground,#c8c8c8);font-family:inherit;appearance:none}
-.preflight-pill.clickable{cursor:pointer;transition:transform .12s ease,background .12s ease}
-.preflight-pill.clickable:hover{transform:translateY(-1px);background:rgba(255,255,255,.06)}
-.preflight-pill.info{background:rgba(87,166,255,.08);border-color:rgba(87,166,255,.16);color:#93c8ff}
-.preflight-pill.accent{background:rgba(78,201,176,.08);border-color:rgba(78,201,176,.18);color:#8ce3d1}
-.preflight-pill.warning{background:rgba(229,192,123,.09);border-color:rgba(229,192,123,.18);color:#f1cf8a}
 .preflight-pill.muted{opacity:.78}
 .preflight-warning{padding:12px;border-radius:12px;border:1px solid rgba(229,192,123,.18);background:rgba(229,192,123,.08);display:flex;flex-direction:column;gap:8px}
 .preflight-warning-title{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#f1cf8a}
@@ -1642,14 +1649,19 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .preflight-warning-actions{display:flex;flex-wrap:wrap;gap:8px}
 .ghost-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--vscode-foreground);font-size:12px;cursor:pointer}
 .ghost-btn:hover{background:rgba(255,255,255,.07)}
-.url-bar{display:flex;gap:8px;padding:8px 10px;flex-shrink:0;align-items:center;position:relative;overflow:visible}
-.url-bar select{width:100px;padding:6px 8px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:6px;font-size:13px;font-weight:700}
-.url-bar input{flex:1;padding:6px 10px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:6px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
+.url-bar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;padding:8px 10px;flex-shrink:0;align-items:center;position:relative;overflow:visible}
+.url-primary-group{display:flex;align-items:center;gap:10px;min-width:0}
+.url-bar select{width:108px;height:46px;padding:0 12px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:14px;font-size:13px;font-weight:700;letter-spacing:.04em}
+.url-bar input{flex:1;height:46px;padding:0 14px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:14px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
 .url-bar input:focus{outline:1px solid var(--vscode-focusBorder)}
-.url-input-wrap{position:relative;flex:1 1 360px;min-width:220px;display:flex}
+.url-input-wrap{position:relative;flex:1 1 420px;min-width:260px;display:flex}
 .url-input-wrap input{flex:1;width:100%}
-.url-action-group{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-left:auto}
-.url-action-group > *{flex-shrink:0}
+.url-hero-actions{display:flex;align-items:center;justify-content:flex-end}
+.url-action-group{display:flex;align-items:center;justify-content:flex-end;min-width:0}
+.url-secondary-group{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.url-action-group > *,
+.url-hero-actions > *,
+.url-secondary-group > *{flex-shrink:0}
 .var-overlay{position:absolute;top:0;left:0;right:0;bottom:0;padding:6px 10px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace);pointer-events:none;white-space:nowrap;overflow:hidden;color:transparent}
 .var-preview-popover{position:fixed;z-index:150;padding:10px 12px;max-width:360px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(30,30,30,.96);box-shadow:0 18px 40px rgba(0,0,0,.35);font-size:12px;line-height:1.5;pointer-events:none}
 .var-preview-popover.hidden{display:none}
@@ -1675,8 +1687,8 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .btn-s{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
 .btn-s:hover{background:var(--vscode-button-secondaryHoverBackground)}
 /* Send 踰꾪듉 */
-.btn-send{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:10px;padding:7px 16px;background:linear-gradient(135deg,#0078d4,#1683eb);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s,filter .15s;box-shadow:0 8px 18px rgba(0,120,212,.24);min-height:42px;flex-shrink:0}
-.btn-send:hover{background:linear-gradient(135deg,#1683eb,#2697ff);transform:translateY(-1px);box-shadow:0 12px 24px rgba(0,120,212,.28)}
+.btn-send{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:10px;padding:8px 18px;background:linear-gradient(135deg,#0078d4,#1683eb);color:#fff;border:none;border-radius:14px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s,filter .15s;box-shadow:0 14px 32px rgba(0,120,212,.24);min-height:48px;flex-shrink:0}
+.btn-send:hover{background:linear-gradient(135deg,#1683eb,#2697ff);transform:translateY(-1px);box-shadow:0 18px 36px rgba(0,120,212,.28)}
 .btn-send svg{flex-shrink:0}
 .btn-send-labels{display:flex;flex-direction:column;align-items:flex-start;line-height:1.1}
 .btn-send-primary{font-size:13px;font-weight:700}
@@ -1690,22 +1702,26 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .btn-send.state-ready .btn-send-secondary{opacity:.95}
 .btn-keyhint{padding:2px 6px;border-radius:999px;background:rgba(255,255,255,.18);font-size:11px;line-height:1;letter-spacing:.02em}
 /* Stop 踰꾪듉 (?꾩넚 以? */
-.btn-stop{display:inline-flex;align-items:center;gap:10px;padding:7px 16px;background:linear-gradient(135deg,#c42b1c,#e04535);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 8px 18px rgba(224,69,53,.18);min-height:42px;flex-shrink:0}
-.btn-stop:hover{background:linear-gradient(135deg,#d53b2c,#f05f4c);transform:translateY(-1px);box-shadow:0 12px 24px rgba(224,69,53,.24)}
+.btn-stop{display:inline-flex;align-items:center;gap:10px;padding:8px 18px;background:linear-gradient(135deg,#c42b1c,#e04535);color:#fff;border:none;border-radius:14px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 14px 30px rgba(224,69,53,.18);min-height:48px;flex-shrink:0}
+.btn-stop:hover{background:linear-gradient(135deg,#d53b2c,#f05f4c);transform:translateY(-1px);box-shadow:0 18px 34px rgba(224,69,53,.24)}
 .btn-stop .stop-icon{display:inline-block;width:10px;height:10px;background:#fff;border-radius:1px}
 
 /* ?대? ??*/
-.tabs{display:flex;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;padding:0 10px;gap:4px;flex-wrap:wrap}
-.tab{padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;opacity:.52;font-size:12px;user-select:none;text-transform:uppercase;letter-spacing:.08em;transition:opacity .15s,background .15s,color .15s,transform .15s;border-radius:10px 10px 0 0}
+.tabs{display:flex;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;padding:0 10px;gap:6px;flex-wrap:wrap}
+.tab{position:relative;padding:9px 14px 10px;cursor:pointer;border-bottom:none;opacity:.54;font-size:12px;user-select:none;text-transform:uppercase;letter-spacing:.08em;transition:opacity .15s,background .15s,color .15s,transform .15s,box-shadow .15s;border-radius:12px 12px 0 0}
+.tab::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:2px;border-radius:999px;background:linear-gradient(90deg,#4ea6ff,#78dbc6);opacity:0;transform:scaleX(.56);transform-origin:center;transition:transform .18s ease,opacity .18s ease}
 .tab:hover{opacity:.82;background:rgba(255,255,255,.04);transform:translateY(-1px)}
-.tab.active{opacity:1;border-bottom-color:#0078d4;background:rgba(0,122,204,.08);color:var(--vscode-foreground)}
+.tab.active{opacity:1;background:rgba(0,122,204,.08);color:var(--vscode-foreground)}
+.tab.active::after{opacity:1;transform:scaleX(1)}
 
 /* ?⑤꼸 ?덉씠?꾩썐 */
 .split{flex:1;overflow:hidden;display:flex;flex-direction:column}
 .req-area{flex:1 1 0;min-height:0;overflow-y:auto;padding:4px 10px}
-.divider{height:5px;background:var(--vscode-panel-border,#444);flex-shrink:0;cursor:row-resize;position:relative;z-index:10;border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(0,0,0,.2)}
-.divider:hover,.divider.active{background:#0078d4}
-.divider::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:2px;background:var(--vscode-foreground);opacity:.2;border-radius:2px}
+.divider{height:18px;background:transparent;flex-shrink:0;cursor:row-resize;position:relative;z-index:10;border:none;display:flex;align-items:center;justify-content:center}
+.divider::before{content:"";position:absolute;left:10px;right:10px;top:50%;height:1px;transform:translateY(-50%);background:linear-gradient(90deg,rgba(255,255,255,.05),rgba(125,200,255,.2),rgba(255,255,255,.05))}
+.divider-grip{position:relative;z-index:1;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.02));box-shadow:0 10px 20px rgba(0,0,0,.12);transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease,background .14s ease}
+.divider-grip span{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.46);box-shadow:0 0 10px rgba(125,200,255,.24)}
+.divider:hover .divider-grip,.divider.active .divider-grip{transform:translateY(-1px) scale(1.02);border-color:rgba(125,200,255,.28);background:linear-gradient(180deg,rgba(87,166,255,.16),rgba(255,255,255,.03));box-shadow:0 14px 30px rgba(0,0,0,.16),0 0 0 1px rgba(87,166,255,.08)}
 .res-area{flex:1 1 0;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:0 10px}
 .res-response-shell{display:flex;flex-direction:column;flex:1;min-height:0}
 .res-empty-shell{flex:1;min-height:0;overflow:auto;padding:8px 0 12px}
@@ -1788,15 +1804,34 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .env-dirty-dot.show{display:inline-block}
 
 /* ?묐떟 */
-.response-summary{display:flex;flex-direction:column;gap:8px}
+.response-summary{display:flex;flex-direction:column;gap:10px;padding-top:2px}
 .res-sticky-shell{position:sticky;top:0;z-index:4;background:linear-gradient(180deg,var(--vscode-editor-background) 0%,var(--vscode-editor-background) 88%,rgba(0,0,0,0) 100%);padding-top:2px}
-.response-meta{display:flex;gap:10px;align-items:center;padding:6px 0 2px;flex-shrink:0;font-size:13px;flex-wrap:wrap}
-.response-meta.response-tone-2xx .status{box-shadow:0 0 0 1px rgba(78,201,78,.12),0 0 18px rgba(78,201,78,.12)}
-.response-meta.response-tone-3xx .status{box-shadow:0 0 0 1px rgba(229,192,123,.12),0 0 18px rgba(229,192,123,.1)}
-.response-meta.response-tone-4xx .status,.response-meta.response-tone-5xx .status{box-shadow:0 0 0 1px rgba(255,122,122,.14),0 0 18px rgba(255,122,122,.12)}
+.response-summary-card{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:12px;border-radius:18px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.018));box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 18px 36px rgba(0,0,0,.16)}
+.response-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;flex:1;min-width:0}
+.response-stat-card{position:relative;display:flex;flex-direction:column;justify-content:flex-start;gap:4px;min-height:84px;padding:12px 12px 11px;border-radius:16px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));overflow:hidden}
+.response-stat-card::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:linear-gradient(180deg,rgba(125,200,255,.66),rgba(125,200,255,.1))}
+.response-stat-card.stat-size::before{background:linear-gradient(180deg,rgba(78,201,176,.66),rgba(78,201,176,.1))}
+.response-stat-card.stat-format::before{background:linear-gradient(180deg,rgba(229,192,123,.66),rgba(229,192,123,.1))}
+.response-stat-label{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--vscode-descriptionForeground,#9ea7b3)}
+.response-stat-value{font-size:22px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums;color:var(--vscode-foreground)}
+.response-stat-detail{font-size:12px;line-height:1.45;color:var(--vscode-descriptionForeground,#b3b8c4);word-break:break-word}
+.response-stat-card.stat-status .response-stat-value{display:inline-flex;align-items:center;justify-content:flex-start;min-width:fit-content}
+.response-summary-card.response-tone-2xx .response-stat-card.stat-status{border-color:rgba(78,201,78,.2);background:linear-gradient(180deg,rgba(78,201,78,.12),rgba(255,255,255,.025))}
+.response-summary-card.response-tone-3xx .response-stat-card.stat-status{border-color:rgba(229,192,123,.2);background:linear-gradient(180deg,rgba(229,192,123,.12),rgba(255,255,255,.025))}
+.response-summary-card.response-tone-4xx .response-stat-card.stat-status,
+.response-summary-card.response-tone-5xx .response-stat-card.stat-status{border-color:rgba(255,122,122,.2);background:linear-gradient(180deg,rgba(255,122,122,.12),rgba(255,255,255,.025))}
+.response-stat-card.stat-status.status-2xx .response-stat-value{color:#7ff09f}
+.response-stat-card.stat-status.status-3xx .response-stat-value{color:#ffd27d}
+.response-stat-card.stat-status.status-4xx .response-stat-value,
+.response-stat-card.stat-status.status-5xx .response-stat-value{color:#ff9fae}
+.response-action-cluster{display:flex;align-items:flex-start;justify-content:flex-end;gap:8px;flex-wrap:wrap;max-width:420px}
+.response-action-cluster .res-action-btn,
+.response-action-cluster .pin-response-btn,
+.response-action-cluster .compare-btn{min-height:40px;padding:8px 12px;border-radius:12px}
+.response-context-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.compare-chip-row{display:flex;flex-wrap:wrap;gap:8px}
 .meta-stat{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);font-variant-numeric:tabular-nums}
 .meta-lang{font-size:11px;opacity:.72;text-transform:uppercase;letter-spacing:.08em}
-.compare-chip-row{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:4px}
 .compare-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);font-size:12px;color:var(--vscode-descriptionForeground,#a6a6a6)}
 .compare-chip strong{color:var(--vscode-foreground)}
 .compare-chip.current{border-color:rgba(78,201,78,.28);color:#93e493;background:rgba(78,201,78,.08)}
@@ -1808,13 +1843,13 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .res-action-btn:disabled{opacity:.35;cursor:default;transform:none}
 .res-action-btn:disabled:hover{background:transparent;transform:none}
 .res-action-btn svg{flex-shrink:0;color:var(--vscode-foreground)}
-.status{font-weight:700;padding:1px 6px;border-radius:3px}
+.status{font-weight:700;padding:1px 6px;border-radius:999px}
 .status-2xx{background:#1a3a1a;color:#4ec94e}
 .status-3xx{background:#3a3a1a;color:#c9c94e}
 .status-4xx{background:#3a1a1a;color:#c94e4e}
 .status-5xx{background:#3a1a2a;color:#c94e8e}
 
-.resolved-url{padding:3px 8px;font-size:13px;color:var(--vscode-textLink-foreground,#3794ff);background:var(--vscode-input-background);border-radius:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-family:var(--vscode-editor-font-family,monospace);flex-shrink:0}
+.resolved-url{display:inline-flex;align-items:center;max-width:100%;padding:8px 12px;font-size:13px;color:var(--vscode-textLink-foreground,#3794ff);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--vscode-editor-font-family,monospace);flex-shrink:0}
 .resolved-url:hover{text-decoration:underline;opacity:.85}
 .resolved-url.copied{color:#4ec94e}
 .resolved-headers-section{margin-bottom:8px}
@@ -1868,16 +1903,16 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .json-key{color:#9cdcfe}.json-str{color:#ce9178}.json-num{color:#b5cea8}.json-bool{color:#569cd6}.json-null{color:#569cd6}
 
 /* ?묐떟 諛붾뵒 ?대컮 */
-.res-body-toolbar{display:flex;align-items:center;gap:4px;padding:2px 0;flex-shrink:0}
-.res-body-toolbar .toggle-group{display:flex;border:1px solid var(--vscode-input-border,#555);border-radius:3px;overflow:hidden;margin-right:4px}
-.res-body-toolbar .toggle-btn{padding:2px 8px;font-size:13px;cursor:pointer;background:transparent;color:var(--vscode-foreground);border:none;opacity:.6;user-select:none}
+.res-body-toolbar{display:flex;align-items:center;gap:6px;padding:4px 0 2px;flex-shrink:0;flex-wrap:wrap}
+.res-body-toolbar .toggle-group{display:flex;border:1px solid var(--vscode-input-border,#555);border-radius:999px;overflow:hidden;margin-right:4px;background:rgba(255,255,255,.025)}
+.res-body-toolbar .toggle-btn{padding:5px 10px;font-size:12px;cursor:pointer;background:transparent;color:var(--vscode-foreground);border:none;opacity:.62;user-select:none;letter-spacing:.04em;text-transform:uppercase}
 .res-body-toolbar .toggle-btn:hover{opacity:.85}
 .res-body-toolbar .toggle-btn.active{opacity:1;background:var(--vscode-button-secondaryBackground)}
-.res-body-toolbar .tb-btn{position:relative;overflow:hidden;padding:2px 6px;font-size:13px;cursor:pointer;background:transparent;color:var(--vscode-foreground);border:1px solid var(--vscode-input-border,#555);border-radius:3px;opacity:.6;transition:transform .1s}
+.res-body-toolbar .tb-btn{position:relative;overflow:hidden;padding:5px 8px;font-size:12px;cursor:pointer;background:transparent;color:var(--vscode-foreground);border:1px solid var(--vscode-input-border,#555);border-radius:999px;opacity:.72;transition:transform .1s}
 .res-body-toolbar .tb-btn:hover{opacity:1}
 .res-body-toolbar .tb-btn:active{transform:scale(.92)}
 .response-search-wrap{margin-left:auto;display:flex;align-items:center;gap:4px;min-width:0;max-width:420px;flex:1;justify-content:flex-end}
-.response-search-input{width:180px;max-width:100%;padding:3px 8px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,#555);border-radius:4px;font-size:13px}
+.response-search-input{width:180px;max-width:100%;padding:7px 10px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,#555);border-radius:999px;font-size:13px}
 .response-search-input:focus{outline:1px solid var(--vscode-focusBorder)}
 .response-search-count{min-width:54px;text-align:center;font-size:12px;color:var(--vscode-descriptionForeground,#a6a6a6);font-variant-numeric:tabular-nums}
 .response-search-wrap .tb-btn.active{opacity:1;background:rgba(87,166,255,.14);border-color:rgba(87,166,255,.24)}
@@ -2047,18 +2082,21 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .elapsed-timer{font-size:13px;opacity:.6;margin-left:4px;font-variant-numeric:tabular-nums}
 
 .placeholder{display:flex;align-items:center;justify-content:center;flex:1;opacity:.25;font-size:13px}
-.empty-state{display:flex;flex-direction:column;justify-content:center;gap:12px;min-height:180px;padding:18px 16px;border:1px solid rgba(255,255,255,.06);border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015))}
+.empty-state{display:flex;flex-direction:column;justify-content:center;gap:14px;min-height:180px;padding:22px 18px;border:1px solid rgba(255,255,255,.06);border-radius:20px;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015))}
 .empty-state.inline{min-height:auto;padding:16px}
+.empty-state-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .empty-state-kicker{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--vscode-descriptionForeground,#8e8e8e)}
-.empty-state-title{font-size:20px;font-weight:700;line-height:1.15}
-.empty-state-copy{font-size:13px;line-height:1.6;color:var(--vscode-descriptionForeground,#a0a0a0);max-width:860px}
+.empty-state-title{font-size:24px;font-weight:800;line-height:1.08;max-width:760px}
+.empty-state-copy{font-size:13px;line-height:1.7;color:var(--vscode-descriptionForeground,#a0a0a0);max-width:860px}
 .empty-state-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
-.empty-state-card{padding:12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05)}
+.empty-state-card{position:relative;padding:14px 14px 13px;border-radius:16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);overflow:hidden}
+.empty-state-card-index{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:22px;padding:0 8px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.045);font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--vscode-descriptionForeground,#aeb6c3);margin-bottom:10px}
 .empty-state-card strong{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;color:var(--vscode-foreground)}
 .empty-state-card span{display:block;font-size:12px;line-height:1.5;color:var(--vscode-descriptionForeground,#a0a0a0)}
-.empty-state-actions{display:flex;flex-wrap:wrap;gap:8px}
+.empty-state-actions{display:flex;flex-wrap:wrap;gap:10px}
 .empty-state-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:rgba(87,166,255,.08);border:1px solid rgba(87,166,255,.16);font-size:12px;color:#93c8ff}
-.empty-state-action{display:inline-flex;align-items:center;justify-content:center;padding:7px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:var(--vscode-foreground);font-size:12px;font-weight:600;cursor:pointer}
+.empty-state-action{display:inline-flex;align-items:center;justify-content:center;padding:8px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:var(--vscode-foreground);font-size:12px;font-weight:700;cursor:pointer}
+.empty-state-action.primary{background:linear-gradient(135deg,rgba(87,166,255,.18),rgba(78,201,176,.08));border-color:rgba(87,166,255,.24);color:#eaf6ff}
 .empty-state-action:hover{background:rgba(255,255,255,.08)}
 .request-change-summary{display:flex;flex-direction:column;gap:8px;padding:8px 10px 10px}
 .request-change-summary.empty{display:none}
@@ -2185,6 +2223,16 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
   --arc-shadow-lg:0 24px 52px rgba(0,0,0,.24);
   --arc-glow-blue:rgba(87,166,255,.18);
   --arc-glow-mint:rgba(78,201,176,.12);
+  --arc-tone-info:#93c8ff;
+  --arc-tone-info-bg:rgba(87,166,255,.1);
+  --arc-tone-warning:#f1cf8a;
+  --arc-tone-warning-bg:rgba(229,192,123,.1);
+  --arc-tone-success:#93e493;
+  --arc-tone-success-bg:rgba(78,201,78,.1);
+  --arc-tone-danger:#ffb3b3;
+  --arc-tone-danger-bg:rgba(255,122,122,.1);
+  --arc-tone-neutral:#bfc9d8;
+  --arc-tone-neutral-bg:rgba(255,255,255,.05);
 }
 body{
   background:
@@ -2340,13 +2388,34 @@ body{
 }
 .url-bar{
   margin:4px 10px 2px;
-  padding:12px;
-  border-radius:20px;
+  padding:14px;
+  border-radius:24px;
   border:1px solid rgba(255,255,255,.07);
   background:
     radial-gradient(circle at top right, rgba(87,166,255,.1), transparent 26%),
+    radial-gradient(circle at left center, rgba(78,201,176,.05), transparent 18%),
     linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.018));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--arc-shadow-lg);
+}
+.url-primary-group{
+  padding:4px;
+  border-radius:18px;
+  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+}
+.url-secondary-group{
+  padding:4px;
+  border-radius:16px;
+  background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.008));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+}
+.url-hero-actions .btn-send,
+.url-hero-actions .btn-stop{
+  min-width:250px;
+  justify-content:space-between;
+}
+.url-secondary-group .res-action-btn{
+  opacity:.88;
 }
 .url-bar select,
 .url-bar input,
@@ -2391,11 +2460,7 @@ body{
   box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 14px 28px rgba(0,0,0,.14);
 }
 .divider{
-  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.015));
-}
-.divider::after{
-  width:52px;
-  opacity:.3;
+  background:transparent;
 }
 .settings-card,
 .script-card,
@@ -2509,10 +2574,56 @@ body{
   position:relative;
   z-index:1;
 }
+.empty-state-orbit{
+  position:absolute;
+  border-radius:50%;
+  pointer-events:none;
+  filter:blur(6px);
+  opacity:.48;
+}
+.empty-state-orbit.orbit-a{
+  right:-40px;
+  top:-26px;
+  width:148px;
+  height:148px;
+  background:radial-gradient(circle, rgba(87,166,255,.22), transparent 72%);
+}
+.empty-state-orbit.orbit-b{
+  left:48%;
+  bottom:-54px;
+  width:180px;
+  height:180px;
+  background:radial-gradient(circle, rgba(78,201,176,.14), transparent 74%);
+}
 .empty-state-card{
   background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
   border-color:rgba(255,255,255,.08);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+}
+.empty-state-card::after{
+  content:'';
+  position:absolute;
+  inset:auto -18% -42% auto;
+  width:110px;
+  height:110px;
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(87,166,255,.16), transparent 72%);
+  opacity:.56;
+}
+.request-editor-panel:not(.hidden),
+.res-body-toolbar:not(.hidden),
+.js-res-tree:not(.hidden),
+.js-res-raw:not(.hidden),
+.js-res-headers:not(.hidden),
+.js-res-cookies:not(.hidden),
+.js-res-tests:not(.hidden),
+.js-res-preview:not(.hidden){
+  animation:panel-enter .18s cubic-bezier(.2,.8,.2,1);
+  transform-origin:top center;
+}
+@keyframes panel-enter{
+  from{opacity:0;transform:translateY(8px) scale(.992)}
+  to{opacity:1;transform:translateY(0) scale(1)}
 }
 .script-card textarea{
   border-radius:14px;
@@ -2570,6 +2681,10 @@ body[data-panel-theme="minimal-cool"] .tab.active{
 }
 body[data-panel-theme="minimal-cool"] .url-bar,
 body[data-panel-theme="minimal-cool"] .response-summary,
+body[data-panel-theme="minimal-cool"] .response-summary-card,
+body[data-panel-theme="minimal-cool"] .response-stat-card,
+body[data-panel-theme="minimal-cool"] .url-primary-group,
+body[data-panel-theme="minimal-cool"] .url-secondary-group,
 body[data-panel-theme="minimal-cool"] .settings-card,
 body[data-panel-theme="minimal-cool"] .script-card,
 body[data-panel-theme="minimal-cool"] .script-helper-shell,
@@ -2646,6 +2761,10 @@ body[data-panel-theme="product"] .main-content::before{
 }
 body[data-panel-theme="product"] .url-bar,
 body[data-panel-theme="product"] .response-summary,
+body[data-panel-theme="product"] .response-summary-card,
+body[data-panel-theme="product"] .response-stat-card,
+body[data-panel-theme="product"] .url-primary-group,
+body[data-panel-theme="product"] .url-secondary-group,
 body[data-panel-theme="product"] .settings-card,
 body[data-panel-theme="product"] .script-card,
 body[data-panel-theme="product"] .script-helper-shell,
@@ -2797,7 +2916,11 @@ body[data-panel-theme="bold-color"] .script-card,
 body[data-panel-theme="bold-color"] .script-helper-card,
 body[data-panel-theme="bold-color"] .script-helper-stage,
 body[data-panel-theme="bold-color"] .default-headers-banner,
-body[data-panel-theme="bold-color"] .empty-state{
+body[data-panel-theme="bold-color"] .empty-state,
+body[data-panel-theme="bold-color"] .response-summary-card,
+body[data-panel-theme="bold-color"] .response-stat-card,
+body[data-panel-theme="bold-color"] .url-primary-group,
+body[data-panel-theme="bold-color"] .url-secondary-group{
   background:
     radial-gradient(circle at top right, rgba(87,166,255,.12), transparent 30%),
     linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.02));
@@ -2834,17 +2957,31 @@ body[data-panel-theme="bold-color"] .empty-state::before{
   background:radial-gradient(circle, rgba(209,154,102,.18), transparent 70%);
 }
 @media (max-width: 1220px){
-  .url-bar{flex-wrap:wrap}
-  .url-action-group{width:100%;margin-left:0}
+  .url-bar{grid-template-columns:minmax(0,1fr) auto}
+  .url-primary-group{grid-column:1 / -1}
+  .url-action-group{width:100%;margin-left:0;grid-column:1 / -1;justify-content:flex-start}
+  .url-secondary-group{justify-content:flex-start}
+  .response-summary-card{flex-direction:column}
+  .response-action-cluster{max-width:none;justify-content:flex-start}
 }
 @media (max-width: 900px){
   .request-topline{align-items:flex-start}
-  .request-topline-right{margin-left:0}
-  .url-action-group{justify-content:flex-start}
-  .btn-send,.btn-stop{margin-left:auto}
+  .request-topline-right{margin-left:0;align-items:flex-start}
+  .url-bar{grid-template-columns:1fr}
+  .url-primary-group{flex-wrap:wrap}
+  .url-primary-group select{width:100%}
+  .url-input-wrap{min-width:0;width:100%}
+  .url-hero-actions,.url-action-group{width:100%;justify-content:flex-start}
+  .url-hero-actions .btn-send,.url-hero-actions .btn-stop{width:100%;min-width:0}
+  .url-secondary-group{width:100%}
+  .response-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .settings-grid,.script-editor-grid,.empty-state-grid{grid-template-columns:1fr}
-  .response-meta{align-items:flex-start}
+  .response-context-row{align-items:flex-start}
   .default-headers-banner{flex-direction:column}
+}
+@media (max-width: 640px){
+  .response-stat-grid{grid-template-columns:1fr}
+  .empty-state-head{align-items:flex-start}
 }
 @media (max-height: 820px){
   .script-helper-shell{padding:10px;gap:10px}
@@ -5123,23 +5260,36 @@ function loadSampleRequestIntoActiveTab() {
 
 function renderEmptyState(kicker, title, copy, cards, actions, badge) {
   return '<div class="empty-state">' +
-    '<div class="empty-state-kicker">' + escapeHtml(kicker) + '</div>' +
+    '<div class="empty-state-orbit orbit-a"></div>' +
+    '<div class="empty-state-orbit orbit-b"></div>' +
+    '<div class="empty-state-head">' +
+      '<div class="empty-state-kicker">' + escapeHtml(kicker) + '</div>' +
+      (badge ? '<div class="empty-state-badge">' + escapeHtml(badge) + '</div>' : '') +
+    '</div>' +
     '<div class="empty-state-title">' + escapeHtml(title) + '</div>' +
     '<div class="empty-state-copy">' + escapeHtml(copy) + '</div>' +
-    (badge ? '<div class="empty-state-badge">' + escapeHtml(badge) + '</div>' : '') +
     '<div class="empty-state-grid">' +
-      (cards || []).map(function(card) {
+      (cards || []).map(function(card, index) {
         return '<div class="empty-state-card">' +
+          '<div class="empty-state-card-index">0' + (index + 1) + '</div>' +
           '<strong>' + escapeHtml(card.title || '') + '</strong>' +
           '<span>' + escapeHtml(card.copy || '') + '</span>' +
         '</div>';
       }).join('') +
     '</div>' +
     ((actions && actions.length)
-      ? '<div class="empty-state-actions">' + actions.map(function(action) {
-          return '<button class="empty-state-action ripple-btn js-empty-action" type="button" data-action="' + escapeAttr(action.action || '') + '">' + escapeHtml(action.label || '') + '</button>';
+      ? '<div class="empty-state-actions">' + actions.map(function(action, index) {
+          return '<button class="empty-state-action ripple-btn js-empty-action' + (index === 0 ? ' primary' : '') + '" type="button" data-action="' + escapeAttr(action.action || '') + '">' + escapeHtml(action.label || '') + '</button>';
         }).join('') + '</div>'
       : '') +
+  '</div>';
+}
+
+function renderResponseStat(label, value, tone, detail) {
+  return '<div class="response-stat-card' + (tone ? ' ' + tone : '') + '">' +
+    '<div class="response-stat-label">' + escapeHtml(label) + '</div>' +
+    '<div class="response-stat-value">' + escapeHtml(value) + '</div>' +
+    (detail ? '<div class="response-stat-detail">' + escapeHtml(detail) + '</div>' : '') +
   '</div>';
 }
 
@@ -5658,6 +5808,15 @@ function renderContent() {
       : '';
     const responseToneClass = 'response-tone-' + sc + 'xx';
     const compareChipHtml = '<div class="compare-chip-row js-compare-chip-row">' + buildCompareChipMarkup(currentSignature) + '</div>';
+    const responseFormatValue = (lang === 'text' ? 'TEXT' : lang.toUpperCase());
+    const responseFormatDetail = ct ? truncate(ct.split(';')[0] || ct, 48) : '';
+    const responseStatsHtml =
+      '<div class="response-stat-grid">' +
+        renderResponseStat(tr('webview.responseStatStatus'), String(r.status), 'stat-status status-' + sc + 'xx', r.statusText || '') +
+        renderResponseStat(tr('webview.responseStatTime'), String(r.time) + ' ms', 'stat-time', '') +
+        renderResponseStat(tr('webview.size'), formatSize(r.size), 'stat-size', '') +
+        renderResponseStat(tr('webview.responseStatFormat'), responseFormatValue, 'stat-format', responseFormatDetail) +
+      '</div>';
     const testResults = tab.scriptResults?.tests || [];
     const failedTests = testResults.filter(function(test) { return !test.passed; });
     const passedCount = testResults.length - failedTests.length;
@@ -5682,27 +5841,28 @@ function renderContent() {
       '<div class="res-response-shell">' +
       '<div class="res-sticky-shell">' +
       '<div class="response-summary">' +
-      '<div class="response-meta ' + responseToneClass + '">' +
-        '<span class="status status-' + sc + 'xx">' + r.status + ' ' + escapeHtml(r.statusText) + '</span>' +
-        '<span class="meta-stat">' + r.time + ' ms</span><span class="meta-stat">' + formatSize(r.size) + '</span>' +
-        '<span style="flex:1"></span>' +
-        (lang !== 'text' ? '<span class="meta-lang">' + lang + '</span>' : '') +
-        '<button class="res-action-btn ripple-btn js-copy-response" title="' + escapeAttr(tr('webview.copyResponse')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M10 3H4v10h8V5l-2-2zM9 4l2 2H9V4zM3 0h6l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V1a1 1 0 011-1z"/><path d="M1 3v11a1 1 0 001 1h8v-1H2V3H1z"/></svg> ' + escapeHtml(tr('webview.copy')) + '</button>' +
-        ((tab.resolvedUrl || tab.url) ? '<button class="res-action-btn ripple-btn js-copy-response-url" title="' + escapeAttr(tr('webview.copyUrl')) + '">' + escapeHtml(tr('webview.copyUrl')) + '</button>' : '') +
-        '<button class="res-action-btn ripple-btn js-copy-response-status" title="' + escapeAttr(tr('webview.copyStatus')) + '">' + escapeHtml(tr('webview.copyStatus')) + '</button>' +
-        '<button class="res-action-btn ripple-btn js-copy-response-headers" title="' + escapeAttr(tr('webview.copyHeadersRaw')) + '">' + escapeHtml(tr('webview.copyHeadersRaw')) + '</button>' +
-        '<button class="res-action-btn ripple-btn js-save-response" title="' + escapeAttr(tr('webview.saveResponse')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> ' + escapeHtml(tr('webview.save')) + '</button>' +
-        '<button class="pin-response-btn ripple-btn js-pin-response" title="' + escapeAttr(tr('webview.pinResponse')) + '">' + pinSvg + ' ' + escapeHtml(tr('webview.pin')) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
-        ((lang === 'html' && (tab.resolvedUrl || tab.url))
-          ? '<button class="res-action-btn ripple-btn js-open-response-url" title="' + escapeAttr(tr('webview.openUrl')) + '">' + escapeHtml(tr('webview.openUrl')) + '</button>'
-          : '') +
-        '<button class="res-action-btn ripple-btn js-compare-last" title="' + escapeAttr(tr('webview.compareLast')) + '"' + (!lastResponse ? ' disabled' : '') + '>' + escapeHtml(tr('webview.last')) + '</button>' +
-        '<button class="res-action-btn ripple-btn js-compare-settings" title="' + escapeAttr(tr('webview.comparisonSettings')) + '">' + escapeHtml(tr('webview.mode')) + ': ' + compareModeShort(compareSettings.mode) + '</button>' +
-        '<button class="compare-btn js-compare-responses' + (pinnedResponses.length >= 2 ? ' ready' : '') + '" title="' + escapeAttr(tr('webview.comparePinned')) + '"' + (pinnedResponses.length < 2 ? ' disabled' : '') + '>' + diffSvg + ' ' + escapeHtml(tr('webview.compare')) + ' ' + compareModeShort(compareSettings.mode) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
+      '<div class="response-summary-card ' + responseToneClass + '">' +
+        responseStatsHtml +
+        '<div class="response-action-cluster">' +
+          '<button class="res-action-btn ripple-btn js-copy-response" title="' + escapeAttr(tr('webview.copyResponse')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M10 3H4v10h8V5l-2-2zM9 4l2 2H9V4zM3 0h6l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V1a1 1 0 011-1z"/><path d="M1 3v11a1 1 0 001 1h8v-1H2V3H1z"/></svg> ' + escapeHtml(tr('webview.copy')) + '</button>' +
+          ((tab.resolvedUrl || tab.url) ? '<button class="res-action-btn ripple-btn js-copy-response-url" title="' + escapeAttr(tr('webview.copyUrl')) + '">' + escapeHtml(tr('webview.copyUrl')) + '</button>' : '') +
+          '<button class="res-action-btn ripple-btn js-copy-response-status" title="' + escapeAttr(tr('webview.copyStatus')) + '">' + escapeHtml(tr('webview.copyStatus')) + '</button>' +
+          '<button class="res-action-btn ripple-btn js-copy-response-headers" title="' + escapeAttr(tr('webview.copyHeadersRaw')) + '">' + escapeHtml(tr('webview.copyHeadersRaw')) + '</button>' +
+          '<button class="res-action-btn ripple-btn js-save-response" title="' + escapeAttr(tr('webview.saveResponse')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> ' + escapeHtml(tr('webview.save')) + '</button>' +
+          '<button class="pin-response-btn ripple-btn js-pin-response" title="' + escapeAttr(tr('webview.pinResponse')) + '">' + pinSvg + ' ' + escapeHtml(tr('webview.pin')) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
+          ((lang === 'html' && (tab.resolvedUrl || tab.url))
+            ? '<button class="res-action-btn ripple-btn js-open-response-url" title="' + escapeAttr(tr('webview.openUrl')) + '">' + escapeHtml(tr('webview.openUrl')) + '</button>'
+            : '') +
+          '<button class="res-action-btn ripple-btn js-compare-last" title="' + escapeAttr(tr('webview.compareLast')) + '"' + (!lastResponse ? ' disabled' : '') + '>' + escapeHtml(tr('webview.last')) + '</button>' +
+          '<button class="res-action-btn ripple-btn js-compare-settings" title="' + escapeAttr(tr('webview.comparisonSettings')) + '">' + escapeHtml(tr('webview.mode')) + ': ' + compareModeShort(compareSettings.mode) + '</button>' +
+          '<button class="compare-btn js-compare-responses' + (pinnedResponses.length >= 2 ? ' ready' : '') + '" title="' + escapeAttr(tr('webview.comparePinned')) + '"' + (pinnedResponses.length < 2 ? ' disabled' : '') + '>' + diffSvg + ' ' + escapeHtml(tr('webview.compare')) + ' ' + compareModeShort(compareSettings.mode) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
+        '</div>' +
       '</div>' +
-      compareChipHtml +
+      '<div class="response-context-row">' +
+        resolvedUrlDisplay +
+        compareChipHtml +
       '</div>' +
-      resolvedUrlDisplay +
+      '</div>' +
       '<div class="tabs js-res-tabs">' +
         '<div class="tab' + (showBody ? ' active' : '') + '" data-tab="resBody">' + escapeHtml(tr('webview.body')) + '</div>' +
         (cookieCount > 0 ? '<div class="tab' + (showCookies ? ' active' : '') + '" data-tab="resCookies">' + escapeHtml(tr('webview.cookies')) + ' <span class="tab-count">' + cookieCount + '</span></div>' : '<div class="tab' + (showCookies ? ' active' : '') + '" data-tab="resCookies">' + escapeHtml(tr('webview.cookies')) + '</div>') +
@@ -5785,21 +5945,25 @@ function renderContent() {
 
   mainContent.innerHTML = envLine +
     '<div class="url-bar">' +
-      '<select class="js-method">' +
-        ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'].map(m =>
-          '<option' + (m === tab.method ? ' selected' : '') + '>' + m + '</option>'
-        ).join('') +
-      '</select>' +
-      '<div class="url-input-wrap">' +
-        '<input class="js-url" type="text" placeholder="' + escapeAttr(tr('webview.urlPlaceholder')) + '" spellcheck="false" value="' + escapeAttr(tab.url) + '"/>' +
-        '<div class="var-overlay js-var-overlay hidden"></div>' +
+      '<div class="url-primary-group">' +
+        '<select class="js-method">' +
+          ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'].map(m =>
+            '<option' + (m === tab.method ? ' selected' : '') + '>' + m + '</option>'
+          ).join('') +
+        '</select>' +
+        '<div class="url-input-wrap">' +
+          '<input class="js-url" type="text" placeholder="' + escapeAttr(tr('webview.urlPlaceholder')) + '" spellcheck="false" value="' + escapeAttr(tab.url) + '"/>' +
+          '<div class="var-overlay js-var-overlay hidden"></div>' +
+        '</div>' +
       '</div>' +
-      renderPrimaryActionButton(tab) +
+      '<div class="url-hero-actions">' + renderPrimaryActionButton(tab) + '</div>' +
       '<div class="url-action-group">' +
-        '<button class="res-action-btn ripple-btn js-save"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> ' + escapeHtml(tr('webview.save')) + '</button>' +
-        (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="' + escapeAttr(tr('webview.saveAs')) + '">' + escapeHtml(tr('webview.saveAs')) + '</button>' : '') +
-        '<button class="res-action-btn ripple-btn js-copy-curl" title="' + escapeAttr(tr('webview.copyAsCurl')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l4.5 4L1 10l1 1.5L7.5 6 2 0.5 1 2zm7 8h7v1.5H8V10z"/></svg> cURL</button>' +
-        '<button class="res-action-btn ripple-btn js-generate-code" title="' + escapeAttr(tr('webview.generateCode')) + '">' + escapeHtml(tr('webview.code')) + '</button>' +
+        '<div class="url-secondary-group">' +
+          '<button class="res-action-btn ripple-btn js-save"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> ' + escapeHtml(tr('webview.save')) + '</button>' +
+          (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="' + escapeAttr(tr('webview.saveAs')) + '">' + escapeHtml(tr('webview.saveAs')) + '</button>' : '') +
+          '<button class="res-action-btn ripple-btn js-copy-curl" title="' + escapeAttr(tr('webview.copyAsCurl')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l4.5 4L1 10l1 1.5L7.5 6 2 0.5 1 2zm7 8h7v1.5H8V10z"/></svg> cURL</button>' +
+          '<button class="res-action-btn ripple-btn js-generate-code" title="' + escapeAttr(tr('webview.generateCode')) + '">' + escapeHtml(tr('webview.code')) + '</button>' +
+        '</div>' +
       '</div>' +
     '</div>' +
     preflightHtml +
@@ -5814,7 +5978,7 @@ function renderContent() {
           '<div class="tab' + (showScriptsEditor ? ' active' : '') + '" data-tab="scripts">' + escapeHtml(tr('webview.scripts')) + '</div>' +
           '<div class="tab' + (showSettingsEditor ? ' active' : '') + '" data-tab="settings">' + escapeHtml(tr('webview.settings')) + '</div>' +
         '</div>' +
-        '<div class="js-params-panel kv-section' + (showParamsEditor ? '' : ' hidden') + '">' +
+        '<div class="js-params-panel request-editor-panel kv-section' + (showParamsEditor ? '' : ' hidden') + '">' +
           '<div class="js-param-rows">' + kvRowsHtml(tab.params) + '</div>' +
           '<div class="kv-actions">' +
             '<button class="add-btn js-add-param">' + escapeHtml(tr('webview.addParam')) + '</button>' +
@@ -5829,7 +5993,7 @@ function renderContent() {
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="js-headers-panel kv-section' + (showHeadersEditor ? '' : ' hidden') + '">' +
+        '<div class="js-headers-panel request-editor-panel kv-section' + (showHeadersEditor ? '' : ' hidden') + '">' +
           '<div class="js-default-headers-banner-wrap">' + renderDefaultHeadersBanner(tab) + '</div>' +
           '<div class="js-header-rows">' + kvRowsHtml(tab.headers) + '</div>' +
           '<div class="kv-actions">' +
@@ -5845,7 +6009,7 @@ function renderContent() {
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="js-body-panel body-section' + (showBodyEditor ? '' : ' hidden') + '">' +
+        '<div class="js-body-panel request-editor-panel body-section' + (showBodyEditor ? '' : ' hidden') + '">' +
           '<select class="js-body-type body-type-select">' +
             ['none','json','xml','form','formdata','binary','raw'].map(function(t) {
               var label = bodyTypeLabel(t);
@@ -5866,10 +6030,10 @@ function renderContent() {
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="js-auth-panel auth-section' + (showAuthEditor ? '' : ' hidden') + '">' +
+        '<div class="js-auth-panel request-editor-panel auth-section' + (showAuthEditor ? '' : ' hidden') + '">' +
           authHtml(tab.auth) +
         '</div>' +
-        '<div class="js-scripts-panel body-section' + (showScriptsEditor ? '' : ' hidden') + '">' +
+        '<div class="js-scripts-panel request-editor-panel body-section' + (showScriptsEditor ? '' : ' hidden') + '">' +
           renderScriptHelpers(tab) +
           '<div class="script-editor-grid">' +
             '<div class="script-card">' +
@@ -5891,7 +6055,7 @@ function renderContent() {
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="js-settings-panel settings-section' + (showSettingsEditor ? '' : ' hidden') + '">' +
+        '<div class="js-settings-panel request-editor-panel settings-section' + (showSettingsEditor ? '' : ' hidden') + '">' +
           '<div class="settings-grid">' +
             '<div class="settings-card">' +
               '<div class="settings-group">' +
@@ -5944,7 +6108,7 @@ function renderContent() {
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="divider"></div>' +
+      '<div class="divider"><div class="divider-grip"><span></span><span></span><span></span></div></div>' +
       '<div class="bullet-progress js-bullet-progress' + (tab.loading ? ' active' : '') + '"><div class="bullet-glow"></div></div>' +
       '<div class="res-area' + (tab.response && tab.slideIn ? ' slide-in' : '') + '">' + resHtml + '</div>' +
     '</div>';

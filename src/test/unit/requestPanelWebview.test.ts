@@ -638,7 +638,7 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /const activeRequestEditorTab = normalizeRequestEditorTab\(tab\.requestEditorTab\);/);
     assert.match(script, /requestEditorTab: normalizeRequestEditorTab\(t\.requestEditorTab\),/);
     assert.match(script, /<div class="tab' \+ \(showScriptsEditor \? ' active' : ''\) \+ '" data-tab="scripts">/);
-    assert.match(script, /<div class="js-scripts-panel body-section' \+ \(showScriptsEditor \? '' : ' hidden'\) \+ '">/);
+    assert.match(script, /<div class="js-scripts-panel request-editor-panel body-section' \+ \(showScriptsEditor \? '' : ' hidden'\) \+ '">/);
   });
 
   it('localizes dirty-close prompts and file picker labels', () => {
@@ -702,11 +702,21 @@ describe('RequestPanel Webview', () => {
     assert.ok(html.includes('script-card'), 'scripts tab should use cards');
     assert.ok(html.includes('script-helper-grid'), 'scripts tab should render helper cards');
     assert.ok(html.includes('btn-keyhint'), 'send button should show the Enter key hint');
+    assert.ok(html.includes('url-primary-group'), 'url bar should isolate the primary request controls');
+    assert.ok(html.includes('url-hero-actions'), 'url bar should elevate the primary action');
     assert.ok(html.includes('url-action-group'), 'url bar should group secondary actions for responsive layouts');
+    assert.ok(html.includes('url-secondary-group'), 'url bar should tuck secondary actions into a separate cluster');
     assert.ok(html.includes('res-response-shell'), 'response area should use a dedicated flex shell');
     assert.ok(html.includes('res-empty-shell'), 'response empty states should render inside a scrollable shell');
+    assert.ok(html.includes('response-summary-card'), 'response summary should render as a product-style card');
+    assert.ok(html.includes('response-stat-grid'), 'response summary should expose response stat cards');
+    assert.ok(html.includes('response-action-cluster'), 'response actions should render in a dedicated cluster');
+    assert.ok(html.includes('empty-state-head'), 'empty state should render a dedicated hero head');
+    assert.ok(html.includes('empty-state-card-index'), 'empty state cards should show playful indices');
+    assert.ok(html.includes('divider-grip'), 'split divider should expose an affordance grip');
     assert.match(script, /function getRequestStageInfo\(tab\)/);
     assert.match(script, /function renderEmptyState\(kicker, title, copy, cards, actions, badge\)/);
+    assert.match(script, /function renderResponseStat\(label, value, tone, detail\)/);
     assert.match(script, /function buildCompareChipMarkup\(currentSignature\)/);
     assert.match(script, /function scriptTemplateSource\(name\)/);
     assert.match(script, /function insertScriptTemplate\(mc, targetName, templateName\)/);
@@ -953,7 +963,10 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /const activeTab = tabs\.find\(t => t\.id === activeTabId\);/);
     assert.match(script, /activeTab\.scriptHelpCollapsed = activeTab\.scriptHelpCollapsed !== true/);
     assert.match(source, /\.req-area\{flex:1 1 0;min-height:0;overflow-y:auto;padding:4px 10px\}/);
-    assert.match(source, /\.url-action-group\{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-left:auto\}/);
+    assert.match(source, /\.url-primary-group\{display:flex;align-items:center;gap:10px;min-width:0\}/);
+    assert.match(source, /\.url-action-group\{display:flex;align-items:center;justify-content:flex-end;min-width:0\}/);
+    assert.match(source, /\.response-summary-card\{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:12px;border-radius:18px;/);
+    assert.match(source, /\.divider-grip\{position:relative;z-index:1;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;/);
     assert.match(source, /\.env-editor\.linked-focus-active\{border-color:rgba\(87,166,255,.26\)\}/);
     assert.match(source, /\.script-helper-shell\.collapsed\{gap:10px\}/);
     assert.match(source, /@media \(max-width: 1220px\)\{/);

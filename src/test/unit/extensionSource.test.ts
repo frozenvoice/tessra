@@ -49,6 +49,11 @@ describe('extension source', () => {
   });
 
   it('refreshes the current panel when the request panel theme changes and reloads storage when the workspace profile changes', () => {
+    assert.match(source, /const inspected = config\.inspect<string>\('requestPanelTheme'\);/);
+    assert.match(source, /if \(inspected\.globalValue === 'glossy'\) \{/);
+    assert.match(source, /config\.update\('requestPanelTheme', 'default', vscode\.ConfigurationTarget\.Global\)/);
+    assert.match(source, /if \(inspected\.workspaceValue === 'glossy'\) \{/);
+    assert.match(source, /config\.update\('requestPanelTheme', 'default', vscode\.ConfigurationTarget\.Workspace\)/);
     assert.match(source, /const requestPanelThemeChanged = event\.affectsConfiguration\('arc-client\.requestPanelTheme'\);/);
     assert.match(source, /if \(!displayLanguageChanged && !requestPanelThemeChanged && !workspaceProfileChanged\) \{ return; \}/);
     assert.match(source, /if \(displayLanguageChanged \|\| requestPanelThemeChanged\) \{[\s\S]*RequestPanel\.refreshCurrentPanel\(\);/);

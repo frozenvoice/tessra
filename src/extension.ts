@@ -92,7 +92,29 @@ export function activate(context: vscode.ExtensionContext) {
     historyTreeView.title = t('view.history');
   }
 
+  async function migrateLegacyRequestPanelTheme(): Promise<void> {
+    const config = vscode.workspace.getConfiguration('arc-client');
+    const inspected = config.inspect<string>('requestPanelTheme');
+    if (!inspected) { return; }
+
+    const updates: Thenable<void>[] = [];
+    if (inspected.globalValue === 'glossy') {
+      updates.push(config.update('requestPanelTheme', 'default', vscode.ConfigurationTarget.Global));
+    }
+    if (inspected.workspaceValue === 'glossy') {
+      updates.push(config.update('requestPanelTheme', 'default', vscode.ConfigurationTarget.Workspace));
+    }
+    if (updates.length === 0) { return; }
+
+    try {
+      await Promise.all(updates);
+    } catch {
+      // 레거시 테마 값 정리는 조용히 시도하고 실패해도 확장 동작은 계속한다.
+    }
+  }
+
   updateLocalizedViewTitles();
+  void migrateLegacyRequestPanelTheme();
 
   RequestPanel.storage = storage;
   RequestPanel.historyProvider = historyProvider;
