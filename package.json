@@ -1,7 +1,7 @@
 {
   "name": "arc-client",
-  "displayName": "Arc Client",
-  "description": "Offline-first REST API client for VS Code — no login required, no cloud dependency",
+  "displayName": "%displayName%",
+  "description": "%description%",
   "version": "1.0.0",
   "publisher": "arc",
   "license": "MIT",
@@ -13,158 +13,188 @@
     "vscode": "^1.74.0"
   },
   "categories": [
+    "Testing",
     "Other"
+  ],
+  "keywords": [
+    "rest",
+    "api",
+    "http",
+    "https",
+    "rest-client",
+    "api-client",
+    "request",
+    "curl",
+    "postman",
+    "offline",
+    "local-first",
+    "collection",
+    "environment",
+    "api-testing"
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
-      "title": "Arc Client",
+      "title": "%displayName%",
       "properties": {
         "arc-client.historyMaxItems": {
           "type": "number",
           "default": 100,
           "minimum": 10,
           "maximum": 1000,
-          "description": "히스토리 최대 보관 개수. 초과 시 pinned 되지 않은 오래된 항목부터 자동 삭제됩니다."
+          "description": "%configuration.historyMaxItems.description%"
+        },
+        "arc-client.allowInsecureCertificates": {
+          "type": "boolean",
+          "default": false,
+          "description": "%configuration.allowInsecureCertificates.description%"
         }
       }
     },
     "commands": [
       {
         "command": "arc.newRequest",
-        "title": "Arc: New Request",
+        "title": "%command.newRequest%",
         "icon": "$(add)"
       },
       {
         "command": "arc.createCollection",
-        "title": "Arc: New Collection",
+        "title": "%command.createCollection%",
         "icon": "$(new-folder)"
       },
       {
         "command": "arc.createFolder",
-        "title": "New Folder",
+        "title": "%command.createFolder%",
         "icon": "$(new-folder)"
       },
       {
         "command": "arc.rename",
-        "title": "Rename"
+        "title": "%command.rename%"
       },
       {
         "command": "arc.delete",
-        "title": "Delete"
+        "title": "%command.delete%"
       },
       {
         "command": "arc.duplicateRequest",
-        "title": "Duplicate"
+        "title": "%command.duplicate%"
       },
       {
         "command": "arc.saveRequestAs",
-        "title": "Save As..."
+        "title": "%command.saveAs%"
       },
       {
         "command": "arc.clearHistory",
-        "title": "Clear History",
+        "title": "%command.clearHistory%",
         "icon": "$(clear-all)"
       },
       {
         "command": "arc.pinHistory",
-        "title": "Pin",
+        "title": "%command.pin%",
         "icon": "$(pin)"
       },
       {
         "command": "arc.unpinHistory",
-        "title": "Unpin",
+        "title": "%command.unpin%",
         "icon": "$(pinned)"
       },
       {
         "command": "arc.deletePinnedHistory",
-        "title": "Delete (Pinned)",
+        "title": "%command.deletePinned%",
         "icon": "$(trash)"
       },
       {
         "command": "arc.createEnvironment",
-        "title": "Arc: New Environment",
+        "title": "%command.createEnvironment%",
         "icon": "$(add)"
       },
       {
         "command": "arc.renameEnvironment",
-        "title": "Rename"
+        "title": "%command.rename%"
       },
       {
         "command": "arc.deleteEnvironment",
-        "title": "Delete"
+        "title": "%command.delete%"
       },
       {
         "command": "arc.editEnvironment",
-        "title": "Edit Variables"
+        "title": "%command.editVariables%"
       },
       {
         "command": "arc.setActiveEnvironment",
-        "title": "Set Active",
+        "title": "%command.setActive%",
         "icon": "$(pass-filled)"
       },
       {
         "command": "arc.deactivateEnvironment",
-        "title": "Deactivate",
+        "title": "%command.deactivate%",
         "icon": "$(circle-slash)"
       },
       {
         "command": "arc.switchEnvironment",
-        "title": "Arc: Switch Environment"
+        "title": "%command.switchEnvironment%"
       },
       {
         "command": "arc.editDefaultHeaders",
-        "title": "Default Headers",
+        "title": "%command.defaultHeaders%",
         "icon": "$(settings-gear)"
       },
       {
         "command": "arc.importCurl",
-        "title": "Arc: Import cURL",
+        "title": "%command.importCurl%",
         "icon": "$(cloud-download)"
       },
       {
         "command": "arc.importCollection",
-        "title": "Arc: Import Collection",
+        "title": "%command.importCollection%",
         "icon": "$(folder-opened)"
       },
       {
+        "command": "arc.exportPostmanCollection",
+        "title": "%command.exportPostmanCollection%"
+      },
+      {
+        "command": "arc.exportPostmanEnvironment",
+        "title": "%command.exportPostmanEnvironment%"
+      },
+      {
         "command": "arc.collapseAll",
-        "title": "Collapse All",
+        "title": "%command.collapseAll%",
         "icon": "$(collapse-all)"
       },
       {
         "command": "arc.filterCollections",
-        "title": "Filter Collections",
+        "title": "%command.filterCollections%",
         "icon": "$(search)"
       },
       {
         "command": "arc.clearCollectionFilter",
-        "title": "Clear Filter",
+        "title": "%command.clearFilter%",
         "icon": "$(close)"
       },
       {
         "command": "arc.filterHistory",
-        "title": "Filter History",
+        "title": "%command.filterHistory%",
         "icon": "$(search)"
       },
       {
         "command": "arc.clearHistoryFilter",
-        "title": "Clear Filter",
+        "title": "%command.clearFilter%",
         "icon": "$(close)"
       },
       {
         "command": "arc.copyAsCurl",
-        "title": "Copy as cURL"
+        "title": "%command.copyAsCurl%"
       },
       {
         "command": "arc.runCollection",
-        "title": "Run All Requests",
+        "title": "%command.runCollection%",
         "icon": "$(run-all)"
       },
       {
         "command": "arc.openGuide",
-        "title": "Arc: Open Guide",
+        "title": "%command.openGuide%",
         "icon": "$(book)"
       }
     ],
@@ -172,7 +202,7 @@
       "activitybar": [
         {
           "id": "arc-sidebar",
-          "title": "Arc Client",
+          "title": "%displayName%",
           "icon": "$(pulse)"
         }
       ]
@@ -181,15 +211,15 @@
       "arc-sidebar": [
         {
           "id": "arc.collections",
-          "name": "Collections"
+          "name": "%view.collections%"
         },
         {
           "id": "arc.environments",
-          "name": "Environments"
+          "name": "%view.environments%"
         },
         {
           "id": "arc.history",
-          "name": "History"
+          "name": "%view.history%"
         }
       ]
     },
@@ -293,6 +323,11 @@
           "group": "1_actions@4"
         },
         {
+          "command": "arc.exportPostmanCollection",
+          "when": "viewItem == collection",
+          "group": "1_actions@5"
+        },
+        {
           "command": "arc.runCollection",
           "when": "viewItem == collection || viewItem == folder",
           "group": "0_run@1"
@@ -326,6 +361,11 @@
           "command": "arc.deleteEnvironment",
           "when": "viewItem == environment || viewItem == environment-active",
           "group": "1_edit@2"
+        },
+        {
+          "command": "arc.exportPostmanEnvironment",
+          "when": "viewItem == environment || viewItem == environment-active",
+          "group": "1_edit@3"
         },
         {
           "command": "arc.pinHistory",

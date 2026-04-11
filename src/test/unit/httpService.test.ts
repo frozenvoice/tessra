@@ -1,5 +1,7 @@
 import * as assert from 'assert';
 import * as http from 'http';
+import { EventEmitter } from 'events';
+import type { RequestOptions as HttpsRequestOptions } from 'https';
 import { HttpService } from '../../services/HttpService';
 
 // HttpService 테스트 (로컬 HTTP 서버 사용)
@@ -185,6 +187,80 @@ describe('HttpService', () => {
       const res = await send('GET', `${baseUrl}/json`, [], '');
       assert.ok(typeof res.time === 'number');
       assert.ok(res.time >= 0);
+    });
+  });
+
+  describe('HTTPS 인증서 검증', () => {
+    const nativeHttps = require('https') as typeof import('https');
+
+    class MockHttpsRequest extends EventEmitter {
+      constructor(private readonly callback: (res: http.IncomingMessage) => void) {
+        super();
+      }
+
+      setTimeout(): this {
+        return this;
+      }
+
+      write(): this {
+        return this;
+      }
+
+      end(): this {
+        const res = new EventEmitter() as http.IncomingMessage;
+        (res as unknown as { headers: Record<string, string> }).headers = { 'content-type': 'text/plain' };
+        (res as unknown as { statusCode: number }).statusCode = 200;
+        (res as unknown as { statusMessage: string }).statusMessage = 'OK';
+        this.callback(res);
+        res.emit('data', Buffer.from('ok'));
+        res.emit('end');
+        return this;
+      }
+
+      destroy(err?: Error): this {
+        if (err) {
+          this.emit('error', err);
+        }
+        return this;
+      }
+    }
+
+    it('기본값으로는 인증서 검증을 유지', async () => {
+      const originalRequest = nativeHttps.request;
+      let capturedOptions: HttpsRequestOptions | undefined;
+
+      try {
+        nativeHttps.request =
+          ((options: HttpsRequestOptions, callback: (res: http.IncomingMessage) => void) => {
+            capturedOptions = options;
+            return new MockHttpsRequest(callback) as unknown as http.ClientRequest;
+          }) as typeof nativeHttps.request;
+
+        const res = await httpService.send('GET', 'https://example.com/test', [], '').promise;
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(capturedOptions?.rejectUnauthorized, undefined);
+      } finally {
+        nativeHttps.request = originalRequest;
+      }
+    });
+
+    it('명시적으로 켠 경우에만 자체 서명 인증서를 허용', async () => {
+      const originalRequest = nativeHttps.request;
+      let capturedOptions: HttpsRequestOptions | undefined;
+
+      try {
+        nativeHttps.request =
+          ((options: HttpsRequestOptions, callback: (res: http.IncomingMessage) => void) => {
+            capturedOptions = options;
+            return new MockHttpsRequest(callback) as unknown as http.ClientRequest;
+          }) as typeof nativeHttps.request;
+
+        const res = await httpService.send('GET', 'https://example.com/test', [], '', 0, true).promise;
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(capturedOptions?.rejectUnauthorized, false);
+      } finally {
+        nativeHttps.request = originalRequest;
+      }
     });
   });
 });

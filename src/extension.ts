@@ -6,17 +6,22 @@ import { HistoryTreeProvider } from './providers/HistoryTreeProvider';
 import { EnvironmentTreeProvider } from './providers/EnvironmentTreeProvider';
 import {
   AuthConfig,
+  CodegenTarget,
   Collection,
   CollectionItem,
   Environment,
+  FormDataField,
   HistoryEntry,
   HttpMethod,
   KeyValue,
   Request,
   RequestBodyType,
+  RequestScripts,
 } from './models/types';
 import { CurlService } from './services/CurlService';
 import { GuidePanel } from './panels/GuidePanel';
+import { ImportExportService } from './services/ImportExportService';
+import { CodegenService } from './services/CodegenService';
 
 const VALID_HTTP_METHODS: ReadonlySet<HttpMethod> = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 
@@ -151,7 +156,9 @@ export function activate(context: vscode.ExtensionContext) {
       if (!uris || uris.length === 0) { return; }
 
       const collections = storage.getCollections();
+      const environments = storage.getEnvironments();
       const stats: ImportStats = { skippedCollections: 0, skippedItems: 0 };
+      const postmanDocuments: unknown[] = [];
       let imported = 0;
 
       for (const uri of uris) {
@@ -161,8 +168,14 @@ export function activate(context: vscode.ExtensionContext) {
           const items = Array.isArray(data) ? data : [data];
 
           for (const item of items) {
+            if (looksLikePostmanDocument(item)) {
+              postmanDocuments.push(item);
+              continue;
+            }
             const normalized = normalizeImportedCollection(item, stats);
-            if (!normalized) { continue; }
+            if (!normalized) {
+              continue;
+            }
             collections.push(normalized);
             imported++;
           }
@@ -173,10 +186,21 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }
 
+      const importedPostman = ImportExportService.importDocuments(postmanDocuments);
+      collections.push(...importedPostman.collections);
+      environments.push(...importedPostman.environments);
+      imported += importedPostman.collections.length;
+
       if (imported > 0) {
         storage.saveCollections(collections);
         collectionProvider.refresh();
         vscode.window.showInformationMessage(`${imported}개 컬렉션을 가져왔습니다.`);
+      }
+
+      if (importedPostman.environments.length > 0) {
+        storage.saveEnvironments(environments);
+        environmentProvider.refresh();
+        vscode.window.showInformationMessage(`환경 ${importedPostman.environments.length}개를 가져왔습니다.`);
       }
 
       if (stats.skippedCollections > 0 || stats.skippedItems > 0) {
@@ -184,6 +208,37 @@ export function activate(context: vscode.ExtensionContext) {
           `가져오는 동안 잘못된 데이터가 있어 컬렉션 ${stats.skippedCollections}개, 항목 ${stats.skippedItems}개를 건너뛰었습니다.`
         );
       }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('arc.exportPostmanCollection', async (node: CollectionNode) => {
+      if (node.kind !== 'collection') { return; }
+      const defaultName = `${sanitizeFilename(node.collection.name)}.postman_collection.json`;
+      const uri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file(defaultName),
+        filters: { 'JSON Files': ['json'] },
+      });
+      if (!uri) { return; }
+
+      const document = ImportExportService.exportCollection(node.collection);
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(document, null, 2), 'utf-8'));
+      vscode.window.showInformationMessage(`Postman 컬렉션을 내보냈습니다: ${uri.fsPath}`);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('arc.exportPostmanEnvironment', async (env: Environment) => {
+      const defaultName = `${sanitizeFilename(env.name)}.postman_environment.json`;
+      const uri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file(defaultName),
+        filters: { 'JSON Files': ['json'] },
+      });
+      if (!uri) { return; }
+
+      const document = ImportExportService.exportEnvironment(env);
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(document, null, 2), 'utf-8'));
+      vscode.window.showInformationMessage(`Postman 환경을 내보냈습니다: ${uri.fsPath}`);
     })
   );
 
@@ -473,8 +528,17 @@ function createImportId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function sanitizeFilename(value: string): string {
+  return value.replace(/[<>:"/\\|?*]+/g, '_');
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function looksLikePostmanDocument(value: unknown): boolean {
+  if (!isRecord(value)) { return false; }
+  return (Array.isArray(value.item) && isRecord(value.info)) || (Array.isArray(value.values) && typeof value.name === 'string');
 }
 
 function normalizeImportedMethod(value: unknown): HttpMethod {
@@ -487,6 +551,8 @@ function normalizeImportedBodyType(value: unknown): RequestBodyType {
     case 'json':
     case 'xml':
     case 'form':
+    case 'formdata':
+    case 'binary':
     case 'raw':
     case 'none':
       return value;
@@ -516,6 +582,31 @@ function normalizeImportedKeyValues(value: unknown): KeyValue[] {
   }
 
   return items;
+}
+
+function normalizeImportedFormData(value: unknown): FormDataField[] {
+  if (!Array.isArray(value)) { return []; }
+
+  return value
+    .filter((item) => isRecord(item) && typeof item.key === 'string')
+    .map((item) => ({
+      id: typeof item.id === 'string' && item.id ? item.id : createImportId(),
+      key: typeof item.key === 'string' ? item.key : '',
+      value: typeof item.value === 'string' ? item.value : '',
+      enabled: typeof item.enabled === 'boolean' ? item.enabled : true,
+      type: item.type === 'file' ? 'file' : 'text',
+    }));
+}
+
+function normalizeImportedScripts(value: unknown): RequestScripts {
+  if (!isRecord(value)) {
+    return { preRequest: '', test: '' };
+  }
+
+  return {
+    preRequest: typeof value.preRequest === 'string' ? value.preRequest : '',
+    test: typeof value.test === 'string' ? value.test : '',
+  };
 }
 
 function normalizeImportedAuthConfig(value: unknown): AuthConfig {
@@ -571,7 +662,10 @@ function normalizeImportedRequest(value: unknown, fallbackName: string): Request
     params: normalizeImportedKeyValues(value.params),
     body: typeof value.body === 'string' ? value.body : '',
     bodyType: normalizeImportedBodyType(value.bodyType),
+    formData: normalizeImportedFormData(value.formData),
+    binaryFilePath: typeof value.binaryFilePath === 'string' ? value.binaryFilePath : '',
     auth: normalizeImportedAuthConfig(value.auth),
+    scripts: normalizeImportedScripts(value.scripts),
   };
 }
 

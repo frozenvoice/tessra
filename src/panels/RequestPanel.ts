@@ -1,15 +1,35 @@
-import * as vscode from 'vscode';
+﻿import * as vscode from 'vscode';
 import { HttpService } from '../services/HttpService';
 import { VariableService } from '../services/VariableService';
 import { StorageService } from '../services/StorageService';
 import { CollectionTreeProvider } from '../providers/CollectionTreeProvider';
 import { HistoryTreeProvider } from '../providers/HistoryTreeProvider';
 import { EnvironmentTreeProvider } from '../providers/EnvironmentTreeProvider';
-import { MessageType, Request, AuthConfig, KeyValue, Environment, CollectionItem, Response, TabState, RequestBodyType, IncomingWebviewMessage, SendRequestMessage, CompareResponsesMessage } from '../models/types';
+import {
+  MessageType,
+  Request,
+  AuthConfig,
+  KeyValue,
+  Environment,
+  CollectionItem,
+  Response,
+  TabState,
+  RequestBodyType,
+  IncomingWebviewMessage,
+  SendRequestMessage,
+  CompareResponsesMessage,
+  FormDataField,
+  RequestScripts,
+  ScriptExecutionResult,
+} from '../models/types';
 import { CurlService } from '../services/CurlService';
 import { SendHandle } from '../services/HttpService';
+import { AuthService } from '../services/AuthService';
+import { RequestBodyService } from '../services/RequestBodyService';
+import { ScriptRunner, ScriptableRequest } from '../services/ScriptRunner';
+import { CodegenService } from '../services/CodegenService';
 
-// Webview 요청 패널 관리 (다중 탭 지원)
+// Webview ?붿껌 ?⑤꼸 愿由?(?ㅼ쨷 ??吏??
 export class RequestPanel {
   public static currentPanel: RequestPanel | undefined;
   public static storage: StorageService;
@@ -30,6 +50,8 @@ export class RequestPanel {
     MessageType.SaveTabState,
     MessageType.CompareResponses,
     MessageType.StopCollectionRun,
+    MessageType.PickFile,
+    MessageType.GenerateCode,
     'webviewReady',
   ]);
   private static readonly UNRESOLVED_VAR_PATTERN = /\{\{([^}]+)\}\}/g;
@@ -59,15 +81,14 @@ export class RequestPanel {
 
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
-    // 저장된 탭 상태 복원
+    // ??λ맂 ???곹깭 蹂듭썝
     this.restoreTabState();
   }
 
-  // 저장된 탭 상태를 webview에 전송
+  // ??λ맂 ???곹깭瑜?webview???꾩넚
   private restoreTabState() {
     const state = RequestPanel.storage.getTabState();
     if (state && state.tabs.length > 0) {
-      // webview 준비 후 복원 (onDidReceiveMessage에서 webviewReady 수신 시 전송)
       this.pendingRestore = state;
     }
   }
@@ -78,6 +99,8 @@ export class RequestPanel {
       case 'json':
       case 'xml':
       case 'form':
+      case 'formdata':
+      case 'binary':
       case 'raw':
       case 'none':
         return bodyType;
@@ -88,9 +111,17 @@ export class RequestPanel {
     }
   }
 
+  private static createEmptyScripts(): RequestScripts {
+    return { preRequest: '', test: '' };
+  }
+
   private postMessage(message: unknown): void {
     if (this.isDisposed) { return; }
     this.panel.webview.postMessage(message);
+  }
+
+  private getAllowInsecureCertificates(): boolean {
+    return vscode.workspace.getConfiguration('arc-client').get<boolean>('allowInsecureCertificates', false);
   }
 
   private cancelActiveRequest(tabId: string): void {
@@ -100,7 +131,6 @@ export class RequestPanel {
     handle.abort();
   }
 
-  // URL, 헤더, 바디, 인증 설정에서 남아 있는 {{변수}}를 모두 수집
   private findUnresolvedVariables(
     url: string,
     headers: KeyValue[],
@@ -155,7 +185,7 @@ export class RequestPanel {
   }
 
   private createUnresolvedVariableError(names: string[]): string {
-    return `미설정 환경변수: ${names.map((name) => `{{${name}}}`).join(', ')}`;
+    return `誘몄꽕???섍꼍蹂?? ${names.map((name) => `{{${name}}}`).join(', ')}`;
   }
 
   private isIncomingMessage(value: unknown): value is IncomingWebviewMessage {
@@ -173,7 +203,7 @@ export class RequestPanel {
     return nonce;
   }
 
-  // 패널 표시. createNewTab=true이면 새 탭도 생성
+  // ?⑤꼸 ?쒖떆. createNewTab=true?대㈃ ????룄 ?앹꽦
   public static show(extensionUri: vscode.Uri, createNewTab: boolean = false) {
     if (RequestPanel.currentPanel) {
       RequestPanel.currentPanel.panel.reveal();
@@ -197,17 +227,14 @@ export class RequestPanel {
     RequestPanel.currentPanel = new RequestPanel(panel, extensionUri);
   }
 
-  // WebviewPanelSerializer에서 호출: 패널 복원
   public static revive(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     RequestPanel.currentPanel = new RequestPanel(panel, extensionUri);
   }
 
-  // Webview에 새 탭 생성 요청
   public newTab() {
     this.postMessage({ type: 'newTab' });
   }
 
-  // 외부에서 요청 로드 → Webview에 새 탭으로 전달 (중복 탭 방지용 requestId 포함)
   public loadRequest(req: Request) {
     this.postMessage({
       type: MessageType.LoadRequest,
@@ -218,12 +245,14 @@ export class RequestPanel {
       params: req.params ?? [],
       body: req.body ?? '',
       bodyType: RequestPanel.normalizeBodyType(req.bodyType),
+      formData: req.formData ?? [],
+      binaryFilePath: req.binaryFilePath ?? '',
       auth: req.auth ?? { type: 'none' },
+      scripts: req.scripts ?? RequestPanel.createEmptyScripts(),
       name: req.name || `${req.method} ${req.url}`,
     });
   }
 
-  // 환경변수 편집 데이터 전송
   public loadEnvironment(env: Environment) {
     this.postMessage({
       type: MessageType.LoadEnvironment,
@@ -233,7 +262,6 @@ export class RequestPanel {
     });
   }
 
-  // 기본 헤더 편집 UI 로드
   public loadDefaultHeaders() {
     const headers = RequestPanel.storage.getDefaultHeaders();
     this.postMessage({
@@ -242,7 +270,6 @@ export class RequestPanel {
     });
   }
 
-  // 활성 환경 이름 업데이트
   public updateActiveEnv(envName: string | null) {
     this.postMessage({
       type: MessageType.UpdateActiveEnv,
@@ -253,7 +280,6 @@ export class RequestPanel {
 
   // 컬렉션 전체 실행 (재귀적으로 하위 폴더 포함)
   public async runCollection(name: string, items: CollectionItem[]) {
-    // 모든 요청을 재귀적으로 수집
     const requests: { name: string; request: Request }[] = [];
     const collect = (list: CollectionItem[]) => {
       for (const item of list) {
@@ -267,11 +293,10 @@ export class RequestPanel {
     collect(items);
 
     if (requests.length === 0) {
-      vscode.window.showInformationMessage('실행할 요청이 없습니다.');
+      vscode.window.showInformationMessage('?ㅽ뻾???붿껌???놁뒿?덈떎.');
       return;
     }
 
-    // Webview에 러너 시작 알림
     this.collectionRunAbort = false;
     this.currentCollectionRequest = null;
     this.postMessage({
@@ -280,7 +305,7 @@ export class RequestPanel {
       total: requests.length,
     });
 
-    const vars = RequestPanel.environmentProvider.getActiveVariables();
+    let vars = RequestPanel.environmentProvider.getActiveVariables();
     const startTime = Date.now();
     let passed = 0;
     let failed = 0;
@@ -289,20 +314,18 @@ export class RequestPanel {
       if (this.collectionRunAbort) { break; }
 
       const { name: reqName, request: req } = requests[i];
-      const resolvedUrl = VariableService.resolve(req.url, vars);
-      const resolvedHeaders = VariableService.resolveKeyValues(req.headers ?? [], vars);
-      const resolvedParams = VariableService.resolveKeyValues(req.params ?? [], vars);
-      const resolvedBody = VariableService.resolve(req.body ?? '', vars);
-      const unresolvedVariables = this.findUnresolvedVariables(
-        resolvedUrl,
-        resolvedHeaders,
-        resolvedParams,
-        resolvedBody,
-        req.auth ?? { type: 'none' },
-        vars
-      );
-      const finalHeaders = [...resolvedHeaders];
-      const finalParams = [...resolvedParams];
+      const scripts = this.normalizeScripts(req.scripts);
+      let requestState = this.createScriptableRequest({
+        method: req.method,
+        url: req.url,
+        headers: req.headers ?? [],
+        params: req.params ?? [],
+        body: req.body ?? '',
+        bodyType: RequestPanel.normalizeBodyType(req.bodyType),
+        formData: req.formData ?? [],
+        binaryFilePath: req.binaryFilePath ?? '',
+        auth: req.auth ?? { type: 'none' },
+      });
 
       let response: Response | null = null;
       let error: string | null = null;
@@ -310,31 +333,90 @@ export class RequestPanel {
       let statusText = '';
       let time = 0;
 
-      if (unresolvedVariables.length > 0) {
-        error = this.createUnresolvedVariableError(unresolvedVariables);
-        failed++;
-      } else {
-        this.applyAuth(req.auth ?? { type: 'none' }, finalHeaders, finalParams, vars);
-        const url = this.buildUrl(resolvedUrl, finalParams);
+      try {
+        const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars);
+        requestState = preRequestResult.request;
+        vars = preRequestResult.envVariables;
+        this.saveActiveEnvironmentVariables(vars);
 
-        try {
-          const handle = this.httpService.send(req.method, url, finalHeaders, resolvedBody, 0);
-          this.currentCollectionRequest = handle;
-          response = await handle.promise;
-          status = response.status;
-          statusText = response.statusText;
-          time = response.time;
-          if (status >= 400) { failed++; } else { passed++; }
-        } catch (err: unknown) {
-          if (this.collectionRunAbort) { break; }
-          error = err instanceof Error ? err.message : String(err);
-          failed++;
-        } finally {
-          this.currentCollectionRequest = null;
+        const resolvedUrl = VariableService.resolve(requestState.url, vars);
+        const resolvedHeaders = VariableService.resolveKeyValues(requestState.headers, vars);
+        const resolvedParams = VariableService.resolveKeyValues(requestState.params, vars);
+        const resolvedBody = VariableService.resolve(requestState.body ?? '', vars);
+        const resolvedFormData = this.cloneFormDataFields(requestState.formData ?? []).map((field) => ({
+          ...field,
+          key: VariableService.resolve(field.key, vars),
+          value: VariableService.resolve(field.value, vars),
+        }));
+        const resolvedBinaryFilePath = VariableService.resolve(requestState.binaryFilePath ?? '', vars);
+        const finalHeaders = [...resolvedHeaders];
+        const finalParams = [...resolvedParams];
+        const unresolvedVariables = this.findUnresolvedVariables(
+          resolvedUrl,
+          finalHeaders,
+          finalParams,
+          resolvedBody,
+          requestState.auth,
+          vars
+        );
+        unresolvedVariables.push(...this.findPayloadUnresolvedVariables(resolvedFormData, resolvedBinaryFilePath));
+        if (unresolvedVariables.length > 0) {
+          throw new Error(this.createUnresolvedVariableError(unresolvedVariables));
         }
+
+        AuthService.applyAuth(requestState.auth, finalHeaders, finalParams, vars);
+        const url = this.buildUrl(resolvedUrl, finalParams);
+        const preparedBody = await RequestBodyService.prepare({
+          bodyType: requestState.bodyType,
+          body: requestState.body ?? '',
+          formData: requestState.formData ?? [],
+          binaryFilePath: requestState.binaryFilePath ?? '',
+          headers: finalHeaders,
+          vars,
+        });
+        const executedRequest = this.createScriptableRequest({
+          method: req.method,
+          url,
+          headers: preparedBody.headers,
+          params: finalParams,
+          body: preparedBody.resolvedBody,
+          bodyType: requestState.bodyType,
+          formData: preparedBody.resolvedFormData,
+          binaryFilePath: preparedBody.resolvedBinaryFilePath,
+          auth: { type: 'none' },
+        });
+
+        const handle = this.httpService.send(
+          req.method,
+          url,
+          preparedBody.headers,
+          preparedBody.data,
+          0,
+          this.getAllowInsecureCertificates()
+        );
+        this.currentCollectionRequest = handle;
+        response = await handle.promise;
+        status = response.status;
+        statusText = response.statusText;
+        time = response.time;
+
+        const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars);
+        vars = testResult.envVariables;
+        this.saveActiveEnvironmentVariables(vars);
+        const failedTests = testResult.result.tests.filter((test) => !test.passed).length;
+        if (failedTests > 0) {
+          error = `Tests failed: ${failedTests}`;
+        }
+
+        if (status >= 400 || error) { failed++; } else { passed++; }
+      } catch (err: unknown) {
+        if (this.collectionRunAbort) { break; }
+        error = err instanceof Error ? err.message : String(err);
+        failed++;
+      } finally {
+        this.currentCollectionRequest = null;
       }
 
-      // 진행 상황 전송
       this.postMessage({
         type: MessageType.RunCollectionProgress,
         index: i,
@@ -352,7 +434,6 @@ export class RequestPanel {
       });
     }
 
-    // 완료 알림
     this.postMessage({
       type: MessageType.RunCollectionDone,
       total: requests.length,
@@ -365,10 +446,10 @@ export class RequestPanel {
 
   private async handleMessage(message: unknown) {
     if (!this.isIncomingMessage(message)) { return; }
-    // Webview 초기화 완료 → 저장된 탭 복원
+    // Webview 珥덇린???꾨즺 ????λ맂 ??蹂듭썝
     if (message.type === 'webviewReady') {
-      // 매 webviewReady마다 저장소에서 탭 상태를 읽어 복원
-      // (retainContextWhenHidden 없이 복원된 패널은 숨김→표시 시 webview가 재생성됨)
+      // 留?webviewReady留덈떎 ??μ냼?먯꽌 ???곹깭瑜??쎌뼱 蹂듭썝
+      // (retainContextWhenHidden ?놁씠 蹂듭썝???⑤꼸? ?④??믫몴????webview媛 ?ъ깮?깅맖)
       const state = this.pendingRestore ?? RequestPanel.storage.getTabState();
       if (state && state.tabs.length > 0) {
         this.postMessage({
@@ -398,7 +479,10 @@ export class RequestPanel {
           params: message.params ?? [],
           body: message.body ?? '',
           bodyType: RequestPanel.normalizeBodyType(message.bodyType),
+          formData: message.formData ?? [],
+          binaryFilePath: message.binaryFilePath ?? '',
           auth: message.auth ?? { type: 'none' },
+          scripts: message.scripts ?? RequestPanel.createEmptyScripts(),
         });
         this.postMessage({
           type: MessageType.SaveRequestResult,
@@ -415,15 +499,18 @@ export class RequestPanel {
           headers: message.headers ?? [],
           params: message.params ?? [],
           body: message.body ?? '',
+          bodyType: RequestPanel.normalizeBodyType(message.bodyType),
+          formData: message.formData ?? [],
+          binaryFilePath: message.binaryFilePath ?? '',
           auth: message.auth ?? { type: 'none' },
         });
         vscode.env.clipboard.writeText(curl);
-        vscode.window.showInformationMessage('cURL 명령어가 클립보드에 복사되었습니다.');
+        vscode.window.showInformationMessage('cURL 紐낅졊?닿? ?대┰蹂대뱶??蹂듭궗?섏뿀?듬땲??');
         break;
       }
       case MessageType.CopyResponseBody:
         await vscode.env.clipboard.writeText(message.body ?? '');
-        vscode.window.showInformationMessage('응답 본문이 클립보드에 복사되었습니다.');
+        vscode.window.showInformationMessage('?묐떟 蹂몃Ц???대┰蹂대뱶??蹂듭궗?섏뿀?듬땲??');
         break;
       case MessageType.CopyToClipboard:
         await vscode.env.clipboard.writeText(message.text ?? '');
@@ -442,7 +529,7 @@ export class RequestPanel {
         break;
       case MessageType.SaveDefaultHeaders:
         RequestPanel.storage.saveDefaultHeaders(message.headers);
-        vscode.window.showInformationMessage('기본 헤더가 저장되었습니다.');
+        vscode.window.showInformationMessage('湲곕낯 ?ㅻ뜑媛 ??λ릺?덉뒿?덈떎.');
         break;
       case MessageType.SaveTabState:
         RequestPanel.storage.saveTabState(message.tabs ?? [], message.activeIndex ?? 0);
@@ -454,44 +541,139 @@ export class RequestPanel {
         this.collectionRunAbort = true;
         this.currentCollectionRequest?.abort();
         break;
+      case MessageType.PickFile: {
+        const selected = await vscode.window.showOpenDialog({
+          canSelectMany: false,
+          openLabel: 'Select File',
+        });
+        this.postMessage({
+          type: MessageType.PickFileResult,
+          target: message.target,
+          rowId: message.rowId,
+          filePath: selected?.[0]?.fsPath,
+        });
+        break;
+      }
+      case MessageType.GenerateCode: {
+        await this.generateCode(message);
+        break;
+      }
     }
   }
 
-  // 활성 환경변수 키 목록을 webview에 전달
+  // ?쒖꽦 ?섍꼍蹂????紐⑸줉??webview???꾨떖
   private sendActiveVarsToWebview() {
     const vars = RequestPanel.environmentProvider.getActiveVariables();
     const varKeys = vars.filter(v => v.enabled && v.key).map(v => v.key);
     this.postMessage({ type: 'activeVarKeys', varKeys });
   }
 
+  private cloneFormDataFields(fields: FormDataField[]): FormDataField[] {
+    return (fields ?? []).map((field) => ({ ...field }));
+  }
+
+  private normalizeScripts(scripts: RequestScripts | undefined): RequestScripts {
+    return scripts ?? RequestPanel.createEmptyScripts();
+  }
+
+  private createScriptableRequest(input: {
+    method: Request['method'];
+    url: string;
+    headers: KeyValue[];
+    params: KeyValue[];
+    body: string;
+    bodyType: RequestBodyType;
+    formData?: FormDataField[];
+    binaryFilePath?: string;
+    auth: AuthConfig;
+  }): ScriptableRequest {
+    return {
+      method: input.method,
+      url: input.url,
+      headers: this.cloneKeyValues(input.headers),
+      params: this.cloneKeyValues(input.params),
+      body: input.body,
+      bodyType: input.bodyType,
+      formData: this.cloneFormDataFields(input.formData ?? []),
+      binaryFilePath: input.binaryFilePath ?? '',
+      auth: JSON.parse(JSON.stringify(input.auth ?? { type: 'none' })),
+    };
+  }
+
+  private saveActiveEnvironmentVariables(variables: KeyValue[]): void {
+    const activeEnvId = RequestPanel.environmentProvider.activeEnvId;
+    if (!activeEnvId) { return; }
+    RequestPanel.storage.updateEnvironmentVars(activeEnvId, variables);
+    RequestPanel.environmentProvider.refresh();
+    this.sendActiveVarsToWebview();
+  }
+
+  private findPayloadUnresolvedVariables(
+    formData: FormDataField[],
+    binaryFilePath: string
+  ): string[] {
+    const names = new Set<string>();
+    for (const field of formData) {
+      if (field.enabled === false) { continue; }
+      this.collectUnresolvedVariableNames(names, field.key);
+      this.collectUnresolvedVariableNames(names, field.value);
+    }
+    this.collectUnresolvedVariableNames(names, binaryFilePath);
+    return [...names];
+  }
+
   private async executeRequest(message: SendRequestMessage) {
     const tabId = message.tabId;
     const method = message.method;
-    const rawUrl = message.url;
-    const rawHeaders: KeyValue[] = message.headers ?? [];
-    const rawParams: KeyValue[] = message.params ?? [];
-    const rawBody: string = message.body ?? '';
     const bodyType = RequestPanel.normalizeBodyType(message.bodyType);
-    const auth: AuthConfig = message.auth ?? { type: 'none' };
     const timeout: number = message.timeout ?? 0;
+    const scripts = this.normalizeScripts(message.scripts);
+    let vars = RequestPanel.environmentProvider.getActiveVariables();
+    let requestState = this.createScriptableRequest({
+      method,
+      url: message.url,
+      headers: message.headers ?? [],
+      params: message.params ?? [],
+      body: message.body ?? '',
+      bodyType,
+      formData: message.formData ?? [],
+      binaryFilePath: message.binaryFilePath ?? '',
+      auth: message.auth ?? { type: 'none' },
+    });
 
-    // {{변수}} 치환
-    const vars = RequestPanel.environmentProvider.getActiveVariables();
-    const resolvedUrl = VariableService.resolve(rawUrl, vars);
+    try {
+      const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars);
+      requestState = preRequestResult.request;
+      vars = preRequestResult.envVariables;
+      this.saveActiveEnvironmentVariables(vars);
+    } catch (err: unknown) {
+      this.postMessage({
+        type: MessageType.ResponseError,
+        tabId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return;
+    }
 
-    const resolvedHeaders = VariableService.resolveKeyValues(rawHeaders, vars);
-    const resolvedParams = VariableService.resolveKeyValues(rawParams, vars);
-    const resolvedBody = VariableService.resolve(rawBody, vars);
+    const resolvedUrl = VariableService.resolve(requestState.url, vars);
+    const resolvedHeaders = VariableService.resolveKeyValues(requestState.headers, vars);
+    const resolvedParams = VariableService.resolveKeyValues(requestState.params, vars);
+    const resolvedBody = VariableService.resolve(requestState.body ?? '', vars);
+    const resolvedFormData = this.cloneFormDataFields(requestState.formData ?? []).map((field) => ({
+      ...field,
+      key: VariableService.resolve(field.key, vars),
+      value: VariableService.resolve(field.value, vars),
+    }));
+    const resolvedBinaryFilePath = VariableService.resolve(requestState.binaryFilePath ?? '', vars);
 
-    // 기본 헤더 병합 (개별 요청 헤더가 우선)
     const defaultHeaders = VariableService.resolveKeyValues(
       RequestPanel.storage.getDefaultHeaders(), vars
     );
     const requestKeySet = new Set(
-      resolvedHeaders.filter((h) => h.enabled && h.key).map((h) => h.key.toLowerCase())
+      resolvedHeaders.filter((header) => header.enabled && header.key).map((header) => header.key.toLowerCase())
     );
     const mergedDefaults = defaultHeaders.filter(
-      (h) => h.enabled && h.key && !requestKeySet.has(h.key.toLowerCase())
+      (header) => header.enabled && header.key && !requestKeySet.has(header.key.toLowerCase())
     );
     const finalHeaders = [...mergedDefaults, ...resolvedHeaders];
     const finalParams = [...resolvedParams];
@@ -500,9 +682,10 @@ export class RequestPanel {
       finalHeaders,
       finalParams,
       resolvedBody,
-      auth,
+      requestState.auth,
       vars
     );
+    unresolvedVariables.push(...this.findPayloadUnresolvedVariables(resolvedFormData, resolvedBinaryFilePath));
     if (unresolvedVariables.length > 0) {
       this.postMessage({
         type: MessageType.ResponseError,
@@ -512,10 +695,8 @@ export class RequestPanel {
       return;
     }
 
-    // 인증 헤더/쿼리 파라미터 주입
-    this.applyAuth(auth, finalHeaders, finalParams, vars);
+    AuthService.applyAuth(requestState.auth, finalHeaders, finalParams, vars);
 
-    // 쿼리 파라미터 병합
     let url: string;
     try {
       url = this.buildUrl(resolvedUrl, finalParams);
@@ -523,14 +704,52 @@ export class RequestPanel {
       this.postMessage({
         type: MessageType.ResponseError,
         tabId,
-        error: `잘못된 URL입니다: ${resolvedUrl}`,
+        error: `?섎せ??URL?낅땲?? ${resolvedUrl}`,
       });
       return;
     }
 
+    let preparedBody: Awaited<ReturnType<typeof RequestBodyService.prepare>>;
+    try {
+      preparedBody = await RequestBodyService.prepare({
+        bodyType,
+        body: requestState.body ?? '',
+        formData: requestState.formData ?? [],
+        binaryFilePath: requestState.binaryFilePath ?? '',
+        headers: finalHeaders,
+        vars,
+      });
+    } catch (err: unknown) {
+      this.postMessage({
+        type: MessageType.ResponseError,
+        tabId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return;
+    }
+
+    const executedRequest = this.createScriptableRequest({
+      method,
+      url,
+      headers: preparedBody.headers,
+      params: finalParams,
+      body: preparedBody.resolvedBody,
+      bodyType,
+      formData: preparedBody.resolvedFormData,
+      binaryFilePath: preparedBody.resolvedBinaryFilePath,
+      auth: { type: 'none' },
+    });
+
     let handle: import('../services/HttpService').SendHandle;
     try {
-      handle = this.httpService.send(method, url, finalHeaders, resolvedBody, timeout);
+      handle = this.httpService.send(
+        method,
+        url,
+        preparedBody.headers,
+        preparedBody.data,
+        timeout,
+        this.getAllowInsecureCertificates()
+      );
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       this.postMessage({
@@ -546,15 +765,40 @@ export class RequestPanel {
       const response = await handle.promise;
       if (this.canceledRequestTabs.delete(tabId)) { return; }
 
-      // 히스토리 저장
-      this.saveToHistory(method, rawUrl, rawHeaders, rawParams, rawBody, bodyType, auth,
-        { status: response.status, statusText: response.statusText, time: response.time });
+      let scriptResults: ScriptExecutionResult | undefined;
+      try {
+        const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars);
+        vars = testResult.envVariables;
+        this.saveActiveEnvironmentVariables(vars);
+        scriptResults = testResult.result;
+      } catch (err: unknown) {
+        scriptResults = {
+          logs: [],
+          tests: [{
+            name: 'Test Script',
+            passed: false,
+            error: err instanceof Error ? err.message : String(err),
+          }],
+        };
+      }
+
+      this.saveToHistory(
+        this.createHistoryRequestSnapshot(
+          method,
+          url,
+          preparedBody.headers,
+          preparedBody.resolvedBody,
+          bodyType,
+          preparedBody.resolvedFormData,
+          preparedBody.resolvedBinaryFilePath
+        ),
+        { status: response.status, statusText: response.statusText, time: response.time }
+      );
       RequestPanel.historyProvider.refresh();
 
-      // 치환된 실제 URL과 헤더를 webview에 전달
-      const resolvedHeaderPairs = finalHeaders
-        .filter(h => h.enabled && h.key)
-        .map(h => ({ key: h.key, value: h.value }));
+      const resolvedHeaderPairs = preparedBody.headers
+        .filter((header) => header.enabled && header.key)
+        .map((header) => ({ key: header.key, value: header.value }));
 
       this.postMessage({
         type: MessageType.ReceiveResponse,
@@ -562,15 +806,33 @@ export class RequestPanel {
         response,
         resolvedUrl: url,
         resolvedHeaders: resolvedHeaderPairs,
+        scriptResults,
       });
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const wasCanceled = this.canceledRequestTabs.delete(tabId);
 
-      if (!wasCanceled) {
-        this.saveToHistory(method, rawUrl, rawHeaders, rawParams, rawBody, bodyType, auth, null);
-        RequestPanel.historyProvider.refresh();
+      if (wasCanceled) {
+        this.postMessage({
+          type: MessageType.RequestCanceled,
+          tabId,
+        });
+        return;
       }
+
+      this.saveToHistory(
+        this.createHistoryRequestSnapshot(
+          method,
+          url,
+          preparedBody.headers,
+          preparedBody.resolvedBody,
+          bodyType,
+          preparedBody.resolvedFormData,
+          preparedBody.resolvedBinaryFilePath
+        ),
+        null
+      );
+      RequestPanel.historyProvider.refresh();
 
       this.postMessage({
         type: MessageType.ResponseError,
@@ -582,19 +844,49 @@ export class RequestPanel {
     }
   }
 
+  private cloneKeyValues(items: KeyValue[]): KeyValue[] {
+    return items
+      .filter((item) => item.enabled !== false && item.key)
+      .map((item) => ({
+        key: item.key,
+        value: item.value,
+        enabled: true,
+      }));
+  }
+
+  private createHistoryRequestSnapshot(
+    method: string,
+    url: string,
+    headers: KeyValue[],
+    body: string,
+    bodyType: RequestBodyType,
+    formData: FormDataField[] = [],
+    binaryFilePath: string = ''
+  ): Request {
+    return {
+      id: '',
+      name: `${method} ${url}`,
+      method: method as Request['method'],
+      url,
+      headers: this.cloneKeyValues(headers),
+      params: [],
+      body,
+      bodyType,
+      formData: this.cloneFormDataFields(formData),
+      binaryFilePath,
+      auth: { type: 'none' },
+      scripts: RequestPanel.createEmptyScripts(),
+    };
+  }
+
   private saveToHistory(
-    method: string, url: string, headers: KeyValue[], params: KeyValue[],
-    body: string, bodyType: RequestBodyType, auth: AuthConfig,
+    request: Request,
     response: { status: number; statusText: string; time: number } | null
   ) {
     const maxItems = vscode.workspace.getConfiguration('arc-client').get<number>('historyMaxItems', 100);
     const removed = RequestPanel.storage.addHistoryEntry({
       id: Date.now().toString(36) + Math.random().toString(36).substring(2, 8),
-      request: {
-        id: '', name: `${method} ${url}`, method: method as any,
-        url, headers, params, body,
-        bodyType, auth,
-      },
+      request,
       response,
       timestamp: Date.now(),
     });
@@ -617,38 +909,7 @@ export class RequestPanel {
     }
   }
 
-  private applyAuth(auth: AuthConfig, headers: KeyValue[], params: KeyValue[], vars: KeyValue[]): void {
-    switch (auth.type) {
-      case 'basic':
-        if (auth.basic) {
-          const u = VariableService.resolve(auth.basic.username, vars);
-          const p = VariableService.resolve(auth.basic.password, vars);
-          const encoded = Buffer.from(`${u}:${p}`).toString('base64');
-          headers.push({ key: 'Authorization', value: `Basic ${encoded}`, enabled: true });
-        }
-        break;
-      case 'bearer':
-        if (auth.bearer) {
-          const t = VariableService.resolve(auth.bearer.token, vars);
-          headers.push({ key: 'Authorization', value: `Bearer ${t}`, enabled: true });
-        }
-        break;
-      case 'apikey':
-        if (auth.apikey) {
-          const key = VariableService.resolve(auth.apikey.key, vars);
-          const value = VariableService.resolve(auth.apikey.value, vars);
-          if (!key) { break; }
-          if (auth.apikey.addTo === 'query') {
-            params.push({ key, value, enabled: true });
-          } else {
-            headers.push({ key, value, enabled: true });
-          }
-        }
-        break;
-    }
-  }
-
-  // Content-Type → 파일 확장자 매핑
+  // Content-Type ???뚯씪 ?뺤옣??留ㅽ븨
   private static contentTypeToExt(ct: string): string {
     const mime = ct.split(';')[0].trim().toLowerCase();
     const map: Record<string, string> = {
@@ -673,10 +934,10 @@ export class RequestPanel {
     return map[mime] || 'txt';
   }
 
-  // 응답 바디를 파일로 저장
+  // ?묐떟 諛붾뵒瑜??뚯씪濡????
   private async saveResponseBody(body: string, contentType: string, bodyBase64?: string): Promise<boolean> {
     const ext = RequestPanel.contentTypeToExt(contentType);
-    // 기본 파일명: response_YYYYMMDD_HHmmss.확장자
+    // 湲곕낯 ?뚯씪紐? response_YYYYMMDD_HHmmss.?뺤옣??
     const now = new Date();
     const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
     const uri = await vscode.window.showSaveDialog({
@@ -690,21 +951,21 @@ export class RequestPanel {
     try {
       const bytes = bodyBase64 ? Buffer.from(bodyBase64, 'base64') : Buffer.from(body, 'utf-8');
       await vscode.workspace.fs.writeFile(uri, bytes);
-      vscode.window.showInformationMessage(`응답 저장 완료: ${uri.fsPath}`);
+      vscode.window.showInformationMessage(`?묐떟 ????꾨즺: ${uri.fsPath}`);
       return true;
     } catch (err: unknown) {
-      vscode.window.showErrorMessage(`저장 실패: ${err instanceof Error ? err.message : String(err)}`);
+      vscode.window.showErrorMessage(`????ㅽ뙣: ${err instanceof Error ? err.message : String(err)}`);
       return false;
     }
   }
 
-  // 두 응답을 임시 파일로 저장하고 VS Code diff 에디터로 비교
+  // ???묐떟???꾩떆 ?뚯씪濡???ν븯怨?VS Code diff ?먮뵒?곕줈 鍮꾧탳
   private async compareResponses(message: CompareResponsesMessage): Promise<void> {
     const { left, right } = message;
     const extL = RequestPanel.contentTypeToExt(left.contentType);
     const extR = RequestPanel.contentTypeToExt(right.contentType);
     try {
-      // 임시 파일 URI (untitled 스키마 대신 실제 tmp 파일 사용)
+      // ?꾩떆 ?뚯씪 URI (untitled ?ㅽ궎留?????ㅼ젣 tmp ?뚯씪 ?ъ슜)
       const basePath = RequestPanel.storage.getStoragePath();
       const diffDir = vscode.Uri.joinPath(vscode.Uri.file(basePath), '.diff');
       await vscode.workspace.fs.createDirectory(diffDir);
@@ -712,23 +973,23 @@ export class RequestPanel {
       const uriL = vscode.Uri.joinPath(diffDir, `resp_left_${ts}.${extL}`);
       const uriR = vscode.Uri.joinPath(diffDir, `resp_right_${ts}.${extR}`);
 
-      // 이미 webview에서 포맷팅된 경우 그대로 사용, 아니면 기본 포맷팅 적용
+      // ?대? webview?먯꽌 ?щ㎎?낅맂 寃쎌슦 洹몃?濡??ъ슜, ?꾨땲硫?湲곕낯 ?щ㎎???곸슜
       const bodyL = left.formatted ? left.body : this.formatForDiff(left.body, extL);
       const bodyR = right.formatted ? right.body : this.formatForDiff(right.body, extR);
 
       await vscode.workspace.fs.writeFile(uriL, new TextEncoder().encode(bodyL));
       await vscode.workspace.fs.writeFile(uriR, new TextEncoder().encode(bodyR));
 
-      await vscode.commands.executeCommand('vscode.diff', uriL, uriR, `${left.label} ↔ ${right.label}`);
+      await vscode.commands.executeCommand('vscode.diff', uriL, uriR, `${left.label} ??${right.label}`);
     } catch (err: unknown) {
-      vscode.window.showErrorMessage(`응답 비교 실패: ${err instanceof Error ? err.message : String(err)}`);
+      vscode.window.showErrorMessage(`?묐떟 鍮꾧탳 ?ㅽ뙣: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  // diff용 본문 포맷팅
+  // diff??蹂몃Ц ?щ㎎??
   private formatForDiff(body: string, ext: string): string {
     if (ext === 'json') {
-      try { return JSON.stringify(JSON.parse(body), null, 2); } catch { /* 파싱 실패 시 원본 반환 */ }
+      try { return JSON.stringify(JSON.parse(body), null, 2); } catch { /* ?뚯떛 ?ㅽ뙣 ???먮낯 諛섑솚 */ }
     }
     if (ext === 'xml' || ext === 'html') {
       return RequestPanel.prettyXml(body);
@@ -736,28 +997,77 @@ export class RequestPanel {
     return body;
   }
 
-  // XML/HTML Pretty 포맷팅 (인덴트 적용)
+  private async generateCode(message: {
+    method: Request['method'];
+    url: string;
+    headers: KeyValue[];
+    params: KeyValue[];
+    body: string;
+    bodyType: RequestBodyType;
+    formData?: FormDataField[];
+    binaryFilePath?: string;
+    auth: AuthConfig;
+  }): Promise<void> {
+    const target = await vscode.window.showQuickPick([
+      { label: 'cURL', target: 'curl' as const },
+      { label: 'fetch', target: 'fetch' as const },
+      { label: 'axios', target: 'axios' as const },
+      { label: 'Java HttpURLConnection', target: 'java' as const },
+    ], {
+      placeHolder: '생성할 코드 형식을 선택하세요',
+    });
+    if (!target) { return; }
+
+    const code = target.target === 'curl'
+      ? CurlService.generate({
+          method: message.method,
+          url: message.url,
+          headers: message.headers ?? [],
+          params: message.params ?? [],
+          body: message.body ?? '',
+          bodyType: message.bodyType,
+          formData: message.formData ?? [],
+          binaryFilePath: message.binaryFilePath ?? '',
+          auth: message.auth ?? { type: 'none' },
+        })
+      : CodegenService.generate(target.target, {
+          method: message.method,
+          url: message.url,
+          headers: message.headers ?? [],
+          params: message.params ?? [],
+          body: message.body ?? '',
+          bodyType: message.bodyType,
+          formData: message.formData ?? [],
+          binaryFilePath: message.binaryFilePath ?? '',
+          auth: message.auth ?? { type: 'none' },
+        });
+
+    await vscode.env.clipboard.writeText(code);
+    vscode.window.showInformationMessage(`${target.label} 코드를 클립보드에 복사했습니다.`);
+  }
+
+  // XML/HTML Pretty ?щ㎎??(?몃뜶???곸슜)
   private static prettyXml(xml: string): string {
-    // 기존 공백 정리
+    // 湲곗〈 怨듬갚 ?뺣━
     let formatted = '';
     let indent = 0;
     const tab = '  ';
-    // 태그 단위로 분리
+    // ?쒓렇 ?⑥쐞濡?遺꾨━
     const parts = xml.replace(/>\s*</g, '><').split(/(<[^>]+>)/);
     for (const part of parts) {
       if (!part.trim()) continue;
-      // 닫는 태그
+      // ?ル뒗 ?쒓렇
       if (part.match(/^<\/\w/)) {
         indent = Math.max(0, indent - 1);
         formatted += tab.repeat(indent) + part + '\n';
-      // 자기 닫기 태그 또는 선언
+      // ?먭린 ?リ린 ?쒓렇 ?먮뒗 ?좎뼵
       } else if (part.match(/\/>$/) || part.match(/^<\?/) || part.match(/^<!--/) || part.match(/^<!DOCTYPE/i)) {
         formatted += tab.repeat(indent) + part + '\n';
-      // 여는 태그
+      // ?щ뒗 ?쒓렇
       } else if (part.match(/^<\w/)) {
         formatted += tab.repeat(indent) + part + '\n';
         indent++;
-      // 텍스트 노드
+      // ?띿뒪???몃뱶
       } else {
         formatted += tab.repeat(indent) + part + '\n';
       }
@@ -773,13 +1083,13 @@ export class RequestPanel {
     for (const tabId of this.activeRequests.keys()) {
       this.cancelActiveRequest(tabId);
     }
-    // 패널 닫힐 때 마지막으로 저장된 탭 상태 유지 (webview에서 주기적으로 전송)
+    // ?⑤꼸 ?ロ옄 ??留덉?留됱쑝濡???λ맂 ???곹깭 ?좎? (webview?먯꽌 二쇨린?곸쑝濡??꾩넚)
     for (const d of this.disposables) { d.dispose(); }
     this.disposables = [];
   }
 
   // ===================================================================
-  // Webview HTML (다중 탭 + 환경변수 편집 + 변수 치환 미리보기)
+  // Webview HTML (?ㅼ쨷 ??+ ?섍꼍蹂???몄쭛 + 蹂??移섑솚 誘몃━蹂닿린)
   // ===================================================================
   private getHtmlContent(): string {
     const hljsUri = this.panel.webview.asWebviewUri(
@@ -801,14 +1111,14 @@ export class RequestPanel {
 <meta http-equiv="Content-Security-Policy" content="${csp}"/>
 <title>Arc Client</title>
 <style nonce="${nonce}">
-/* highlight.js vs2015 테마 (인라인) */
+/* highlight.js vs2015 ?뚮쭏 (?몃씪?? */
 pre code.hljs{display:block;overflow-x:auto;padding:0}code.hljs{padding:0}.hljs{background:transparent;color:#dcdcdc}.hljs-keyword,.hljs-literal,.hljs-name,.hljs-symbol{color:#569cd6}.hljs-link{color:#569cd6;text-decoration:underline}.hljs-built_in,.hljs-type{color:#4ec9b0}.hljs-class,.hljs-number{color:#b8d7a3}.hljs-meta .hljs-string,.hljs-string{color:#d69d85}.hljs-regexp,.hljs-template-tag{color:#9a5334}.hljs-formula,.hljs-function,.hljs-params,.hljs-subst,.hljs-title{color:#dcdcdc}.hljs-comment,.hljs-quote{color:#57a64a;font-style:italic}.hljs-doctag{color:#608b4e}.hljs-meta,.hljs-meta .hljs-keyword,.hljs-tag{color:#9b9b9b}.hljs-template-variable,.hljs-variable{color:#bd63c5}.hljs-attr,.hljs-attribute{color:#9cdcfe}.hljs-section{color:gold}.hljs-emphasis{font-style:italic}.hljs-strong{font-weight:700}.hljs-bullet,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id,.hljs-selector-pseudo,.hljs-selector-tag{color:#d7ba7d}.hljs-addition{background-color:#144212;display:inline-block;width:100%}.hljs-deletion{background-color:#600;display:inline-block;width:100%}
 </style>
 <style nonce="${nonce}">
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);color:var(--vscode-foreground);background:var(--vscode-editor-background);display:flex;flex-direction:column;height:100vh;overflow:hidden}
 
-/* === 요청 탭 바 === */
+/* === ?붿껌 ??諛?=== */
 .tab-bar{display:flex;background:var(--vscode-editorGroupHeader-tabsBackground,var(--vscode-editor-background));border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;overflow-x:auto;scrollbar-width:thin}
 .tab-bar::-webkit-scrollbar{height:3px}
 .req-tab{display:flex;align-items:center;gap:4px;padding:4px 10px;font-size:13px;cursor:pointer;border-right:1px solid var(--vscode-panel-border,#333);white-space:nowrap;opacity:.6;min-width:0;flex-shrink:0;user-select:none;transition:background .15s,opacity .15s;border-bottom:3px solid transparent}
@@ -843,10 +1153,10 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .tab-ctx-menu .ctx-item.disabled{opacity:.4;cursor:default;pointer-events:none}
 .tab-ctx-menu .ctx-sep{height:1px;margin:4px 8px;background:var(--vscode-menu-separatorBackground,#454545)}
 
-/* === 메인 컨텐츠 === */
+/* === 硫붿씤 而⑦뀗痢?=== */
 .main-content{flex:1;overflow:hidden;display:flex;flex-direction:column}
 
-/* URL 바 */
+/* URL 諛?*/
 .url-bar{display:flex;gap:8px;padding:8px 10px;flex-shrink:0;align-items:center;position:relative;overflow:visible}
 .url-bar select{width:100px;padding:6px 8px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:6px;font-size:13px;font-weight:700}
 .url-bar input{flex:1;padding:6px 10px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:6px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
@@ -860,23 +1170,23 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btn-s{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
 .btn-s:hover{background:var(--vscode-button-secondaryHoverBackground)}
-/* Send 버튼 */
+/* Send 踰꾪듉 */
 .btn-send{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:5px;padding:6px 16px;background:#0078d4;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s}
 .btn-send:hover{background:#1a8ae8}
 .btn-send svg{flex-shrink:0}
-/* Stop 버튼 (전송 중) */
+/* Stop 踰꾪듉 (?꾩넚 以? */
 .btn-stop{display:inline-flex;align-items:center;gap:5px;padding:6px 16px;background:#c42b1c;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s}
 .btn-stop:hover{background:#e04535}
 .btn-stop .stop-icon{display:inline-block;width:10px;height:10px;background:#fff;border-radius:1px}
 .url-bar-spacer{flex:1}
 
-/* 내부 탭 */
+/* ?대? ??*/
 .tabs{display:flex;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;padding:0 10px;gap:2px}
 .tab{padding:6px 14px;cursor:pointer;border-bottom:2px solid transparent;opacity:.45;font-size:13px;user-select:none;text-transform:uppercase;letter-spacing:.5px;transition:opacity .15s}
 .tab:hover{opacity:.8}
 .tab.active{opacity:1;border-bottom-color:#0078d4}
 
-/* 패널 레이아웃 */
+/* ?⑤꼸 ?덉씠?꾩썐 */
 .split{flex:1;overflow:hidden;display:flex;flex-direction:column}
 .req-area{flex:none;min-height:60px;overflow-y:auto;padding:4px 10px}
 .divider{height:5px;background:var(--vscode-panel-border,#444);flex-shrink:0;cursor:row-resize;position:relative;z-index:10;border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(0,0,0,.2)}
@@ -884,7 +1194,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .divider::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:2px;background:var(--vscode-foreground);opacity:.2;border-radius:2px}
 .res-area{flex:1;min-height:40px;overflow:hidden;display:flex;flex-direction:column;padding:0 10px}
 
-/* KV 행 */
+/* KV ??*/
 .kv-section{padding:3px 0}
 .kv-row{display:flex;gap:3px;margin-bottom:2px;align-items:center}
 .kv-row input[type="checkbox"]{width:14px;height:14px;accent-color:var(--vscode-focusBorder)}
@@ -906,7 +1216,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .auth-row{display:flex;gap:4px;align-items:center}
 .auth-row label{font-size:13px;opacity:.6;min-width:55px}
 
-/* Settings 패널 */
+/* Settings ?⑤꼸 */
 .settings-section{padding:8px 4px}
 .settings-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .settings-label{font-size:13px;opacity:.8;min-width:80px;font-weight:600}
@@ -915,7 +1225,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .settings-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .settings-hint{font-size:13px;opacity:.4}
 
-/* 환경변수 편집 */
+/* ?섍꼍蹂???몄쭛 */
 .env-editor{padding:6px 10px;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;background:var(--vscode-sideBar-background,var(--vscode-editor-background))}
 .env-editor-title{font-size:13px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px}
 .env-badge{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);padding:1px 6px;border-radius:8px;font-size:13px}
@@ -924,7 +1234,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .env-dirty-dot{width:6px;height:6px;border-radius:50%;background:var(--vscode-editorWarning-foreground,#cca700);display:none}
 .env-dirty-dot.show{display:inline-block}
 
-/* 응답 */
+/* ?묐떟 */
 .response-meta{display:flex;gap:10px;align-items:center;padding:5px 0;flex-shrink:0;font-size:13px}
 .res-action-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border:1px solid var(--vscode-input-border,#555);border-radius:6px;background:transparent;color:var(--vscode-foreground);font-size:13px;cursor:pointer;transition:background .15s,transform .1s;user-select:none}
 .res-action-btn:hover{background:var(--vscode-button-secondaryHoverBackground,rgba(255,255,255,.1));transform:scale(1.05)}
@@ -956,7 +1266,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .cookie-badge{display:inline-block;background:var(--vscode-badge-background,#4d4d4d);color:var(--vscode-badge-foreground,#ccc);font-size:13px;padding:0 4px;border-radius:3px;font-weight:600}
 .tab-count{display:inline-block;background:var(--vscode-badge-background,#4d4d4d);color:var(--vscode-badge-foreground,#ccc);font-size:13px;padding:0 5px;border-radius:8px;margin-left:3px;min-width:14px;text-align:center;line-height:15px;vertical-align:middle}
 
-/* 응답 비교 (Pin / Compare) */
+/* ?묐떟 鍮꾧탳 (Pin / Compare) */
 .pin-response-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border:1px solid var(--vscode-input-border,#555);border-radius:6px;background:transparent;color:var(--vscode-foreground);font-size:13px;cursor:pointer;transition:background .15s,transform .1s;user-select:none}
 .pin-response-btn:hover{background:var(--vscode-button-secondaryHoverBackground,rgba(255,255,255,.1));transform:scale(1.05)}
 .pin-response-btn:active{transform:scale(.92)}
@@ -966,7 +1276,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .compare-btn:active:not(:disabled){transform:scale(.92)}
 .compare-btn:disabled{opacity:.35;cursor:default;transform:none}
 .compare-btn.ready{border-color:var(--vscode-charts-blue,#3794ff);color:var(--vscode-charts-blue,#3794ff)}
-/* 응답 컨텍스트 메뉴 */
+/* ?묐떟 而⑦뀓?ㅽ듃 硫붾돱 */
 .res-ctx-menu{position:fixed;z-index:9999;min-width:200px;background:var(--vscode-menu-background,#252526);color:var(--vscode-menu-foreground,#ccc);border:1px solid var(--vscode-menu-border,#454545);border-radius:5px;padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,.4);font-size:13px}
 .res-ctx-menu .ctx-item{padding:6px 16px;cursor:pointer;display:flex;align-items:center;gap:8px}
 .res-ctx-menu .ctx-item:hover{background:var(--vscode-menu-selectionBackground,#094771)}
@@ -977,7 +1287,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .json-body{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;white-space:pre-wrap;word-break:break-all;overflow:auto;flex:1;line-height:1.45}
 .json-key{color:#9cdcfe}.json-str{color:#ce9178}.json-num{color:#b5cea8}.json-bool{color:#569cd6}.json-null{color:#569cd6}
 
-/* 응답 바디 툴바 */
+/* ?묐떟 諛붾뵒 ?대컮 */
 .res-body-toolbar{display:flex;align-items:center;gap:4px;padding:2px 0;flex-shrink:0}
 .res-body-toolbar .toggle-group{display:flex;border:1px solid var(--vscode-input-border,#555);border-radius:3px;overflow:hidden;margin-right:4px}
 .res-body-toolbar .toggle-btn{padding:2px 8px;font-size:13px;cursor:pointer;background:transparent;color:var(--vscode-foreground);border:none;opacity:.6;user-select:none}
@@ -987,7 +1297,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .res-body-toolbar .tb-btn:hover{opacity:1}
 .res-body-toolbar .tb-btn:active{transform:scale(.92)}
 
-/* JSON 트리 뷰 */
+/* JSON ?몃━ 酉?*/
 .json-tree{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;overflow:auto;flex:1;line-height:1.6;user-select:text}
 .jt-node{padding-left:16px}
 .jt-row{display:flex;align-items:baseline;white-space:nowrap}
@@ -999,7 +1309,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .jt-children{overflow:hidden}
 .jt-children.collapsed{display:none}
 
-/* Format 드롭다운 */
+/* Format ?쒕∼?ㅼ슫 */
 .fmt-wrap{position:relative;display:inline-block}
 .fmt-menu{display:none;position:absolute;top:100%;left:0;z-index:100;background:var(--vscode-dropdown-background,#252526);border:1px solid var(--vscode-dropdown-border,#555);border-radius:3px;padding:4px 0;min-width:170px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .fmt-menu.open{display:block}
@@ -1016,17 +1326,17 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .spinner{display:inline-block;width:11px;height:11px;border:2px solid var(--vscode-foreground);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* 공통 ripple 버튼 효과 */
+/* 怨듯넻 ripple 踰꾪듉 ?④낵 */
 .ripple-btn{position:relative;overflow:hidden;transition:transform .05s ease}
 .ripple-btn .ripple-circle{position:absolute;border-radius:50%;background:rgba(255,255,255,.4);transform:scale(0);animation:ripple-expand .35s ease-out forwards;pointer-events:none}
 @keyframes ripple-expand{0%{transform:scale(0);opacity:1}100%{transform:scale(5);opacity:0}}
-/* 클릭 시 배경색 flash */
+/* ?대┃ ??諛곌꼍??flash */
 .ripple-btn.btn-flash{background:rgba(255,255,255,.25)!important}
-/* 눌림 → 바운스 → 원래 시퀀스 */
+/* ?뚮┝ ??諛붿슫?????먮옒 ?쒗??*/
 @keyframes btn-bounce{0%{transform:scale(.85)}40%{transform:scale(.85)}60%{transform:scale(1.05)}100%{transform:scale(1)}}
 .ripple-btn.btn-bouncing{animation:btn-bounce .25s cubic-bezier(.22,.68,0,1.2) forwards}
 
-/* ========== Send 버튼 클릭 이펙트 ========== */
+/* ========== Send 踰꾪듉 ?대┃ ?댄럺??========== */
 @keyframes send-click{
   0%{transform:scale(.82);box-shadow:0 0 25px 6px rgba(0,120,212,.8)}
   40%{transform:scale(1.05) translateY(-2px);box-shadow:0 0 12px 3px rgba(0,120,212,.4)}
@@ -1036,7 +1346,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .send-click{animation:send-click .25s cubic-bezier(.22,.68,0,1.2) forwards!important;transition:none!important}
 .send-click-flash{background:#40a0ff!important}
 
-/* ========== 전송 중 총알 로딩 바 ========== */
+/* ========== ?꾩넚 以?珥앹븣 濡쒕뵫 諛?========== */
 .bullet-progress{height:3px;width:100%;background:rgba(255,255,255,.05);overflow:hidden;flex-shrink:0;position:relative;opacity:0;transition:opacity .15s}
 .bullet-progress.active{opacity:1}
 @keyframes bullet-run{
@@ -1044,7 +1354,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
   100%{left:100%}
 }
 .bullet-progress .bullet-glow{position:absolute;top:0;height:100%;width:60px;background:linear-gradient(90deg,transparent,#4da6ff 30%,#80bfff 60%,transparent);border-radius:2px;animation:bullet-run 1.2s ease-in-out infinite;box-shadow:0 0 8px rgba(77,166,255,.5)}
-/* 완료 시: 총알이 끝까지 달려가며 사라짐 */
+/* ?꾨즺 ?? 珥앹븣???앷퉴吏 ?щ젮媛硫??щ씪吏?*/
 @keyframes bullet-finish{
   0%{left:var(--pos);opacity:1}
   100%{left:100%;opacity:0}
@@ -1052,8 +1362,8 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .bullet-progress.finishing .bullet-glow{animation:bullet-finish .2s ease-out forwards}
 .bullet-progress.finishing{transition:opacity .15s .2s;opacity:0}
 
-/* ========== Stop 버튼 타격감 ========== */
-/* stop: transform + box-shadow 하나의 keyframe으로 합침 */
+/* ========== Stop 踰꾪듉 ?寃⑷컧 ========== */
+/* stop: transform + box-shadow ?섎굹??keyframe?쇰줈 ?⑹묠 */
 @keyframes stop-slam{
   0%{transform:scale(.82);box-shadow:0 0 20px rgba(255,50,50,.8)}
   40%{transform:scale(.82);box-shadow:0 0 16px rgba(255,50,50,.6)}
@@ -1062,67 +1372,67 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 }
 .btn-stop.stop-slam{animation:stop-slam .35s cubic-bezier(.22,.68,0,1.2) forwards!important;transition:none!important}
 .btn-stop.stop-flash{background:#ff6b6b!important}
-/* Stop vignette flash (화면 빨간 오버레이) */
+/* Stop vignette flash (?붾㈃ 鍮④컙 ?ㅻ쾭?덉씠) */
 @keyframes stop-vignette{0%{opacity:.22}100%{opacity:0}}
 .stop-vignette-flash{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;background:radial-gradient(ellipse at center,transparent 40%,rgba(255,40,40,.35) 100%);animation:stop-vignette .25s ease-out forwards}
 
-/* ========== Send→Stop 전환 ========== */
+/* ========== Send?뭆top ?꾪솚 ========== */
 @keyframes icon-fade-in{0%{opacity:0}100%{opacity:1}}
 .btn-stop .stop-icon{animation:icon-fade-in .2s ease}
 .btn-send svg{animation:icon-fade-in .2s ease}
 
-/* Send 버튼 빛 줄기 효과 */
+/* Send 踰꾪듉 鍮?以꾧린 ?④낵 */
 .btn-send .send-streak{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;border-radius:6px;overflow:hidden}
 .btn-send .send-streak::after{content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:none}
 .btn-send.streak-active .send-streak::after{animation:send-streak .5s ease-out forwards}
 @keyframes send-streak{0%{left:-60%}100%{left:120%}}
 
-/* 버튼 피드백 텍스트 */
+/* 踰꾪듉 ?쇰뱶諛??띿뒪??*/
 .btn-feedback{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);white-space:nowrap;font-size:12px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .15s}
 .btn-feedback.show{opacity:1}
 
 
-/* URL 입력란 빛 줄기 sweep */
+/* URL ?낅젰? 鍮?以꾧린 sweep */
 @keyframes url-sweep{0%{background-position:-100% 0}100%{background-position:200% 0}}
 .url-input-wrap.sweep::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;border-radius:3px;pointer-events:none;background:linear-gradient(90deg,transparent 0%,rgba(0,122,204,.25) 40%,rgba(0,122,204,.45) 50%,rgba(0,122,204,.25) 60%,transparent 100%);background-size:50% 100%;background-repeat:no-repeat;animation:url-sweep .3s ease forwards}
 
-/* 전송 중 네온 펄스 */
+/* ?꾩넚 以??ㅼ삩 ?꾩뒪 */
 @keyframes neon-pulse{0%{border-color:#007acc;box-shadow:0 0 3px rgba(0,122,204,.4)}50%{border-color:#3af;box-shadow:0 0 8px rgba(51,170,255,.6)}100%{border-color:#007acc;box-shadow:0 0 3px rgba(0,122,204,.4)}}
 .url-bar input.neon-active{animation:neon-pulse 1.5s ease infinite;border-color:#007acc}
 
-/* Send→Cancel 전환 슬라이드 */
+/* Send?묬ancel ?꾪솚 ?щ씪?대뱶 */
 @keyframes btn-slide-in{from{opacity:0;transform:translateX(6px)}to{opacity:1;transform:translateX(0)}}
 .btn-sending{pointer-events:auto;position:relative;min-width:58px;animation:btn-slide-in .2s ease}
 .btn-sending .spinner{width:10px;height:10px;border-width:1.5px;margin-right:3px}
 
-/* 2xx 성공: 초록 빛 폭발 + scale 바운스 */
+/* 2xx ?깃났: 珥덈줉 鍮???컻 + scale 諛붿슫??*/
 @keyframes badge-pop{0%{transform:scale(1.5);box-shadow:0 0 20px rgba(78,201,78,.9)}40%{transform:scale(.95);box-shadow:0 0 8px rgba(78,201,78,.4)}70%{transform:scale(1.08)}100%{transform:scale(1);box-shadow:none}}
 .status.flash-success{animation:badge-pop .35s cubic-bezier(.17,.67,.35,1.5)}
 
-/* 4xx/5xx 실패: shake 흔들림 (좌우 3px, 3회) + 빨간 flash */
+/* 4xx/5xx ?ㅽ뙣: shake ?붾뱾由?(醫뚯슦 3px, 3?? + 鍮④컙 flash */
 @keyframes badge-shake{0%,100%{transform:translateX(0);box-shadow:none}10%{transform:translateX(-3px)}20%{transform:translateX(3px)}30%{transform:translateX(-3px)}40%{transform:translateX(3px)}50%{transform:translateX(-3px)}60%{transform:translateX(3px)}70%{transform:translateX(0)}}
 .status.flash-error{animation:badge-shake .35s ease;box-shadow:0 0 12px rgba(255,50,50,.6)}
 
-/* 4xx/5xx 화면 전체 빨간색 번쩍 */
+/* 4xx/5xx ?붾㈃ ?꾩껜 鍮④컙??踰덉찉 */
 @keyframes screen-flash-red{0%{opacity:.18}100%{opacity:0}}
 .screen-flash{position:fixed;top:0;left:0;right:0;bottom:0;background:#c94e4e;pointer-events:none;z-index:9999;animation:screen-flash-red .12s ease forwards}
 
-/* 응답 영역 슬램 (바운스) */
+/* ?묐떟 ?곸뿭 ?щ옩 (諛붿슫?? */
 @keyframes res-slam{0%{opacity:0;transform:translateY(-10px)}60%{opacity:1;transform:translateY(2px)}100%{transform:translateY(0)}}
 .res-area.slide-in{animation:res-slam .25s cubic-bezier(.22,.68,0,1.2)}
 
-/* 프로그레스 바 */
+/* ?꾨줈洹몃젅??諛?*/
 
-/* PERFECT! 텍스트 */
+/* PERFECT! ?띿뒪??*/
 @keyframes perfect-pop{0%{opacity:0;transform:scale(.5)}30%{opacity:1;transform:scale(1.1)}60%{transform:scale(.95)}100%{opacity:0;transform:scale(1)}}
 .perfect-badge{position:absolute;top:-18px;right:0;font-size:9px;font-weight:800;color:#4ec94e;letter-spacing:1px;pointer-events:none;animation:perfect-pop .8s ease forwards;text-shadow:0 0 6px rgba(78,201,78,.5)}
 
-/* 경과시간 실시간 표시 */
+/* 寃쎄낵?쒓컙 ?ㅼ떆媛??쒖떆 */
 .elapsed-timer{font-size:13px;opacity:.6;margin-left:4px;font-variant-numeric:tabular-nums}
 
 .placeholder{display:flex;align-items:center;justify-content:center;flex:1;opacity:.25;font-size:13px}
 
-/* 스켈레톤 로딩 UI */
+/* ?ㅼ펷?덊넠 濡쒕뵫 UI */
 @keyframes skeleton-pulse{0%{opacity:.15}50%{opacity:.3}100%{opacity:.15}}
 .skeleton-loader{padding:12px 10px;display:flex;flex-direction:column;gap:8px}
 .skeleton-line{height:14px;border-radius:4px;background:var(--vscode-foreground,#ccc);animation:skeleton-pulse 1.2s ease-in-out infinite}
@@ -1131,10 +1441,10 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .skeleton-line:nth-child(3){width:55%;animation-delay:.3s}
 .skeleton-line:nth-child(4){width:40%;animation-delay:.45s}
 
-/* 빈 요청 탭 안내 */
+/* 鍮??붿껌 ???덈궡 */
 .empty-tab-hint{display:flex;align-items:center;justify-content:center;flex:1;color:var(--vscode-descriptionForeground,#888);font-size:13px;opacity:.5;text-align:center;padding:20px;user-select:none}
 
-/* 컬렉션 러너 */
+/* 而щ젆???щ꼫 */
 .runner-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:var(--vscode-editor-background);z-index:100;display:flex;flex-direction:column;overflow:hidden}
 .runner-header{padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border,#444);display:flex;align-items:center;gap:8px;flex-shrink:0}
 .runner-header h3{font-size:13px;font-weight:600;flex:1;margin:0}
@@ -1154,19 +1464,19 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .runner-row.pass .rr-status{color:#4ec94e}.runner-row.fail .rr-status{color:#e06c75}.runner-row.pending{opacity:.35}
 .runner-detail{padding:6px 12px;background:var(--vscode-input-background);border-bottom:1px solid var(--vscode-panel-border,#333);font-family:var(--vscode-editor-font-family,monospace);font-size:13px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto}
 
-/* 활성 환경 표시 */
+/* ?쒖꽦 ?섍꼍 ?쒖떆 */
 .env-indicator{font-size:13px;opacity:.6;padding:0 10px 2px;flex-shrink:0}
 .env-indicator .var-name{color:#dcdcaa}
 </style>
 </head>
 <body>
 
-<!-- 요청 탭 바 -->
+<!-- ?붿껌 ??諛?-->
 <div class="tab-bar" id="tabBar">
   <div class="add-tab" id="addTabBtn" title="New tab">+</div>
 </div>
 
-<!-- 환경변수 편집 (숨김 상태) -->
+<!-- ?섍꼍蹂???몄쭛 (?④? ?곹깭) -->
 <div id="envEditor" class="env-editor hidden">
   <div class="env-editor-title">
     <span>Environment:</span>
@@ -1180,7 +1490,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
   <button class="add-btn" id="addEnvVarBtn">+ Add Variable</button>
 </div>
 
-<!-- 기본 헤더 편집 (숨김 상태) -->
+<!-- 湲곕낯 ?ㅻ뜑 ?몄쭛 (?④? ?곹깭) -->
 <div id="defaultHeadersEditor" class="env-editor hidden">
   <div class="env-editor-title">
     <span>Default Headers</span>
@@ -1192,7 +1502,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
   <button class="add-btn" id="addDefaultHeaderBtn">+ Add Header</button>
 </div>
 
-<!-- 메인 (탭별 컨텐츠) -->
+<!-- 硫붿씤 (??퀎 而⑦뀗痢? -->
 <div class="main-content" id="mainContent">
   <div class="placeholder" id="emptyPlaceholder">Press + or Ctrl+T to create a new request</div>
 </div>
@@ -1200,24 +1510,24 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 
-// === 탭 상태 관리 ===
+// === ???곹깭 愿由?===
 let tabs = [];       // { id, name, method, url, headers, params, body, auth, response, error, loading }
 let activeTabId = null;
 let tabIdCounter = 0;
 let currentEnvName = null;
 let editingEnvId = null;
-let activeVarKeys = [];  // 활성 환경의 변수 키 목록
-let pendingSaveBtn = null;          // Save 버튼 다이얼로그 완료 대기
-let pendingSaveResponseBtn = null;  // Save Response Body 버튼 다이얼로그 완료 대기
-var _pendingCloseAfterSave = null;  // dirty 탭 닫기 시 저장 후 닫을 탭 ID
-const VALID_BODY_TYPES = ['none', 'json', 'xml', 'form', 'raw'];
+let activeVarKeys = [];  // ?쒖꽦 ?섍꼍??蹂????紐⑸줉
+let pendingSaveBtn = null;          // Save 踰꾪듉 ?ㅼ씠?쇰줈洹??꾨즺 ?湲?
+let pendingSaveResponseBtn = null;  // Save Response Body 踰꾪듉 ?ㅼ씠?쇰줈洹??꾨즺 ?湲?
+var _pendingCloseAfterSave = null;  // dirty ???リ린 ????????レ쓣 ??ID
+const VALID_BODY_TYPES = ['none', 'json', 'xml', 'form', 'formdata', 'binary', 'raw'];
 
-// === 응답 비교 (Pin / Compare) ===
-// 최대 2개까지 저장, 3번째 추가 시 가장 오래된 거 덮어쓰기
+// === ?묐떟 鍮꾧탳 (Pin / Compare) ===
+// 理쒕? 2媛쒓퉴吏 ??? 3踰덉㎏ 異붽? ??媛???ㅻ옒??嫄???뼱?곌린
 var pinnedResponses = [];  // [{ label, body, contentType, timestamp, tabId, formatStyle, formatIndent, formatLang }]
-var lastResponse = null;   // 직전 응답 (빠른 비교용)
+var lastResponse = null;   // 吏곸쟾 ?묐떟 (鍮좊Ⅸ 鍮꾧탳??
 
-// Pin된 응답의 body를 저장된 포맷 스타일로 포맷팅
+// Pin???묐떟??body瑜???λ맂 ?щ㎎ ?ㅽ??쇰줈 ?щ㎎??
 function formatPinnedBody(pin) {
   if (pin.formatLang && pin.formatStyle) {
     if (pin.formatLang === 'json') return formatJson(pin.body, pin.formatStyle, pin.formatIndent);
@@ -1226,7 +1536,7 @@ function formatPinnedBody(pin) {
   return pin.body;
 }
 
-// Pin/Compare 버튼 상태 일괄 갱신
+// Pin/Compare 踰꾪듉 ?곹깭 ?쇨큵 媛깆떊
 function updatePinCompareButtons(mc) {
   var pinBtn = mc.querySelector('.js-pin-response');
   if (pinBtn) {
@@ -1252,7 +1562,7 @@ function normalizeBodyType(bodyType) {
   return bodyType === 'text' ? 'raw' : 'none';
 }
 
-// === 탭 바 ===
+// === ??諛?===
 const tabBar = document.getElementById('tabBar');
 const addTabBtn = document.getElementById('addTabBtn');
 const mainContent = document.getElementById('mainContent');
@@ -1265,27 +1575,38 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handlePrimaryAction(); }
 });
 
-// 탭 스냅샷 생성 (dirty 비교용)
+// ???ㅻ깄???앹꽦 (dirty 鍮꾧탳??
 function snapshotTab(tab) {
   return JSON.stringify({
     method: tab.method, url: tab.url,
     headers: tab.headers, params: tab.params,
-    body: tab.body, bodyType: tab.bodyType, auth: tab.auth, timeout: tab.timeout
+    body: tab.body, bodyType: tab.bodyType,
+    formData: tab.formData, binaryFilePath: tab.binaryFilePath,
+    auth: tab.auth, scripts: tab.scripts, timeout: tab.timeout
   });
 }
 
-// 탭이 dirty 상태인지 판별
+// ??씠 dirty ?곹깭?몄? ?먮퀎
 function isTabDirty(tab) {
   if (!tab) return false;
-  // 새 탭: URL, 헤더, 파라미터, 바디 중 하나라도 입력되면 dirty
+  // ???? URL, ?ㅻ뜑, ?뚮씪誘명꽣, 諛붾뵒 以??섎굹?쇰룄 ?낅젰?섎㈃ dirty
   if (!tab._snapshot) {
-    return !!(tab.url || tab.headers.some(function(h){return h.key||h.value}) || tab.params.some(function(p){return p.key||p.value}) || tab.body);
+    return !!(
+      tab.url ||
+      tab.headers.some(function(h){return h.key||h.value}) ||
+      tab.params.some(function(p){return p.key||p.value}) ||
+      tab.body ||
+      (tab.formData || []).some(function(field){return field.key || field.value}) ||
+      tab.binaryFilePath ||
+      tab.scripts?.preRequest ||
+      tab.scripts?.test
+    );
   }
-  // 컬렉션에서 불러온 탭: 스냅샷 대비 변경 감지
+  // 而щ젆?섏뿉??遺덈윭???? ?ㅻ깄???鍮?蹂寃?媛먯?
   return snapshotTab(tab) !== tab._snapshot;
 }
 
-// dirty 상태 갱신 후 탭 바 리렌더
+// dirty ?곹깭 媛깆떊 ????諛?由щ젋??
 function markDirty() {
   var tab = tabs.find(function(t){return t.id === activeTabId});
   if (!tab) return;
@@ -1299,7 +1620,7 @@ function createTab(data) {
   const id = 'tab_' + (++tabIdCounter);
   const tab = {
     id,
-    requestId: data?.requestId || null,  // 컬렉션/히스토리 요청 ID (중복 탭 방지)
+    requestId: data?.requestId || null,  // 而щ젆???덉뒪?좊━ ?붿껌 ID (以묐났 ??諛⑹?)
     name: data?.name || 'New Request',
     method: data?.method || 'GET',
     url: data?.url || '',
@@ -1307,21 +1628,25 @@ function createTab(data) {
     params: data?.params || [],
     body: data?.body || '',
     bodyType: normalizeBodyType(data?.bodyType),
+    formData: data?.formData || [],
+    binaryFilePath: data?.binaryFilePath || '',
     auth: data?.auth || { type: 'none' },
+    scripts: data?.scripts || { preRequest: '', test: '' },
     timeout: data?.timeout ?? 0,
     pinned: data?.pinned || false,
     dirty: false,
-    _snapshot: null,  // 컬렉션에서 불러온 탭의 원본 스냅샷
+    _snapshot: null,  // 而щ젆?섏뿉??遺덈윭????쓽 ?먮낯 ?ㅻ깄??
     response: null,
     resolvedUrl: '',
     resolvedHeaders: [],
+    scriptResults: null,
     error: null,
     loading: false,
     progressVisible: false,
     slideIn: false,
     sendTime: 0,
   };
-  // 컬렉션/히스토리에서 불러온 탭이면 스냅샷 저장
+  // 而щ젆???덉뒪?좊━?먯꽌 遺덈윭????씠硫??ㅻ깄?????
   if (data?.requestId) {
     tab._snapshot = snapshotTab(tab);
   }
@@ -1360,7 +1685,7 @@ function closeTab(id) {
   const tab = tabs.find(t => t.id === id);
   if (!tab) return;
   if (tab.pinned) return;
-  // dirty 상태면 현재 폼 값 동기화 후 재확인
+  // dirty ?곹깭硫??꾩옱 ??媛??숆린?????ы솗??
   if (id === activeTabId) saveActiveTabState();
   tab.dirty = isTabDirty(tab);
   if (tab.dirty) {
@@ -1370,9 +1695,9 @@ function closeTab(id) {
   doCloseTab(id);
 }
 
-// dirty 탭 닫기 확인 다이얼로그
+// dirty ???リ린 ?뺤씤 ?ㅼ씠?쇰줈洹?
 function showDirtyConfirm(tabId) {
-  // 기존 다이얼로그 제거
+  // 湲곗〈 ?ㅼ씠?쇰줈洹??쒓굅
   var old = document.getElementById('dirtyConfirmOverlay');
   if (old) old.remove();
   var overlay = document.createElement('div');
@@ -1380,11 +1705,11 @@ function showDirtyConfirm(tabId) {
   overlay.className = 'dirty-confirm-overlay';
   overlay.innerHTML =
     '<div class="dirty-confirm-dialog">' +
-      '<div class="dirty-confirm-msg">저장하지 않은 변경사항이 있습니다. 닫으시겠습니까?</div>' +
+      '<div class="dirty-confirm-msg">??ν븯吏 ?딆? 蹂寃쎌궗??씠 ?덉뒿?덈떎. ?レ쑝?쒓쿋?듬땲源?</div>' +
       '<div class="dirty-confirm-actions">' +
-        '<button class="dirty-btn dirty-btn-save" data-action="save">저장</button>' +
-        '<button class="dirty-btn dirty-btn-discard" data-action="discard">저장 안 함</button>' +
-        '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">취소</button>' +
+        '<button class="dirty-btn dirty-btn-save" data-action="save">???/button>' +
+        '<button class="dirty-btn dirty-btn-discard" data-action="discard">???????/button>' +
+        '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">痍⑥냼</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(overlay);
@@ -1393,23 +1718,23 @@ function showDirtyConfirm(tabId) {
     if (!action) return;
     overlay.remove();
     if (action === 'save') {
-      // 저장 후 닫기: saveRequest 전송 → 결과에서 탭 닫기
+      // ??????リ린: saveRequest ?꾩넚 ??寃곌낵?먯꽌 ???リ린
       var tab = tabs.find(function(t){return t.id === tabId});
       if (tab && tab.url) {
         if (tabId === activeTabId) saveActiveTabState();
         _pendingCloseAfterSave = tabId;
-        vscode.postMessage({ type: 'saveRequest', requestId: tab.requestId || undefined, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, auth: tab.auth });
+        vscode.postMessage({ type: 'saveRequest', requestId: tab.requestId || undefined, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' } });
       } else {
         doCloseTab(tabId);
       }
     } else if (action === 'discard') {
       doCloseTab(tabId);
     }
-    // cancel: 아무것도 안 함
+    // cancel: ?꾨Т寃껊룄 ????
   });
 }
 
-// 여러 탭 일괄 닫기 (dirty 탭은 하나씩 순차 확인)
+// ?щ윭 ???쇨큵 ?リ린 (dirty ??? ?섎굹???쒖감 ?뺤씤)
 function closeTabs(ids) {
   if (!ids || ids.length === 0) return;
   var queue = ids.slice();
@@ -1439,10 +1764,10 @@ function closeTabs(ids) {
     overlay.className = 'dirty-confirm-overlay';
     overlay.innerHTML =
       '<div class="dirty-confirm-dialog">' +
-        '<div class="dirty-confirm-msg">"' + escapeHtml(tabLabel) + '"에 저장하지 않은 변경사항이 있습니다.</div>' +
+        '<div class="dirty-confirm-msg">"' + escapeHtml(tabLabel) + '"????ν븯吏 ?딆? 蹂寃쎌궗??씠 ?덉뒿?덈떎.</div>' +
         '<div class="dirty-confirm-actions">' +
-          '<button class="dirty-btn dirty-btn-discard" data-action="discard">저장 안 함</button>' +
-          '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">취소</button>' +
+          '<button class="dirty-btn dirty-btn-discard" data-action="discard">???????/button>' +
+          '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">痍⑥냼</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -1454,12 +1779,12 @@ function closeTabs(ids) {
         doCloseTab(tabId);
         next();
       }
-      // cancel: 나머지도 모두 취소
+      // cancel: ?섎㉧吏??紐⑤몢 痍⑥냼
     });
   }
 }
 
-// === 클릭 ripple 이펙트 ===
+// === ?대┃ ripple ?댄럺??===
 function addRipple(btn, e) {
   const rect = btn.getBoundingClientRect();
   const x = e.clientX - rect.left;
@@ -1474,7 +1799,7 @@ function addRipple(btn, e) {
   circle.addEventListener('animationend', () => circle.remove());
 }
 
-// 버튼 텍스트 임시 변경 피드백
+// 踰꾪듉 ?띿뒪???꾩떆 蹂寃??쇰뱶諛?
 function showBtnFeedback(btn, text, duration) {
   duration = duration || 1500;
   const origHtml = btn.innerHTML;
@@ -1482,14 +1807,14 @@ function showBtnFeedback(btn, text, duration) {
   setTimeout(() => { btn.innerHTML = origHtml; }, duration);
 }
 
-// Send 빛 줄기 효과
+// Send 鍮?以꾧린 ?④낵
 function triggerSendStreak(btn) {
   btn.classList.add('streak-active');
   setTimeout(() => btn.classList.remove('streak-active'), 400);
 }
 
-// Send 버튼 클릭 이펙트 — 깔끔한 눌림 + 글로우
-// renderContent()가 직후에 DOM을 교체하므로 setTimeout(0)으로 새 버튼에 적용
+// Send 踰꾪듉 ?대┃ ?댄럺????源붾걫???뚮┝ + 湲濡쒖슦
+// renderContent()媛 吏곹썑??DOM??援먯껜?섎?濡?setTimeout(0)?쇰줈 ??踰꾪듉???곸슜
 function triggerSendSlam(btn) {
   triggerSendStreak(btn);
   setTimeout(function() {
@@ -1503,17 +1828,17 @@ function triggerSendSlam(btn) {
   }, 0);
 }
 
-// Stop 버튼 타격감 (slam + glow + flash + vignette — 단일 keyframe으로 통합)
+// Stop 踰꾪듉 ?寃⑷컧 (slam + glow + flash + vignette ???⑥씪 keyframe?쇰줈 ?듯빀)
 function triggerStopSlam(btn) {
   console.log('Stop clicked - animation start');
-  // slam 눌림 + 글로우 (하나의 animation으로 통합)
+  // slam ?뚮┝ + 湲濡쒖슦 (?섎굹??animation?쇰줈 ?듯빀)
   btn.classList.remove('stop-slam');
   void btn.offsetWidth;
   btn.classList.add('stop-slam');
-  // 배경색 flash (160ms)
+  // 諛곌꼍??flash (160ms)
   btn.classList.add('stop-flash');
   setTimeout(function() { btn.classList.remove('stop-flash'); }, 160);
-  // slam 클래스 정리
+  // slam ?대옒???뺣━
   setTimeout(function() { btn.classList.remove('stop-slam'); }, 400);
   // vignette flash
   var vig = document.createElement('div');
@@ -1522,18 +1847,18 @@ function triggerStopSlam(btn) {
   setTimeout(function() { vig.remove(); }, 300);
 }
 
-// 전역 ripple 이벤트 위임 (모든 .ripple-btn 대상) + flash/bounce 효과
-// Send/Stop 버튼은 전용 slam 핸들러가 처리하므로 여기선 ripple만
+// ?꾩뿭 ripple ?대깽???꾩엫 (紐⑤뱺 .ripple-btn ??? + flash/bounce ?④낵
+// Send/Stop 踰꾪듉? ?꾩슜 slam ?몃뱾?ш? 泥섎━?섎?濡??ш린??ripple留?
 document.addEventListener('click', function(e) {
   const btn = e.target.closest('.ripple-btn');
   if (!btn) return;
   addRipple(btn, e);
-  // Send/Stop 버튼은 전용 효과 사용
+  // Send/Stop 踰꾪듉? ?꾩슜 ?④낵 ?ъ슜
   if (btn.classList.contains('btn-send') || btn.classList.contains('btn-stop')) return;
-  // 배경색 flash (0.1초)
+  // 諛곌꼍??flash (0.1珥?
   btn.classList.add('btn-flash');
   setTimeout(function() { btn.classList.remove('btn-flash'); }, 100);
-  // 눌림 → 바운스 → 원래 시퀀스
+  // ?뚮┝ ??諛붿슫?????먮옒 ?쒗??
   btn.classList.remove('btn-bouncing');
   void btn.offsetWidth;
   btn.classList.add('btn-bouncing');
@@ -1576,15 +1901,18 @@ function saveActiveTabState() {
   tab.params = collectKv(mc.querySelector('.js-param-rows'));
   tab.body = mc.querySelector('.js-body')?.value || '';
   tab.bodyType = mc.querySelector('.js-body-type')?.value || 'none';
+  tab.formData = collectFormData(mc.querySelector('.js-formdata-rows'));
+  tab.binaryFilePath = mc.querySelector('.js-binary-path')?.value || '';
   tab.auth = collectAuth(mc);
+  tab.scripts = collectScripts(mc);
   tab.timeout = parseInt(mc.querySelector('.js-timeout')?.value) || 0;
 }
 
 function renderTabBar() {
-  // 기존 탭 요소 제거
+  // 湲곗〈 ???붿냼 ?쒓굅
   tabBar.querySelectorAll('.req-tab').forEach(el => el.remove());
 
-  // pinned 탭을 왼쪽에 고정
+  // pinned ??쓣 ?쇱そ??怨좎젙
   const sorted = tabs.filter(t => t.pinned).concat(tabs.filter(t => !t.pinned));
 
   for (const tab of sorted) {
@@ -1594,7 +1922,7 @@ function renderTabBar() {
       '<span class="pin-icon">\u{1F4CC}</span>' +
       '<span class="method-badge method-' + tab.method + '">' + tab.method + '</span>' +
       '<span class="tab-name">' + escapeHtml(truncate(tab.name, 25)) + '</span>' +
-      (tab.dirty ? '<span class="dirty-dot" title="미저장 변경사항">\u25CF</span>' : '') +
+      (tab.dirty ? '<span class="dirty-dot" title="誘몄???蹂寃쎌궗??>\u25CF</span>' : '') +
       '<span class="close-tab" data-id="' + tab.id + '">&times;</span>';
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('close-tab')) {
@@ -1655,7 +1983,7 @@ function showTabContextMenu(x, y, tabId) {
   menu.style.top = y + 'px';
   document.body.appendChild(menu);
 
-  // 메뉴가 뷰포트 밖으로 나가면 보정
+  // 硫붾돱媛 酉고룷??諛뽰쑝濡??섍?硫?蹂댁젙
   var rect = menu.getBoundingClientRect();
   if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + 'px';
   if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 4) + 'px';
@@ -1689,7 +2017,7 @@ function showTabContextMenu(x, y, tabId) {
         break;
       case 'duplicate':
         saveActiveTabState();
-        createTab({ name: tab.name, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, auth: tab.auth, timeout: tab.timeout });
+        createTab({ name: tab.name, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout });
         break;
     }
   });
@@ -1706,7 +2034,7 @@ function renderContent() {
     mainContent.innerHTML = '<div class="placeholder">Press + or Ctrl+T to create a new request</div>';
     return;
   }
-  // 리렌더 전 수동 조절된 요청 영역 높이 보존
+  // 由щ젋?????섎룞 議곗젅???붿껌 ?곸뿭 ?믪씠 蹂댁〈
   var prevReqArea = mainContent.querySelector('.req-area');
   var savedHeight = prevReqArea && prevReqArea.dataset.manualHeight ? prevReqArea.style.height : null;
   const tab = tabs.find(t => t.id === activeTabId);
@@ -1718,7 +2046,7 @@ function renderContent() {
 
   let resHtml = '';
   if (tab.loading) {
-    resHtml = '<div style="padding:6px"><span class="spinner"></span>요청 전송 중...</div>' +
+    resHtml = '<div style="padding:6px"><span class="spinner"></span>?붿껌 ?꾩넚 以?..</div>' +
       '<div class="skeleton-loader"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>';
   } else if (tab.error) {
     resHtml = '<div class="error-msg">' + escapeHtml(tab.error) + '</div>';
@@ -1728,11 +2056,11 @@ function renderContent() {
     const ct = (r.headers?.['content-type'] || r.headers?.['Content-Type'] || '').toLowerCase();
     const isBinary = !!r.bodyBase64 && isBinaryContentType(ct);
     const displayBody = isBinary
-      ? '[바이너리 응답입니다. Save 버튼으로 원본 파일을 저장하세요.]'
+      ? '[諛붿씠?덈━ ?묐떟?낅땲?? Save 踰꾪듉?쇰줈 ?먮낯 ?뚯씪????ν븯?몄슂.]'
       : r.body;
     const lang = isBinary ? 'text' : detectLang(ct, displayBody);
     const rawBodyHtml = isBinary ? escapeHtml(displayBody) : highlightBody(displayBody, lang);
-    // 응답 헤더를 테이블 HTML로 생성
+    // ?묐떟 ?ㅻ뜑瑜??뚯씠釉?HTML濡??앹꽦
     const headerEntries = Object.entries(r.headers);
     const headerCount = headerEntries.length;
     let headersTableHtml = '<table class="res-header-table">' +
@@ -1743,9 +2071,9 @@ function renderContent() {
     }
     headersTableHtml += '</tbody></table>';
 
-    // Set-Cookie 파싱하여 쿠키 테이블 생성
-    // rawSetCookies가 있으면 개별 쿠키 배열 사용 (expires 쉼표 문제 없음)
-    // 없으면 헤더에서 추출 후 정규식으로 쿠키 경계 분리
+    // Set-Cookie ?뚯떛?섏뿬 荑좏궎 ?뚯씠釉??앹꽦
+    // rawSetCookies媛 ?덉쑝硫?媛쒕퀎 荑좏궎 諛곗뿴 ?ъ슜 (expires ?쇳몴 臾몄젣 ?놁쓬)
+    // ?놁쑝硫??ㅻ뜑?먯꽌 異붿텧 ???뺢퇋?앹쑝濡?荑좏궎 寃쎄퀎 遺꾨━
     let allCookieStrs = [];
     if (r.rawSetCookies && r.rawSetCookies.length > 0) {
       allCookieStrs = r.rawSetCookies;
@@ -1755,7 +2083,7 @@ function renderContent() {
         .map(([,v]) => String(v))
         .join(', ');
       if (cookieHeader) {
-        // 쉼표 뒤에 "알파벳+=" 패턴이 오면 새 쿠키 시작 (expires 날짜 쉼표와 구별)
+        // ?쇳몴 ?ㅼ뿉 "?뚰뙆踰?=" ?⑦꽩???ㅻ㈃ ??荑좏궎 ?쒖옉 (expires ?좎쭨 ?쇳몴? 援щ퀎)
         allCookieStrs = cookieHeader.split(/,\\s*(?=[A-Za-z_][A-Za-z0-9_]*=)/);
       }
     }
@@ -1796,15 +2124,15 @@ function renderContent() {
     const hasFormat = (lang === 'json' || lang === 'xml');
     const fmtMenuHtml = hasFormat
       ? '<div class="fmt-wrap">' +
-          '<button class="tb-btn ripple-btn js-fmt-btn">Format ▾</button>' +
+          '<button class="tb-btn ripple-btn js-fmt-btn">Format ??/button>' +
           '<div class="fmt-menu js-fmt-menu">' +
             '<div class="fmt-menu-label">Style</div>' +
-            '<div class="fmt-menu-item js-fmt-style" data-style="pretty"><span class="check">' + (lang === 'xml' ? ' ' : '✓') + '</span>Pretty</div>' +
+            '<div class="fmt-menu-item js-fmt-style" data-style="pretty"><span class="check">' + (lang === 'xml' ? ' ' : '??) + '</span>Pretty</div>' +
             '<div class="fmt-menu-item js-fmt-style" data-style="compact"><span class="check"> </span>Compact</div>' +
-            (lang === 'xml' ? '<div class="fmt-menu-item js-fmt-style" data-style="inline"><span class="check">✓</span>Inline Children</div>' : '') +
+            (lang === 'xml' ? '<div class="fmt-menu-item js-fmt-style" data-style="inline"><span class="check">??/span>Inline Children</div>' : '') +
             '<div class="fmt-menu-sep"></div>' +
             '<div class="fmt-menu-label">Indent</div>' +
-            '<div class="fmt-menu-item js-fmt-indent" data-indent="2"><span class="check">✓</span>2 spaces</div>' +
+            '<div class="fmt-menu-item js-fmt-indent" data-indent="2"><span class="check">??/span>2 spaces</div>' +
             '<div class="fmt-menu-item js-fmt-indent" data-indent="4"><span class="check"> </span>4 spaces</div>' +
             '<div class="fmt-menu-item js-fmt-indent" data-indent="tab"><span class="check"> </span>Tab</div>' +
           '</div>' +
@@ -1817,15 +2145,15 @@ function renderContent() {
                 '<button class="toggle-btn active" data-mode="tree">Tree</button>' +
                 '<button class="toggle-btn" data-mode="raw">Raw</button>' +
               '</div>' +
-              '<button class="tb-btn js-expand-all" title="Expand All">⊞ Expand</button>' +
-              '<button class="tb-btn js-collapse-all" title="Collapse All">⊟ Collapse</button>'
+              '<button class="tb-btn js-expand-all" title="Expand All">??Expand</button>' +
+              '<button class="tb-btn js-collapse-all" title="Collapse All">??Collapse</button>'
             : '') +
           fmtMenuHtml +
         '</div>'
       : '';
-    // 치환된 실제 URL 표시
+    // 移섑솚???ㅼ젣 URL ?쒖떆
     const resolvedUrlDisplay = tab.resolvedUrl
-      ? '<div class="resolved-url js-resolved-url" title="클릭하여 복사">' + escapeHtml(tab.resolvedUrl) + '</div>'
+      ? '<div class="resolved-url js-resolved-url" title="?대┃?섏뿬 蹂듭궗">' + escapeHtml(tab.resolvedUrl) + '</div>'
       : '';
     resHtml =
       '<div class="response-meta">' +
@@ -1843,6 +2171,7 @@ function renderContent() {
         '<div class="tab active" data-tab="resBody">Body</div>' +
         (cookieCount > 0 ? '<div class="tab" data-tab="resCookies">Cookies <span class="tab-count">' + cookieCount + '</span></div>' : '<div class="tab" data-tab="resCookies">Cookies</div>') +
         '<div class="tab" data-tab="resHeaders">Headers <span class="tab-count">' + headerCount + '</span></div>' +
+        ((tab.scriptResults?.tests?.length || 0) > 0 ? '<div class="tab" data-tab="resTests">Tests <span class="tab-count">' + tab.scriptResults.tests.length + '</span></div>' : '<div class="tab" data-tab="resTests">Tests</div>') +
         (lang === 'html' ? '<div class="tab" data-tab="resPreview">Preview</div>' : '') +
       '</div>' +
       toolbarHtml +
@@ -1850,7 +2179,7 @@ function renderContent() {
       '<div class="json-body js-res-raw js-res-body' + (lang === 'json' ? ' hidden' : '') + '">' + rawBodyHtml + '</div>' +
       '<div class="res-headers-panel hidden js-res-headers">' +
         (tab.resolvedHeaders && tab.resolvedHeaders.length
-          ? '<div class="resolved-headers-section"><div class="resolved-headers-title">Request Headers (치환 후)</div>' +
+          ? '<div class="resolved-headers-section"><div class="resolved-headers-title">Request Headers (移섑솚 ??</div>' +
             '<table class="res-header-table"><thead><tr><th class="res-header-key-col">Key</th><th>Value</th></tr></thead><tbody>' +
             tab.resolvedHeaders.map(function(h) {
               return '<tr><td class="res-header-key">' + escapeHtml(h.key) + '</td><td class="res-header-value" title="' + escapeAttr(h.value) + '">' + escapeHtml(h.value) + '</td></tr>';
@@ -1861,6 +2190,24 @@ function renderContent() {
       '</div>' +
       '<div class="res-cookies-panel hidden js-res-cookies">' +
         (cookieCount > 0 ? cookiesTableHtml : '<div class="placeholder" style="padding:12px;font-size:13px;opacity:.5">No cookies in response</div>') +
+      '</div>' +
+      '<div class="res-headers-panel hidden js-res-tests">' +
+        ((tab.scriptResults?.tests?.length || 0) > 0
+          ? '<table class="res-header-table"><thead><tr><th class="res-header-key-col">Test</th><th>Result</th></tr></thead><tbody>' +
+            tab.scriptResults.tests.map(function(test) {
+              var status = test.passed ? 'PASS' : 'FAIL';
+              var detail = test.passed ? '성공' : escapeHtml(test.error || '실패');
+              return '<tr><td class="res-header-key">' + escapeHtml(test.name) + '</td><td class="res-header-value" title="' + escapeAttr(detail) + '">' + status + ' - ' + detail + '</td></tr>';
+            }).join('') +
+            '</tbody></table>' +
+            ((tab.scriptResults.logs || []).length > 0
+              ? '<div class="resolved-headers-title" style="margin-top:8px">Script Logs</div><table class="res-header-table"><thead><tr><th class="res-header-key-col">Level</th><th>Message</th></tr></thead><tbody>' +
+                tab.scriptResults.logs.map(function(log) {
+                  return '<tr><td class="res-header-key">' + escapeHtml(log.level.toUpperCase()) + '</td><td class="res-header-value" title="' + escapeAttr(log.message) + '">' + escapeHtml(log.message) + '</td></tr>';
+                }).join('') +
+                '</tbody></table>'
+              : '')
+          : '<div class="placeholder" style="padding:12px;font-size:13px;opacity:.5">No tests executed</div>') +
       '</div>' +
       (lang === 'html' ? '<iframe class="res-preview hidden js-res-preview" sandbox="allow-same-origin" style="width:100%;flex:1;border:none;background:#fff"></iframe>' : '');
   } else {
@@ -1885,8 +2232,9 @@ function renderContent() {
         : '<button class="btn-send ripple-btn js-send"><span class="send-streak"></span><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1.5l14 6.5-14 6.5V9l10-1-10-1V1.5z"/></svg> Send</button>') +
       '<span class="url-bar-spacer"></span>' +
       '<button class="res-action-btn ripple-btn js-save"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> Save</button>' +
-      (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="다른 이름으로 저장">Save As</button>' : '') +
+      (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="?ㅻⅨ ?대쫫?쇰줈 ???>Save As</button>' : '') +
       '<button class="res-action-btn ripple-btn js-copy-curl" title="Copy as cURL"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l4.5 4L1 10l1 1.5L7.5 6 2 0.5 1 2zm7 8h7v1.5H8V10z"/></svg> cURL</button>' +
+      '<button class="res-action-btn ripple-btn js-generate-code" title="Generate Code">Code</button>' +
     '</div>' +
     '<div class="split">' +
       '<div class="req-area">' +
@@ -1895,6 +2243,7 @@ function renderContent() {
           '<div class="tab" data-tab="headers">Headers</div>' +
           '<div class="tab" data-tab="body">Body</div>' +
           '<div class="tab" data-tab="auth">Auth</div>' +
+          '<div class="tab" data-tab="scripts">Scripts</div>' +
           '<div class="tab" data-tab="settings">Settings</div>' +
         '</div>' +
         '<div class="js-params-panel kv-section">' +
@@ -1907,21 +2256,38 @@ function renderContent() {
         '</div>' +
         '<div class="js-body-panel body-section hidden">' +
           '<select class="js-body-type body-type-select">' +
-            ['none','json','xml','form','raw'].map(function(t) {
-              var label = { none:'None', json:'JSON', xml:'XML', form:'Form URL Encoded', raw:'Raw' }[t];
+            ['none','json','xml','form','formdata','binary','raw'].map(function(t) {
+              var label = { none:'None', json:'JSON', xml:'XML', form:'Form URL Encoded', formdata:'Form Data', binary:'Binary', raw:'Raw' }[t];
               return '<option value="' + t + '"' + (t === tab.bodyType ? ' selected' : '') + '>' + label + '</option>';
             }).join('') +
           '</select>' +
-          '<textarea class="js-body" placeholder="{&quot;key&quot;: &quot;value&quot;}"' + (tab.bodyType === 'none' ? ' style="display:none"' : '') + '>' + escapeHtml(tab.body) + '</textarea>' +
+          '<textarea class="js-body" placeholder="{&quot;key&quot;: &quot;value&quot;}"' + (tab.bodyType === 'none' || tab.bodyType === 'formdata' || tab.bodyType === 'binary' ? ' style="display:none"' : '') + '>' + escapeHtml(tab.body) + '</textarea>' +
+          '<div class="js-formdata-panel' + (tab.bodyType === 'formdata' ? '' : ' hidden') + '">' +
+            '<div class="js-formdata-rows">' + formDataRowsHtml(tab.formData || []) + '</div>' +
+            '<button class="add-btn js-add-formdata-text">+ Add Field</button>' +
+            '<button class="add-btn js-add-formdata-file">+ Add File</button>' +
+          '</div>' +
+          '<div class="js-binary-panel' + (tab.bodyType === 'binary' ? '' : ' hidden') + '">' +
+            '<div class="kv-row" style="margin-top:4px">' +
+              '<input class="js-binary-path" type="text" placeholder="File Path" value="' + escapeAttr(tab.binaryFilePath || '') + '"/>' +
+              '<button class="btn btn-s js-browse-binary" type="button" style="padding:3px 8px">Browse</button>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         '<div class="js-auth-panel auth-section hidden">' +
           authHtml(tab.auth) +
         '</div>' +
+        '<div class="js-scripts-panel body-section hidden">' +
+          '<div style="font-size:12px;opacity:.65;margin-bottom:4px">Pre-request Script</div>' +
+          '<textarea class="js-script-prerequest" placeholder="env.set(''token'', ''123'');">' + escapeHtml(tab.scripts?.preRequest || '') + '</textarea>' +
+          '<div style="font-size:12px;opacity:.65;margin:8px 0 4px">Test Script</div>' +
+          '<textarea class="js-script-test" placeholder="test(''status'', function () { pm.response.to.have.status(200); });">' + escapeHtml(tab.scripts?.test || '') + '</textarea>' +
+        '</div>' +
         '<div class="js-settings-panel settings-section hidden">' +
           '<div class="settings-row">' +
-            '<label class="settings-label">Timeout (초)</label>' +
-            '<input class="js-timeout settings-input" type="number" min="0" placeholder="0" title="0 = 무제한" value="' + (tab.timeout || '') + '"/>' +
-            '<span class="settings-hint">0 = 무제한</span>' +
+            '<label class="settings-label">Timeout (珥?</label>' +
+            '<input class="js-timeout settings-input" type="number" min="0" placeholder="0" title="0 = 臾댁젣?? value="' + (tab.timeout || '') + '"/>' +
+            '<span class="settings-hint">0 = 臾댁젣??/span>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -1930,10 +2296,10 @@ function renderContent() {
       '<div class="res-area' + (tab.response && tab.slideIn ? ' slide-in' : '') + '">' + resHtml + '</div>' +
     '</div>';
 
-  // 이벤트 바인딩
+  // ?대깽??諛붿씤??
   bindContentEvents();
 
-  // 수동 조절 높이 복원
+  // ?섎룞 議곗젅 ?믪씠 蹂듭썝
   if (savedHeight) {
     var newReqArea = mainContent.querySelector('.req-area');
     if (newReqArea) {
@@ -1947,13 +2313,13 @@ function renderContent() {
 function bindContentEvents() {
   const mc = mainContent;
 
-  // 메서드 변경 시 탭 바 업데이트
+  // 硫붿꽌??蹂寃?????諛??낅뜲?댄듃
   mc.querySelector('.js-method')?.addEventListener('change', (e) => {
     const tab = tabs.find(t => t.id === activeTabId);
     if (tab) { tab.method = e.target.value; markDirty(); renderTabBar(); }
   });
 
-  // URL 입력 → 미치환 변수 체크 + 자동 저장
+  // URL ?낅젰 ??誘몄튂??蹂??泥댄겕 + ?먮룞 ???
   var urlInputEl = mc.querySelector('.js-url');
   if (urlInputEl) {
     urlInputEl.addEventListener('input', function() {
@@ -1965,11 +2331,11 @@ function bindContentEvents() {
       var ov = mc.querySelector('.js-var-overlay');
       if (ov) ov.scrollLeft = urlInputEl.scrollLeft;
     });
-    // 초기 체크
+    // 珥덇린 泥댄겕
     setTimeout(checkUnresolvedVars, 50);
   }
 
-  // Send / Stop 클릭 타격감
+  // Send / Stop ?대┃ ?寃⑷컧
   const sendBtn = mc.querySelector('.js-send');
   if (sendBtn) {
     sendBtn.addEventListener('click', () => {
@@ -1982,34 +2348,42 @@ function bindContentEvents() {
     });
   }
 
-  // Save (이미 저장된 탭이면 덮어쓰기, 새 탭이면 위치 선택 다이얼로그)
+  // Save (?대? ??λ맂 ??씠硫???뼱?곌린, ????씠硫??꾩튂 ?좏깮 ?ㅼ씠?쇰줈洹?
   mc.querySelector('.js-save')?.addEventListener('click', function() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
     pendingSaveBtn = this;
-    vscode.postMessage({ type: 'saveRequest', requestId: tab.requestId || undefined, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, auth: tab.auth });
+    vscode.postMessage({ type: 'saveRequest', requestId: tab.requestId || undefined, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' } });
   });
 
-  // Save As (새 이름/위치로 저장 — requestId 없이 전송하여 새 항목 생성)
+  // Save As (???대쫫/?꾩튂濡??????requestId ?놁씠 ?꾩넚?섏뿬 ????ぉ ?앹꽦)
   mc.querySelector('.js-save-as')?.addEventListener('click', function() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
     pendingSaveBtn = this;
-    vscode.postMessage({ type: 'saveRequest', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, auth: tab.auth });
+    vscode.postMessage({ type: 'saveRequest', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' } });
   });
 
-  // Copy as cURL (+ "Copied!" 피드백)
+  // Copy as cURL (+ "Copied!" ?쇰뱶諛?
   mc.querySelector('.js-copy-curl')?.addEventListener('click', function() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
-    vscode.postMessage({ type: 'copyAsCurl', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, auth: tab.auth });
-    showBtnFeedback(this, '✓ Copied!', 1200);
+    vscode.postMessage({ type: 'copyAsCurl', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth });
+    showBtnFeedback(this, '??Copied!', 1200);
   });
 
-  // Copy Response Body (+ "Copied!" 피드백)
+  mc.querySelector('.js-generate-code')?.addEventListener('click', function() {
+    saveActiveTabState();
+    const tab = tabs.find(t => t.id === activeTabId);
+    if (!tab || !tab.url) return;
+    vscode.postMessage({ type: 'generateCode', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth });
+    showBtnFeedback(this, 'Opened!', 1000);
+  });
+
+  // Copy Response Body (+ "Copied!" ?쇰뱶諛?
   mc.querySelector('.js-copy-response')?.addEventListener('click', function() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab?.response) return;
@@ -2020,21 +2394,21 @@ function bindContentEvents() {
       else if (opts.lang === 'xml') body = formatXml(body, opts.style, opts.indent);
     }
     vscode.postMessage({ type: 'copyResponseBody', body: body });
-    showBtnFeedback(this, '✓ Copied!', 1200);
+    showBtnFeedback(this, '??Copied!', 1200);
   });
 
-  // 치환된 URL 클릭 → 클립보드 복사
+  // 移섑솚??URL ?대┃ ???대┰蹂대뱶 蹂듭궗
   mc.querySelector('.js-resolved-url')?.addEventListener('click', (e) => {
     const el = e.currentTarget;
     const url = el.textContent;
     vscode.postMessage({ type: 'copyToClipboard', text: url });
     el.classList.add('copied');
     const orig = el.textContent;
-    el.textContent = '✓ Copied!';
+    el.textContent = '??Copied!';
     setTimeout(() => { el.textContent = orig; el.classList.remove('copied'); }, 1200);
   });
 
-  // Save Response Body (다이얼로그 완료 후에만 "Saved ✓" 피드백)
+  // Save Response Body (?ㅼ씠?쇰줈洹??꾨즺 ?꾩뿉留?"Saved ?? ?쇰뱶諛?
   mc.querySelector('.js-save-response')?.addEventListener('click', function() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab?.response) return;
@@ -2043,33 +2417,33 @@ function bindContentEvents() {
     vscode.postMessage({ type: 'saveResponseBody', body: tab.response.body, bodyBase64: tab.response.bodyBase64 || '', contentType: ct });
   });
 
-  // Pin Response — 현재 응답을 비교용으로 저장 / 토글
+  // Pin Response ???꾩옱 ?묐떟??鍮꾧탳?⑹쑝濡????/ ?좉?
   mc.querySelector('.js-pin-response')?.addEventListener('click', function() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab?.response) return;
     var btn = this;
-    // 이미 핀된 응답인지 확인 (같은 탭 + 같은 body → 해제)
+    // ?대? ????묐떟?몄? ?뺤씤 (媛숈? ??+ 媛숈? body ???댁젣)
     var existIdx = pinnedResponses.findIndex(function(p) { return p.tabId === activeTabId && p.body === tab.response.body; });
     if (existIdx !== -1) {
-      // Pin 해제
+      // Pin ?댁젣
       pinnedResponses.splice(existIdx, 1);
       btn.innerHTML = 'Unpinned';
       setTimeout(function() { updatePinCompareButtons(mc); }, 1200);
     } else {
-      // Pin 추가 — 현재 포맷 스타일도 함께 저장
+      // Pin 異붽? ???꾩옱 ?щ㎎ ?ㅽ??쇰룄 ?④퍡 ???
       const ct = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || 'text/plain';
       const envLabel = currentEnvName ? '[' + currentEnvName + ']' : '';
       const timeLabel = new Date().toLocaleTimeString();
       const label = (tab.name || tab.method + ' ' + tab.url) + ' ' + envLabel + ' ' + timeLabel;
       var fmtOpts = getFormatOptions(mc);
       if (pinnedResponses.length >= 2) {
-        pinnedResponses.shift(); // 가장 오래된 거 제거
+        pinnedResponses.shift(); // 媛???ㅻ옒??嫄??쒓굅
       }
       pinnedResponses.push({ label: label.trim(), body: tab.response.body, contentType: ct, timestamp: Date.now(), tabId: activeTabId, formatStyle: fmtOpts ? fmtOpts.style : null, formatIndent: fmtOpts ? fmtOpts.indent : null, formatLang: fmtOpts ? fmtOpts.lang : null });
-      btn.innerHTML = '✓ Pinned (' + pinnedResponses.length + '/2)';
+      btn.innerHTML = '??Pinned (' + pinnedResponses.length + '/2)';
       setTimeout(function() { updatePinCompareButtons(mc); }, 1200);
     }
-    // Compare 버튼은 즉시 갱신
+    // Compare 踰꾪듉? 利됱떆 媛깆떊
     var cmpBtn = mc.querySelector('.js-compare-responses');
     if (cmpBtn) {
       if (pinnedResponses.length >= 2) { cmpBtn.disabled = false; cmpBtn.classList.add('ready'); }
@@ -2078,7 +2452,7 @@ function bindContentEvents() {
     }
   });
 
-  // Compare Responses — 저장된 2개 응답을 각자의 포맷 스타일로 포맷팅하여 비교
+  // Compare Responses ????λ맂 2媛??묐떟??媛곸옄???щ㎎ ?ㅽ??쇰줈 ?щ㎎?낇븯??鍮꾧탳
   mc.querySelector('.js-compare-responses')?.addEventListener('click', function() {
     if (pinnedResponses.length < 2) return;
     vscode.postMessage({
@@ -2088,10 +2462,10 @@ function bindContentEvents() {
     });
   });
 
-  // 응답 영역 우클릭 → 컨텍스트 메뉴
+  // ?묐떟 ?곸뿭 ?고겢由???而⑦뀓?ㅽ듃 硫붾돱
   mc.querySelector('.res-area')?.addEventListener('contextmenu', function(e) {
     e.preventDefault();
-    // 기존 메뉴 제거
+    // 湲곗〈 硫붾돱 ?쒓굅
     document.querySelectorAll('.res-ctx-menu').forEach(m => m.remove());
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab?.response) return;
@@ -2099,33 +2473,33 @@ function bindContentEvents() {
     const menu = document.createElement('div');
     menu.className = 'res-ctx-menu';
     menu.innerHTML =
-      '<div class="ctx-item js-ctx-compare-last' + (!lastResponse ? ' disabled' : '') + '">⇄ Compare with Last Response</div>' +
+      '<div class="ctx-item js-ctx-compare-last' + (!lastResponse ? ' disabled' : '') + '">??Compare with Last Response</div>' +
       '<div class="ctx-sep"></div>' +
       '<div class="ctx-item js-ctx-pin-current">' + pinSvg + ' Pin Current Response</div>' +
-      '<div class="ctx-item js-ctx-clear-pins' + (pinnedResponses.length === 0 ? ' disabled' : '') + '">✕ Clear All Pins' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + ')' : '') + '</div>';
+      '<div class="ctx-item js-ctx-clear-pins' + (pinnedResponses.length === 0 ? ' disabled' : '') + '">??Clear All Pins' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + ')' : '') + '</div>';
     menu.style.left = e.clientX + 'px';
     menu.style.top = e.clientY + 'px';
     document.body.appendChild(menu);
 
-    // 화면 밖으로 나가지 않도록 조정
+    // ?붾㈃ 諛뽰쑝濡??섍?吏 ?딅룄濡?議곗젙
     var rect = menu.getBoundingClientRect();
     if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + 'px';
     if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 4) + 'px';
 
-    // Compare with Last Response — 각자의 포맷 스타일로 포맷팅하여 비교
+    // Compare with Last Response ??媛곸옄???щ㎎ ?ㅽ??쇰줈 ?щ㎎?낇븯??鍮꾧탳
     menu.querySelector('.js-ctx-compare-last')?.addEventListener('click', function() {
       if (!lastResponse || !tab.response) return;
       var ct = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || 'text/plain';
       var envLabel = currentEnvName ? '[' + currentEnvName + ']' : '';
       var curLabel = (tab.name || tab.method + ' ' + tab.url) + ' ' + envLabel + ' (current)';
-      // 현재 응답은 현재 포맷 옵션 사용
+      // ?꾩옱 ?묐떟? ?꾩옱 ?щ㎎ ?듭뀡 ?ъ슜
       var curFmt = getFormatOptions(mc);
       var curBody = tab.response.body;
       if (curFmt) {
         if (curFmt.lang === 'json') curBody = formatJson(curBody, curFmt.style, curFmt.indent);
         else if (curFmt.lang === 'xml') curBody = formatXml(curBody, curFmt.style, curFmt.indent);
       }
-      // 직전 응답은 저장된 포맷 옵션 사용
+      // 吏곸쟾 ?묐떟? ??λ맂 ?щ㎎ ?듭뀡 ?ъ슜
       var lastBody = formatPinnedBody(lastResponse);
       vscode.postMessage({
         type: 'compareResponses',
@@ -2142,7 +2516,7 @@ function bindContentEvents() {
       menu.remove();
     });
 
-    // Clear All Pins — 모든 핀 해제
+    // Clear All Pins ??紐⑤뱺 ? ?댁젣
     menu.querySelector('.js-ctx-clear-pins')?.addEventListener('click', function() {
       if (pinnedResponses.length === 0) return;
       pinnedResponses.length = 0;
@@ -2150,7 +2524,7 @@ function bindContentEvents() {
       menu.remove();
     });
 
-    // 다른 곳 클릭 시 메뉴 닫기
+    // ?ㅻⅨ 怨??대┃ ??硫붾돱 ?リ린
     setTimeout(function() {
       document.addEventListener('click', function closeCtx() {
         menu.remove();
@@ -2159,19 +2533,19 @@ function bindContentEvents() {
     }, 0);
   });
 
-  // 요청 탭 전환
+  // ?붿껌 ???꾪솚
   mc.querySelector('.js-req-tabs')?.addEventListener('click', (e) => {
     const t = e.target.closest('.tab');
     if (!t) return;
     mc.querySelectorAll('.js-req-tabs .tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
-    const panels = { params: '.js-params-panel', headers: '.js-headers-panel', body: '.js-body-panel', auth: '.js-auth-panel', settings: '.js-settings-panel' };
+    const panels = { params: '.js-params-panel', headers: '.js-headers-panel', body: '.js-body-panel', auth: '.js-auth-panel', scripts: '.js-scripts-panel', settings: '.js-settings-panel' };
     for (const [k, sel] of Object.entries(panels)) {
       mc.querySelector(sel)?.classList.toggle('hidden', k !== t.dataset.tab);
     }
   });
 
-  // 응답 탭 전환 (Body / Headers / Preview)
+  // ?묐떟 ???꾪솚 (Body / Headers / Preview)
   mc.querySelector('.js-res-tabs')?.addEventListener('click', (e) => {
     const t = e.target.closest('.tab');
     if (!t) return;
@@ -2181,34 +2555,37 @@ function bindContentEvents() {
     const isBody = sel === 'resBody';
     const isPreview = sel === 'resPreview';
 
-    // 모든 응답 콘텐츠 숨김
-    mc.querySelectorAll('.js-res-body').forEach(el => el.classList.add('hidden'));
-    mc.querySelector('.js-res-headers')?.classList.add('hidden');
-    mc.querySelector('.js-res-cookies')?.classList.add('hidden');
-    const preview = mc.querySelector('.js-res-preview');
-    if (preview) preview.classList.add('hidden');
+    // 紐⑤뱺 ?묐떟 肄섑뀗痢??④?
+      mc.querySelectorAll('.js-res-body').forEach(el => el.classList.add('hidden'));
+      mc.querySelector('.js-res-headers')?.classList.add('hidden');
+      mc.querySelector('.js-res-cookies')?.classList.add('hidden');
+      mc.querySelector('.js-res-tests')?.classList.add('hidden');
+      const preview = mc.querySelector('.js-res-preview');
+      if (preview) preview.classList.add('hidden');
     const toolbar = mc.querySelector('.js-res-body-toolbar');
     if (toolbar) toolbar.classList.add('hidden');
 
-    // 선택된 탭 콘텐츠만 표시
+    // ?좏깮????肄섑뀗痢좊쭔 ?쒖떆
     if (isBody) {
       if (toolbar) toolbar.classList.remove('hidden');
       const tree = mc.querySelector('.js-res-tree');
       const raw = mc.querySelector('.js-res-raw');
       if (tree) {
-        // JSON: Tree/Raw 토글 모드 복원
+        // JSON: Tree/Raw ?좉? 紐⑤뱶 蹂듭썝
         const mode = toolbar?.querySelector('.toggle-btn.active')?.dataset.mode || 'tree';
         tree.classList.toggle('hidden', mode !== 'tree');
         if (raw) raw.classList.toggle('hidden', mode !== 'raw');
       } else {
-        // XML, text 등: raw만 표시
+        // XML, text ?? raw留??쒖떆
         if (raw) raw.classList.remove('hidden');
       }
-    } else if (sel === 'resHeaders') {
-      mc.querySelector('.js-res-headers')?.classList.remove('hidden');
-    } else if (sel === 'resCookies') {
-      mc.querySelector('.js-res-cookies')?.classList.remove('hidden');
-    } else if (isPreview && preview) {
+      } else if (sel === 'resHeaders') {
+        mc.querySelector('.js-res-headers')?.classList.remove('hidden');
+      } else if (sel === 'resCookies') {
+        mc.querySelector('.js-res-cookies')?.classList.remove('hidden');
+      } else if (sel === 'resTests') {
+        mc.querySelector('.js-res-tests')?.classList.remove('hidden');
+      } else if (isPreview && preview) {
       preview.classList.remove('hidden');
       if (!preview.dataset.loaded) {
         const tab = tabs.find(tt => tt.id === activeTabId);
@@ -2220,7 +2597,7 @@ function bindContentEvents() {
     }
   });
 
-  // Tree/Raw 토글
+  // Tree/Raw ?좉?
   mc.querySelector('.js-res-body-toolbar')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.toggle-btn');
     if (btn) {
@@ -2230,7 +2607,7 @@ function bindContentEvents() {
       const raw = mc.querySelector('.js-res-raw');
       if (tree) tree.classList.toggle('hidden', btn.dataset.mode !== 'tree');
       if (raw) raw.classList.toggle('hidden', btn.dataset.mode !== 'raw');
-      // Expand/Collapse 버튼은 Tree 모드에서만 활성
+      // Expand/Collapse 踰꾪듉? Tree 紐⑤뱶?먯꽌留??쒖꽦
       mc.querySelectorAll('.js-expand-all,.js-collapse-all').forEach(b => b.style.display = btn.dataset.mode === 'tree' ? '' : 'none');
     }
   });
@@ -2238,18 +2615,18 @@ function bindContentEvents() {
   // Expand All
   mc.querySelector('.js-expand-all')?.addEventListener('click', () => {
     mc.querySelectorAll('.js-res-tree .jt-children').forEach(el => el.classList.remove('collapsed'));
-    mc.querySelectorAll('.js-res-tree .jt-toggle').forEach(el => { el.textContent = '▼'; });
+    mc.querySelectorAll('.js-res-tree .jt-toggle').forEach(el => { el.textContent = '??; });
     mc.querySelectorAll('.js-res-tree .jt-ellipsis').forEach(el => el.classList.add('hidden'));
   });
 
   // Collapse All
   mc.querySelector('.js-collapse-all')?.addEventListener('click', () => {
     mc.querySelectorAll('.js-res-tree .jt-children').forEach(el => el.classList.add('collapsed'));
-    mc.querySelectorAll('.js-res-tree .jt-toggle').forEach(el => { el.textContent = '▶'; });
+    mc.querySelectorAll('.js-res-tree .jt-toggle').forEach(el => { el.textContent = '??; });
     mc.querySelectorAll('.js-res-tree .jt-ellipsis').forEach(el => el.classList.remove('hidden'));
   });
 
-  // Format 드롭다운
+  // Format ?쒕∼?ㅼ슫
   const fmtBtn = mc.querySelector('.js-fmt-btn');
   const fmtMenu = mc.querySelector('.js-fmt-menu');
   if (fmtBtn && fmtMenu) {
@@ -2260,31 +2637,31 @@ function bindContentEvents() {
     document.addEventListener('click', () => fmtMenu.classList.remove('open'));
     fmtMenu.addEventListener('click', (e) => { e.stopPropagation(); });
 
-    // 스타일 선택
+    // ?ㅽ????좏깮
     fmtMenu.querySelectorAll('.js-fmt-style').forEach(item => {
       item.addEventListener('click', () => {
         fmtMenu.querySelectorAll('.js-fmt-style .check').forEach(c => { c.textContent = ' '; });
-        item.querySelector('.check').textContent = '✓';
+        item.querySelector('.check').textContent = '??;
         applyFormat(mc);
       });
     });
-    // 들여쓰기 선택
+    // ?ㅼ뿬?곌린 ?좏깮
     fmtMenu.querySelectorAll('.js-fmt-indent').forEach(item => {
       item.addEventListener('click', () => {
         fmtMenu.querySelectorAll('.js-fmt-indent .check').forEach(c => { c.textContent = ' '; });
-        item.querySelector('.check').textContent = '✓';
+        item.querySelector('.check').textContent = '??;
         applyFormat(mc);
       });
     });
   }
 
-  // XML/JSON 초기 포맷 적용 (응답 수신 시 즉시 포맷팅)
+  // XML/JSON 珥덇린 ?щ㎎ ?곸슜 (?묐떟 ?섏떊 ??利됱떆 ?щ㎎??
   if (mc.querySelector('.js-res-body-toolbar')) {
-    console.log('[arc-client] 초기 포맷 적용 호출');
+    console.log('[arc-client] 珥덇린 ?щ㎎ ?곸슜 ?몄텧');
     applyFormat(mc);
   }
 
-  // JSON 트리 초기 렌더링
+  // JSON ?몃━ 珥덇린 ?뚮뜑留?
   const treeContainer = mc.querySelector('.js-res-tree');
   if (treeContainer && !treeContainer.hasChildNodes()) {
     const tab = tabs.find(t => t.id === activeTabId);
@@ -2297,44 +2674,48 @@ function bindContentEvents() {
     }
   }
 
-  // KV 추가
+  // KV 異붽?
   mc.querySelector('.js-add-param')?.addEventListener('click', () => { addKvRow(mc.querySelector('.js-param-rows')); markDirty(); });
   mc.querySelector('.js-add-header')?.addEventListener('click', () => { addKvRow(mc.querySelector('.js-header-rows')); markDirty(); });
 
-  // KV 삭제 이벤트 위임
+  // KV ??젣 ?대깽???꾩엫
   mc.querySelectorAll('.js-param-rows, .js-header-rows').forEach(container => {
     container.addEventListener('click', (e) => {
       if (e.target.classList.contains('rm')) { e.target.closest('.kv-row')?.remove(); markDirty(); }
     });
-    // KV 입력 변경 감지
+    // KV ?낅젰 蹂寃?媛먯?
     container.addEventListener('input', markDirty);
   });
 
-  // Auth 타입 변경
+  // Auth ???蹂寃?
   mc.querySelector('.js-auth-type')?.addEventListener('change', (e) => {
     const fields = mc.querySelector('.js-auth-fields');
     if (fields) fields.innerHTML = authFieldsHtml(e.target.value);
     markDirty();
   });
-  // Auth 필드 입력 변경 감지 (이벤트 위임)
+  // Auth ?꾨뱶 ?낅젰 蹂寃?媛먯? (?대깽???꾩엫)
   mc.querySelector('.js-auth-fields')?.addEventListener('input', markDirty);
 
-  // Body 타입 변경 → Content-Type 자동 설정
+  // Body ???蹂寃???Content-Type ?먮룞 ?ㅼ젙
   mc.querySelector('.js-body-type')?.addEventListener('change', (e) => {
     const bodyType = e.target.value;
     const textarea = mc.querySelector('.js-body');
-    if (textarea) textarea.style.display = bodyType === 'none' ? 'none' : '';
+    const formDataPanel = mc.querySelector('.js-formdata-panel');
+    const binaryPanel = mc.querySelector('.js-binary-panel');
+    if (textarea) textarea.style.display = (bodyType === 'none' || bodyType === 'formdata' || bodyType === 'binary') ? 'none' : '';
+    if (formDataPanel) formDataPanel.classList.toggle('hidden', bodyType !== 'formdata');
+    if (binaryPanel) binaryPanel.classList.toggle('hidden', bodyType !== 'binary');
     syncAutoContentType(mc, bodyType);
     markDirty();
   });
-  // 초기 렌더링 시 auto Content-Type 동기화
+  // 珥덇린 ?뚮뜑留???auto Content-Type ?숆린??
   var initBodyType = mc.querySelector('.js-body-type')?.value || 'none';
   if (initBodyType !== 'none') syncAutoContentType(mc, initBodyType);
 
-  // Timeout 입력 변경 감지
+  // Timeout ?낅젰 蹂寃?媛먯?
   mc.querySelector('.js-timeout')?.addEventListener('input', markDirty);
 
-  // === textarea 자동 높이 조절 ===
+  // === textarea ?먮룞 ?믪씠 議곗젅 ===
   var bodyTa = mc.querySelector('.js-body');
   if (bodyTa) {
     function autoGrow() {
@@ -2349,7 +2730,42 @@ function bindContentEvents() {
     autoGrow();
   }
 
-  // === 드래그 구분선 ===
+  mc.querySelector('.js-add-formdata-text')?.addEventListener('click', () => {
+    addFormDataRow(mc.querySelector('.js-formdata-rows'), 'text');
+    markDirty();
+  });
+  mc.querySelector('.js-add-formdata-file')?.addEventListener('click', () => {
+    addFormDataRow(mc.querySelector('.js-formdata-rows'), 'file');
+    markDirty();
+  });
+  mc.querySelector('.js-formdata-rows')?.addEventListener('click', (e) => {
+    if (e.target.classList.contains('rm')) {
+      e.target.closest('.formdata-row')?.remove();
+      markDirty();
+      return;
+    }
+    if (e.target.classList.contains('js-formdata-browse')) {
+      const row = e.target.closest('.formdata-row');
+      vscode.postMessage({ type: 'pickFile', target: 'formdata', rowId: row?.dataset.rowId });
+    }
+  });
+  mc.querySelector('.js-formdata-rows')?.addEventListener('change', (e) => {
+    if (e.target.classList.contains('js-formdata-type')) {
+      syncFormDataRow(e.target.closest('.formdata-row'));
+    }
+    markDirty();
+  });
+  mc.querySelector('.js-formdata-rows')?.addEventListener('input', markDirty);
+  mc.querySelectorAll('.formdata-row').forEach(syncFormDataRow);
+
+  mc.querySelector('.js-browse-binary')?.addEventListener('click', () => {
+    vscode.postMessage({ type: 'pickFile', target: 'binary' });
+  });
+  mc.querySelector('.js-binary-path')?.addEventListener('input', markDirty);
+  mc.querySelector('.js-script-prerequest')?.addEventListener('input', markDirty);
+  mc.querySelector('.js-script-test')?.addEventListener('input', markDirty);
+
+  // === ?쒕옒洹?援щ텇??===
   var divider = mc.querySelector('.divider');
   var splitEl = mc.querySelector('.split');
   var reqArea = mc.querySelector('.req-area');
@@ -2391,6 +2807,8 @@ var BODY_TYPE_CT = {
   json: 'application/json',
   xml: 'application/xml',
   form: 'application/x-www-form-urlencoded',
+  formdata: 'multipart/form-data',
+  binary: 'application/octet-stream',
   raw: 'text/plain',
 };
 
@@ -2398,13 +2816,13 @@ function syncAutoContentType(mc, bodyType) {
   var headerRows = mc.querySelector('.js-header-rows');
   if (!headerRows) return;
 
-  // 기존 auto Content-Type 행 제거
+  // 湲곗〈 auto Content-Type ???쒓굅
   headerRows.querySelectorAll('.kv-row[data-auto="content-type"]').forEach(function(r) { r.remove(); });
 
   var ct = BODY_TYPE_CT[bodyType];
-  if (!ct) return; // none이면 추가하지 않음
+  if (!ct) return; // none?대㈃ 異붽??섏? ?딆쓬
 
-  // 수동으로 Content-Type이 이미 있으면 추가하지 않음
+  // ?섎룞?쇰줈 Content-Type???대? ?덉쑝硫?異붽??섏? ?딆쓬
   var hasManual = false;
   headerRows.querySelectorAll('.kv-row:not([data-auto])').forEach(function(row) {
     var keyInput = row.querySelectorAll('input[type="text"]')[0];
@@ -2412,7 +2830,7 @@ function syncAutoContentType(mc, bodyType) {
   });
   if (hasManual) return;
 
-  // auto 행 추가
+  // auto ??異붽?
   var row = document.createElement('div');
   row.className = 'kv-row';
   row.dataset.auto = 'content-type';
@@ -2442,9 +2860,9 @@ function sendActiveTab() {
   if (tab.loading) return;
   const mc = mainContent;
 
-  // 1) Send 버튼 눌림 효과 → renderContent에서 Stop으로 전환됨
+  // 1) Send 踰꾪듉 ?뚮┝ ?④낵 ??renderContent?먯꽌 Stop?쇰줈 ?꾪솚??
 
-  // 2) URL 입력란 빛 줄기 sweep
+  // 2) URL ?낅젰? 鍮?以꾧린 sweep
   var urlWrap = mc.querySelector('.url-input-wrap');
   if (urlWrap) {
     urlWrap.classList.remove('sweep');
@@ -2453,7 +2871,7 @@ function sendActiveTab() {
     setTimeout(function() { urlWrap.classList.remove('sweep'); }, 350);
   }
 
-  // auto Content-Type 포함한 전체 헤더 수집
+  // auto Content-Type ?ы븿???꾩껜 ?ㅻ뜑 ?섏쭛
   const allHeaders = collectAllKv(mc.querySelector('.js-header-rows'));
   tab.loading = true;
   tab.error = null;
@@ -2462,18 +2880,18 @@ function sendActiveTab() {
   tab.sendTime = Date.now();
   renderContent();
 
-  // 3) 전송 중 네온 펄스 (renderContent 후 다시 쿼리)
+  // 3) ?꾩넚 以??ㅼ삩 ?꾩뒪 (renderContent ???ㅼ떆 荑쇰━)
   var urlInput = mc.querySelector('.js-url');
   if (urlInput) {
     urlInput.classList.add('neon-active');
   }
 
-  // 3초 후 경과시간 실시간 표시 + 프로그레스 바
+  // 3珥???寃쎄낵?쒓컙 ?ㅼ떆媛??쒖떆 + ?꾨줈洹몃젅??諛?
   var elapsedTimer = null;
   var progressTimer = setTimeout(function() {
     if (!tab.loading) return;
     tab.progressVisible = true;
-    // 경과시간 표시 시작
+    // 寃쎄낵?쒓컙 ?쒖떆 ?쒖옉
     var timerEl = mc.querySelector('.js-elapsed-timer');
     if (!timerEl) {
       var loadingDiv = mc.querySelector('.res-area > div');
@@ -2497,11 +2915,11 @@ function sendActiveTab() {
 
   vscode.postMessage({
     type: 'sendRequest', tabId: tab.id,
-    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, auth: tab.auth, timeout: tab.timeout,
+    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout,
   });
 }
 
-// === KV 행 ===
+// === KV ??===
 function kvRowsHtml(items) {
   return (items || []).map(kv =>
     '<div class="kv-row">' +
@@ -2530,12 +2948,83 @@ function collectKv(container) {
   if (!container) return [];
   const arr = [];
   container.querySelectorAll('.kv-row').forEach(row => {
-    if (row.dataset.auto) return; // auto 행 제외
+    if (row.dataset.auto) return; // auto ???쒖쇅
     const cb = row.querySelector('input[type="checkbox"]');
     const inputs = row.querySelectorAll('input[type="text"],input[type="password"]');
     if (inputs[0]?.value) arr.push({ key: inputs[0].value, value: inputs[1].value, enabled: cb?.checked !== false });
   });
   return arr;
+}
+
+function formDataRowsHtml(items) {
+  return (items || []).map(function(field) {
+    var isFile = field.type === 'file';
+    return '<div class="kv-row formdata-row" data-row-id="' + escapeAttr(field.id || ('fd_' + Math.random().toString(36).slice(2, 8))) + '">' +
+      '<input type="checkbox"' + (field.enabled !== false ? ' checked' : '') + '/>' +
+      '<input type="text" class="js-formdata-key" placeholder="Key" value="' + escapeAttr(field.key || '') + '"/>' +
+      '<select class="js-formdata-type body-type-select" style="width:84px;margin-bottom:0">' +
+        '<option value="text"' + (isFile ? '' : ' selected') + '>Text</option>' +
+        '<option value="file"' + (isFile ? ' selected' : '') + '>File</option>' +
+      '</select>' +
+      '<input type="text" class="js-formdata-value" placeholder="' + (isFile ? 'File Path' : 'Value') + '" value="' + escapeAttr(field.value || '') + '"/>' +
+      '<button class="btn btn-s js-formdata-browse' + (isFile ? '' : ' hidden') + '" type="button" style="padding:3px 8px">Browse</button>' +
+      '<span class="rm" title="Remove">&times;</span>' +
+    '</div>';
+  }).join('');
+}
+
+function addFormDataRow(container, type) {
+  if (!container) return;
+  var row = document.createElement('div');
+  row.className = 'kv-row formdata-row';
+  row.dataset.rowId = 'fd_' + Math.random().toString(36).slice(2, 10);
+  row.innerHTML =
+    '<input type="checkbox" checked/>' +
+    '<input type="text" class="js-formdata-key" placeholder="Key"/>' +
+    '<select class="js-formdata-type body-type-select" style="width:84px;margin-bottom:0">' +
+      '<option value="text"' + (type === 'file' ? '' : ' selected') + '>Text</option>' +
+      '<option value="file"' + (type === 'file' ? ' selected' : '') + '>File</option>' +
+    '</select>' +
+    '<input type="text" class="js-formdata-value" placeholder="' + (type === 'file' ? 'File Path' : 'Value') + '"/>' +
+    '<button class="btn btn-s js-formdata-browse' + (type === 'file' ? '' : ' hidden') + '" type="button" style="padding:3px 8px">Browse</button>' +
+    '<span class="rm" title="Remove">&times;</span>';
+  container.appendChild(row);
+}
+
+function syncFormDataRow(row) {
+  if (!row) return;
+  var type = row.querySelector('.js-formdata-type')?.value || 'text';
+  var valueInput = row.querySelector('.js-formdata-value');
+  var browseBtn = row.querySelector('.js-formdata-browse');
+  if (valueInput) valueInput.placeholder = type === 'file' ? 'File Path' : 'Value';
+  if (browseBtn) browseBtn.classList.toggle('hidden', type !== 'file');
+}
+
+function collectFormData(container) {
+  if (!container) return [];
+  var arr = [];
+  container.querySelectorAll('.formdata-row').forEach(function(row) {
+    var cb = row.querySelector('input[type="checkbox"]');
+    var key = row.querySelector('.js-formdata-key')?.value || '';
+    var value = row.querySelector('.js-formdata-value')?.value || '';
+    var type = row.querySelector('.js-formdata-type')?.value || 'text';
+    if (!key && !value) return;
+    arr.push({
+      id: row.dataset.rowId || ('fd_' + Math.random().toString(36).slice(2, 8)),
+      key: key,
+      value: value,
+      enabled: cb?.checked !== false,
+      type: type === 'file' ? 'file' : 'text',
+    });
+  });
+  return arr;
+}
+
+function collectScripts(mc) {
+  return {
+    preRequest: mc.querySelector('.js-script-prerequest')?.value || '',
+    test: mc.querySelector('.js-script-test')?.value || '',
+  };
 }
 
 // === Auth ===
@@ -2580,7 +3069,7 @@ function collectAuth(mc) {
   return auth;
 }
 
-// === 환경변수 편집 ===
+// === ?섍꼍蹂???몄쭛 ===
 const envEditor = document.getElementById('envEditor');
 const envEditorName = document.getElementById('envEditorName');
 const envVarRows = document.getElementById('envVarRows');
@@ -2588,7 +3077,7 @@ const envVarRows = document.getElementById('envVarRows');
 document.getElementById('addEnvVarBtn').addEventListener('click', () => addKvRow(envVarRows));
 document.getElementById('envCloseBtn').addEventListener('click', () => envEditor.classList.add('hidden'));
 
-// 환경변수 자동저장 (debounce 500ms)
+// ?섍꼍蹂???먮룞???(debounce 500ms)
 const envDirtyDot = document.getElementById('envDirtyDot');
 const envAutoSaved = document.getElementById('envAutoSaved');
 let envSaveTimer = null;
@@ -2603,7 +3092,7 @@ function envAutoSave() {
   if (!editingEnvId) return;
   const vars = collectKv(envVarRows);
   vscode.postMessage({ type: 'saveEnvironmentVars', envId: editingEnvId, variables: vars });
-  // 저장 완료 피드백
+  // ????꾨즺 ?쇰뱶諛?
   envDirtyDot.classList.remove('show');
   envAutoSaved.classList.add('show');
   clearTimeout(envAutoSavedTimer);
@@ -2616,7 +3105,7 @@ function envScheduleSave() {
   envSaveTimer = setTimeout(envAutoSave, 500);
 }
 
-// 입력 변경 감지 (input, checkbox, blur)
+// ?낅젰 蹂寃?媛먯? (input, checkbox, blur)
 envVarRows.addEventListener('input', envScheduleSave);
 envVarRows.addEventListener('change', envScheduleSave);
 envVarRows.addEventListener('focusout', () => {
@@ -2632,7 +3121,7 @@ envVarRows.addEventListener('click', (e) => {
   }
 });
 
-// === 기본 헤더 편집 ===
+// === 湲곕낯 ?ㅻ뜑 ?몄쭛 ===
 const defaultHeadersEditor = document.getElementById('defaultHeadersEditor');
 const defaultHeaderRows = document.getElementById('defaultHeaderRows');
 
@@ -2646,9 +3135,27 @@ defaultHeaderRows.addEventListener('click', (e) => {
   if (e.target.classList.contains('rm')) e.target.closest('.kv-row')?.remove();
 });
 
-// === Extension → Webview 메시지 ===
+// === Extension ??Webview 硫붿떆吏 ===
 window.addEventListener('message', (event) => {
   const msg = event.data;
+
+  if (msg.type === 'requestCanceled') {
+    const tab = tabs.find(t => t.id === msg.tabId);
+    if (!tab) return;
+    clearTabRequestState(tab);
+    tab.error = null;
+    if (activeTabId === msg.tabId) {
+      var neonEl = mainContent.querySelector('.js-url.neon-active');
+      if (neonEl) neonEl.classList.remove('neon-active');
+      renderContent();
+    } else {
+      renderTabBar();
+    }
+  }
+
+  private static createEmptyScripts(): RequestScripts {
+    return { preRequest: '', test: '' };
+  }
 
   if (msg.type === 'receiveResponse' || msg.type === 'responseError') {
     const tab = tabs.find(t => t.id === msg.tabId);
@@ -2656,12 +3163,12 @@ window.addEventListener('message', (event) => {
     clearTabRequestState(tab);
     tab.slideIn = true;
 
-    // 네온 펄스 제거
+    // ?ㅼ삩 ?꾩뒪 ?쒓굅
     var neonEl = mainContent.querySelector('.js-url.neon-active');
     if (neonEl) neonEl.classList.remove('neon-active');
 
     if (msg.type === 'receiveResponse') {
-      // 직전 응답 저장 (빠른 비교용) — 현재 포맷 스타일도 함께 저장
+      // 吏곸쟾 ?묐떟 ???(鍮좊Ⅸ 鍮꾧탳?? ???꾩옱 ?щ㎎ ?ㅽ??쇰룄 ?④퍡 ???
       if (tab.response) {
         var prevCt = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || 'text/plain';
         var prevEnv = currentEnvName ? '[' + currentEnvName + ']' : '';
@@ -2671,13 +3178,15 @@ window.addEventListener('message', (event) => {
       tab.response = msg.response;
       tab.resolvedUrl = msg.resolvedUrl || '';
       tab.resolvedHeaders = msg.resolvedHeaders || [];
+      tab.scriptResults = msg.scriptResults || { logs: [], tests: [] };
       tab.error = null;
     } else {
       tab.error = msg.error;
       tab.response = null;
+      tab.scriptResults = null;
     }
     if (activeTabId === msg.tabId) {
-      // 총알 로딩 바: 끝까지 달려가며 사라지는 완료 애니메이션
+      // 珥앹븣 濡쒕뵫 諛? ?앷퉴吏 ?щ젮媛硫??щ씪吏???꾨즺 ?좊땲硫붿씠??
       var bp = mainContent.querySelector('.js-bullet-progress');
       if (bp) {
         var glow = bp.querySelector('.bullet-glow');
@@ -2688,20 +3197,20 @@ window.addEventListener('message', (event) => {
         }
         bp.classList.add('finishing');
       }
-      // 완료 애니메이션(0.25초) 후 renderContent
+      // ?꾨즺 ?좊땲硫붿씠??0.25珥? ??renderContent
       setTimeout(function() {
         renderContent();
         setTimeout(function() {
           var sc = tab.response ? Math.floor(tab.response.status / 100) : 0;
           var isError = (sc >= 4 || !tab.response);
 
-          // 상태코드 배지 효과
+          // ?곹깭肄붾뱶 諛곗? ?④낵
           var badge = mainContent.querySelector('.status');
           if (badge) {
             badge.classList.add(isError ? 'flash-error' : 'flash-success');
           }
 
-          // 4xx/5xx: 화면 전체 빨간색 번쩍
+          // 4xx/5xx: ?붾㈃ ?꾩껜 鍮④컙??踰덉찉
           if (isError && tab.response) {
             var flash = document.createElement('div');
             flash.className = 'screen-flash';
@@ -2709,7 +3218,7 @@ window.addEventListener('message', (event) => {
             setTimeout(function() { flash.remove(); }, 150);
           }
 
-          // 빠른 응답 (100ms 이하): PERFECT!
+          // 鍮좊Ⅸ ?묐떟 (100ms ?댄븯): PERFECT!
           if (tab.response && tab.response.time <= 100) {
             var meta = mainContent.querySelector('.response-meta');
             if (meta) {
@@ -2724,7 +3233,7 @@ window.addEventListener('message', (event) => {
         }, 30);
       }, 250);
     }
-    // slide-in은 한 번만 적용
+    // slide-in? ??踰덈쭔 ?곸슜
     setTimeout(function() { tab.slideIn = false; }, 300);
   }
 
@@ -2733,18 +3242,18 @@ window.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'restoreTabState') {
-    // 저장된 탭들 복원
+    // ??λ맂 ??뱾 蹂듭썝
     var restoreTabs = msg.tabs || [];
     var restoreIdx = msg.activeIndex || 0;
     if (restoreTabs.length > 0) {
-      // 초기 빈 탭 제거 (탭이 1개이고 URL이 비어있으면)
+      // 珥덇린 鍮????쒓굅 (??씠 1媛쒖씠怨?URL??鍮꾩뼱?덉쑝硫?
       if (tabs.length === 1 && !tabs[0].url) {
         tabs.splice(0, 1);
       }
       for (var ri = 0; ri < restoreTabs.length; ri++) {
         createTab(restoreTabs[ri]);
       }
-      // 활성 탭 복원
+      // ?쒖꽦 ??蹂듭썝
       if (restoreIdx >= 0 && restoreIdx < tabs.length) {
         switchTab(tabs[restoreIdx].id);
       }
@@ -2757,7 +3266,7 @@ window.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'loadRequest') {
-    // 중복 탭 방지: requestId가 있으면 기존 탭에서 검색
+    // 以묐났 ??諛⑹?: requestId媛 ?덉쑝硫?湲곗〈 ??뿉??寃??
     if (msg.requestId) {
       var existing = tabs.find(function(t) { return t.requestId === msg.requestId; });
       if (existing) {
@@ -2774,8 +3283,28 @@ window.addEventListener('message', (event) => {
       params: msg.params || [],
       body: msg.body || '',
       bodyType: msg.bodyType || 'none',
+      formData: msg.formData || [],
+      binaryFilePath: msg.binaryFilePath || '',
       auth: msg.auth || { type: 'none' },
+      scripts: msg.scripts || { preRequest: '', test: '' },
     });
+  }
+
+  if (msg.type === 'pickFileResult') {
+    if (msg.target === 'binary') {
+      var binaryInput = mainContent.querySelector('.js-binary-path');
+      if (binaryInput && msg.filePath) {
+        binaryInput.value = msg.filePath;
+        markDirty();
+      }
+    } else if (msg.target === 'formdata' && msg.rowId) {
+      var row = mainContent.querySelector('.formdata-row[data-row-id="' + msg.rowId + '"]');
+      var input = row?.querySelector('.js-formdata-value');
+      if (input && msg.filePath) {
+        input.value = msg.filePath;
+        markDirty();
+      }
+    }
   }
 
   if (msg.type === 'loadEnvironment') {
@@ -2803,10 +3332,10 @@ window.addEventListener('message', (event) => {
     }
   }
 
-  // === Save 결과 피드백 ===
+  // === Save 寃곌낵 ?쇰뱶諛?===
   if (msg.type === 'saveRequestResult') {
     if (msg.saved) {
-      // 탭에 컬렉션 요청 ID와 이름 연결 + dirty 초기화
+      // ??뿉 而щ젆???붿껌 ID? ?대쫫 ?곌껐 + dirty 珥덇린??
       var savedTab = _pendingCloseAfterSave
         ? tabs.find(function(t){return t.id === _pendingCloseAfterSave})
         : tabs.find(function(t){return t.id === activeTabId});
@@ -2818,28 +3347,28 @@ window.addEventListener('message', (event) => {
       }
       renderTabBar();
       if (pendingSaveBtn) {
-        showBtnFeedback(pendingSaveBtn, '✓ Saved!', 1200);
+        showBtnFeedback(pendingSaveBtn, '??Saved!', 1200);
       }
-      // dirty 확인 다이얼로그에서 "저장" 선택 후 닫기
+      // dirty ?뺤씤 ?ㅼ씠?쇰줈洹몄뿉??"??? ?좏깮 ???リ린
       if (_pendingCloseAfterSave) {
         doCloseTab(_pendingCloseAfterSave);
         _pendingCloseAfterSave = null;
       }
       debouncePersist();
     } else {
-      // 저장 취소 시 pendingClose도 취소
+      // ???痍⑥냼 ??pendingClose??痍⑥냼
       _pendingCloseAfterSave = null;
     }
     pendingSaveBtn = null;
   }
   if (msg.type === 'saveResponseBodyResult') {
     if (msg.saved && pendingSaveResponseBtn) {
-      showBtnFeedback(pendingSaveResponseBtn, '✓ Saved!', 1200);
+      showBtnFeedback(pendingSaveResponseBtn, '??Saved!', 1200);
     }
     pendingSaveResponseBtn = null;
   }
 
-  // === 컬렉션 러너 메시지 ===
+  // === 而щ젆???щ꼫 硫붿떆吏 ===
   if (msg.type === 'runCollectionStart') {
     showRunner(msg.name, msg.total);
   }
@@ -2851,13 +3380,13 @@ window.addEventListener('message', (event) => {
   }
 });
 
-// === 컬렉션 러너 UI ===
+// === 而щ젆???щ꼫 UI ===
 var runnerOverlay = null;
 var runnerResults = [];
 
 function showRunner(name, total) {
   runnerResults = [];
-  // 오버레이 생성
+  // ?ㅻ쾭?덉씠 ?앹꽦
   if (runnerOverlay) runnerOverlay.remove();
   runnerOverlay = document.createElement('div');
   runnerOverlay.className = 'runner-overlay';
@@ -2882,17 +3411,17 @@ function showRunner(name, total) {
 
   document.body.appendChild(runnerOverlay);
 
-  // Stop 버튼
+  // Stop 踰꾪듉
   runnerOverlay.querySelector('.js-runner-stop').addEventListener('click', function() {
     vscode.postMessage({ type: 'stopCollectionRun' });
     this.disabled = true;
     this.textContent = 'Stopping...';
   });
-  // Close 버튼
+  // Close 踰꾪듉
   runnerOverlay.querySelector('.js-runner-close').addEventListener('click', function() {
     if (runnerOverlay) { runnerOverlay.remove(); runnerOverlay = null; }
   });
-  // 행 클릭 이벤트 위임
+  // ???대┃ ?대깽???꾩엫
   runnerOverlay.querySelector('.js-runner-list').addEventListener('click', function(e) {
     var row = e.target.closest('.runner-row');
     if (!row) return;
@@ -2912,7 +3441,7 @@ function showRunner(name, total) {
       var body = r.response.body || '';
       var ct = (r.response.headers?.['content-type'] || r.response.headers?.['Content-Type'] || '').toLowerCase();
       if (r.response.bodyBase64 && isBinaryContentType(ct)) {
-        body = '[바이너리 응답입니다. Save 버튼으로 원본 파일을 저장하세요.]';
+        body = '[諛붿씠?덈━ ?묐떟?낅땲?? Save 踰꾪듉?쇰줈 ?먮낯 ?뚯씪????ν븯?몄슂.]';
       }
       if (body.length > 2000) body = body.substring(0, 2000) + '\\n... (truncated)';
       detail.textContent = 'Status: ' + r.response.status + ' ' + r.response.statusText +
@@ -2941,39 +3470,39 @@ function updateRunnerRow(msg) {
     '<span class="rr-icon">' + icon + '</span>';
   list.appendChild(row);
 
-  // 결과 저장
+  // 寃곌낵 ???
   runnerResults[msg.index] = { error: msg.error, response: msg.response };
 
-  // 프로그레스 업데이트
+  // ?꾨줈洹몃젅???낅뜲?댄듃
   var pct = Math.round(((msg.index + 1) / msg.total) * 100);
   runnerOverlay.querySelector('.js-runner-counter').textContent = (msg.index + 1) + '/' + msg.total;
   runnerOverlay.querySelector('.js-runner-bar').style.width = pct + '%';
   runnerOverlay.querySelector('.js-runner-pass').textContent = msg.passed;
   runnerOverlay.querySelector('.js-runner-fail').textContent = msg.failed;
 
-  // 자동 스크롤
+  // ?먮룞 ?ㅽ겕濡?
   list.scrollTop = list.scrollHeight;
 }
 
 function finishRunner(msg) {
   if (!runnerOverlay) return;
-  // 스피너 제거
+  // ?ㅽ뵾???쒓굅
   var spinner = runnerOverlay.querySelector('.js-runner-spinner');
   if (spinner) spinner.remove();
-  // Stop → Close 전환
+  // Stop ??Close ?꾪솚
   var stopBtn = runnerOverlay.querySelector('.js-runner-stop');
   if (stopBtn) stopBtn.classList.add('hidden');
   var closeBtn = runnerOverlay.querySelector('.js-runner-close');
   if (closeBtn) closeBtn.classList.remove('hidden');
-  // 최종 시간 표시
+  // 理쒖쥌 ?쒓컙 ?쒖떆
   runnerOverlay.querySelector('.js-runner-time').textContent = 'Time: ' + msg.time + 'ms';
-  // 바 100% (또는 중단 시 현재 값 유지)
+  // 諛?100% (?먮뒗 以묐떒 ???꾩옱 媛??좎?)
   if (!msg.stopped) {
     runnerOverlay.querySelector('.js-runner-bar').style.width = '100%';
   }
 }
 
-// === JSON 트리 뷰 ===
+// === JSON ?몃━ 酉?===
 function buildJsonTree(val, key, isLast) {
   const comma = isLast ? '' : '<span class="jt-comma">,</span>';
   const keyHtml = key !== '' ? '<span class="jt-key">' + escapeHtml('"' + key + '"') + '</span>: ' : '';
@@ -3011,7 +3540,7 @@ function buildJsonTree(val, key, isLast) {
   const summary = isArr ? count + ' items' : count + ' keys';
 
   return '<div class="jt-row">' +
-      '<span class="jt-toggle">▼</span>' + keyHtml +
+      '<span class="jt-toggle">??/span>' + keyHtml +
       '<span class="jt-brace">' + open + '</span>' +
       '<span class="jt-ellipsis hidden" title="' + summary + '"> ... ' + summary + ' </span>' +
     '</div>' +
@@ -3025,7 +3554,7 @@ function bindTreeToggles(container) {
     const ellipsis = e.target.closest('.jt-ellipsis');
     if (!toggle && !ellipsis) return;
 
-    // ellipsis 클릭 시 → 해당 행의 토글과 동일 동작
+    // ellipsis ?대┃ ?????대떦 ?됱쓽 ?좉?怨??숈씪 ?숈옉
     const row = (toggle || ellipsis).closest('.jt-row');
     if (!row) return;
     const tgl = row.querySelector('.jt-toggle');
@@ -3035,14 +3564,14 @@ function bindTreeToggles(container) {
     if (!children || !children.classList.contains('jt-children')) return;
 
     const collapsed = children.classList.toggle('collapsed');
-    tgl.textContent = collapsed ? '▶' : '▼';
+    tgl.textContent = collapsed ? '?? : '??;
     const ell = row.querySelector('.jt-ellipsis');
     if (ell) ell.classList.toggle('hidden', !collapsed);
   });
 }
 
-// === Content-Type 감지 및 구문 하이라이팅 (highlight.js) ===
-// hljs 언어 매핑
+// === Content-Type 媛먯? 諛?援щЦ ?섏씠?쇱씠??(highlight.js) ===
+// hljs ?몄뼱 留ㅽ븨
 var hljsLangMap = { json: 'json', html: 'html', xml: 'xml', js: 'javascript', css: 'css', text: 'plaintext' };
 
 function detectLang(ct, body) {
@@ -3077,34 +3606,34 @@ function isBinaryContentType(ct) {
 }
 
 function highlightBody(body, lang) {
-  // JSON은 pretty-print 후 하이라이팅 (_formatted_json이면 이미 포맷됨)
+  // JSON? pretty-print ???섏씠?쇱씠??(_formatted_json?대㈃ ?대? ?щ㎎??
   if (lang === 'json') {
     try { body = JSON.stringify(JSON.parse(body), null, 2); } catch {}
   }
   var actualLang = lang === '_formatted_json' ? 'json' : lang;
-  // hljs 사용 가능하면 라이브러리 하이라이팅
+  // hljs ?ъ슜 媛?ν븯硫??쇱씠釉뚮윭由??섏씠?쇱씠??
   if (typeof hljs !== 'undefined') {
     var hljsLang = hljsLangMap[actualLang] || 'plaintext';
     try {
       return hljs.highlight(body, { language: hljsLang }).value;
     } catch {}
   }
-  // fallback: 단순 escape
+  // fallback: ?⑥닚 escape
   return escapeHtml(body);
 }
 
-// === Format 기능 (JSON + XML) ===
+// === Format 湲곕뒫 (JSON + XML) ===
 function getFormatOptions(mc) {
   var toolbar = mc.querySelector('.js-res-body-toolbar');
   if (!toolbar) return null;
   var styleEl = toolbar.querySelector('.js-fmt-style .check');
   var style = 'pretty';
   toolbar.querySelectorAll('.js-fmt-style').forEach(function(el) {
-    if (el.querySelector('.check').textContent.trim() === '✓') style = el.dataset.style;
+    if (el.querySelector('.check').textContent.trim() === '??) style = el.dataset.style;
   });
   var indent = '2';
   toolbar.querySelectorAll('.js-fmt-indent').forEach(function(el) {
-    if (el.querySelector('.check').textContent.trim() === '✓') indent = el.dataset.indent;
+    if (el.querySelector('.check').textContent.trim() === '??) indent = el.dataset.indent;
   });
   var indentStr = indent === 'tab' ? '\\t' : ' '.repeat(parseInt(indent));
   return { style: style, indent: indentStr, lang: toolbar.dataset.lang };
@@ -3112,7 +3641,7 @@ function getFormatOptions(mc) {
 
 function applyFormat(mc) {
   var opts = getFormatOptions(mc);
-  console.log('[arc-client] applyFormat 호출, opts:', opts);
+  console.log('[arc-client] applyFormat ?몄텧, opts:', opts);
   if (!opts) return;
   var tab = tabs.find(function(t) { return t.id === activeTabId; });
   if (!tab || !tab.response) return;
@@ -3125,10 +3654,10 @@ function applyFormat(mc) {
   } else {
     return;
   }
-  // Raw 뷰 업데이트
+  // Raw 酉??낅뜲?댄듃
   var rawEl = mc.querySelector('.js-res-raw');
   if (rawEl) rawEl.innerHTML = highlightBody(formatted, opts.lang === 'json' ? '_formatted_json' : 'xml');
-  // JSON 트리도 재렌더링 (pretty에서는 의미 없지만 일관성 유지)
+  // JSON ?몃━???щ젋?붾쭅 (pretty?먯꽌???섎? ?놁?留??쇨????좎?)
   if (opts.lang === 'json') {
     var treeEl = mc.querySelector('.js-res-tree');
     if (treeEl) {
@@ -3149,18 +3678,18 @@ function formatJson(body, style, indent) {
   } catch { return body; }
 }
 
-// === XML 포맷터 (정규식 기반, 외부 라이브러리 없음) ===
+// === XML ?щ㎎??(?뺢퇋??湲곕컲, ?몃? ?쇱씠釉뚮윭由??놁쓬) ===
 function formatXml(xml, style, indent) {
-  console.log('[arc-client] formatXml 호출, style:', style, 'indent:', JSON.stringify(indent));
-  // 선행 공백/줄바꿈 정규화
+  console.log('[arc-client] formatXml ?몄텧, style:', style, 'indent:', JSON.stringify(indent));
+  // ?좏뻾 怨듬갚/以꾨컮轅??뺢퇋??
   xml = xml.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
 
   if (style === 'compact') {
-    // 태그 사이의 공백/줄바꿈 제거
+    // ?쒓렇 ?ъ씠??怨듬갚/以꾨컮轅??쒓굅
     return xml.replace(/>\\s+</g, '><').replace(/^\\s+|\\s+$/g, '');
   }
 
-  // 토큰 분리: XML 선언, 주석, CDATA, 셀프클로징, 여는태그, 닫는태그, 텍스트
+  // ?좏겙 遺꾨━: XML ?좎뼵, 二쇱꽍, CDATA, ??꾪겢濡쒖쭠, ?щ뒗?쒓렇, ?ル뒗?쒓렇, ?띿뒪??
   var tokens = xmlTokenize(xml);
 
   if (style === 'inline') {
@@ -3216,17 +3745,17 @@ function xmlBuildPretty(tokens, indent) {
 }
 
 function xmlBuildInline(tokens, indent) {
-  // Inline Children: 자식이 텍스트 하나거나 자식이 하나뿐이면 한 줄로
-  // 1단계: 트리 구조 파악 후 inline 판정
+  // Inline Children: ?먯떇???띿뒪???섎굹嫄곕굹 ?먯떇???섎굹肉먯씠硫???以꾨줈
+  // 1?④퀎: ?몃━ 援ъ“ ?뚯븙 ??inline ?먯젙
   var lines = [];
   var depth = 0;
   var i = 0;
   while (i < tokens.length) {
     var t = tokens[i];
     if (t.type === 'open') {
-      // 다음 토큰이 텍스트+닫는태그 또는 단일 자식+닫는태그인지 확인
+      // ?ㅼ쓬 ?좏겙???띿뒪???ル뒗?쒓렇 ?먮뒗 ?⑥씪 ?먯떇+?ル뒗?쒓렇?몄? ?뺤씤
       if (i + 2 < tokens.length && tokens[i+1].type === 'text' && tokens[i+2].type === 'close') {
-        // <tag>text</tag> → 한 줄
+        // <tag>text</tag> ????以?
         lines.push(indentStr(depth, indent) + t.value + tokens[i+1].value + tokens[i+2].value);
         i += 3;
         continue;
@@ -3236,7 +3765,7 @@ function xmlBuildInline(tokens, indent) {
         i += 3;
         continue;
       }
-      // 자식이 하나 (open + text + close) 인 경우: <parent><child>text</child></parent>
+      // ?먯떇???섎굹 (open + text + close) ??寃쎌슦: <parent><child>text</child></parent>
       if (i + 4 < tokens.length &&
           tokens[i+1].type === 'open' && tokens[i+2].type === 'text' &&
           tokens[i+3].type === 'close' && tokens[i+4].type === 'close') {
@@ -3274,7 +3803,7 @@ function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;
 function escapeAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function truncate(s, n) { return s.length > n ? s.substring(0, n-1) + '...' : s; }
 
-// 미치환 변수 체크 (URL 입력란)
+// 誘몄튂??蹂??泥댄겕 (URL ?낅젰?)
 function checkUnresolvedVars() {
   var urlEl = mainContent.querySelector('.js-url');
   var overlay = mainContent.querySelector('.js-var-overlay');
@@ -3298,7 +3827,7 @@ function checkUnresolvedVars() {
     });
     overlay.innerHTML = html;
     overlay.classList.remove('hidden');
-    // 스크롤 동기화
+    // ?ㅽ겕濡??숆린??
     overlay.scrollLeft = urlEl.scrollLeft;
   } else {
     overlay.innerHTML = '';
@@ -3306,27 +3835,27 @@ function checkUnresolvedVars() {
   }
 }
 
-// 탭 상태를 Extension에 전송 (저장용)
-function persistTabState() {
-  saveActiveTabState();
-  var tabData = tabs.map(function(t) {
-    return { name: t.name, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, auth: t.auth, timeout: t.timeout, pinned: t.pinned || false, requestId: t.requestId || undefined };
-  });
+// ???곹깭瑜?Extension???꾩넚 (??μ슜)
+  function persistTabState() {
+    saveActiveTabState();
+    var tabData = tabs.map(function(t) {
+    return { name: t.name, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, timeout: t.timeout, pinned: t.pinned || false, requestId: t.requestId || undefined };
+    });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
   vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx) });
 }
 
-// 탭 변경/전환/닫기 시 자동 저장 (디바운스)
+// ??蹂寃??꾪솚/?リ린 ???먮룞 ???(?붾컮?댁뒪)
 var _persistTimer = null;
 function debouncePersist() {
   if (_persistTimer) clearTimeout(_persistTimer);
   _persistTimer = setTimeout(persistTabState, 1000);
 }
 
-// 초기 상태: 빈 탭 하나 생성
+// 珥덇린 ?곹깭: 鍮????섎굹 ?앹꽦
 createTab();
 
-// webview 준비 신호 전송
+// webview 以鍮??좏샇 ?꾩넚
 vscode.postMessage({ type: 'webviewReady' });
 </script>
 <script nonce="${nonce}" src="${hljsUri}"></script>
@@ -3334,3 +3863,6 @@ vscode.postMessage({ type: 'webviewReady' });
 </html>`;
   }
 }
+
+
+

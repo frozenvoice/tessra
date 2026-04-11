@@ -124,7 +124,10 @@ export class CurlService {
       params,
       body,
       bodyType,
+      formData: [],
+      binaryFilePath: '',
       auth,
+      scripts: { preRequest: '', test: '' },
     };
   }
 
@@ -182,6 +185,9 @@ export class CurlService {
     headers?: KeyValue[];
     params?: KeyValue[];
     body?: string;
+    bodyType?: RequestBodyType;
+    formData?: Request['formData'];
+    binaryFilePath?: string;
     auth?: AuthConfig;
   }): string {
     const parts: string[] = ['curl'];
@@ -246,7 +252,17 @@ export class CurlService {
     }
 
     // 바디
-    if (req.body) {
+    if (req.bodyType === 'formdata' && req.formData && req.formData.length > 0) {
+      for (const field of req.formData.filter((field) => field.enabled && field.key)) {
+        if (field.type === 'file') {
+          parts.push(`-F '${CurlService.shellEscape(field.key)}=@${CurlService.shellEscape(field.value)}'`);
+        } else {
+          parts.push(`-F '${CurlService.shellEscape(field.key)}=${CurlService.shellEscape(field.value)}'`);
+        }
+      }
+    } else if (req.bodyType === 'binary' && req.binaryFilePath) {
+      parts.push(`--data-binary '@${CurlService.shellEscape(req.binaryFilePath)}'`);
+    } else if (req.body) {
       parts.push(`-d '${CurlService.shellEscape(req.body)}'`);
     }
 

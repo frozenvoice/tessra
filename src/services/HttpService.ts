@@ -26,8 +26,9 @@ export class HttpService {
     method: HttpMethod,
     url: string,
     headers: KeyValue[],
-    body: string,
-    timeoutSec: number = 0
+    body: string | Buffer,
+    timeoutSec: number = 0,
+    allowInsecureHttps: boolean = false
   ): SendHandle {
     const parsedUrl = new URL(url);
     const isHttps = parsedUrl.protocol === 'https:';
@@ -47,9 +48,11 @@ export class HttpService {
       port: parsedUrl.port || (isHttps ? 443 : 80),
       path: parsedUrl.pathname + parsedUrl.search,
       headers: headerMap,
-      // 오프라인/사설 네트워크: 자체 서명 인증서 허용
-      rejectUnauthorized: false,
     };
+    if (isHttps && allowInsecureHttps) {
+      // 자체 서명 인증서 허용은 명시적으로 켠 경우에만 적용
+      options.rejectUnauthorized = false;
+    }
 
     const startTime = Date.now();
 

@@ -1,7 +1,7 @@
-// HTTP 메서드 타입
+﻿// HTTP 메서드 타입
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
 
-// 키-값 쌍 (헤더, 쿼리 파라미터 등)
+// 공통 키-값 구조
 export interface KeyValue {
   key: string;
   value: string;
@@ -12,7 +12,44 @@ export interface KeyValue {
 export type AuthType = 'none' | 'basic' | 'bearer' | 'apikey';
 
 // 요청 바디 타입
-export type RequestBodyType = 'none' | 'json' | 'xml' | 'form' | 'raw' | 'text';
+export type RequestBodyType =
+  | 'none'
+  | 'json'
+  | 'xml'
+  | 'form'
+  | 'formdata'
+  | 'binary'
+  | 'raw'
+  | 'text';
+
+export interface FormDataField {
+  id: string;
+  key: string;
+  value: string;
+  enabled: boolean;
+  type: 'text' | 'file';
+}
+
+export interface RequestScripts {
+  preRequest: string;
+  test: string;
+}
+
+export interface ScriptLogEntry {
+  level: 'log' | 'warn' | 'error';
+  message: string;
+}
+
+export interface ScriptTestResult {
+  name: string;
+  passed: boolean;
+  error?: string;
+}
+
+export interface ScriptExecutionResult {
+  logs: ScriptLogEntry[];
+  tests: ScriptTestResult[];
+}
 
 export interface AuthConfig {
   type: AuthType;
@@ -21,7 +58,7 @@ export interface AuthConfig {
   apikey?: { key: string; value: string; addTo: 'header' | 'query' };
 }
 
-// 탭 상태 (영속화용)
+// 탭 상태
 export interface TabState {
   name: string;
   method: HttpMethod;
@@ -30,10 +67,13 @@ export interface TabState {
   params: KeyValue[];
   body: string;
   bodyType: RequestBodyType;
+  formData?: FormDataField[];
+  binaryFilePath?: string;
   auth: AuthConfig;
+  scripts?: RequestScripts;
   timeout: number;
   pinned?: boolean;
-  requestId?: string;  // 컬렉션/히스토리 요청 ID (중복 탭 방지)
+  requestId?: string;
 }
 
 // HTTP 요청 정의
@@ -46,7 +86,10 @@ export interface Request {
   params: KeyValue[];
   body: string;
   bodyType: RequestBodyType;
+  formData?: FormDataField[];
+  binaryFilePath?: string;
   auth: AuthConfig;
+  scripts?: RequestScripts;
 }
 
 // HTTP 응답
@@ -54,7 +97,7 @@ export interface Response {
   status: number;
   statusText: string;
   headers: Record<string, string>;
-  rawSetCookies?: string[];  // Set-Cookie 헤더 원본 배열 (쉼표 join 하지 않은 개별 쿠키)
+  rawSetCookies?: string[];
   body: string;
   bodyBase64?: string;
   time: number;
@@ -70,7 +113,7 @@ export interface HistoryEntry {
   pinned?: boolean;
 }
 
-// 컬렉션 내 항목 (요청 또는 폴더)
+// 컬렉션 아이템
 export interface CollectionItem {
   id: string;
   type: 'request' | 'folder';
@@ -93,9 +136,11 @@ export interface Environment {
   variables: KeyValue[];
 }
 
+export type CodegenTarget = 'curl' | 'fetch' | 'axios' | 'java';
+
 // Webview ↔ Extension 메시지 타입
 export enum MessageType {
-  // Webview → Extension
+  // Webview -> Extension
   SendRequest = 'sendRequest',
   SaveRequest = 'saveRequest',
   SaveEnvironmentVars = 'saveEnvironmentVars',
@@ -104,34 +149,32 @@ export enum MessageType {
   CopyToClipboard = 'copyToClipboard',
   SaveResponseBody = 'saveResponseBody',
   SaveDefaultHeaders = 'saveDefaultHeaders',
-
   CancelRequest = 'cancelRequest',
   SaveTabState = 'saveTabState',
-
-  // Webview → Extension (응답 비교)
   CompareResponses = 'compareResponses',
-
-  // Webview → Extension (컬렉션 러너)
   StopCollectionRun = 'stopCollectionRun',
+  PickFile = 'pickFile',
+  GenerateCode = 'generateCode',
 
-  // Extension → Webview
+  // Extension -> Webview
   RestoreTabState = 'restoreTabState',
   ReceiveResponse = 'receiveResponse',
   ResponseError = 'responseError',
+  RequestCanceled = 'requestCanceled',
   LoadRequest = 'loadRequest',
   LoadEnvironment = 'loadEnvironment',
   UpdateActiveEnv = 'updateActiveEnv',
   LoadDefaultHeaders = 'loadDefaultHeaders',
   SaveRequestResult = 'saveRequestResult',
   SaveResponseBodyResult = 'saveResponseBodyResult',
+  PickFileResult = 'pickFileResult',
 
-  // Extension → Webview (컬렉션 러너)
+  // 컬렉션 러너
   RunCollectionStart = 'runCollectionStart',
   RunCollectionProgress = 'runCollectionProgress',
   RunCollectionDone = 'runCollectionDone',
 }
 
-// Webview에서 Extension으로 보내는 메시지
 export interface SendRequestMessage {
   type: MessageType.SendRequest;
   tabId: string;
@@ -141,20 +184,26 @@ export interface SendRequestMessage {
   params: KeyValue[];
   body: string;
   bodyType: RequestBodyType;
+  formData?: FormDataField[];
+  binaryFilePath?: string;
   auth: AuthConfig;
+  scripts?: RequestScripts;
   timeout?: number;
 }
 
 export interface SaveRequestMessage {
   type: MessageType.SaveRequest;
-  requestId?: string;  // 기존 컬렉션 요청 ID (있으면 덮어쓰기, 없으면 새로 생성)
+  requestId?: string;
   method: HttpMethod;
   url: string;
   headers: KeyValue[];
   params: KeyValue[];
   body: string;
   bodyType: RequestBodyType;
+  formData?: FormDataField[];
+  binaryFilePath?: string;
   auth: AuthConfig;
+  scripts?: RequestScripts;
 }
 
 export interface SaveEnvironmentVarsMessage {
@@ -170,6 +219,9 @@ export interface CopyAsCurlMessage {
   headers: KeyValue[];
   params: KeyValue[];
   body: string;
+  bodyType?: RequestBodyType;
+  formData?: FormDataField[];
+  binaryFilePath?: string;
   auth: AuthConfig;
 }
 
@@ -216,15 +268,36 @@ export interface StopCollectionRunMessage {
   type: MessageType.StopCollectionRun;
 }
 
+export interface PickFileMessage {
+  type: MessageType.PickFile;
+  target: 'binary' | 'formdata';
+  rowId?: string;
+}
+
+export interface GenerateCodeMessage {
+  type: MessageType.GenerateCode;
+  method: HttpMethod;
+  url: string;
+  headers: KeyValue[];
+  params: KeyValue[];
+  body: string;
+  bodyType: RequestBodyType;
+  formData?: FormDataField[];
+  binaryFilePath?: string;
+  auth: AuthConfig;
+}
+
 export interface WebviewReadyMessage {
   type: 'webviewReady';
 }
 
-// Extension에서 Webview로 보내는 응답 메시지
 export interface ReceiveResponseMessage {
   type: MessageType.ReceiveResponse;
   tabId: string;
   response: Response;
+  resolvedUrl?: string;
+  resolvedHeaders?: Array<{ key: string; value: string }>;
+  scriptResults?: ScriptExecutionResult;
 }
 
 export interface ResponseErrorMessage {
@@ -233,7 +306,11 @@ export interface ResponseErrorMessage {
   error: string;
 }
 
-// Extension에서 Webview로 보내는 요청 로드 메시지
+export interface RequestCanceledMessage {
+  type: MessageType.RequestCanceled;
+  tabId: string;
+}
+
 export interface LoadRequestMessage {
   type: MessageType.LoadRequest;
   requestId?: string;
@@ -243,7 +320,10 @@ export interface LoadRequestMessage {
   params: KeyValue[];
   body: string;
   bodyType: RequestBodyType;
+  formData?: FormDataField[];
+  binaryFilePath?: string;
   auth: AuthConfig;
+  scripts?: RequestScripts;
   name: string;
 }
 
@@ -259,6 +339,13 @@ export interface UpdateActiveEnvMessage {
   envName: string | null;
 }
 
+export interface PickFileResultMessage {
+  type: MessageType.PickFileResult;
+  target: 'binary' | 'formdata';
+  rowId?: string;
+  filePath?: string;
+}
+
 export type IncomingWebviewMessage =
   | SendRequestMessage
   | SaveRequestMessage
@@ -272,13 +359,17 @@ export type IncomingWebviewMessage =
   | SaveTabStateMessage
   | CompareResponsesMessage
   | StopCollectionRunMessage
+  | PickFileMessage
+  | GenerateCodeMessage
   | WebviewReadyMessage;
 
 export type OutgoingWebviewMessage =
   | ReceiveResponseMessage
   | ResponseErrorMessage
+  | RequestCanceledMessage
   | LoadRequestMessage
   | LoadEnvironmentMessage
-  | UpdateActiveEnvMessage;
+  | UpdateActiveEnvMessage
+  | PickFileResultMessage;
 
 export type WebviewMessage = IncomingWebviewMessage | OutgoingWebviewMessage;

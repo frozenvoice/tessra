@@ -144,6 +144,10 @@ export class CollectionTreeProvider
     if (!raw) { return; }
     const draggedIds: string[] = raw.value;
     if (!draggedIds || draggedIds.length === 0) { return; }
+    if (!target) {
+      vscode.window.showWarningMessage('이동할 컬렉션, 폴더 또는 요청 위에 드롭해주세요.');
+      return;
+    }
 
     const collections = this.storage.getCollections();
     if (this.isInvalidDropTarget(collections, draggedIds, target)) {
@@ -160,10 +164,8 @@ export class CollectionTreeProvider
     if (draggedItems.length === 0) { return; }
 
     // 드롭 대상에 삽입
-    if (!target || target.kind === 'collection') {
-      const col = target
-        ? collections.find((c) => c.id === target.collection.id)
-        : collections[0];
+    if (target.kind === 'collection') {
+      const col = collections.find((c) => c.id === target.collection.id);
       if (col) { col.items.push(...draggedItems); }
     } else if (target.kind === 'folder') {
       const folder = this.findItem(collections, target.item.id);
@@ -232,7 +234,10 @@ export class CollectionTreeProvider
       params: Request['params'];
       body: string;
       bodyType: RequestBodyType;
+      formData?: Request['formData'];
+      binaryFilePath?: string;
       auth: Request['auth'];
+      scripts?: Request['scripts'];
     }
   ): Promise<{ requestId: string; name: string } | null> {
     const collections = this.storage.getCollections();
@@ -244,12 +249,15 @@ export class CollectionTreeProvider
         existing.request.method = requestData.method as any;
         existing.request.url = requestData.url;
         existing.request.headers = requestData.headers ?? [];
-        existing.request.params = requestData.params ?? [];
-        existing.request.body = requestData.body ?? '';
-        existing.request.bodyType = requestData.bodyType;
-        existing.request.auth = requestData.auth ?? { type: 'none' };
-        this.storage.saveCollections(collections);
-        this.refresh();
+          existing.request.params = requestData.params ?? [];
+          existing.request.body = requestData.body ?? '';
+          existing.request.bodyType = requestData.bodyType;
+          existing.request.formData = requestData.formData ?? [];
+          existing.request.binaryFilePath = requestData.binaryFilePath ?? '';
+          existing.request.auth = requestData.auth ?? { type: 'none' };
+          existing.request.scripts = requestData.scripts ?? { preRequest: '', test: '' };
+          this.storage.saveCollections(collections);
+          this.refresh();
         return { requestId: existing.request.id, name: existing.name };
       }
     }
@@ -285,7 +293,10 @@ export class CollectionTreeProvider
         params: requestData.params ?? [],
         body: requestData.body ?? '',
         bodyType: requestData.bodyType,
+        formData: requestData.formData ?? [],
+        binaryFilePath: requestData.binaryFilePath ?? '',
         auth: requestData.auth ?? { type: 'none' },
+        scripts: requestData.scripts ?? { preRequest: '', test: '' },
       },
     };
 
