@@ -1,21 +1,21 @@
-# Arc Client - 프로젝트 규칙
+﻿# Arc Client — 프로젝트 규칙
 
 ## 프로젝트 개요
-Offline-first VS Code REST API 클라이언트 확장.
+Arc Client는 VS Code 안에서 동작하는 offline-first REST API 클라이언트 확장이다.
 
-Thunder Client의 핵심 사용성을 로그인이나 유료 제한 없이 로컬 환경에서 구현한다. 모든 데이터는 사용자 PC에만 저장되며, 네트워크 호출은 사용자가 직접 보내는 API 요청에만 사용된다.
+핵심 목표는 Thunder Client 스타일의 빠른 요청 워크플로를 로그인, 클라우드 의존성, 유료 제한 없이 로컬 환경에서 제공하는 것이다. 모든 데이터는 로컬에 저장되고, 네트워크 호출은 사용자가 명시적으로 보낸 API 요청에서만 발생한다.
 
 ## 핵심 원칙
-- 외부 네트워크 호출 금지: 텔레메트리, 업데이트 체크, 인증 서버 호출 없음
-- 로컬 저장 우선: VS Code `globalStorage` 아래 JSON 파일 기반 저장
-- 의존성 최소화: 런타임은 Node.js 내장 `http` / `https` 중심, 빌드는 `esbuild`
-- 오프라인 우선: 로그인, 계정, 클라우드 동기화 없이 동작
-- 한국어 주석: 코드 주석과 커밋 메시지는 한국어로 작성
+- 외부 서비스 의존 금지: 텔레메트리, 업데이트 체크, 인증 서버 호출 없음
+- 로컬 우선 저장: VS Code `globalStorage` 아래 JSON 파일 사용
+- 의존성 최소화: 런타임은 `esbuild` 번들 결과와 Node.js 내장 모듈 중심
+- 보안 기본값 유지: HTTPS 인증서 검증은 기본적으로 활성화
+- 문서 동기화 필수: 사용자에게 보이는 기능이나 설정을 바꾸면 `README.md`, `README.ko.md`, `AGENTS.md`, `CLAUDE.md`를 함께 검토하고 필요한 내용을 반영한다
 
 ## 기술 스택
 - TypeScript (`strict` mode)
-- VS Code Extension API (최소 `1.74.0`)
-- Webview 패널 기반 요청 UI
+- VS Code Extension API (`^1.74.0`)
+- Webview 기반 요청 패널 UI
 - TreeView 기반 사이드바 (`Collections`, `Environments`, `History`)
 - Node.js 내장 `http` / `https`
 - esbuild
@@ -23,14 +23,14 @@ Thunder Client의 핵심 사용성을 로그인이나 유료 제한 없이 로�
 - Mocha
 
 ## 코딩 규칙
-- 파일명: camelCase (서비스, 모델), PascalCase (클래스, 프로바이더)
-- 인터페이스에 `I` 접두사 사용 금지
-- 에러 처리는 `try/catch` 우선
-- 사용자에게 보이는 실패는 `vscode.window.showErrorMessage`로 알림
-- 비동기는 `async/await` 사용, Promise chain 지양
-- Webview ↔ Extension 통신은 `postMessage` 기반, 메시지 타입은 enum으로 관리
+- 파일명은 camelCase, 클래스/프로바이더는 PascalCase
+- 인터페이스 이름에 `I` 접두사 사용 금지
+- 사용자에게 보이는 실패는 `try/catch` 후 `showErrorMessage` 또는 webview 메시지로 처리
+- 비동기는 `async/await` 우선
+- Webview ↔ Extension 통신은 `postMessage` 기반으로 유지
 - Webview에서 외부 리소스 로딩 금지
-- 모든 아이콘은 VS Code 내장 codicon 사용
+- 아이콘은 VS Code 내장 codicon 또는 인라인 SVG 사용
+- 코드 주석과 커밋 메시지는 한국어를 기본으로 한다
 
 ## 현재 프로젝트 구조
 ```text
@@ -53,6 +53,7 @@ arc-client/
 │   │   ├── HttpService.ts
 │   │   ├── ImportExportService.ts
 │   │   ├── RequestBodyService.ts
+│   │   ├── ResponseCompareService.ts
 │   │   ├── ScriptRunner.ts
 │   │   ├── StorageService.ts
 │   │   └── VariableService.ts
@@ -61,34 +62,35 @@ arc-client/
 │   └── webview/
 │       └── hljs.ts
 ├── package.json
-├── tsconfig.json
-├── esbuild.config.js
-├── .vscodeignore
+├── README.md
+├── README.ko.md
 ├── AGENTS.md
-├── CLAUDE.md
-└── README.md
+└── CLAUDE.md
 ```
 
 ## 현재 구현 상태
 
 ### 완료된 기능
-1. 스캐폴딩 및 VS Code 확장 등록
-2. Webview 요청 패널과 멀티 탭 UI
-3. HTTP 요청 전송 및 취소
-4. Collections CRUD, 폴더, 정렬, 필터, 컬렉션 실행
-5. Environments CRUD, 활성 환경 전환, `{{변수}}` 치환
-6. History 저장, pin, 필터, 자동 정리
-7. 인증: Basic, Bearer, API Key
-8. Body 타입: JSON, XML, form-urlencoded, form-data, binary, raw
-9. Pre-request / Test 스크립트
-10. Import / Export: Arc JSON import, Postman collection/environment import/export, cURL import/export
-11. 코드 생성: fetch, axios, Java HttpURLConnection
-12. 응답 뷰어: body, headers, cookies, tests, 저장, 비교
+1. 멀티 탭 요청 편집기
+2. HTTP 요청 전송, 취소, 응답 표시
+3. Collections / folders / requests CRUD와 실행
+4. Environments CRUD와 `{{variable}}` 치환
+5. History 저장, pin, filter, 자동 정리
+6. 인증: Basic, Bearer, API Key
+7. Body 타입: JSON, XML, form-urlencoded, form-data, binary, raw
+8. Pre-request / Test scripts
+9. Postman collection/environment import/export
+10. cURL import / copy as cURL
+11. 코드 생성: `fetch`, `axios`, `Java HttpURLConnection`
+12. 응답 비교: `Raw`, `Normalized`, `Pretty`, ignore headers / ignore JSON paths
+13. 요청별 Settings 탭: timeout, redirects, TLS override, max size, retries, stop after headers, save to history, skip default headers, disable scripts, HTML preview 기본 열기
+14. HTML preview, JSON tree, XML format options, richer empty states와 상태 피드백 UI
+15. `arc-client.displayLanguage` 설정 기반 UI 언어 선택 (기본 영어, VS Code locale과 분리, 현재 `en`/`ko`/`ja`)
 
-### 남은 큰 항목
+### 남아 있는 큰 항목
 1. WebSocket 지원
-2. UI 폴리싱 및 추가 단축키
-3. 엣지케이스 보강과 회귀 테스트 확대
+2. 추가 UI 폴리싱과 사용성 디테일 보강
+3. 수동 E2E 점검 범위 확대
 
 ## 빌드 & 테스트
 ```bash
@@ -98,10 +100,10 @@ npm test
 npx vsce package
 ```
 
-VS Code에서 `F5`로 Extension Development Host를 실행해 수동 검증한다.
+수동 검증은 VS Code에서 `F5`로 Extension Development Host를 띄워 수행한다.
 
 ## 저장 데이터
-모든 데이터는 VS Code `globalStorage` 아래 JSON 파일로 저장한다.
+모든 데이터는 VS Code `globalStorage` 아래 JSON 파일로 저장된다.
 
 - `collections.json`
 - `history.json`
@@ -111,7 +113,7 @@ VS Code에서 `F5`로 Extension Development Host를 실행해 수동 검증한�
 - `tab-state.json`
 
 ## 주의사항
-- 기존 코드 수정 전 영향 범위를 먼저 확인할 것
-- `package.json`의 `engines.vscode` 버전은 임의로 올리지 말 것
-- 요청 보안 설정은 기본적으로 안전한 값 유지
-- 문서 업데이트 시 실제 코드 구조와 설정 키를 기준으로 작성할 것
+- 기존 기능을 건드릴 때는 webview 파싱 오류와 상태 복원 흐름을 가장 먼저 확인한다
+- `package.json`의 `engines.vscode` 버전은 임의로 올리지 않는다
+- 보안 관련 기본값은 안전한 쪽을 유지하고, 완화 옵션은 opt-in으로 둔다
+- 문서는 실제 코드 기준으로 유지하고, 기능 추가/변경 시 같은 턴에 반영한다

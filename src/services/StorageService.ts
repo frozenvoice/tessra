@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Collection, HistoryEntry, Environment, KeyValue, TabState } from '../models/types';
+import { Collection, HistoryEntry, Environment, KeyValue, TabState, CompareSettings, StoredTabState } from '../models/types';
 
 // globalStorage 경로에 JSON 파일로 데이터 영속화
 export class StorageService {
@@ -154,11 +154,11 @@ export class StorageService {
 
   // === 탭 상태 ===
 
-  getTabState(): { tabs: TabState[]; activeIndex: number } | null {
+  getTabState(): StoredTabState | null {
     return this.readJson(this.tabStatePath, null);
   }
 
-  saveTabState(tabs: TabState[], activeIndex: number): void {
-    this.writeJson(this.tabStatePath, { tabs, activeIndex });
+  saveTabState(tabs: TabState[], activeIndex: number, compareSettings?: CompareSettings): void {
+    this.writeJson(this.tabStatePath, { tabs, activeIndex, compareSettings });
   }
 }

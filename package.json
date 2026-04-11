@@ -51,6 +51,22 @@
           "type": "boolean",
           "default": false,
           "description": "%configuration.allowInsecureCertificates.description%"
+        },
+        "arc-client.displayLanguage": {
+          "type": "string",
+          "scope": "window",
+          "default": "en",
+          "enum": [
+            "en",
+            "ko",
+            "ja"
+          ],
+          "enumDescriptions": [
+            "%configuration.displayLanguage.enum.en%",
+            "%configuration.displayLanguage.enum.ko%",
+            "%configuration.displayLanguage.enum.ja%"
+          ],
+          "description": "%configuration.displayLanguage.description%"
         }
       }
     },
@@ -136,6 +152,10 @@
       {
         "command": "arc.switchEnvironment",
         "title": "%command.switchEnvironment%"
+      },
+      {
+        "command": "arc.changeDisplayLanguage",
+        "title": "%command.changeDisplayLanguage%"
       },
       {
         "command": "arc.editDefaultHeaders",

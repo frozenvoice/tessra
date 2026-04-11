@@ -35,6 +35,22 @@ export interface RequestScripts {
   test: string;
 }
 
+export type TlsValidationMode = 'default' | 'strict' | 'insecure';
+
+export interface RequestSettings {
+  timeout?: number;
+  followRedirects?: boolean;
+  saveToHistory?: boolean;
+  tlsValidation?: TlsValidationMode;
+  maxResponseSizeKb?: number;
+  retryCount?: number;
+  retryDelayMs?: number;
+  stopAfterHeaders?: boolean;
+  skipDefaultHeaders?: boolean;
+  disableScripts?: boolean;
+  openHtmlPreviewByDefault?: boolean;
+}
+
 export interface ScriptLogEntry {
   level: 'log' | 'warn' | 'error';
   message: string;
@@ -61,6 +77,7 @@ export interface AuthConfig {
 // 탭 상태
 export interface TabState {
   name: string;
+  autoName?: boolean;
   method: HttpMethod;
   url: string;
   headers: KeyValue[];
@@ -72,6 +89,16 @@ export interface TabState {
   auth: AuthConfig;
   scripts?: RequestScripts;
   timeout: number;
+  followRedirects?: boolean;
+  saveToHistory?: boolean;
+  tlsValidation?: TlsValidationMode;
+  maxResponseSizeKb?: number;
+  retryCount?: number;
+  retryDelayMs?: number;
+  stopAfterHeaders?: boolean;
+  skipDefaultHeaders?: boolean;
+  disableScripts?: boolean;
+  openHtmlPreviewByDefault?: boolean;
   jsonFormatStyle?: 'pretty' | 'compact';
   xmlFormatStyle?: 'pretty' | 'compact' | 'inline';
   formatIndent?: '2' | '4' | 'tab';
@@ -80,7 +107,7 @@ export interface TabState {
 }
 
 // HTTP 요청 정의
-export interface Request {
+export interface Request extends RequestSettings {
   id: string;
   name: string;
   method: HttpMethod;
@@ -140,6 +167,20 @@ export interface Environment {
 }
 
 export type CodegenTarget = 'curl' | 'fetch' | 'axios' | 'java';
+export type CompareMode = 'raw' | 'normalized' | 'pretty';
+
+export interface CompareSettings {
+  mode: CompareMode;
+  includeMetadataSummary: boolean;
+  ignoreHeaders: string[];
+  ignoreJsonPaths: string[];
+}
+
+export interface StoredTabState {
+  tabs: TabState[];
+  activeIndex: number;
+  compareSettings?: CompareSettings;
+}
 
 // Webview ↔ Extension 메시지 타입
 export enum MessageType {
@@ -167,6 +208,7 @@ export enum MessageType {
   LoadRequest = 'loadRequest',
   LoadEnvironment = 'loadEnvironment',
   UpdateActiveEnv = 'updateActiveEnv',
+  UpdateLocalization = 'updateLocalization',
   LoadDefaultHeaders = 'loadDefaultHeaders',
   SaveRequestResult = 'saveRequestResult',
   SaveResponseBodyResult = 'saveResponseBodyResult',
@@ -178,7 +220,7 @@ export enum MessageType {
   RunCollectionDone = 'runCollectionDone',
 }
 
-export interface SendRequestMessage {
+export interface SendRequestMessage extends RequestSettings {
   type: MessageType.SendRequest;
   tabId: string;
   method: HttpMethod;
@@ -191,10 +233,9 @@ export interface SendRequestMessage {
   binaryFilePath?: string;
   auth: AuthConfig;
   scripts?: RequestScripts;
-  timeout?: number;
 }
 
-export interface SaveRequestMessage {
+export interface SaveRequestMessage extends RequestSettings {
   type: MessageType.SaveRequest;
   requestId?: string;
   method: HttpMethod;
@@ -259,12 +300,38 @@ export interface SaveTabStateMessage {
   type: MessageType.SaveTabState;
   tabs: TabState[];
   activeIndex: number;
+  compareSettings?: CompareSettings;
 }
 
 export interface CompareResponsesMessage {
   type: MessageType.CompareResponses;
-  left: { label: string; body: string; contentType: string; formatted?: boolean };
-  right: { label: string; body: string; contentType: string; formatted?: boolean };
+  left: {
+    label: string;
+    body: string;
+    bodyBase64?: string;
+    contentType: string;
+    status?: number;
+    statusText?: string;
+    size?: number;
+    time?: number;
+    resolvedUrl?: string;
+    headers?: Record<string, string>;
+    timestamp?: number;
+  };
+  right: {
+    label: string;
+    body: string;
+    bodyBase64?: string;
+    contentType: string;
+    status?: number;
+    statusText?: string;
+    size?: number;
+    time?: number;
+    resolvedUrl?: string;
+    headers?: Record<string, string>;
+    timestamp?: number;
+  };
+  options?: CompareSettings;
 }
 
 export interface StopCollectionRunMessage {
@@ -294,6 +361,13 @@ export interface WebviewReadyMessage {
   type: 'webviewReady';
 }
 
+export interface RestoreTabStateMessage {
+  type: MessageType.RestoreTabState;
+  tabs: TabState[];
+  activeIndex: number;
+  compareSettings?: CompareSettings;
+}
+
 export interface ReceiveResponseMessage {
   type: MessageType.ReceiveResponse;
   tabId: string;
@@ -314,7 +388,7 @@ export interface RequestCanceledMessage {
   tabId: string;
 }
 
-export interface LoadRequestMessage {
+export interface LoadRequestMessage extends RequestSettings {
   type: MessageType.LoadRequest;
   requestId?: string;
   method: HttpMethod;
@@ -342,6 +416,13 @@ export interface UpdateActiveEnvMessage {
   envName: string | null;
 }
 
+export interface UpdateLocalizationMessage {
+  type: MessageType.UpdateLocalization;
+  displayLanguage: string;
+  strings: Record<string, string>;
+  dateLocale: string;
+}
+
 export interface PickFileResultMessage {
   type: MessageType.PickFileResult;
   target: 'binary' | 'formdata';
@@ -367,12 +448,14 @@ export type IncomingWebviewMessage =
   | WebviewReadyMessage;
 
 export type OutgoingWebviewMessage =
+  | RestoreTabStateMessage
   | ReceiveResponseMessage
   | ResponseErrorMessage
   | RequestCanceledMessage
   | LoadRequestMessage
   | LoadEnvironmentMessage
   | UpdateActiveEnvMessage
+  | UpdateLocalizationMessage
   | PickFileResultMessage;
 
 export type WebviewMessage = IncomingWebviewMessage | OutgoingWebviewMessage;

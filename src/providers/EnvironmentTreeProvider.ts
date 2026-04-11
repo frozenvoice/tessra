@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { StorageService } from '../services/StorageService';
 import { Environment } from '../models/types';
+import { LocalizationService } from '../services/LocalizationService';
 
 const ENV_MIME = 'application/vnd.arc.environment';
 
@@ -85,7 +86,9 @@ export class EnvironmentTreeProvider
       env.name,
       vscode.TreeItemCollapsibleState.None
     );
-    item.description = isActive ? '✓ active' : `${env.variables.length} vars`;
+    item.description = isActive
+      ? `✓ ${LocalizationService.t('environment.active')}`
+      : LocalizationService.t('environment.vars', { count: env.variables.length });
     item.iconPath = new vscode.ThemeIcon(
       isActive ? 'pass-filled' : 'symbol-variable',
       isActive ? new vscode.ThemeColor('charts.green') : undefined
@@ -95,7 +98,7 @@ export class EnvironmentTreeProvider
     // 싱글클릭: 변수 편집, 더블클릭: 활성/비활성 토글
     item.command = {
       command: 'arc.onEnvironmentClick',
-      title: 'Environment Click',
+      title: LocalizationService.t('environment.clickTitle'),
       arguments: [env],
     };
 
@@ -109,8 +112,8 @@ export class EnvironmentTreeProvider
   // 새 환경 생성
   async createEnvironment(): Promise<void> {
     const name = await vscode.window.showInputBox({
-      prompt: 'Environment name',
-      placeHolder: 'Development',
+      prompt: LocalizationService.t('environment.name.prompt'),
+      placeHolder: LocalizationService.t('environment.name.placeholder'),
     });
     if (!name) { return; }
 
@@ -127,7 +130,7 @@ export class EnvironmentTreeProvider
   // 이름 변경
   async renameEnvironment(env: Environment): Promise<void> {
     const newName = await vscode.window.showInputBox({
-      prompt: 'New name',
+      prompt: LocalizationService.t('environment.rename.prompt'),
       value: env.name,
     });
     if (!newName || newName === env.name) { return; }
@@ -142,11 +145,11 @@ export class EnvironmentTreeProvider
   // 삭제
   async deleteEnvironment(env: Environment): Promise<void> {
     const confirm = await vscode.window.showWarningMessage(
-      `Delete environment "${env.name}"?`,
+      LocalizationService.t('environment.delete.confirm', { name: env.name }),
       { modal: true },
-      'Delete'
+      LocalizationService.t('warn.delete')
     );
-    if (confirm !== 'Delete') { return; }
+    if (confirm !== LocalizationService.t('warn.delete')) { return; }
 
     const envs = this.storage.getEnvironments();
     const idx = envs.findIndex((e) => e.id === env.id);

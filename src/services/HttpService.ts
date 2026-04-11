@@ -1,4 +1,4 @@
-import * as http from 'http';
+﻿import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
 import { HttpMethod, KeyValue, Response } from '../models/types';
@@ -8,8 +8,18 @@ export interface SendHandle {
   abort: () => void;
 }
 
+export interface HttpSendOptions {
+  timeoutSec?: number;
+  allowInsecureHttps?: boolean;
+  followRedirects?: boolean;
+  maxResponseSizeBytes?: number;
+  stopAfterHeaders?: boolean;
+}
+
 // Node.js 내장 http/https 모듈로 HTTP 요청 실행
 export class HttpService {
+  private static readonly REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
+  private static readonly MAX_REDIRECTS = 10;
   private static readonly TEXT_CONTENT_TYPES = new Set([
     'application/json',
     'application/xml',
@@ -27,107 +37,236 @@ export class HttpService {
     url: string,
     headers: KeyValue[],
     body: string | Buffer,
-    timeoutSec: number = 0,
-    allowInsecureHttps: boolean = false
+    options: HttpSendOptions = {}
   ): SendHandle {
-    const parsedUrl = new URL(url);
-    const isHttps = parsedUrl.protocol === 'https:';
-    const transport = isHttps ? https : http;
-
-    // 활성화된 헤더만 적용
-    const headerMap: Record<string, string> = {};
-    for (const h of headers) {
-      if (h.enabled && h.key) {
-        headerMap[h.key] = h.value;
+    const baseHeaders: Record<string, string> = {};
+    for (const header of headers) {
+      if (header.enabled && header.key) {
+        baseHeaders[header.key] = header.value;
       }
     }
 
-    const options: http.RequestOptions & { rejectUnauthorized?: boolean } = {
-      method,
-      hostname: parsedUrl.hostname,
-      port: parsedUrl.port || (isHttps ? 443 : 80),
-      path: parsedUrl.pathname + parsedUrl.search,
-      headers: headerMap,
-    };
-    if (isHttps && allowInsecureHttps) {
-      // 자체 서명 인증서 허용은 명시적으로 켠 경우에만 적용
-      options.rejectUnauthorized = false;
-    }
-
+    const timeoutSec = Math.max(0, options.timeoutSec ?? 0);
+    const allowInsecureHttps = options.allowInsecureHttps === true;
+    const followRedirects = options.followRedirects === true;
+    const maxResponseSizeBytes = Math.max(0, options.maxResponseSizeBytes ?? 0);
+    const stopAfterHeaders = options.stopAfterHeaders === true;
     const startTime = Date.now();
 
-    let reqRef: http.ClientRequest;
+    let reqRef: http.ClientRequest | undefined;
+    let settled = false;
+    let aborted = false;
 
     const promise = new Promise<Response>((resolve, reject) => {
-      reqRef = transport.request(options, (res) => {
-        const chunks: Buffer[] = [];
+      const safeResolve = (value: Response) => {
+        if (settled) { return; }
+        settled = true;
+        resolve(value);
+      };
 
-        res.on('data', (chunk: Buffer) => {
-          chunks.push(chunk);
-        });
+      const safeReject = (error: unknown) => {
+        if (settled) { return; }
+        settled = true;
+        reject(error);
+      };
 
-        res.on('end', () => {
-          const elapsed = Date.now() - startTime;
-          const buffer = Buffer.concat(chunks);
+      const extractResponseHeaders = (rawHeaders: http.IncomingHttpHeaders): Pick<Response, 'headers' | 'rawSetCookies'> => {
+        const responseHeaders: Record<string, string> = {};
+        const rawSetCookies: string[] = [];
 
-          // 응답 헤더를 단순 레코드로 변환
-          const responseHeaders: Record<string, string> = {};
-          // Set-Cookie는 배열 그대로 보존 (expires 날짜의 쉼표 때문에 join하면 파싱 불가)
-          const rawSetCookies: string[] = [];
-          for (const [key, val] of Object.entries(res.headers)) {
-            if (val) {
-              if (key.toLowerCase() === 'set-cookie' && Array.isArray(val)) {
-                rawSetCookies.push(...val);
-                responseHeaders[key] = val.join(', ');
-              } else {
-                responseHeaders[key] = Array.isArray(val) ? val.join(', ') : val;
-              }
+        for (const [key, value] of Object.entries(rawHeaders)) {
+          if (!value) { continue; }
+          if (key.toLowerCase() === 'set-cookie' && Array.isArray(value)) {
+            rawSetCookies.push(...value);
+            responseHeaders[key] = value.join(', ');
+          } else {
+            responseHeaders[key] = Array.isArray(value) ? value.join(', ') : value;
+          }
+        }
+
+        return {
+          headers: responseHeaders,
+          rawSetCookies: rawSetCookies.length > 0 ? rawSetCookies : undefined,
+        };
+      };
+
+      const deleteHeaderCaseInsensitive = (map: Record<string, string>, headerName: string): void => {
+        for (const key of Object.keys(map)) {
+          if (key.toLowerCase() === headerName.toLowerCase()) {
+            delete map[key];
+          }
+        }
+      };
+
+      const getRedirectTarget = (
+        statusCode: number,
+        currentMethod: HttpMethod,
+        currentUrl: string,
+        currentBody: string | Buffer,
+        responseHeaders: Record<string, string>,
+        currentHeaders: Record<string, string>
+      ): { nextMethod: HttpMethod; nextUrl: string; nextBody: string | Buffer; nextHeaders: Record<string, string> } | null => {
+        const location = Object.entries(responseHeaders).find(([key]) => key.toLowerCase() === 'location')?.[1];
+        if (!location) { return null; }
+
+        let nextMethod = currentMethod;
+        let nextBody = currentBody;
+        const nextHeaders = { ...currentHeaders };
+
+        if (statusCode === 303 || ((statusCode === 301 || statusCode === 302) && currentMethod === 'POST')) {
+          nextMethod = 'GET';
+          nextBody = '';
+          deleteHeaderCaseInsensitive(nextHeaders, 'content-length');
+          deleteHeaderCaseInsensitive(nextHeaders, 'content-type');
+        }
+
+        return {
+          nextMethod,
+          nextUrl: new URL(location, currentUrl).toString(),
+          nextBody,
+          nextHeaders,
+        };
+      };
+
+      const performRequest = (
+        currentMethod: HttpMethod,
+        currentUrl: string,
+        currentBody: string | Buffer,
+        currentHeaders: Record<string, string>,
+        redirectCount: number
+      ) => {
+        if (aborted) {
+          safeReject(new Error('Request was canceled'));
+          return;
+        }
+
+        const parsedUrl = new URL(currentUrl);
+        const isHttps = parsedUrl.protocol === 'https:';
+        const transport = isHttps ? https : http;
+        const requestOptions: http.RequestOptions & { rejectUnauthorized?: boolean } = {
+          method: currentMethod,
+          hostname: parsedUrl.hostname,
+          port: parsedUrl.port || (isHttps ? 443 : 80),
+          path: parsedUrl.pathname + parsedUrl.search,
+          headers: currentHeaders,
+        };
+
+        if (isHttps && allowInsecureHttps) {
+          requestOptions.rejectUnauthorized = false;
+        }
+
+        reqRef = transport.request(requestOptions, (res) => {
+          const statusCode = res.statusCode ?? 0;
+          const headerInfo = extractResponseHeaders(res.headers);
+          const responseHeaders = headerInfo.headers;
+
+          if (followRedirects && HttpService.REDIRECT_STATUS_CODES.has(statusCode)) {
+            if (redirectCount >= HttpService.MAX_REDIRECTS) {
+              res.resume();
+              safeReject(new Error(`Too many redirects (${HttpService.MAX_REDIRECTS})`));
+              return;
+            }
+
+            const redirectTarget = getRedirectTarget(
+              statusCode,
+              currentMethod,
+              currentUrl,
+              currentBody,
+              responseHeaders,
+              currentHeaders
+            );
+            if (redirectTarget) {
+              res.resume();
+              res.on('end', () => {
+                performRequest(
+                  redirectTarget.nextMethod,
+                  redirectTarget.nextUrl,
+                  redirectTarget.nextBody,
+                  redirectTarget.nextHeaders,
+                  redirectCount + 1
+                );
+              });
+              return;
             }
           }
 
-          const contentType = responseHeaders['content-type'] ?? '';
-          const isBinary = HttpService.isBinaryContentType(contentType);
+          if (stopAfterHeaders) {
+            res.resume();
+            safeResolve({
+              status: statusCode,
+              statusText: res.statusMessage ?? '',
+              headers: responseHeaders,
+              rawSetCookies: headerInfo.rawSetCookies,
+              body: '',
+              time: Date.now() - startTime,
+              size: 0,
+            });
+            return;
+          }
 
-          resolve({
-            status: res.statusCode ?? 0,
-            statusText: res.statusMessage ?? '',
-            headers: responseHeaders,
-            rawSetCookies: rawSetCookies.length > 0 ? rawSetCookies : undefined,
-            body: buffer.toString('utf-8'),
-            bodyBase64: isBinary ? buffer.toString('base64') : undefined,
-            time: elapsed,
-            size: buffer.length,
+          const chunks: Buffer[] = [];
+          let totalSize = 0;
+
+          res.on('data', (chunk: Buffer) => {
+            totalSize += chunk.length;
+            if (maxResponseSizeBytes > 0 && totalSize > maxResponseSizeBytes) {
+              const error = new Error(`Response exceeded max size (${Math.ceil(maxResponseSizeBytes / 1024)} KB)`);
+              res.destroy();
+              reqRef?.destroy();
+              safeReject(error);
+              return;
+            }
+            chunks.push(chunk);
+          });
+
+          res.on('end', () => {
+            const buffer = Buffer.concat(chunks);
+            const contentType = responseHeaders['content-type'] ?? responseHeaders['Content-Type'] ?? '';
+            const isBinary = HttpService.isBinaryContentType(contentType);
+
+            safeResolve({
+              status: statusCode,
+              statusText: res.statusMessage ?? '',
+              headers: responseHeaders,
+              rawSetCookies: headerInfo.rawSetCookies,
+              body: buffer.toString('utf-8'),
+              bodyBase64: isBinary ? buffer.toString('base64') : undefined,
+              time: Date.now() - startTime,
+              size: buffer.length,
+            });
           });
         });
-      });
 
-      reqRef.on('error', (err) => {
-        reject(err);
-      });
-
-      // 타임아웃 (0이면 무제한)
-      if (timeoutSec > 0) {
-        const ms = timeoutSec * 1000;
-        reqRef.setTimeout(ms, () => {
-          reqRef.destroy(new Error(`Request timed out (${timeoutSec}s)`));
+        reqRef.on('error', (err) => {
+          safeReject(err);
         });
-      }
 
-      // body 전송 (GET/HEAD 제외)
-      if (body && method !== 'GET' && method !== 'HEAD') {
-        reqRef.write(body);
-      }
+        if (timeoutSec > 0) {
+          reqRef.setTimeout(timeoutSec * 1000, () => {
+            reqRef?.destroy(new Error(`Request timed out (${timeoutSec}s)`));
+          });
+        }
 
-      reqRef.end();
+        if (currentBody && currentMethod !== 'GET' && currentMethod !== 'HEAD') {
+          reqRef.write(currentBody);
+        }
+
+        reqRef.end();
+      };
+
+      performRequest(method, url, body, { ...baseHeaders }, 0);
     });
 
     return {
       promise,
-      abort: () => { reqRef.destroy(new Error('Request was canceled')); },
+      abort: () => {
+        aborted = true;
+        reqRef?.destroy(new Error('Request was canceled'));
+      },
     };
   }
 
-  // 파일 저장이 필요한 바이너리 응답만 base64로 함께 보존
+  // 파일 타입이 의심되는 바이너리 응답만 base64로 원본 보존
   private static isBinaryContentType(contentType: string): boolean {
     const mime = contentType.split(';')[0].trim().toLowerCase();
     if (!mime) { return false; }

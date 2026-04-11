@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { StorageService } from '../services/StorageService';
 import { HistoryEntry } from '../models/types';
+import { LocalizationService } from '../services/LocalizationService';
 
 const MIME = 'application/vnd.arc.history-entry';
 
@@ -37,20 +38,20 @@ export class HistoryTreeProvider
   getTreeItem(entry: HistoryEntry): vscode.TreeItem {
     const method = entry.request.method;
     const url = this.shortenUrl(entry.request.url);
-    const status = entry.response ? `${entry.response.status}` : 'ERR';
+    const status = entry.response ? `${entry.response.status}` : LocalizationService.t('history.errorShort');
     const time = entry.response ? `${entry.response.time}ms` : '';
     const label = `${method} ${url}`;
 
     const pinLabel = entry.pinned ? '📌 ' : '';
     const item = new vscode.TreeItem(pinLabel + label, vscode.TreeItemCollapsibleState.None);
     item.description = `${status} ${time}`;
-    item.tooltip = `${entry.pinned ? '[Pinned] ' : ''}${method} ${entry.request.url}\n${status} ${time}\n${new Date(entry.timestamp).toLocaleString()}`;
+    item.tooltip = `${entry.pinned ? LocalizationService.t('history.pinnedTag') : ''}${method} ${entry.request.url}\n${status} ${time}\n${LocalizationService.formatDateTime(new Date(entry.timestamp))}`;
     item.iconPath = this.getMethodIcon(method);
     item.contextValue = entry.pinned ? 'history-pinned' : 'history';
 
     item.command = {
       command: 'arc.loadFromHistory',
-      title: 'Load Request',
+      title: LocalizationService.t('tree.loadRequest'),
       arguments: [entry],
     };
 

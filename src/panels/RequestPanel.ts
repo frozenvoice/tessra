@@ -20,7 +20,10 @@ import {
   CompareResponsesMessage,
   FormDataField,
   RequestScripts,
+  RequestSettings,
   ScriptExecutionResult,
+  StoredTabState,
+  TlsValidationMode,
 } from '../models/types';
 import { CurlService } from '../services/CurlService';
 import { SendHandle } from '../services/HttpService';
@@ -28,6 +31,22 @@ import { AuthService } from '../services/AuthService';
 import { RequestBodyService } from '../services/RequestBodyService';
 import { ScriptRunner, ScriptableRequest } from '../services/ScriptRunner';
 import { CodegenService } from '../services/CodegenService';
+import { ResponseCompareService } from '../services/ResponseCompareService';
+import { LocalizationService } from '../services/LocalizationService';
+
+type ResolvedRequestSettings = {
+  timeout: number;
+  followRedirects: boolean;
+  saveToHistory: boolean;
+  tlsValidation: TlsValidationMode;
+  maxResponseSizeKb: number;
+  retryCount: number;
+  retryDelayMs: number;
+  stopAfterHeaders: boolean;
+  skipDefaultHeaders: boolean;
+  disableScripts: boolean;
+  openHtmlPreviewByDefault: boolean;
+};
 
 // Webview ?붿껌 ?⑤꼸 愿由?(?ㅼ쨷 ??吏??
 export class RequestPanel {
@@ -89,11 +108,11 @@ export class RequestPanel {
   // ??λ맂 ???곹깭瑜?webview???꾩넚
   private restoreTabState() {
     const state = RequestPanel.storage.getTabState();
-    if (state && state.tabs.length > 0) {
+    if (state && (state.tabs.length > 0 || state.compareSettings)) {
       this.pendingRestore = state;
     }
   }
-  private pendingRestore: { tabs: TabState[]; activeIndex: number } | null = null;
+  private pendingRestore: StoredTabState | null = null;
 
   private static normalizeBodyType(bodyType: string | undefined): RequestBodyType {
     switch (bodyType) {
@@ -114,6 +133,76 @@ export class RequestPanel {
 
   private static createEmptyScripts(): RequestScripts {
     return { preRequest: '', test: '' };
+  }
+
+  private static normalizeCount(value: number | undefined): number {
+    return Number.isFinite(value) && (value ?? 0) > 0 ? Math.floor(value as number) : 0;
+  }
+
+  private normalizeRequestSettings(settings?: RequestSettings): ResolvedRequestSettings {
+    const tlsValidation = settings?.tlsValidation === 'strict' || settings?.tlsValidation === 'insecure'
+      ? settings.tlsValidation
+      : 'default';
+
+    return {
+      timeout: RequestPanel.normalizeCount(settings?.timeout),
+      followRedirects: settings?.followRedirects === true,
+      saveToHistory: settings?.saveToHistory !== false,
+      tlsValidation,
+      maxResponseSizeKb: RequestPanel.normalizeCount(settings?.maxResponseSizeKb),
+      retryCount: RequestPanel.normalizeCount(settings?.retryCount),
+      retryDelayMs: RequestPanel.normalizeCount(settings?.retryDelayMs),
+      stopAfterHeaders: settings?.stopAfterHeaders === true,
+      skipDefaultHeaders: settings?.skipDefaultHeaders === true,
+      disableScripts: settings?.disableScripts === true,
+      openHtmlPreviewByDefault: settings?.openHtmlPreviewByDefault === true,
+    };
+  }
+
+  private resolveAllowInsecureHttps(tlsValidation: TlsValidationMode): boolean {
+    if (tlsValidation === 'insecure') { return true; }
+    if (tlsValidation === 'strict') { return false; }
+    return this.getAllowInsecureCertificates();
+  }
+
+  private shouldRetryResponse(status: number): boolean {
+    return status === 408 || status === 429 || status >= 500;
+  }
+
+  private cloneRequestSettings(settings: ResolvedRequestSettings): RequestSettings {
+    return {
+      timeout: settings.timeout,
+      followRedirects: settings.followRedirects,
+      saveToHistory: settings.saveToHistory,
+      tlsValidation: settings.tlsValidation,
+      maxResponseSizeKb: settings.maxResponseSizeKb,
+      retryCount: settings.retryCount,
+      retryDelayMs: settings.retryDelayMs,
+      stopAfterHeaders: settings.stopAfterHeaders,
+      skipDefaultHeaders: settings.skipDefaultHeaders,
+      disableScripts: settings.disableScripts,
+      openHtmlPreviewByDefault: settings.openHtmlPreviewByDefault,
+    };
+  }
+
+  private createCancelableDelay(
+    ms: number,
+    registerCancel?: (cancel: (() => void) | null) => void
+  ): Promise<void> {
+    if (ms <= 0) { return Promise.resolve(); }
+
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        registerCancel?.(null);
+        resolve();
+      }, ms);
+
+      registerCancel?.(() => {
+        clearTimeout(timer);
+        registerCancel?.(null);
+        reject(new Error('Request was canceled'));
+      });
+    });
   }
 
   private postMessage(message: unknown): void {
@@ -235,9 +324,29 @@ export class RequestPanel {
     RequestPanel.currentPanel = new RequestPanel(panel, extensionUri);
   }
 
+  public static refreshCurrentPanel(): void {
+    if (!RequestPanel.currentPanel) { return; }
+    RequestPanel.currentPanel.refreshLocalization();
+  }
+
   private reloadWebview(): void {
     this.webviewReady = false;
     this.panel.webview.html = this.getHtmlContent();
+  }
+
+  private refreshLocalization(): void {
+    if (!this.webviewReady) {
+      this.reloadWebview();
+      return;
+    }
+
+    const displayLanguage = LocalizationService.getDisplayLanguage();
+    this.postMessage({
+      type: MessageType.UpdateLocalization,
+      displayLanguage,
+      strings: LocalizationService.getStrings(displayLanguage),
+      dateLocale: LocalizationService.getDateLocale(displayLanguage),
+    });
   }
 
   public newTab() {
@@ -258,6 +367,17 @@ export class RequestPanel {
       binaryFilePath: req.binaryFilePath ?? '',
       auth: req.auth ?? { type: 'none' },
       scripts: req.scripts ?? RequestPanel.createEmptyScripts(),
+      timeout: req.timeout ?? 0,
+      followRedirects: req.followRedirects === true,
+      saveToHistory: req.saveToHistory !== false,
+      tlsValidation: req.tlsValidation ?? 'default',
+      maxResponseSizeKb: req.maxResponseSizeKb ?? 0,
+      retryCount: req.retryCount ?? 0,
+      retryDelayMs: req.retryDelayMs ?? 0,
+      stopAfterHeaders: req.stopAfterHeaders === true,
+      skipDefaultHeaders: req.skipDefaultHeaders === true,
+      disableScripts: req.disableScripts === true,
+      openHtmlPreviewByDefault: req.openHtmlPreviewByDefault === true,
       name: req.name || `${req.method} ${req.url}`,
     });
   }
@@ -302,7 +422,7 @@ export class RequestPanel {
     collect(items);
 
     if (requests.length === 0) {
-      vscode.window.showInformationMessage('There are no requests to run.');
+      vscode.window.showInformationMessage(LocalizationService.t('info.noRequestsToRun'));
       return;
     }
 
@@ -323,6 +443,7 @@ export class RequestPanel {
       if (this.collectionRunAbort) { break; }
 
       const { name: reqName, request: req } = requests[i];
+      const settings = this.normalizeRequestSettings(req);
       const scripts = this.normalizeScripts(req.scripts);
       let requestState = this.createScriptableRequest({
         method: req.method,
@@ -343,10 +464,12 @@ export class RequestPanel {
       let time = 0;
 
       try {
-        const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars);
-        requestState = preRequestResult.request;
-        vars = preRequestResult.envVariables;
-        this.saveActiveEnvironmentVariables(vars);
+        if (!settings.disableScripts) {
+          const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars);
+          requestState = preRequestResult.request;
+          vars = preRequestResult.envVariables;
+          this.saveActiveEnvironmentVariables(vars);
+        }
 
         const resolvedUrl = VariableService.resolve(requestState.url, vars);
         const resolvedHeaders = VariableService.resolveKeyValues(requestState.headers, vars);
@@ -358,7 +481,16 @@ export class RequestPanel {
           value: VariableService.resolve(field.value, vars),
         }));
         const resolvedBinaryFilePath = VariableService.resolve(requestState.binaryFilePath ?? '', vars);
-        const finalHeaders = [...resolvedHeaders];
+        const defaultHeaders = settings.skipDefaultHeaders
+          ? []
+          : VariableService.resolveKeyValues(RequestPanel.storage.getDefaultHeaders(), vars);
+        const requestKeySet = new Set(
+          resolvedHeaders.filter((header) => header.enabled && header.key).map((header) => header.key.toLowerCase())
+        );
+        const mergedDefaults = defaultHeaders.filter(
+          (header) => header.enabled && header.key && !requestKeySet.has(header.key.toLowerCase())
+        );
+        const finalHeaders = [...mergedDefaults, ...resolvedHeaders];
         const finalParams = [...resolvedParams];
         const unresolvedVariables = this.findUnresolvedVariables(
           resolvedUrl,
@@ -395,26 +527,62 @@ export class RequestPanel {
           auth: { type: 'none' },
         });
 
-        const handle = this.httpService.send(
-          req.method,
-          url,
-          preparedBody.headers,
-          preparedBody.data,
-          0,
-          this.getAllowInsecureCertificates()
-        );
-        this.currentCollectionRequest = handle;
-        response = await handle.promise;
+        for (let attempt = 0; attempt <= settings.retryCount; attempt++) {
+          if (this.collectionRunAbort) {
+            throw new Error('Request was canceled');
+          }
+
+          const handle = this.httpService.send(
+            req.method,
+            url,
+            preparedBody.headers,
+            preparedBody.data,
+            {
+              timeoutSec: settings.timeout,
+              allowInsecureHttps: this.resolveAllowInsecureHttps(settings.tlsValidation),
+              followRedirects: settings.followRedirects,
+              maxResponseSizeBytes: settings.maxResponseSizeKb > 0 ? settings.maxResponseSizeKb * 1024 : 0,
+              stopAfterHeaders: settings.stopAfterHeaders,
+            }
+          );
+          this.currentCollectionRequest = handle;
+
+          try {
+            response = await handle.promise;
+            this.currentCollectionRequest = null;
+          } catch (err: unknown) {
+            this.currentCollectionRequest = null;
+            if (this.collectionRunAbort || attempt >= settings.retryCount) {
+              throw err;
+            }
+            await this.createCancelableDelay(settings.retryDelayMs);
+            continue;
+          }
+
+          if (response && attempt < settings.retryCount && this.shouldRetryResponse(response.status)) {
+            await this.createCancelableDelay(settings.retryDelayMs);
+            response = null;
+            continue;
+          }
+
+          break;
+        }
+
+        if (!response) {
+          throw new Error('Request did not produce a response.');
+        }
         status = response.status;
         statusText = response.statusText;
         time = response.time;
 
-        const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars);
-        vars = testResult.envVariables;
-        this.saveActiveEnvironmentVariables(vars);
-        const failedTests = testResult.result.tests.filter((test) => !test.passed).length;
-        if (failedTests > 0) {
-          error = `Tests failed: ${failedTests}`;
+        if (!settings.disableScripts) {
+          const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars);
+          vars = testResult.envVariables;
+          this.saveActiveEnvironmentVariables(vars);
+          const failedTests = testResult.result.tests.filter((test) => !test.passed).length;
+          if (failedTests > 0) {
+            error = `Tests failed: ${failedTests}`;
+          }
         }
 
         if (status >= 400 || error) { failed++; } else { passed++; }
@@ -461,11 +629,12 @@ export class RequestPanel {
       // 留?webviewReady留덈떎 ??μ냼?먯꽌 ???곹깭瑜??쎌뼱 蹂듭썝
       // (retainContextWhenHidden ?놁씠 蹂듭썝???⑤꼸? ?④??믫몴????webview媛 ?ъ깮?깅맖)
       const state = this.pendingRestore ?? RequestPanel.storage.getTabState();
-      if (state && state.tabs.length > 0) {
+      if (state && (state.tabs.length > 0 || state.compareSettings)) {
         this.postMessage({
           type: MessageType.RestoreTabState,
           tabs: state.tabs,
           activeIndex: state.activeIndex,
+          compareSettings: state.compareSettings,
         });
       }
       this.pendingRestore = null;
@@ -493,6 +662,17 @@ export class RequestPanel {
           binaryFilePath: message.binaryFilePath ?? '',
           auth: message.auth ?? { type: 'none' },
           scripts: message.scripts ?? RequestPanel.createEmptyScripts(),
+          timeout: message.timeout ?? 0,
+          followRedirects: message.followRedirects === true,
+          saveToHistory: message.saveToHistory !== false,
+          tlsValidation: message.tlsValidation ?? 'default',
+          maxResponseSizeKb: message.maxResponseSizeKb ?? 0,
+          retryCount: message.retryCount ?? 0,
+          retryDelayMs: message.retryDelayMs ?? 0,
+          stopAfterHeaders: message.stopAfterHeaders === true,
+          skipDefaultHeaders: message.skipDefaultHeaders === true,
+          disableScripts: message.disableScripts === true,
+          openHtmlPreviewByDefault: message.openHtmlPreviewByDefault === true,
         });
         this.postMessage({
           type: MessageType.SaveRequestResult,
@@ -515,12 +695,12 @@ export class RequestPanel {
           auth: message.auth ?? { type: 'none' },
         });
         vscode.env.clipboard.writeText(curl);
-        vscode.window.showInformationMessage('Copied cURL command to the clipboard.');
+      vscode.window.showInformationMessage(LocalizationService.t('info.copiedCurl'));
         break;
       }
       case MessageType.CopyResponseBody:
         await vscode.env.clipboard.writeText(message.body ?? '');
-        vscode.window.showInformationMessage('Copied response body to the clipboard.');
+      vscode.window.showInformationMessage(LocalizationService.t('panel.copiedResponseBody'));
         break;
       case MessageType.CopyToClipboard:
         await vscode.env.clipboard.writeText(message.text ?? '');
@@ -539,10 +719,10 @@ export class RequestPanel {
         break;
       case MessageType.SaveDefaultHeaders:
         RequestPanel.storage.saveDefaultHeaders(message.headers);
-        vscode.window.showInformationMessage('Saved default headers.');
+      vscode.window.showInformationMessage(LocalizationService.t('panel.savedDefaultHeaders'));
         break;
       case MessageType.SaveTabState:
-        RequestPanel.storage.saveTabState(message.tabs ?? [], message.activeIndex ?? 0);
+        RequestPanel.storage.saveTabState(message.tabs ?? [], message.activeIndex ?? 0, message.compareSettings);
         break;
       case MessageType.CompareResponses:
         await this.compareResponses(message);
@@ -636,7 +816,7 @@ export class RequestPanel {
     const tabId = message.tabId;
     const method = message.method;
     const bodyType = RequestPanel.normalizeBodyType(message.bodyType);
-    const timeout: number = message.timeout ?? 0;
+    const settings = this.normalizeRequestSettings(message);
     const scripts = this.normalizeScripts(message.scripts);
     let vars = RequestPanel.environmentProvider.getActiveVariables();
     let requestState = this.createScriptableRequest({
@@ -651,18 +831,20 @@ export class RequestPanel {
       auth: message.auth ?? { type: 'none' },
     });
 
-    try {
-      const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars);
-      requestState = preRequestResult.request;
-      vars = preRequestResult.envVariables;
-      this.saveActiveEnvironmentVariables(vars);
-    } catch (err: unknown) {
-      this.postMessage({
-        type: MessageType.ResponseError,
-        tabId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      return;
+    if (!settings.disableScripts) {
+      try {
+        const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars);
+        requestState = preRequestResult.request;
+        vars = preRequestResult.envVariables;
+        this.saveActiveEnvironmentVariables(vars);
+      } catch (err: unknown) {
+        this.postMessage({
+          type: MessageType.ResponseError,
+          tabId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
     }
 
     const resolvedUrl = VariableService.resolve(requestState.url, vars);
@@ -676,9 +858,9 @@ export class RequestPanel {
     }));
     const resolvedBinaryFilePath = VariableService.resolve(requestState.binaryFilePath ?? '', vars);
 
-    const defaultHeaders = VariableService.resolveKeyValues(
-      RequestPanel.storage.getDefaultHeaders(), vars
-    );
+    const defaultHeaders = settings.skipDefaultHeaders
+      ? []
+      : VariableService.resolveKeyValues(RequestPanel.storage.getDefaultHeaders(), vars);
     const requestKeySet = new Set(
       resolvedHeaders.filter((header) => header.enabled && header.key).map((header) => header.key.toLowerCase())
     );
@@ -750,61 +932,101 @@ export class RequestPanel {
       auth: { type: 'none' },
     });
 
-    let handle: import('../services/HttpService').SendHandle;
-    try {
-      handle = this.httpService.send(
-        method,
-        url,
-        preparedBody.headers,
-        preparedBody.data,
-        timeout,
-        this.getAllowInsecureCertificates()
-      );
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      this.postMessage({
-        type: MessageType.ResponseError,
-        tabId,
-        error: errorMsg,
-      });
-      return;
-    }
-    this.activeRequests.set(tabId, handle);
+    let currentHandle: SendHandle | null = null;
+    let cancelDelay: (() => void) | null = null;
+    this.activeRequests.set(tabId, {
+      abort: () => {
+        currentHandle?.abort();
+        cancelDelay?.();
+      },
+    });
 
     try {
-      const response = await handle.promise;
-      if (this.canceledRequestTabs.delete(tabId)) { return; }
-
-      let scriptResults: ScriptExecutionResult | undefined;
-      try {
-        const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars);
-        vars = testResult.envVariables;
-        this.saveActiveEnvironmentVariables(vars);
-        scriptResults = testResult.result;
-      } catch (err: unknown) {
-        scriptResults = {
-          logs: [],
-          tests: [{
-            name: 'Test Script',
-            passed: false,
-            error: err instanceof Error ? err.message : String(err),
-          }],
-        };
-      }
-
-      this.saveToHistory(
-        this.createHistoryRequestSnapshot(
+      let response: Response | null = null;
+      for (let attempt = 0; attempt <= settings.retryCount; attempt++) {
+        currentHandle = this.httpService.send(
           method,
           url,
           preparedBody.headers,
-          preparedBody.resolvedBody,
-          bodyType,
-          preparedBody.resolvedFormData,
-          preparedBody.resolvedBinaryFilePath
-        ),
-        { status: response.status, statusText: response.statusText, time: response.time }
-      );
-      RequestPanel.historyProvider.refresh();
+          preparedBody.data,
+          {
+            timeoutSec: settings.timeout,
+            allowInsecureHttps: this.resolveAllowInsecureHttps(settings.tlsValidation),
+            followRedirects: settings.followRedirects,
+            maxResponseSizeBytes: settings.maxResponseSizeKb > 0 ? settings.maxResponseSizeKb * 1024 : 0,
+            stopAfterHeaders: settings.stopAfterHeaders,
+          }
+        );
+
+        try {
+          response = await currentHandle.promise;
+          currentHandle = null;
+        } catch (err: unknown) {
+          currentHandle = null;
+          if (this.canceledRequestTabs.has(tabId) || attempt >= settings.retryCount) {
+            throw err;
+          }
+          await this.createCancelableDelay(settings.retryDelayMs, (cancel) => {
+            cancelDelay = cancel;
+          });
+          cancelDelay = null;
+          continue;
+        }
+
+        if (response && attempt < settings.retryCount && this.shouldRetryResponse(response.status)) {
+          await this.createCancelableDelay(settings.retryDelayMs, (cancel) => {
+            cancelDelay = cancel;
+          });
+          cancelDelay = null;
+          response = null;
+          continue;
+        }
+
+        if (response) {
+          break;
+        }
+      }
+
+      if (this.canceledRequestTabs.delete(tabId)) { return; }
+      if (!response) {
+        throw new Error('Request did not produce a response.');
+      }
+
+      let scriptResults: ScriptExecutionResult | undefined;
+      if (!settings.disableScripts) {
+        try {
+          const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars);
+          vars = testResult.envVariables;
+          this.saveActiveEnvironmentVariables(vars);
+          scriptResults = testResult.result;
+        } catch (err: unknown) {
+          scriptResults = {
+            logs: [],
+            tests: [{
+              name: LocalizationService.t('webview.testScript'),
+              passed: false,
+              error: err instanceof Error ? err.message : String(err),
+            }],
+          };
+        }
+      }
+
+      if (settings.saveToHistory) {
+        this.saveToHistory(
+          this.createHistoryRequestSnapshot(
+            method,
+            url,
+            preparedBody.headers,
+            preparedBody.resolvedBody,
+            bodyType,
+            preparedBody.resolvedFormData,
+            preparedBody.resolvedBinaryFilePath,
+            settings
+          ),
+          { status: response.status, statusText: response.statusText, time: response.time }
+        );
+        RequestPanel.historyProvider.refresh();
+      }
 
       const resolvedHeaderPairs = preparedBody.headers
         .filter((header) => header.enabled && header.key)
@@ -830,19 +1052,22 @@ export class RequestPanel {
         return;
       }
 
-      this.saveToHistory(
-        this.createHistoryRequestSnapshot(
-          method,
-          url,
-          preparedBody.headers,
-          preparedBody.resolvedBody,
-          bodyType,
-          preparedBody.resolvedFormData,
-          preparedBody.resolvedBinaryFilePath
-        ),
-        null
-      );
-      RequestPanel.historyProvider.refresh();
+      if (settings.saveToHistory) {
+        this.saveToHistory(
+          this.createHistoryRequestSnapshot(
+            method,
+            url,
+            preparedBody.headers,
+            preparedBody.resolvedBody,
+            bodyType,
+            preparedBody.resolvedFormData,
+            preparedBody.resolvedBinaryFilePath,
+            settings
+          ),
+          null
+        );
+        RequestPanel.historyProvider.refresh();
+      }
 
       this.postMessage({
         type: MessageType.ResponseError,
@@ -850,6 +1075,7 @@ export class RequestPanel {
         error: errorMsg,
       });
     } finally {
+      cancelDelay = null;
       this.activeRequests.delete(tabId);
     }
   }
@@ -871,8 +1097,10 @@ export class RequestPanel {
     body: string,
     bodyType: RequestBodyType,
     formData: FormDataField[] = [],
-    binaryFilePath: string = ''
+    binaryFilePath: string = '',
+    settings?: RequestSettings
   ): Request {
+    const normalizedSettings = this.normalizeRequestSettings(settings);
     return {
       id: '',
       name: `${method} ${url}`,
@@ -886,6 +1114,7 @@ export class RequestPanel {
       binaryFilePath,
       auth: { type: 'none' },
       scripts: RequestPanel.createEmptyScripts(),
+      ...this.cloneRequestSettings(normalizedSettings),
     };
   }
 
@@ -961,38 +1190,32 @@ export class RequestPanel {
     try {
       const bytes = bodyBase64 ? Buffer.from(bodyBase64, 'base64') : Buffer.from(body, 'utf-8');
       await vscode.workspace.fs.writeFile(uri, bytes);
-      vscode.window.showInformationMessage(`Saved response body: ${uri.fsPath}`);
+      vscode.window.showInformationMessage(LocalizationService.t('panel.savedResponseBody', { path: uri.fsPath }));
       return true;
     } catch (err: unknown) {
-      vscode.window.showErrorMessage(`Failed to save response body: ${err instanceof Error ? err.message : String(err)}`);
+      vscode.window.showErrorMessage(LocalizationService.t('panel.failedSaveResponseBody', { message: err instanceof Error ? err.message : String(err) }));
       return false;
     }
   }
 
   // ???묐떟???꾩떆 ?뚯씪濡???ν븯怨?VS Code diff ?먮뵒?곕줈 鍮꾧탳
   private async compareResponses(message: CompareResponsesMessage): Promise<void> {
-    const { left, right } = message;
-    const extL = RequestPanel.contentTypeToExt(left.contentType);
-    const extR = RequestPanel.contentTypeToExt(right.contentType);
+    const comparison = ResponseCompareService.prepareComparison(message.left, message.right, message.options);
     try {
-      // ?꾩떆 ?뚯씪 URI (untitled ?ㅽ궎留?????ㅼ젣 tmp ?뚯씪 ?ъ슜)
       const basePath = RequestPanel.storage.getStoragePath();
+      await ResponseCompareService.cleanupDiffArtifacts(basePath);
       const diffDir = vscode.Uri.joinPath(vscode.Uri.file(basePath), '.diff');
       await vscode.workspace.fs.createDirectory(diffDir);
       const ts = Date.now().toString(36);
-      const uriL = vscode.Uri.joinPath(diffDir, `resp_left_${ts}.${extL}`);
-      const uriR = vscode.Uri.joinPath(diffDir, `resp_right_${ts}.${extR}`);
+      const uriL = vscode.Uri.joinPath(diffDir, `resp_left_${ts}.${comparison.left.extension}`);
+      const uriR = vscode.Uri.joinPath(diffDir, `resp_right_${ts}.${comparison.right.extension}`);
 
-      // ?대? webview?먯꽌 ?щ㎎?낅맂 寃쎌슦 洹몃?濡??ъ슜, ?꾨땲硫?湲곕낯 ?щ㎎???곸슜
-      const bodyL = left.formatted ? left.body : this.formatForDiff(left.body, extL);
-      const bodyR = right.formatted ? right.body : this.formatForDiff(right.body, extR);
+      await vscode.workspace.fs.writeFile(uriL, new TextEncoder().encode(comparison.left.content));
+      await vscode.workspace.fs.writeFile(uriR, new TextEncoder().encode(comparison.right.content));
 
-      await vscode.workspace.fs.writeFile(uriL, new TextEncoder().encode(bodyL));
-      await vscode.workspace.fs.writeFile(uriR, new TextEncoder().encode(bodyR));
-
-      await vscode.commands.executeCommand('vscode.diff', uriL, uriR, `${left.label} ??${right.label}`);
+      await vscode.commands.executeCommand('vscode.diff', uriL, uriR, comparison.title);
     } catch (err: unknown) {
-      vscode.window.showErrorMessage(`Failed to compare responses: ${err instanceof Error ? err.message : String(err)}`);
+      vscode.window.showErrorMessage(LocalizationService.t('panel.failedCompareResponses', { message: err instanceof Error ? err.message : String(err) }));
     }
   }
 
@@ -1024,7 +1247,7 @@ export class RequestPanel {
       { label: 'axios', target: 'axios' as const },
       { label: 'Java HttpURLConnection', target: 'java' as const },
     ], {
-      placeHolder: 'Choose a code generation format',
+      placeHolder: LocalizationService.t('panel.chooseCodegen'),
     });
     if (!target) { return; }
 
@@ -1053,7 +1276,7 @@ export class RequestPanel {
         });
 
     await vscode.env.clipboard.writeText(code);
-    vscode.window.showInformationMessage(`Copied ${target.label} code to the clipboard.`);
+    vscode.window.showInformationMessage(LocalizationService.t('panel.copiedCode', { label: target.label }));
   }
 
   // XML/HTML Pretty ?щ㎎??(?몃뜶???곸슜)
@@ -1106,6 +1329,9 @@ export class RequestPanel {
       vscode.Uri.joinPath(this.extensionUri, 'dist', 'hljs.js')
     );
     const nonce = RequestPanel.createNonce();
+    const displayLanguage = LocalizationService.getDisplayLanguage();
+    const localizedStrings = JSON.stringify(LocalizationService.getStrings(displayLanguage)).replace(/</g, '\\u003c');
+    const dateLocale = LocalizationService.getDateLocale(displayLanguage);
     const csp = [
       "default-src 'none'",
       `img-src ${this.panel.webview.cspSource} data:`,
@@ -1114,7 +1340,7 @@ export class RequestPanel {
       `font-src ${this.panel.webview.cspSource}`,
     ].join('; ');
     return /*html*/ `<!DOCTYPE html>
-<html lang="ko">
+<html lang="${displayLanguage}">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
@@ -1131,12 +1357,21 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 /* === ?붿껌 ??諛?=== */
 .tab-bar{display:flex;background:var(--vscode-editorGroupHeader-tabsBackground,var(--vscode-editor-background));border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;overflow-x:auto;scrollbar-width:thin}
 .tab-bar::-webkit-scrollbar{height:3px}
-.req-tab{display:flex;align-items:center;gap:4px;padding:4px 10px;font-size:13px;cursor:pointer;border-right:1px solid var(--vscode-panel-border,#333);white-space:nowrap;opacity:.6;min-width:0;flex-shrink:0;user-select:none;transition:background .15s,opacity .15s;border-bottom:3px solid transparent}
-.req-tab:hover{opacity:.85;background:rgba(255,255,255,.04)}
-.req-tab.active{opacity:1;background:var(--vscode-editor-background);border-bottom:3px solid var(--vscode-focusBorder)}
+.req-tab{position:relative;display:flex;align-items:center;gap:5px;padding:6px 12px;font-size:13px;cursor:pointer;border-right:1px solid var(--vscode-panel-border,#333);white-space:nowrap;opacity:.68;min-width:0;flex-shrink:0;user-select:none;transition:background .18s,opacity .18s,transform .18s,box-shadow .18s;border-bottom:3px solid transparent;border-radius:10px 10px 0 0;margin-top:2px;background:rgba(255,255,255,.015)}
+.req-tab::after{content:'';position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:999px;background:linear-gradient(90deg,transparent,currentColor,transparent);opacity:0;transition:opacity .18s}
+.req-tab:hover{opacity:.92;background:rgba(255,255,255,.05);transform:translateY(-1px)}
+.req-tab.active{opacity:1;background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02));border-bottom:3px solid var(--vscode-focusBorder);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 20px rgba(0,0,0,.22)}
+.req-tab.active::after{opacity:.5}
 .req-tab .method-badge{font-weight:700;font-size:13px;padding:1px 4px;border-radius:2px}
+.req-tab .tab-name{max-width:180px;overflow:hidden;text-overflow:ellipsis}
 .method-GET{color:#4ec94e}.method-POST{color:#e5c07b}.method-PUT{color:#61afef}.method-PATCH{color:#d19a66}.method-DELETE{color:#e06c75}.method-HEAD{color:#abb2bf}.method-OPTIONS{color:#abb2bf}
-.req-tab.active.tab-GET{border-bottom-color:#4ec94e}.req-tab.active.tab-POST{border-bottom-color:#e5c07b}.req-tab.active.tab-PUT{border-bottom-color:#61afef}.req-tab.active.tab-PATCH{border-bottom-color:#d19a66}.req-tab.active.tab-DELETE{border-bottom-color:#e06c75}.req-tab.active.tab-HEAD{border-bottom-color:#abb2bf}.req-tab.active.tab-OPTIONS{border-bottom-color:#abb2bf}
+.req-tab.active.tab-GET{border-bottom-color:#4ec94e;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(78,201,78,.12)}
+.req-tab.active.tab-POST{border-bottom-color:#e5c07b;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(229,192,123,.12)}
+.req-tab.active.tab-PUT{border-bottom-color:#61afef;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(97,175,239,.12)}
+.req-tab.active.tab-PATCH{border-bottom-color:#d19a66;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(209,154,102,.12)}
+.req-tab.active.tab-DELETE{border-bottom-color:#e06c75;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(224,108,117,.14)}
+.req-tab.active.tab-HEAD{border-bottom-color:#abb2bf}
+.req-tab.active.tab-OPTIONS{border-bottom-color:#abb2bf}
 .req-tab .close-tab{opacity:.5;cursor:pointer;font-size:13px;padding:0 2px;line-height:1}
 .req-tab .close-tab:hover{opacity:1;color:var(--vscode-errorForeground)}
 .req-tab.pinned{opacity:.85;border-left:2px solid var(--vscode-focusBorder)}
@@ -1144,7 +1379,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .req-tab.pinned .pin-icon{display:inline;font-size:13px;margin-right:2px}
 .req-tab .pin-icon{display:none}
 .req-tab .dirty-dot{color:var(--vscode-foreground,#ccc);font-size:10px;margin-left:3px;opacity:.85}
-.dirty-confirm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center}
+.dirty-confirm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(5,8,14,.55);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center}
 .dirty-confirm-dialog{background:var(--vscode-editor-background,#1e1e1e);border:1px solid var(--vscode-panel-border,#444);border-radius:6px;padding:20px 24px;min-width:340px;box-shadow:0 4px 24px rgba(0,0,0,.5)}
 .dirty-confirm-msg{font-size:14px;margin-bottom:16px;line-height:1.5}
 .dirty-confirm-actions{display:flex;gap:8px;justify-content:flex-end}
@@ -1155,6 +1390,15 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .dirty-btn-discard:hover{background:var(--vscode-list-hoverBackground,#2a2d2e)}
 .dirty-btn-cancel{background:transparent;color:var(--vscode-foreground,#ccc);border:1px solid var(--vscode-panel-border,#444)}
 .dirty-btn-cancel:hover{background:var(--vscode-list-hoverBackground,#2a2d2e)}
+.compare-settings-dialog{min-width:520px;max-width:640px}
+.compare-settings-grid{display:flex;flex-direction:column;gap:12px}
+.compare-settings-row{display:flex;flex-direction:column;gap:6px}
+.compare-settings-row label{font-size:12px;opacity:.9}
+.compare-settings-input{width:100%;padding:6px 8px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:4px;font-size:13px}
+.compare-settings-note{font-size:12px;opacity:.65;line-height:1.5}
+.compare-mode-options{display:flex;gap:8px;flex-wrap:wrap}
+.compare-mode-chip{padding:6px 10px;border:1px solid var(--vscode-input-border,#555);border-radius:999px;background:transparent;color:var(--vscode-foreground);cursor:pointer;font-size:12px}
+.compare-mode-chip.active{border-color:var(--vscode-charts-blue,#3794ff);color:var(--vscode-charts-blue,#3794ff);background:rgba(55,148,255,.12)}
 .add-tab{padding:4px 10px;cursor:pointer;opacity:.5;font-size:14px;display:flex;align-items:center}
 .add-tab:hover{opacity:1}
 .tab-ctx-menu{position:fixed;z-index:9999;background:var(--vscode-menu-background,#252526);border:1px solid var(--vscode-menu-border,#454545);border-radius:4px;padding:4px 0;min-width:160px;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:13px}
@@ -1167,6 +1411,19 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .main-content{flex:1;overflow:hidden;display:flex;flex-direction:column}
 
 /* URL 諛?*/
+.request-topline{display:flex;align-items:center;gap:10px;padding:10px 10px 0;flex-shrink:0;flex-wrap:wrap}
+.request-stage{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font-size:12px;font-weight:700;letter-spacing:.02em;background:rgba(255,255,255,.03)}
+.request-stage .stage-dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 10px currentColor}
+.request-stage.stage-idle{color:var(--vscode-descriptionForeground,#8d8d8d)}
+.request-stage.stage-ready{color:var(--vscode-charts-blue,#57a6ff)}
+.request-stage.stage-loading{color:#7dc8ff}
+.request-stage.stage-success{color:#4ec94e}
+.request-stage.stage-redirect{color:#e5c07b}
+.request-stage.stage-error{color:#ff7a7a}
+.request-stage.stage-canceled{color:#d19a66}
+.request-stage-hint{font-size:12px;color:var(--vscode-descriptionForeground,#9a9a9a);line-height:1.4}
+.request-topline-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.env-indicator-inline{font-size:12px;opacity:.72;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
 .url-bar{display:flex;gap:8px;padding:8px 10px;flex-shrink:0;align-items:center;position:relative;overflow:visible}
 .url-bar select{width:100px;padding:6px 8px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:6px;font-size:13px;font-weight:700}
 .url-bar input{flex:1;padding:6px 10px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:6px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
@@ -1181,20 +1438,21 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .btn-s{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
 .btn-s:hover{background:var(--vscode-button-secondaryHoverBackground)}
 /* Send 踰꾪듉 */
-.btn-send{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:5px;padding:6px 16px;background:#0078d4;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s}
-.btn-send:hover{background:#1a8ae8}
+.btn-send{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:7px;padding:6px 16px;background:linear-gradient(135deg,#0078d4,#1683eb);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 8px 18px rgba(0,120,212,.24)}
+.btn-send:hover{background:linear-gradient(135deg,#1683eb,#2697ff);transform:translateY(-1px);box-shadow:0 12px 24px rgba(0,120,212,.28)}
 .btn-send svg{flex-shrink:0}
+.btn-keyhint{padding:2px 6px;border-radius:999px;background:rgba(255,255,255,.18);font-size:11px;line-height:1;letter-spacing:.02em}
 /* Stop 踰꾪듉 (?꾩넚 以? */
-.btn-stop{display:inline-flex;align-items:center;gap:5px;padding:6px 16px;background:#c42b1c;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s}
-.btn-stop:hover{background:#e04535}
+.btn-stop{display:inline-flex;align-items:center;gap:7px;padding:6px 16px;background:linear-gradient(135deg,#c42b1c,#e04535);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 8px 18px rgba(224,69,53,.18)}
+.btn-stop:hover{background:linear-gradient(135deg,#d53b2c,#f05f4c);transform:translateY(-1px);box-shadow:0 12px 24px rgba(224,69,53,.24)}
 .btn-stop .stop-icon{display:inline-block;width:10px;height:10px;background:#fff;border-radius:1px}
 .url-bar-spacer{flex:1}
 
 /* ?대? ??*/
-.tabs{display:flex;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;padding:0 10px;gap:2px}
-.tab{padding:6px 14px;cursor:pointer;border-bottom:2px solid transparent;opacity:.45;font-size:13px;user-select:none;text-transform:uppercase;letter-spacing:.5px;transition:opacity .15s}
-.tab:hover{opacity:.8}
-.tab.active{opacity:1;border-bottom-color:#0078d4}
+.tabs{display:flex;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;padding:0 10px;gap:4px;flex-wrap:wrap}
+.tab{padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;opacity:.52;font-size:12px;user-select:none;text-transform:uppercase;letter-spacing:.08em;transition:opacity .15s,background .15s,color .15s,transform .15s;border-radius:10px 10px 0 0}
+.tab:hover{opacity:.82;background:rgba(255,255,255,.04);transform:translateY(-1px)}
+.tab.active{opacity:1;border-bottom-color:#0078d4;background:rgba(0,122,204,.08);color:var(--vscode-foreground)}
 
 /* ?⑤꼸 ?덉씠?꾩썐 */
 .split{flex:1;overflow:hidden;display:flex;flex-direction:column}
@@ -1227,13 +1485,28 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .auth-row label{font-size:13px;opacity:.6;min-width:55px}
 
 /* Settings ?⑤꼸 */
-.settings-section{padding:8px 4px}
-.settings-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.settings-section{padding:10px 4px}
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.settings-card{padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));box-shadow:0 10px 24px rgba(0,0,0,.14)}
+.settings-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .settings-label{font-size:13px;opacity:.8;min-width:80px;font-weight:600}
 .settings-input{width:80px;padding:4px 8px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:4px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
 .settings-input:focus{outline:1px solid var(--vscode-focusBorder)}
 .settings-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .settings-hint{font-size:13px;opacity:.4}
+.settings-group{padding:0}
+.settings-group + .settings-group{border-top:none;margin-top:0}
+.settings-group-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.6;margin:0 0 6px}
+.settings-group-note{font-size:12px;line-height:1.45;color:var(--vscode-descriptionForeground,#989898);margin:0 0 12px}
+.settings-toggle-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.settings-toggle{display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.4;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)}
+.settings-toggle input{margin:2px 0 0}
+.settings-toggle > span{display:flex;flex-direction:column;gap:3px}
+.settings-row.multi-line{align-items:flex-start;flex-direction:column;gap:4px}
+.settings-select{width:140px}
+.settings-inline-note{display:block;font-size:12px;color:var(--vscode-descriptionForeground,#989898);margin-left:22px}
+.settings-field-meta{display:flex;flex-direction:column;gap:2px}
+.settings-field-meta .settings-hint{font-size:12px}
 
 /* ?섍꼍蹂???몄쭛 */
 .env-editor{padding:6px 10px;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;background:var(--vscode-sideBar-background,var(--vscode-editor-background))}
@@ -1245,10 +1518,24 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .env-dirty-dot.show{display:inline-block}
 
 /* ?묐떟 */
-.response-meta{display:flex;gap:10px;align-items:center;padding:5px 0;flex-shrink:0;font-size:13px}
+.response-summary{display:flex;flex-direction:column;gap:8px}
+.response-meta{display:flex;gap:10px;align-items:center;padding:6px 0 2px;flex-shrink:0;font-size:13px;flex-wrap:wrap}
+.response-meta.response-tone-2xx .status{box-shadow:0 0 0 1px rgba(78,201,78,.12),0 0 18px rgba(78,201,78,.12)}
+.response-meta.response-tone-3xx .status{box-shadow:0 0 0 1px rgba(229,192,123,.12),0 0 18px rgba(229,192,123,.1)}
+.response-meta.response-tone-4xx .status,.response-meta.response-tone-5xx .status{box-shadow:0 0 0 1px rgba(255,122,122,.14),0 0 18px rgba(255,122,122,.12)}
+.meta-stat{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);font-variant-numeric:tabular-nums}
+.meta-lang{font-size:11px;opacity:.72;text-transform:uppercase;letter-spacing:.08em}
+.compare-chip-row{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:4px}
+.compare-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);font-size:12px;color:var(--vscode-descriptionForeground,#a6a6a6)}
+.compare-chip strong{color:var(--vscode-foreground)}
+.compare-chip.current{border-color:rgba(78,201,78,.28);color:#93e493;background:rgba(78,201,78,.08)}
+.compare-chip.ready{border-color:rgba(87,166,255,.24);color:#93c8ff;background:rgba(87,166,255,.08)}
+.compare-chip.mode{border-color:rgba(209,154,102,.22);color:#f0c995;background:rgba(209,154,102,.08)}
 .res-action-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border:1px solid var(--vscode-input-border,#555);border-radius:6px;background:transparent;color:var(--vscode-foreground);font-size:13px;cursor:pointer;transition:background .15s,transform .1s;user-select:none}
 .res-action-btn:hover{background:var(--vscode-button-secondaryHoverBackground,rgba(255,255,255,.1));transform:scale(1.05)}
 .res-action-btn:active{transform:scale(.92)}
+.res-action-btn:disabled{opacity:.35;cursor:default;transform:none}
+.res-action-btn:disabled:hover{background:transparent;transform:none}
 .res-action-btn svg{flex-shrink:0;color:var(--vscode-foreground)}
 .status{font-weight:700;padding:1px 6px;border-radius:3px}
 .status-2xx{background:#1a3a1a;color:#4ec94e}
@@ -1441,6 +1728,17 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .elapsed-timer{font-size:13px;opacity:.6;margin-left:4px;font-variant-numeric:tabular-nums}
 
 .placeholder{display:flex;align-items:center;justify-content:center;flex:1;opacity:.25;font-size:13px}
+.empty-state{display:flex;flex-direction:column;justify-content:center;gap:12px;min-height:180px;padding:18px 16px;border:1px solid rgba(255,255,255,.06);border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015))}
+.empty-state.inline{min-height:auto;padding:16px}
+.empty-state-kicker{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--vscode-descriptionForeground,#8e8e8e)}
+.empty-state-title{font-size:20px;font-weight:700;line-height:1.15}
+.empty-state-copy{font-size:13px;line-height:1.6;color:var(--vscode-descriptionForeground,#a0a0a0);max-width:860px}
+.empty-state-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.empty-state-card{padding:12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05)}
+.empty-state-card strong{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;color:var(--vscode-foreground)}
+.empty-state-card span{display:block;font-size:12px;line-height:1.5;color:var(--vscode-descriptionForeground,#a0a0a0)}
+.empty-state-actions{display:flex;flex-wrap:wrap;gap:8px}
+.empty-state-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:rgba(87,166,255,.08);border:1px solid rgba(87,166,255,.16);font-size:12px;color:#93c8ff}
 
 /* ?ㅼ펷?덊넠 濡쒕뵫 UI */
 @keyframes skeleton-pulse{0%{opacity:.15}50%{opacity:.3}100%{opacity:.15}}
@@ -1453,6 +1751,11 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 
 /* 鍮??붿껌 ???덈궡 */
 .empty-tab-hint{display:flex;align-items:center;justify-content:center;flex:1;color:var(--vscode-descriptionForeground,#888);font-size:13px;opacity:.5;text-align:center;padding:20px;user-select:none}
+.script-editor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.script-card{padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015))}
+.script-card-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.7;margin-bottom:4px}
+.script-card-note{font-size:12px;line-height:1.45;color:var(--vscode-descriptionForeground,#989898);margin-bottom:8px}
+.script-card textarea{min-height:160px}
 
 /* 而щ젆???щ꼫 */
 .runner-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:var(--vscode-editor-background);z-index:100;display:flex;flex-direction:column;overflow:hidden}
@@ -1477,48 +1780,60 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 /* ?쒖꽦 ?섍꼍 ?쒖떆 */
 .env-indicator{font-size:13px;opacity:.6;padding:0 10px 2px;flex-shrink:0}
 .env-indicator .var-name{color:#dcdcaa}
+@media (max-width: 900px){
+  .request-topline{align-items:flex-start}
+  .request-topline-right{margin-left:0}
+  .url-bar{flex-wrap:wrap}
+  .url-bar-spacer{display:none}
+  .btn-send,.btn-stop{margin-left:auto}
+  .settings-grid,.script-editor-grid,.empty-state-grid{grid-template-columns:1fr}
+  .response-meta{align-items:flex-start}
+}
 </style>
 </head>
 <body>
 
 <!-- ?붿껌 ??諛?-->
 <div class="tab-bar" id="tabBar">
-  <div class="add-tab" id="addTabBtn" title="New tab">+</div>
+<div class="add-tab" id="addTabBtn" title="${LocalizationService.t('webview.newTab', undefined, displayLanguage)}">+</div>
 </div>
 
 <!-- ?섍꼍蹂???몄쭛 (?④? ?곹깭) -->
 <div id="envEditor" class="env-editor hidden">
   <div class="env-editor-title">
-    <span>Environment:</span>
+    <span id="envEditorTitle">${LocalizationService.t('webview.environment', undefined, displayLanguage)}</span>
     <span class="env-badge" id="envEditorName"></span>
     <span style="flex:1"></span>
-    <span class="env-dirty-dot" id="envDirtyDot" title="Unsaved changes"></span>
-    <span class="env-autosave-indicator" id="envAutoSaved"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M6.27 10.87h.04l4.49-4.49-1.06-1.06-3.47 3.47-1.47-1.47-1.06 1.06 2.53 2.49z"/><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12z"/></svg> Auto-saved</span>
+    <span class="env-dirty-dot" id="envDirtyDot" title="${LocalizationService.t('webview.unsavedChanges', undefined, displayLanguage)}"></span>
+    <span class="env-autosave-indicator" id="envAutoSaved"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M6.27 10.87h.04l4.49-4.49-1.06-1.06-3.47 3.47-1.47-1.47-1.06 1.06 2.53 2.49z"/><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12z"/></svg> <span id="envAutoSavedLabel">${LocalizationService.t('webview.autoSaved', undefined, displayLanguage)}</span></span>
     <span class="rm" id="envCloseBtn" style="cursor:pointer;font-size:14px;opacity:.6">&times;</span>
   </div>
   <div id="envVarRows" class="kv-section"></div>
-  <button class="add-btn" id="addEnvVarBtn">+ Add Variable</button>
+  <button class="add-btn" id="addEnvVarBtn">${LocalizationService.t('webview.addVariable', undefined, displayLanguage)}</button>
 </div>
 
 <!-- 湲곕낯 ?ㅻ뜑 ?몄쭛 (?④? ?곹깭) -->
 <div id="defaultHeadersEditor" class="env-editor hidden">
   <div class="env-editor-title">
-    <span>Default Headers</span>
+    <span id="defaultHeadersTitle">${LocalizationService.t('webview.defaultHeaders', undefined, displayLanguage)}</span>
     <span style="flex:1"></span>
-    <button class="btn btn-s" id="defaultHeadersSaveBtn" style="padding:2px 8px;font-size:13px">Save</button>
+    <button class="btn btn-s" id="defaultHeadersSaveBtn" style="padding:2px 8px;font-size:13px">${LocalizationService.t('webview.save', undefined, displayLanguage)}</button>
     <span class="rm" id="defaultHeadersCloseBtn" style="cursor:pointer;font-size:14px;opacity:.6">&times;</span>
   </div>
   <div id="defaultHeaderRows" class="kv-section"></div>
-  <button class="add-btn" id="addDefaultHeaderBtn">+ Add Header</button>
+  <button class="add-btn" id="addDefaultHeaderBtn">${LocalizationService.t('webview.addHeader', undefined, displayLanguage)}</button>
 </div>
 
 <!-- 硫붿씤 (??퀎 而⑦뀗痢? -->
 <div class="main-content" id="mainContent">
-  <div class="placeholder" id="emptyPlaceholder">Press + or Ctrl+T to create a new request</div>
+  <div class="placeholder" id="emptyPlaceholder">${LocalizationService.t('webview.emptyPlaceholder', undefined, displayLanguage)}</div>
 </div>
 
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
+let i18n = ${localizedStrings};
+let appDateLocale = ${JSON.stringify(dateLocale)};
+let currentDisplayLanguage = ${JSON.stringify(displayLanguage)};
 
 // === ???곹깭 愿由?===
 let tabs = [];       // { id, name, method, url, headers, params, body, auth, response, error, loading }
@@ -1532,26 +1847,202 @@ let pendingSaveResponseBtn = null;  // Save Response Body 踰꾪듉 ?ㅼ씠?쇰�
 var _pendingCloseAfterSave = null;  // dirty ???リ린 ????????レ쓣 ??ID
 const VALID_BODY_TYPES = ['none', 'json', 'xml', 'form', 'formdata', 'binary', 'raw'];
 
-// === ?묐떟 鍮꾧탳 (Pin / Compare) ===
-// 理쒕? 2媛쒓퉴吏 ??? 3踰덉㎏ 異붽? ??媛???ㅻ옒??嫄???뼱?곌린
-var pinnedResponses = [];  // [{ label, body, contentType, timestamp, tabId, formatStyle, formatIndent, formatLang }]
-var lastResponse = null;   // 吏곸쟾 ?묐떟 (鍮좊Ⅸ 鍮꾧탳??
+const DEFAULT_COMPARE_IGNORE_HEADERS = ['date', 'set-cookie', 'x-request-id', 'x-correlation-id', 'x-amzn-trace-id'];
+const DEFAULT_COMPARE_IGNORE_JSON_PATHS = ['$.timestamp', '$.traceId', '$.requestId', '$.correlationId'];
+var pinnedResponses = [];
+var lastResponse = null;
+var compareSettings = normalizeCompareSettings();
 
-// Pin???묐떟??body瑜???λ맂 ?щ㎎ ?ㅽ??쇰줈 ?щ㎎??
-function formatPinnedBody(pin) {
-  if (pin.formatLang && pin.formatStyle) {
-    if (pin.formatLang === 'json') return formatJson(pin.body, pin.formatStyle, pin.formatIndent);
-    if (pin.formatLang === 'xml') return formatXml(pin.body, pin.formatStyle, pin.formatIndent);
-  }
-  return pin.body;
+function tr(key) {
+  return Object.prototype.hasOwnProperty.call(i18n, key) ? i18n[key] : key;
 }
 
-// Pin/Compare 踰꾪듉 ?곹깭 ?쇨큵 媛깆떊
+function tf(key, params) {
+  return tr(key).replace(/\{(\w+)\}/g, function(_, name) {
+    return Object.prototype.hasOwnProperty.call(params || {}, name) ? String(params[name]) : '{' + name + '}';
+  });
+}
+
+function formatShortTime(date) {
+  try {
+    return new Intl.DateTimeFormat(appDateLocale, {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(date);
+  } catch {
+    return date.toLocaleTimeString();
+  }
+}
+
+function bodyTypeLabel(type) {
+  var map = {
+    none: tr('webview.none'),
+    json: 'JSON',
+    xml: 'XML',
+    form: tr('webview.formUrlEncoded'),
+    formdata: tr('webview.formData'),
+    binary: tr('webview.binary'),
+    raw: tr('webview.raw'),
+  };
+  return map[type] || type;
+}
+
+function authTypeLabel(type) {
+  var map = {
+    none: tr('webview.noAuth'),
+    basic: tr('webview.basicAuth'),
+    bearer: tr('webview.bearerToken'),
+    apikey: tr('webview.apiKey'),
+  };
+  return map[type] || type;
+}
+
+function normalizeCompareList(value, fallback) {
+  if (Array.isArray(value)) {
+    return value.map(function(item) { return String(item || '').trim(); }).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value.split(',').map(function(item) { return item.trim(); }).filter(Boolean);
+  }
+  return fallback.slice();
+}
+
+function normalizeCompareSettings(value) {
+  var mode = value && (value.mode === 'raw' || value.mode === 'pretty' || value.mode === 'normalized')
+    ? value.mode
+    : 'normalized';
+  return {
+    mode: mode,
+    includeMetadataSummary: value ? value.includeMetadataSummary !== false : true,
+    ignoreHeaders: normalizeCompareList(value && value.ignoreHeaders, DEFAULT_COMPARE_IGNORE_HEADERS),
+    ignoreJsonPaths: normalizeCompareList(value && value.ignoreJsonPaths, DEFAULT_COMPARE_IGNORE_JSON_PATHS)
+  };
+}
+
+function cloneCompareSettings(value) {
+  var normalized = normalizeCompareSettings(value);
+  return {
+    mode: normalized.mode,
+    includeMetadataSummary: normalized.includeMetadataSummary,
+    ignoreHeaders: normalized.ignoreHeaders.slice(),
+    ignoreJsonPaths: normalized.ignoreJsonPaths.slice()
+  };
+}
+
+function compareModeShort(mode) {
+  return mode === 'raw' ? tr('webview.modeRaw') : mode === 'pretty' ? tr('webview.modePretty') : tr('webview.modeNormalized');
+}
+
+function compareModeLabel(mode) {
+  return mode === 'raw' ? tr('webview.modeRaw') : mode === 'pretty' ? tr('webview.modePretty') : tr('webview.modeNormalized');
+}
+
+function simpleHash(value) {
+  var hash = 5381;
+  for (var i = 0; i < value.length; i++) {
+    hash = ((hash << 5) + hash) + value.charCodeAt(i);
+    hash = hash & hash;
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function buildResponseSignature(snapshot) {
+  return [
+    snapshot.status || 0,
+    snapshot.statusText || '',
+    snapshot.contentType || '',
+    snapshot.resolvedUrl || '',
+    snapshot.body ? snapshot.body.length : 0,
+    simpleHash(snapshot.bodyBase64 || snapshot.body || '')
+  ].join('|');
+}
+
+function createResponseSnapshot(tab, response, label) {
+  if (!tab || !response) return null;
+  var ct = response.headers?.['content-type'] || response.headers?.['Content-Type'] || 'text/plain';
+  var snapshot = {
+    label: label,
+    body: response.body || '',
+    bodyBase64: response.bodyBase64 || '',
+    contentType: ct,
+    status: response.status,
+    statusText: response.statusText,
+    size: response.size,
+    time: response.time,
+    resolvedUrl: tab.resolvedUrl || tab.url || '',
+    headers: response.headers || {},
+    timestamp: Date.now()
+  };
+  snapshot.signature = buildResponseSignature(snapshot);
+  return snapshot;
+}
+
+function getActiveResponseSnapshot() {
+  var tab = tabs.find(function(t) { return t.id === activeTabId; });
+  if (!tab || !tab.response) return null;
+  var envLabel = currentEnvName ? '[' + currentEnvName + ']' : '';
+  var timeLabel = formatShortTime(new Date());
+  var label = ((tab.name || (tab.method + ' ' + tab.url)) + ' ' + envLabel + ' ' + timeLabel).trim();
+  return createResponseSnapshot(tab, tab.response, label);
+}
+
+function serializeCompareSnapshot(snapshot) {
+  return {
+    label: snapshot.label,
+    body: snapshot.body,
+    bodyBase64: snapshot.bodyBase64 || '',
+    contentType: snapshot.contentType,
+    status: snapshot.status,
+    statusText: snapshot.statusText,
+    size: snapshot.size,
+    time: snapshot.time,
+    resolvedUrl: snapshot.resolvedUrl,
+    headers: snapshot.headers || {},
+    timestamp: snapshot.timestamp
+  };
+}
+
+function requestCompare(left, right) {
+  if (!left || !right) return;
+  vscode.postMessage({
+    type: 'compareResponses',
+    left: serializeCompareSnapshot(left),
+    right: serializeCompareSnapshot(right),
+    options: cloneCompareSettings(compareSettings)
+  });
+}
+
+function compareCurrentWithLast() {
+  var current = getActiveResponseSnapshot();
+  if (!current || !lastResponse) return;
+  requestCompare(lastResponse, current);
+}
+
+function buildCompareChipMarkup(currentSignature) {
+  return '<span class="compare-chip mode"><strong>' + escapeHtml(tr('webview.mode')) + '</strong> ' + escapeHtml(compareModeShort(compareSettings.mode)) + '</span>' +
+    (lastResponse ? '<span class="compare-chip ready"><strong>' + escapeHtml(tr('webview.last')) + '</strong> ' + escapeHtml(tr('webview.lastReady')) + '</span>' : '') +
+    pinnedResponses.map(function(pin, index) {
+      var current = pin.signature === currentSignature;
+      return '<span class="compare-chip' + (current ? ' current' : '') + '">' +
+        '<strong>' + escapeHtml(current ? tr('webview.pinnedHere') : tf('webview.pinNumber', { count: index + 1 })) + '</strong>' +
+        escapeHtml(truncate(pin.label || tr('webview.savedResponse'), 24)) +
+      '</span>';
+    }).join('');
+}
+
 function updatePinCompareButtons(mc) {
+  var activeSnapshot = getActiveResponseSnapshot();
+  var currentPinned = activeSnapshot
+    ? pinnedResponses.some(function(pin) { return pin.signature === activeSnapshot.signature; })
+    : false;
+
   var pinBtn = mc.querySelector('.js-pin-response');
   if (pinBtn) {
-    pinBtn.innerHTML = pinSvg + ' Pin' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '');
+    pinBtn.classList.toggle('pinned', currentPinned);
+    pinBtn.innerHTML = pinSvg + ' ' + escapeHtml(currentPinned ? tr('webview.unpin') : tr('webview.pin')) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '');
   }
+
   var cmpBtn = mc.querySelector('.js-compare-responses');
   if (cmpBtn) {
     if (pinnedResponses.length >= 2) {
@@ -1561,11 +2052,122 @@ function updatePinCompareButtons(mc) {
       cmpBtn.disabled = true;
       cmpBtn.classList.remove('ready');
     }
-    cmpBtn.innerHTML = diffSvg + ' Compare' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '');
+    cmpBtn.innerHTML = diffSvg + ' ' + escapeHtml(tr('webview.compare')) + ' ' + escapeHtml(compareModeShort(compareSettings.mode)) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '');
+  }
+
+  var compareLastBtn = mc.querySelector('.js-compare-last');
+  if (compareLastBtn) {
+    compareLastBtn.disabled = !lastResponse;
+    compareLastBtn.textContent = tr('webview.last');
+  }
+
+  var settingsBtn = mc.querySelector('.js-compare-settings');
+  if (settingsBtn) {
+    settingsBtn.textContent = tr('webview.mode') + ': ' + compareModeShort(compareSettings.mode);
+  }
+
+  var chipRow = mc.querySelector('.js-compare-chip-row');
+  if (chipRow) {
+    chipRow.innerHTML = buildCompareChipMarkup(activeSnapshot ? activeSnapshot.signature : '');
   }
 }
 var pinSvg = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1C8.55228 1 9 1.44772 9 2V7.586L12.707 3.879C13.098 3.488 13.731 3.488 14.121 3.879C14.512 4.269 14.512 4.902 14.121 5.293L9 10.414V14C9 14.5523 8.55228 15 8 15C7.44772 15 7 14.5523 7 14V10.414L1.879 5.293C1.488 4.902 1.488 4.269 1.879 3.879C2.269 3.488 2.902 3.488 3.293 3.879L7 7.586V2C7 1.44772 7.44772 1 8 1Z"/></svg>';
 var diffSvg = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 4h5v1H2V4zm0 3h5v1H2V7zm0 3h5v1H2v-1zm9-6h5v1h-5V4zm0 3h5v1h-5V7zm0 3h5v1h-5v-1zM8 1v14l-1-1V2l1-1z"/></svg>';
+
+function showCompareSettings() {
+  var old = document.getElementById('compareSettingsOverlay');
+  if (old) old.remove();
+
+  var draft = cloneCompareSettings(compareSettings);
+  var overlay = document.createElement('div');
+  overlay.id = 'compareSettingsOverlay';
+  overlay.className = 'dirty-confirm-overlay';
+  overlay.innerHTML =
+    '<div class="dirty-confirm-dialog compare-settings-dialog">' +
+      '<div class="dirty-confirm-msg">' + escapeHtml(tr('webview.comparisonSettings')) + '</div>' +
+      '<div class="compare-settings-grid">' +
+        '<div class="compare-settings-row">' +
+          '<label>' + escapeHtml(tr('webview.mode')) + '</label>' +
+          '<div class="compare-mode-options">' +
+            '<button class="compare-mode-chip' + (draft.mode === 'raw' ? ' active' : '') + '" data-mode="raw">' + escapeHtml(tr('webview.modeRaw')) + '</button>' +
+            '<button class="compare-mode-chip' + (draft.mode === 'normalized' ? ' active' : '') + '" data-mode="normalized">' + escapeHtml(tr('webview.modeNormalized')) + '</button>' +
+            '<button class="compare-mode-chip' + (draft.mode === 'pretty' ? ' active' : '') + '" data-mode="pretty">' + escapeHtml(tr('webview.modePretty')) + '</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="compare-settings-row">' +
+          '<label><input type="checkbox" class="js-compare-metadata"' + (draft.includeMetadataSummary ? ' checked' : '') + '/> ' + escapeHtml(tr('webview.includeMetadata')) + '</label>' +
+        '</div>' +
+        '<div class="compare-settings-row">' +
+          '<label>' + escapeHtml(tr('webview.ignoredHeaders')) + '</label>' +
+          '<input type="text" class="compare-settings-input js-compare-ignore-headers" value="' + escapeAttr(draft.ignoreHeaders.join(', ')) + '"/>' +
+        '</div>' +
+        '<div class="compare-settings-row">' +
+          '<label>' + escapeHtml(tr('webview.ignoredJsonPaths')) + '</label>' +
+          '<input type="text" class="compare-settings-input js-compare-ignore-paths" value="' + escapeAttr(draft.ignoreJsonPaths.join(', ')) + '"/>' +
+        '</div>' +
+        '<div class="compare-settings-note">' + escapeHtml(tr('webview.normalizedModeNote')) + '</div>' +
+      '</div>' +
+      '<div class="dirty-confirm-actions compare-settings-actions">' +
+        '<button class="dirty-btn dirty-btn-discard" data-action="reset">' + escapeHtml(tr('webview.reset')) + '</button>' +
+        '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">' + escapeHtml(tr('webview.cancel')) + '</button>' +
+        '<button class="dirty-btn dirty-btn-save" data-action="save">' + escapeHtml(tr('webview.save')) + '</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener('click', function(event) {
+    if (event.target === overlay) {
+      overlay.remove();
+    }
+  });
+
+  overlay.querySelectorAll('.compare-mode-chip').forEach(function(button) {
+    button.addEventListener('click', function(event) {
+      event.preventDefault();
+      draft.mode = button.dataset.mode;
+      overlay.querySelectorAll('.compare-mode-chip').forEach(function(chip) {
+        chip.classList.toggle('active', chip === button);
+      });
+    });
+  });
+
+  overlay.addEventListener('click', function(event) {
+    var target = event.target.closest('[data-action]');
+    if (!target) return;
+    var action = target.dataset.action;
+    if (action === 'cancel') {
+      overlay.remove();
+      return;
+    }
+
+    if (action === 'reset') {
+      overlay.remove();
+      compareSettings = cloneCompareSettings({
+        mode: 'normalized',
+        includeMetadataSummary: true,
+        ignoreHeaders: DEFAULT_COMPARE_IGNORE_HEADERS,
+        ignoreJsonPaths: DEFAULT_COMPARE_IGNORE_JSON_PATHS
+      });
+      renderContent();
+      debouncePersist();
+      return;
+    }
+
+    draft.includeMetadataSummary = !!overlay.querySelector('.js-compare-metadata')?.checked;
+    draft.ignoreHeaders = normalizeCompareList(
+      overlay.querySelector('.js-compare-ignore-headers')?.value || '',
+      []
+    );
+    draft.ignoreJsonPaths = normalizeCompareList(
+      overlay.querySelector('.js-compare-ignore-paths')?.value || '',
+      []
+    );
+    compareSettings = normalizeCompareSettings(draft);
+    overlay.remove();
+    renderContent();
+    debouncePersist();
+  });
+}
 
 function normalizeBodyType(bodyType) {
   if (VALID_BODY_TYPES.indexOf(bodyType) >= 0) return bodyType;
@@ -1578,6 +2180,46 @@ const addTabBtn = document.getElementById('addTabBtn');
 const mainContent = document.getElementById('mainContent');
 const emptyPlaceholder = document.getElementById('emptyPlaceholder');
 
+function setTextContent(id, value) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function updateStaticLocalizedText() {
+  document.documentElement.lang = currentDisplayLanguage;
+  addTabBtn.title = tr('webview.newTab');
+  if (emptyPlaceholder) emptyPlaceholder.textContent = tr('webview.emptyPlaceholder');
+  setTextContent('envEditorTitle', tr('webview.environment'));
+  setTextContent('envAutoSavedLabel', tr('webview.autoSaved'));
+  setTextContent('addEnvVarBtn', tr('webview.addVariable'));
+  setTextContent('defaultHeadersTitle', tr('webview.defaultHeaders'));
+  setTextContent('defaultHeadersSaveBtn', tr('webview.save'));
+  setTextContent('addDefaultHeaderBtn', tr('webview.addHeader'));
+  var envDirty = document.getElementById('envDirtyDot');
+  if (envDirty) envDirty.title = tr('webview.unsavedChanges');
+}
+
+function applyLocalizationUpdate(msg) {
+  if (msg.strings && typeof msg.strings === 'object') {
+    i18n = msg.strings;
+  }
+  if (typeof msg.dateLocale === 'string' && msg.dateLocale) {
+    appDateLocale = msg.dateLocale;
+  }
+  if (typeof msg.displayLanguage === 'string' && msg.displayLanguage) {
+    currentDisplayLanguage = msg.displayLanguage;
+  }
+  tabs.forEach(function(tab) {
+    if (tab.autoName || isKnownDefaultTabName(tab.name)) {
+      tab.name = tr('webview.stage.newRequest');
+      tab.autoName = true;
+    }
+  });
+  updateStaticLocalizedText();
+  renderTabBar();
+  renderContent();
+}
+
 addTabBtn.addEventListener('click', () => createTab());
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 't') { e.preventDefault(); createTab(); }
@@ -1585,14 +2227,102 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handlePrimaryAction(); }
 });
 
+updateStaticLocalizedText();
+
+function knownDefaultTabNames() {
+  return ['New Request', '새 요청', '新しいリクエスト', 'Nouvelle requête'];
+}
+
+function isKnownDefaultTabName(name) {
+  return knownDefaultTabNames().indexOf(name) >= 0;
+}
+
 // ???ㅻ깄???앹꽦 (dirty 鍮꾧탳??
+function normalizeNumberSetting(value) {
+  var num = parseInt(value, 10);
+  return Number.isFinite(num) && num > 0 ? num : 0;
+}
+
+function normalizeTlsValidation(value) {
+  return value === 'strict' || value === 'insecure' ? value : 'default';
+}
+
+function getRequestSettings(data) {
+  return {
+    timeout: normalizeNumberSetting(data?.timeout),
+    followRedirects: data?.followRedirects === true,
+    saveToHistory: data?.saveToHistory !== false,
+    tlsValidation: normalizeTlsValidation(data?.tlsValidation),
+    maxResponseSizeKb: normalizeNumberSetting(data?.maxResponseSizeKb),
+    retryCount: normalizeNumberSetting(data?.retryCount),
+    retryDelayMs: normalizeNumberSetting(data?.retryDelayMs),
+    stopAfterHeaders: data?.stopAfterHeaders === true,
+    skipDefaultHeaders: data?.skipDefaultHeaders === true,
+    disableScripts: data?.disableScripts === true,
+    openHtmlPreviewByDefault: data?.openHtmlPreviewByDefault === true,
+  };
+}
+
+function applyRequestSettings(target, data) {
+  var settings = getRequestSettings(data);
+  target.timeout = settings.timeout;
+  target.followRedirects = settings.followRedirects;
+  target.saveToHistory = settings.saveToHistory;
+  target.tlsValidation = settings.tlsValidation;
+  target.maxResponseSizeKb = settings.maxResponseSizeKb;
+  target.retryCount = settings.retryCount;
+  target.retryDelayMs = settings.retryDelayMs;
+  target.stopAfterHeaders = settings.stopAfterHeaders;
+  target.skipDefaultHeaders = settings.skipDefaultHeaders;
+  target.disableScripts = settings.disableScripts;
+  target.openHtmlPreviewByDefault = settings.openHtmlPreviewByDefault;
+  return target;
+}
+
+function requestSettingsSnapshot(tab) {
+  return {
+    timeout: tab.timeout,
+    followRedirects: !!tab.followRedirects,
+    saveToHistory: tab.saveToHistory !== false,
+    tlsValidation: normalizeTlsValidation(tab.tlsValidation),
+    maxResponseSizeKb: normalizeNumberSetting(tab.maxResponseSizeKb),
+    retryCount: normalizeNumberSetting(tab.retryCount),
+    retryDelayMs: normalizeNumberSetting(tab.retryDelayMs),
+    stopAfterHeaders: !!tab.stopAfterHeaders,
+    skipDefaultHeaders: !!tab.skipDefaultHeaders,
+    disableScripts: !!tab.disableScripts,
+    openHtmlPreviewByDefault: !!tab.openHtmlPreviewByDefault,
+  };
+}
+
+function buildSaveRequestMessage(tab, requestId) {
+  var payload = {
+    type: 'saveRequest',
+    method: tab.method,
+    url: tab.url,
+    headers: tab.headers,
+    params: tab.params,
+    body: tab.body,
+    bodyType: tab.bodyType,
+    formData: tab.formData || [],
+    binaryFilePath: tab.binaryFilePath || '',
+    auth: tab.auth,
+    scripts: tab.scripts || { preRequest: '', test: '' },
+  };
+  if (requestId !== undefined) {
+    payload.requestId = requestId;
+  }
+  return Object.assign(payload, requestSettingsSnapshot(tab));
+}
+
 function snapshotTab(tab) {
   return JSON.stringify({
     method: tab.method, url: tab.url,
     headers: tab.headers, params: tab.params,
     body: tab.body, bodyType: tab.bodyType,
     formData: tab.formData, binaryFilePath: tab.binaryFilePath,
-    auth: tab.auth, scripts: tab.scripts, timeout: tab.timeout
+    auth: tab.auth, scripts: tab.scripts,
+    settings: requestSettingsSnapshot(tab)
   });
 }
 
@@ -1609,7 +2339,18 @@ function isTabDirty(tab) {
       (tab.formData || []).some(function(field){return field.key || field.value}) ||
       tab.binaryFilePath ||
       tab.scripts?.preRequest ||
-      tab.scripts?.test
+      tab.scripts?.test ||
+      tab.timeout ||
+      tab.followRedirects ||
+      tab.saveToHistory === false ||
+      (tab.tlsValidation && tab.tlsValidation !== 'default') ||
+      tab.maxResponseSizeKb ||
+      tab.retryCount ||
+      tab.retryDelayMs ||
+      tab.stopAfterHeaders ||
+      tab.skipDefaultHeaders ||
+      tab.disableScripts ||
+      tab.openHtmlPreviewByDefault
     );
   }
   // 而щ젆?섏뿉??遺덈윭???? ?ㅻ깄???鍮?蹂寃?媛먯?
@@ -1628,10 +2369,15 @@ function markDirty() {
 
   function createTab(data) {
     const id = 'tab_' + (++tabIdCounter);
-    const tab = {
+    const incomingName = data?.name;
+    const autoName = data?.autoName === true
+      || (!incomingName && !data?.requestId)
+      || (data?.autoName !== false && !data?.requestId && isKnownDefaultTabName(incomingName || ''));
+    const tab = applyRequestSettings({
       id,
     requestId: data?.requestId || null,  // 而щ젆???덉뒪?좊━ ?붿껌 ID (以묐났 ??諛⑹?)
-    name: data?.name || 'New Request',
+    name: autoName ? tr('webview.stage.newRequest') : (incomingName || tr('webview.stage.newRequest')),
+    autoName: autoName,
     method: data?.method || 'GET',
     url: data?.url || '',
     headers: data?.headers || [],
@@ -1642,7 +2388,6 @@ function markDirty() {
     binaryFilePath: data?.binaryFilePath || '',
     auth: data?.auth || { type: 'none' },
       scripts: data?.scripts || { preRequest: '', test: '' },
-      timeout: data?.timeout ?? 0,
       jsonFormatStyle: data?.jsonFormatStyle || 'pretty',
       xmlFormatStyle: data?.xmlFormatStyle || 'inline',
       formatIndent: data?.formatIndent || '2',
@@ -1657,8 +2402,10 @@ function markDirty() {
     loading: false,
     progressVisible: false,
     slideIn: false,
+    lastEvent: data?.lastEvent || 'idle',
+    responseTab: data?.responseTab || 'resBody',
     sendTime: 0,
-  };
+  }, data);
   // 而щ젆???덉뒪?좊━?먯꽌 遺덈윭????씠硫??ㅻ깄?????
   if (data?.requestId) {
     tab._snapshot = snapshotTab(tab);
@@ -1736,7 +2483,7 @@ function showDirtyConfirm(tabId) {
       if (tab && tab.url) {
         if (tabId === activeTabId) saveActiveTabState();
         _pendingCloseAfterSave = tabId;
-        vscode.postMessage({ type: 'saveRequest', requestId: tab.requestId || undefined, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' } });
+        vscode.postMessage(buildSaveRequestMessage(tab, tab.requestId || undefined));
       } else {
         doCloseTab(tabId);
       }
@@ -1771,7 +2518,7 @@ function closeTabs(ids) {
     var old = document.getElementById('dirtyConfirmOverlay');
     if (old) old.remove();
     var tabObj = tabs.find(function(t){return t.id === tabId});
-    var tabLabel = tabObj ? (tabObj.name || 'New Request') : '';
+    var tabLabel = tabObj ? (tabObj.name || tr('webview.stage.newRequest')) : '';
     var overlay = document.createElement('div');
     overlay.id = 'dirtyConfirmOverlay';
     overlay.className = 'dirty-confirm-overlay';
@@ -1917,7 +2664,17 @@ function saveActiveTabState() {
   tab.binaryFilePath = mc.querySelector('.js-binary-path')?.value || '';
   tab.auth = collectAuth(mc);
   tab.scripts = collectScripts(mc);
-  tab.timeout = parseInt(mc.querySelector('.js-timeout')?.value) || 0;
+  tab.timeout = normalizeNumberSetting(mc.querySelector('.js-timeout')?.value);
+  tab.followRedirects = mc.querySelector('.js-follow-redirects')?.checked === true;
+  tab.saveToHistory = mc.querySelector('.js-save-history')?.checked !== false;
+  tab.tlsValidation = normalizeTlsValidation(mc.querySelector('.js-tls-validation')?.value);
+  tab.maxResponseSizeKb = normalizeNumberSetting(mc.querySelector('.js-max-response-size')?.value);
+  tab.retryCount = normalizeNumberSetting(mc.querySelector('.js-retry-count')?.value);
+  tab.retryDelayMs = normalizeNumberSetting(mc.querySelector('.js-retry-delay')?.value);
+  tab.stopAfterHeaders = mc.querySelector('.js-stop-after-headers')?.checked === true;
+  tab.skipDefaultHeaders = mc.querySelector('.js-skip-default-headers')?.checked === true;
+  tab.disableScripts = mc.querySelector('.js-disable-scripts')?.checked === true;
+  tab.openHtmlPreviewByDefault = mc.querySelector('.js-open-html-preview')?.checked === true;
 }
 
 function renderTabBar() {
@@ -1934,7 +2691,7 @@ function renderTabBar() {
       '<span class="pin-icon">\u{1F4CC}</span>' +
       '<span class="method-badge method-' + tab.method + '">' + tab.method + '</span>' +
       '<span class="tab-name">' + escapeHtml(truncate(tab.name, 25)) + '</span>' +
-      (tab.dirty ? '<span class="dirty-dot" title="Unsaved changes">\u25CF</span>' : '') +
+      (tab.dirty ? '<span class="dirty-dot" title="' + escapeAttr(tr('webview.unsavedChanges')) + '">\u25CF</span>' : '') +
       '<span class="close-tab" data-id="' + tab.id + '">&times;</span>';
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('close-tab')) {
@@ -1962,16 +2719,16 @@ function showTabContextMenu(x, y, tabId) {
   const allClosable = tabs.filter(t => !t.pinned);
 
   const items = [
-    { label: 'Close', action: 'close', disabled: !!tab.pinned },
-    { label: 'Close Others', action: 'closeOthers', disabled: othersClosable.length === 0 },
-    { label: 'Close All', action: 'closeAll', disabled: allClosable.length === 0 },
-    { label: 'Close to the Right', action: 'closeRight', disabled: rightClosable.length === 0 },
+    { label: tr('webview.close'), action: 'close', disabled: !!tab.pinned },
+    { label: tr('webview.closeOthers'), action: 'closeOthers', disabled: othersClosable.length === 0 },
+    { label: tr('webview.closeAll'), action: 'closeAll', disabled: allClosable.length === 0 },
+    { label: tr('webview.closeRight'), action: 'closeRight', disabled: rightClosable.length === 0 },
     { sep: true },
     tab.pinned
-      ? { label: 'Unpin Tab', action: 'unpin' }
-      : { label: 'Pin Tab', action: 'pin' },
+      ? { label: tr('webview.unpinTab'), action: 'unpin' }
+      : { label: tr('webview.pinTab'), action: 'pin' },
     { sep: true },
-    { label: 'Duplicate Tab', action: 'duplicate' },
+    { label: tr('webview.duplicateTab'), action: 'duplicate' },
   ];
 
   const menu = document.createElement('div');
@@ -2029,7 +2786,7 @@ function showTabContextMenu(x, y, tabId) {
         break;
       case 'duplicate':
         saveActiveTabState();
-        createTab({ name: tab.name, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent });
+        createTab({ name: tab.name, autoName: !!tab.autoName, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, openHtmlPreviewByDefault: tab.openHtmlPreviewByDefault, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent });
         break;
     }
   });
@@ -2041,9 +2798,78 @@ function closeTabContextMenu() {
   if (m) m.remove();
 }
 
+function getRequestStageInfo(tab) {
+  if (!tab) {
+    return { tone: 'idle', label: tr('webview.stage.newRequest'), detail: tr('webview.stage.newRequest.detail') };
+  }
+  if (tab.loading) {
+    return { tone: 'loading', label: tr('webview.stage.sending'), detail: tr('webview.stage.sending.detail') };
+  }
+  if (tab.lastEvent === 'canceled') {
+    return {
+      tone: 'canceled',
+      label: tr('webview.stage.canceled'),
+      detail: tab.response ? tr('webview.stage.canceled.withResponse') : tr('webview.stage.canceled.noResponse')
+    };
+  }
+  if (tab.error) {
+    return { tone: 'error', label: tr('webview.stage.failed'), detail: truncate(tab.error, 96) };
+  }
+  if (tab.response) {
+    var status = tab.response.status || 0;
+    if (status >= 500) {
+      return { tone: 'error', label: tr('webview.stage.serverError'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + tab.response.time + ' ms' };
+    }
+    if (status >= 400) {
+      return { tone: 'error', label: tr('webview.stage.clientError'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + tab.response.time + ' ms' };
+    }
+    if (status >= 300) {
+      return { tone: 'redirect', label: tr('webview.stage.redirected'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + tab.response.time + ' ms' };
+    }
+    return { tone: 'success', label: tr('webview.stage.liveResponse'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + tab.response.time + ' ms' };
+  }
+  if (tab.url) {
+    return { tone: 'ready', label: tr('webview.stage.ready'), detail: tr('webview.stage.ready.detail') };
+  }
+  return { tone: 'idle', label: tr('webview.stage.newRequest'), detail: tr('webview.stage.newRequest.detail') };
+}
+
+function renderEmptyState(kicker, title, copy, cards) {
+  return '<div class="empty-state">' +
+    '<div class="empty-state-kicker">' + escapeHtml(kicker) + '</div>' +
+    '<div class="empty-state-title">' + escapeHtml(title) + '</div>' +
+    '<div class="empty-state-copy">' + escapeHtml(copy) + '</div>' +
+    '<div class="empty-state-grid">' +
+      (cards || []).map(function(card) {
+        return '<div class="empty-state-card">' +
+          '<strong>' + escapeHtml(card.title || '') + '</strong>' +
+          '<span>' + escapeHtml(card.copy || '') + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+  '</div>';
+}
+
+function renderInlineEmptyState(kicker, title, copy) {
+  return '<div class="empty-state inline">' +
+    '<div class="empty-state-kicker">' + escapeHtml(kicker) + '</div>' +
+    '<div class="empty-state-title" style="font-size:16px">' + escapeHtml(title) + '</div>' +
+    '<div class="empty-state-copy" style="max-width:none">' + escapeHtml(copy) + '</div>' +
+  '</div>';
+}
+
 function renderContent() {
   if (!activeTabId || tabs.length === 0) {
-    mainContent.innerHTML = '<div class="placeholder">Press + or Ctrl+T to create a new request</div>';
+    mainContent.innerHTML = renderEmptyState(
+      tr('webview.empty.hero.kicker'),
+      tr('webview.empty.hero.title'),
+      tr('webview.empty.hero.copy'),
+      [
+        { title: tr('webview.empty.hero.card.create.title'), copy: tr('webview.empty.hero.card.create.copy') },
+        { title: tr('webview.empty.hero.card.import.title'), copy: tr('webview.empty.hero.card.import.copy') },
+        { title: tr('webview.empty.hero.card.compare.title'), copy: tr('webview.empty.hero.card.compare.copy') }
+      ]
+    );
     return;
   }
   // 由щ젋?????섎룞 議곗젅???붿껌 ?곸뿭 ?믪씠 蹂댁〈
@@ -2052,13 +2878,22 @@ function renderContent() {
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab) return;
 
-  const envLine = currentEnvName
-    ? '<div class="env-indicator"><span class="var-name">{{env}}</span> = ' + escapeHtml(currentEnvName) + '</div>'
-    : '';
+  const stage = getRequestStageInfo(tab);
+  const envLine =
+    '<div class="request-topline">' +
+      '<div class="request-stage stage-' + stage.tone + '"><span class="stage-dot"></span>' + escapeHtml(stage.label) + '</div>' +
+      '<div class="request-stage-hint">' + escapeHtml(stage.detail) + '</div>' +
+      '<div class="request-topline-right">' +
+        (currentEnvName
+          ? '<div class="env-indicator-inline"><span class="var-name">{{env}}</span> = ' + escapeHtml(currentEnvName) + '</div>'
+          : '<div class="empty-state-badge">' + escapeHtml(tr('webview.offlineWorkspace')) + '</div>') +
+      '</div>' +
+    '</div>';
 
   let resHtml = '';
   if (tab.loading) {
-    resHtml = '<div style="padding:6px"><span class="spinner"></span>Sending request...</div>' +
+    resHtml = '<div style="padding:6px"><span class="spinner"></span>' + escapeHtml(tr('webview.loading')) + '</div>' +
+      '<div class="request-stage-hint" style="padding:0 6px 6px">' + escapeHtml(tr('webview.loading.hint')) + '</div>' +
       '<div class="skeleton-loader"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>';
   } else if (tab.error) {
     resHtml = '<div class="error-msg">' + escapeHtml(tab.error) + '</div>';
@@ -2068,7 +2903,7 @@ function renderContent() {
     const ct = (r.headers?.['content-type'] || r.headers?.['Content-Type'] || '').toLowerCase();
     const isBinary = !!r.bodyBase64 && isBinaryContentType(ct);
     const displayBody = isBinary
-      ? '[Binary response. Use the Save button to write the original file.]'
+      ? tr('webview.binaryResponse')
       : r.body;
     const lang = isBinary ? 'text' : detectLang(ct, displayBody);
     const rawBodyHtml = isBinary ? escapeHtml(displayBody) : highlightBody(displayBody, lang);
@@ -2076,7 +2911,7 @@ function renderContent() {
     const headerEntries = Object.entries(r.headers);
     const headerCount = headerEntries.length;
     let headersTableHtml = '<table class="res-header-table">' +
-      '<thead><tr><th class="res-header-key-col">Key</th><th>Value</th></tr></thead><tbody>';
+      '<thead><tr><th class="res-header-key-col">' + escapeHtml(tr('webview.key')) + '</th><th>' + escapeHtml(tr('webview.value')) + '</th></tr></thead><tbody>';
     for (const [k,v] of headerEntries) {
       headersTableHtml += '<tr><td class="res-header-key">' + escapeHtml(k) + '</td>' +
         '<td class="res-header-value" title="' + escapeAttr(String(v)) + '">' + escapeHtml(String(v)) + '</td></tr>';
@@ -2133,103 +2968,140 @@ function renderContent() {
       }
       cookiesTableHtml += '</tbody></table>';
     }
+    const activeResponseTab = tab.responseTab === 'resPreview' && lang !== 'html'
+      ? 'resBody'
+      : tab.responseTab === 'resCookies' && cookieCount === 0
+        ? 'resBody'
+        : tab.responseTab || 'resBody';
+    const showBody = activeResponseTab === 'resBody';
+    const showCookies = activeResponseTab === 'resCookies';
+    const showHeaders = activeResponseTab === 'resHeaders';
+    const showTests = activeResponseTab === 'resTests';
+    const showPreview = activeResponseTab === 'resPreview';
     const hasFormat = (lang === 'json' || lang === 'xml');
+    const currentSnapshot = createResponseSnapshot(tab, tab.response, '');
+    const currentSignature = currentSnapshot?.signature || '';
     const formatStyle = lang === 'xml'
       ? (tab.xmlFormatStyle || 'inline')
       : (tab.jsonFormatStyle || 'pretty');
     const formatIndent = tab.formatIndent || '2';
     const fmtMenuHtml = hasFormat
       ? '<div class="fmt-wrap">' +
-          '<button class="tb-btn ripple-btn js-fmt-btn">Format</button>' +
+          '<button class="tb-btn ripple-btn js-fmt-btn">' + escapeHtml(tr('webview.format')) + '</button>' +
           '<div class="fmt-menu js-fmt-menu">' +
-            '<div class="fmt-menu-label">Style</div>' +
-            '<div class="fmt-menu-item js-fmt-style" data-style="pretty"><span class="check">' + (formatStyle === 'pretty' ? 'x' : ' ') + '</span>Pretty</div>' +
-            '<div class="fmt-menu-item js-fmt-style" data-style="compact"><span class="check">' + (formatStyle === 'compact' ? 'x' : ' ') + '</span>Compact</div>' +
-            (lang === 'xml' ? '<div class="fmt-menu-item js-fmt-style" data-style="inline"><span class="check">' + (formatStyle === 'inline' ? 'x' : ' ') + '</span>Inline Children</div>' : '') +
+            '<div class="fmt-menu-label">' + escapeHtml(tr('webview.style')) + '</div>' +
+            '<div class="fmt-menu-item js-fmt-style" data-style="pretty"><span class="check">' + (formatStyle === 'pretty' ? 'x' : ' ') + '</span>' + escapeHtml(tr('webview.pretty')) + '</div>' +
+            '<div class="fmt-menu-item js-fmt-style" data-style="compact"><span class="check">' + (formatStyle === 'compact' ? 'x' : ' ') + '</span>' + escapeHtml(tr('webview.compact')) + '</div>' +
+            (lang === 'xml' ? '<div class="fmt-menu-item js-fmt-style" data-style="inline"><span class="check">' + (formatStyle === 'inline' ? 'x' : ' ') + '</span>' + escapeHtml(tr('webview.inlineChildren')) + '</div>' : '') +
             '<div class="fmt-menu-sep"></div>' +
-            '<div class="fmt-menu-label">Indent</div>' +
-            '<div class="fmt-menu-item js-fmt-indent" data-indent="2"><span class="check">' + (formatIndent === '2' ? 'x' : ' ') + '</span>2 spaces</div>' +
-            '<div class="fmt-menu-item js-fmt-indent" data-indent="4"><span class="check">' + (formatIndent === '4' ? 'x' : ' ') + '</span>4 spaces</div>' +
-            '<div class="fmt-menu-item js-fmt-indent" data-indent="tab"><span class="check">' + (formatIndent === 'tab' ? 'x' : ' ') + '</span>Tab</div>' +
+            '<div class="fmt-menu-label">' + escapeHtml(tr('webview.indent')) + '</div>' +
+            '<div class="fmt-menu-item js-fmt-indent" data-indent="2"><span class="check">' + (formatIndent === '2' ? 'x' : ' ') + '</span>' + escapeHtml(tr('webview.twoSpaces')) + '</div>' +
+            '<div class="fmt-menu-item js-fmt-indent" data-indent="4"><span class="check">' + (formatIndent === '4' ? 'x' : ' ') + '</span>' + escapeHtml(tr('webview.fourSpaces')) + '</div>' +
+            '<div class="fmt-menu-item js-fmt-indent" data-indent="tab"><span class="check">' + (formatIndent === 'tab' ? 'x' : ' ') + '</span>' + escapeHtml(tr('webview.tabIndent')) + '</div>' +
           '</div>' +
         '</div>'
       : '';
     const toolbarHtml = (lang === 'json' || lang === 'xml')
-      ? '<div class="res-body-toolbar js-res-body-toolbar" data-lang="' + lang + '">' +
+      ? '<div class="res-body-toolbar js-res-body-toolbar' + (showBody ? '' : ' hidden') + '" data-lang="' + lang + '">' +
           (lang === 'json'
               ? '<div class="toggle-group">' +
-                  '<button class="toggle-btn active" data-mode="tree">Tree</button>' +
-                  '<button class="toggle-btn" data-mode="raw">Raw</button>' +
+                  '<button class="toggle-btn active" data-mode="tree">' + escapeHtml(tr('webview.tree')) + '</button>' +
+                  '<button class="toggle-btn" data-mode="raw">' + escapeHtml(tr('webview.raw')) + '</button>' +
                 '</div>' +
-              '<button class="tb-btn js-expand-all" title="Expand All">Expand</button>' +
-              '<button class="tb-btn js-collapse-all" title="Collapse All">Collapse</button>'
+              '<button class="tb-btn js-expand-all" title="' + escapeAttr(tr('webview.expand')) + '">' + escapeHtml(tr('webview.expand')) + '</button>' +
+              '<button class="tb-btn js-collapse-all" title="' + escapeAttr(tr('webview.collapse')) + '">' + escapeHtml(tr('webview.collapse')) + '</button>'
             : '') +
           fmtMenuHtml +
         '</div>'
       : '';
     // 移섑솚???ㅼ젣 URL ?쒖떆
     const resolvedUrlDisplay = tab.resolvedUrl
-      ? '<div class="resolved-url js-resolved-url" title="Click to copy">' + escapeHtml(tab.resolvedUrl) + '</div>'
+      ? '<div class="resolved-url js-resolved-url" title="' + escapeAttr(tr('webview.clickToCopy')) + '">' + escapeHtml(tab.resolvedUrl) + '</div>'
       : '';
+    const responseToneClass = 'response-tone-' + sc + 'xx';
+    const compareChipHtml = '<div class="compare-chip-row js-compare-chip-row">' + buildCompareChipMarkup(currentSignature) + '</div>';
     resHtml =
-      '<div class="response-meta">' +
+      '<div class="response-summary">' +
+      '<div class="response-meta ' + responseToneClass + '">' +
         '<span class="status status-' + sc + 'xx">' + r.status + ' ' + escapeHtml(r.statusText) + '</span>' +
-        '<span>' + r.time + ' ms</span><span>' + formatSize(r.size) + '</span>' +
+        '<span class="meta-stat">' + r.time + ' ms</span><span class="meta-stat">' + formatSize(r.size) + '</span>' +
         '<span style="flex:1"></span>' +
-        (lang !== 'text' ? '<span style="font-size:13px;opacity:.5;text-transform:uppercase">' + lang + '</span>' : '') +
-        '<button class="res-action-btn ripple-btn js-copy-response" title="Copy Response Body"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M10 3H4v10h8V5l-2-2zM9 4l2 2H9V4zM3 0h6l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V1a1 1 0 011-1z"/><path d="M1 3v11a1 1 0 001 1h8v-1H2V3H1z"/></svg> Copy</button>' +
-        '<button class="res-action-btn ripple-btn js-save-response" title="Save Response Body"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> Save</button>' +
-        '<button class="pin-response-btn ripple-btn js-pin-response" title="Pin Response for Compare">' + pinSvg + ' Pin' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
-        '<button class="compare-btn js-compare-responses' + (pinnedResponses.length >= 2 ? ' ready' : '') + '" title="Compare Pinned Responses"' + (pinnedResponses.length < 2 ? ' disabled' : '') + '>' + diffSvg + ' Compare' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
+        (lang !== 'text' ? '<span class="meta-lang">' + lang + '</span>' : '') +
+        '<button class="res-action-btn ripple-btn js-copy-response" title="' + escapeAttr(tr('webview.copyResponse')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M10 3H4v10h8V5l-2-2zM9 4l2 2H9V4zM3 0h6l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V1a1 1 0 011-1z"/><path d="M1 3v11a1 1 0 001 1h8v-1H2V3H1z"/></svg> ' + escapeHtml(tr('webview.copy')) + '</button>' +
+        '<button class="res-action-btn ripple-btn js-save-response" title="' + escapeAttr(tr('webview.saveResponse')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> ' + escapeHtml(tr('webview.save')) + '</button>' +
+        '<button class="pin-response-btn ripple-btn js-pin-response" title="' + escapeAttr(tr('webview.pinResponse')) + '">' + pinSvg + ' ' + escapeHtml(tr('webview.pin')) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
+        '<button class="res-action-btn ripple-btn js-compare-last" title="' + escapeAttr(tr('webview.compareLast')) + '"' + (!lastResponse ? ' disabled' : '') + '>' + escapeHtml(tr('webview.last')) + '</button>' +
+        '<button class="res-action-btn ripple-btn js-compare-settings" title="' + escapeAttr(tr('webview.comparisonSettings')) + '">' + escapeHtml(tr('webview.mode')) + ': ' + compareModeShort(compareSettings.mode) + '</button>' +
+        '<button class="compare-btn js-compare-responses' + (pinnedResponses.length >= 2 ? ' ready' : '') + '" title="' + escapeAttr(tr('webview.comparePinned')) + '"' + (pinnedResponses.length < 2 ? ' disabled' : '') + '>' + diffSvg + ' ' + escapeHtml(tr('webview.compare')) + ' ' + compareModeShort(compareSettings.mode) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
+      '</div>' +
+      compareChipHtml +
       '</div>' +
       resolvedUrlDisplay +
       '<div class="tabs js-res-tabs">' +
-        '<div class="tab active" data-tab="resBody">Body</div>' +
-        (cookieCount > 0 ? '<div class="tab" data-tab="resCookies">Cookies <span class="tab-count">' + cookieCount + '</span></div>' : '<div class="tab" data-tab="resCookies">Cookies</div>') +
-        '<div class="tab" data-tab="resHeaders">Headers <span class="tab-count">' + headerCount + '</span></div>' +
-        ((tab.scriptResults?.tests?.length || 0) > 0 ? '<div class="tab" data-tab="resTests">Tests <span class="tab-count">' + tab.scriptResults.tests.length + '</span></div>' : '<div class="tab" data-tab="resTests">Tests</div>') +
-        (lang === 'html' ? '<div class="tab" data-tab="resPreview">Preview</div>' : '') +
+        '<div class="tab' + (showBody ? ' active' : '') + '" data-tab="resBody">' + escapeHtml(tr('webview.body')) + '</div>' +
+        (cookieCount > 0 ? '<div class="tab' + (showCookies ? ' active' : '') + '" data-tab="resCookies">' + escapeHtml(tr('webview.cookies')) + ' <span class="tab-count">' + cookieCount + '</span></div>' : '<div class="tab' + (showCookies ? ' active' : '') + '" data-tab="resCookies">' + escapeHtml(tr('webview.cookies')) + '</div>') +
+        '<div class="tab' + (showHeaders ? ' active' : '') + '" data-tab="resHeaders">' + escapeHtml(tr('webview.headers')) + ' <span class="tab-count">' + headerCount + '</span></div>' +
+        ((tab.scriptResults?.tests?.length || 0) > 0 ? '<div class="tab' + (showTests ? ' active' : '') + '" data-tab="resTests">' + escapeHtml(tr('webview.tests')) + ' <span class="tab-count">' + tab.scriptResults.tests.length + '</span></div>' : '<div class="tab' + (showTests ? ' active' : '') + '" data-tab="resTests">' + escapeHtml(tr('webview.tests')) + '</div>') +
+        (lang === 'html' ? '<div class="tab' + (showPreview ? ' active' : '') + '" data-tab="resPreview">' + escapeHtml(tr('webview.preview')) + '</div>' : '') +
       '</div>' +
       toolbarHtml +
-      (lang === 'json' ? '<div class="json-tree js-res-tree js-res-body"></div>' : '') +
-      '<div class="json-body js-res-raw js-res-body' + (lang === 'json' ? ' hidden' : '') + '">' + rawBodyHtml + '</div>' +
-      '<div class="res-headers-panel hidden js-res-headers">' +
+      (lang === 'json' ? '<div class="json-tree js-res-tree js-res-body' + (showBody ? '' : ' hidden') + '"></div>' : '') +
+      '<div class="json-body js-res-raw js-res-body' + ((lang === 'json' || !showBody) ? ' hidden' : '') + '">' + rawBodyHtml + '</div>' +
+      '<div class="res-headers-panel' + (showHeaders ? '' : ' hidden') + ' js-res-headers">' +
         (tab.resolvedHeaders && tab.resolvedHeaders.length
-          ? '<div class="resolved-headers-section"><div class="resolved-headers-title">Request Headers (Resolved)</div>' +
-            '<table class="res-header-table"><thead><tr><th class="res-header-key-col">Key</th><th>Value</th></tr></thead><tbody>' +
+          ? '<div class="resolved-headers-section"><div class="resolved-headers-title">' + escapeHtml(tr('webview.requestHeadersResolved')) + '</div>' +
+            '<table class="res-header-table"><thead><tr><th class="res-header-key-col">' + escapeHtml(tr('webview.key')) + '</th><th>' + escapeHtml(tr('webview.value')) + '</th></tr></thead><tbody>' +
             tab.resolvedHeaders.map(function(h) {
               return '<tr><td class="res-header-key">' + escapeHtml(h.key) + '</td><td class="res-header-value" title="' + escapeAttr(h.value) + '">' + escapeHtml(h.value) + '</td></tr>';
             }).join('') +
-            '</tbody></table></div><div class="resolved-headers-title" style="margin-top:8px">Response Headers</div>'
+            '</tbody></table></div><div class="resolved-headers-title" style="margin-top:8px">' + escapeHtml(tr('webview.responseHeaders')) + '</div>'
           : '') +
         headersTableHtml +
       '</div>' +
-      '<div class="res-cookies-panel hidden js-res-cookies">' +
-        (cookieCount > 0 ? cookiesTableHtml : '<div class="placeholder" style="padding:12px;font-size:13px;opacity:.5">No cookies in response</div>') +
+      '<div class="res-cookies-panel' + (showCookies ? '' : ' hidden') + ' js-res-cookies">' +
+        (cookieCount > 0 ? cookiesTableHtml : renderInlineEmptyState(tr('webview.inline.response.noCookies.kicker'), tr('webview.inline.response.noCookies.title'), tr('webview.inline.response.noCookies.copy'))) +
       '</div>' +
-      '<div class="res-headers-panel hidden js-res-tests">' +
+      '<div class="res-headers-panel' + (showTests ? '' : ' hidden') + ' js-res-tests">' +
         ((tab.scriptResults?.tests?.length || 0) > 0
-          ? '<table class="res-header-table"><thead><tr><th class="res-header-key-col">Test</th><th>Result</th></tr></thead><tbody>' +
+          ? '<table class="res-header-table"><thead><tr><th class="res-header-key-col">' + escapeHtml(tr('webview.test')) + '</th><th>' + escapeHtml(tr('webview.result')) + '</th></tr></thead><tbody>' +
             tab.scriptResults.tests.map(function(test) {
-              var status = test.passed ? 'PASS' : 'FAIL';
-              var detail = test.passed ? 'Passed' : escapeHtml(test.error || 'Failed');
+              var status = test.passed ? tr('webview.testResult.pass') : tr('webview.testResult.fail');
+              var detail = test.passed ? tr('webview.testResult.passed') : escapeHtml(test.error || tr('webview.testResult.failed'));
               return '<tr><td class="res-header-key">' + escapeHtml(test.name) + '</td><td class="res-header-value" title="' + escapeAttr(detail) + '">' + status + ' - ' + detail + '</td></tr>';
             }).join('') +
             '</tbody></table>' +
             ((tab.scriptResults.logs || []).length > 0
-              ? '<div class="resolved-headers-title" style="margin-top:8px">Script Logs</div><table class="res-header-table"><thead><tr><th class="res-header-key-col">Level</th><th>Message</th></tr></thead><tbody>' +
+              ? '<div class="resolved-headers-title" style="margin-top:8px">' + escapeHtml(tr('webview.scriptLogs')) + '</div><table class="res-header-table"><thead><tr><th class="res-header-key-col">' + escapeHtml(tr('webview.level')) + '</th><th>' + escapeHtml(tr('webview.message')) + '</th></tr></thead><tbody>' +
                 tab.scriptResults.logs.map(function(log) {
                   return '<tr><td class="res-header-key">' + escapeHtml(log.level.toUpperCase()) + '</td><td class="res-header-value" title="' + escapeAttr(log.message) + '">' + escapeHtml(log.message) + '</td></tr>';
                 }).join('') +
                 '</tbody></table>'
               : '')
-          : '<div class="placeholder" style="padding:12px;font-size:13px;opacity:.5">No tests executed</div>') +
+          : renderInlineEmptyState(tr('webview.inline.tests.none.kicker'), tr('webview.inline.tests.none.title'), tr('webview.inline.tests.none.copy'))) +
       '</div>' +
-      (lang === 'html' ? '<iframe class="res-preview hidden js-res-preview" sandbox="allow-same-origin" style="width:100%;flex:1;border:none;background:#fff"></iframe>' : '');
+      (lang === 'html' ? '<iframe class="res-preview' + (showPreview ? '' : ' hidden') + ' js-res-preview" sandbox="allow-same-origin" srcdoc="' + escapeAttr(tab.response.body || '') + '" style="width:100%;flex:1;border:none;background:#fff"></iframe>' : '');
   } else {
     resHtml = tab.url
-      ? '<div class="placeholder">Send a request to see the response</div>'
-      : '<div class="empty-tab-hint">Enter a URL and click Send to get started</div>';
+      ? renderEmptyState(
+          tr('webview.empty.response.kicker'),
+          tr('webview.empty.response.title'),
+          tr('webview.empty.response.copy'),
+          [
+            { title: tr('webview.empty.response.card.send.title'), copy: tr('webview.empty.response.card.send.copy') },
+            { title: tr('webview.empty.response.card.settings.title'), copy: tr('webview.empty.response.card.settings.copy') },
+            { title: tr('webview.empty.response.card.compare.title'), copy: tr('webview.empty.response.card.compare.copy') }
+          ]
+        )
+      : renderEmptyState(
+          tr('webview.empty.request.kicker'),
+          tr('webview.empty.request.title'),
+          tr('webview.empty.request.copy'),
+          [
+            { title: tr('webview.empty.request.card.variables.title'), copy: tr('webview.empty.request.card.variables.copy') },
+            { title: tr('webview.empty.request.card.bodies.title'), copy: tr('webview.empty.request.card.bodies.copy') },
+            { title: tr('webview.empty.request.card.scripts.title'), copy: tr('webview.empty.request.card.scripts.copy') }
+          ]
+        );
   }
 
   mainContent.innerHTML = envLine +
@@ -2240,53 +3112,53 @@ function renderContent() {
         ).join('') +
       '</select>' +
       '<div class="url-input-wrap">' +
-        '<input class="js-url" type="text" placeholder="{{baseUrl}}/api/endpoint" spellcheck="false" value="' + escapeAttr(tab.url) + '"/>' +
+        '<input class="js-url" type="text" placeholder="' + escapeAttr(tr('webview.urlPlaceholder')) + '" spellcheck="false" value="' + escapeAttr(tab.url) + '"/>' +
         '<div class="var-overlay js-var-overlay hidden"></div>' +
       '</div>' +
       (tab.loading
-        ? '<button class="btn-stop js-send"><span class="stop-icon"></span> Stop</button>'
-        : '<button class="btn-send ripple-btn js-send"><span class="send-streak"></span><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1.5l14 6.5-14 6.5V9l10-1-10-1V1.5z"/></svg> Send</button>') +
+        ? '<button class="btn-stop js-send"><span class="stop-icon"></span> ' + escapeHtml(tr('webview.stop')) + '</button>'
+        : '<button class="btn-send ripple-btn js-send"><span class="send-streak"></span><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1.5l14 6.5-14 6.5V9l10-1-10-1V1.5z"/></svg> ' + escapeHtml(tr('webview.send')) + ' <span class="btn-keyhint">Enter</span></button>') +
       '<span class="url-bar-spacer"></span>' +
-      '<button class="res-action-btn ripple-btn js-save"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> Save</button>' +
-      (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="Save as a new request">Save As</button>' : '') +
-      '<button class="res-action-btn ripple-btn js-copy-curl" title="Copy as cURL"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l4.5 4L1 10l1 1.5L7.5 6 2 0.5 1 2zm7 8h7v1.5H8V10z"/></svg> cURL</button>' +
-      '<button class="res-action-btn ripple-btn js-generate-code" title="Generate Code">Code</button>' +
+      '<button class="res-action-btn ripple-btn js-save"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> ' + escapeHtml(tr('webview.save')) + '</button>' +
+      (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="' + escapeAttr(tr('webview.saveAs')) + '">' + escapeHtml(tr('webview.saveAs')) + '</button>' : '') +
+      '<button class="res-action-btn ripple-btn js-copy-curl" title="' + escapeAttr(tr('webview.copyAsCurl')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l4.5 4L1 10l1 1.5L7.5 6 2 0.5 1 2zm7 8h7v1.5H8V10z"/></svg> cURL</button>' +
+      '<button class="res-action-btn ripple-btn js-generate-code" title="' + escapeAttr(tr('webview.generateCode')) + '">' + escapeHtml(tr('webview.code')) + '</button>' +
     '</div>' +
     '<div class="split">' +
       '<div class="req-area">' +
         '<div class="tabs js-req-tabs">' +
-          '<div class="tab active" data-tab="params">Params</div>' +
-          '<div class="tab" data-tab="headers">Headers</div>' +
-          '<div class="tab" data-tab="body">Body</div>' +
-          '<div class="tab" data-tab="auth">Auth</div>' +
-          '<div class="tab" data-tab="scripts">Scripts</div>' +
-          '<div class="tab" data-tab="settings">Settings</div>' +
+          '<div class="tab active" data-tab="params">' + escapeHtml(tr('webview.params')) + '</div>' +
+          '<div class="tab" data-tab="headers">' + escapeHtml(tr('webview.headers')) + '</div>' +
+          '<div class="tab" data-tab="body">' + escapeHtml(tr('webview.body')) + '</div>' +
+          '<div class="tab" data-tab="auth">' + escapeHtml(tr('webview.auth')) + '</div>' +
+          '<div class="tab" data-tab="scripts">' + escapeHtml(tr('webview.scripts')) + '</div>' +
+          '<div class="tab" data-tab="settings">' + escapeHtml(tr('webview.settings')) + '</div>' +
         '</div>' +
         '<div class="js-params-panel kv-section">' +
           '<div class="js-param-rows">' + kvRowsHtml(tab.params) + '</div>' +
-          '<button class="add-btn js-add-param">+ Add Param</button>' +
+          '<button class="add-btn js-add-param">' + escapeHtml(tr('webview.addParam')) + '</button>' +
         '</div>' +
         '<div class="js-headers-panel kv-section hidden">' +
           '<div class="js-header-rows">' + kvRowsHtml(tab.headers) + '</div>' +
-          '<button class="add-btn js-add-header">+ Add Header</button>' +
+          '<button class="add-btn js-add-header">' + escapeHtml(tr('webview.addHeader')) + '</button>' +
         '</div>' +
         '<div class="js-body-panel body-section hidden">' +
           '<select class="js-body-type body-type-select">' +
             ['none','json','xml','form','formdata','binary','raw'].map(function(t) {
-              var label = { none:'None', json:'JSON', xml:'XML', form:'Form URL Encoded', formdata:'Form Data', binary:'Binary', raw:'Raw' }[t];
+              var label = bodyTypeLabel(t);
               return '<option value="' + t + '"' + (t === tab.bodyType ? ' selected' : '') + '>' + label + '</option>';
             }).join('') +
           '</select>' +
-          '<textarea class="js-body" placeholder="{&quot;key&quot;: &quot;value&quot;}"' + (tab.bodyType === 'none' || tab.bodyType === 'formdata' || tab.bodyType === 'binary' ? ' style="display:none"' : '') + '>' + escapeHtml(tab.body) + '</textarea>' +
+          '<textarea class="js-body" placeholder="' + escapeAttr(tr('webview.bodyPlaceholder')) + '"' + (tab.bodyType === 'none' || tab.bodyType === 'formdata' || tab.bodyType === 'binary' ? ' style="display:none"' : '') + '>' + escapeHtml(tab.body) + '</textarea>' +
           '<div class="js-formdata-panel' + (tab.bodyType === 'formdata' ? '' : ' hidden') + '">' +
             '<div class="js-formdata-rows">' + formDataRowsHtml(tab.formData || []) + '</div>' +
-            '<button class="add-btn js-add-formdata-text">+ Add Field</button>' +
-            '<button class="add-btn js-add-formdata-file">+ Add File</button>' +
+            '<button class="add-btn js-add-formdata-text">' + escapeHtml(tr('webview.addField')) + '</button>' +
+            '<button class="add-btn js-add-formdata-file">' + escapeHtml(tr('webview.addFile')) + '</button>' +
           '</div>' +
           '<div class="js-binary-panel' + (tab.bodyType === 'binary' ? '' : ' hidden') + '">' +
             '<div class="kv-row" style="margin-top:4px">' +
-              '<input class="js-binary-path" type="text" placeholder="File Path" value="' + escapeAttr(tab.binaryFilePath || '') + '"/>' +
-              '<button class="btn btn-s js-browse-binary" type="button" style="padding:3px 8px">Browse</button>' +
+              '<input class="js-binary-path" type="text" placeholder="' + escapeAttr(tr('webview.filePath')) + '" value="' + escapeAttr(tab.binaryFilePath || '') + '"/>' +
+              '<button class="btn btn-s js-browse-binary" type="button" style="padding:3px 8px">' + escapeHtml(tr('webview.browse')) + '</button>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -2294,16 +3166,70 @@ function renderContent() {
           authHtml(tab.auth) +
         '</div>' +
         '<div class="js-scripts-panel body-section hidden">' +
-          '<div style="font-size:12px;opacity:.65;margin-bottom:4px">Pre-request Script</div>' +
-          '<textarea class="js-script-prerequest" placeholder="env.set(&quot;token&quot;, &quot;123&quot;);">' + escapeHtml(tab.scripts?.preRequest || '') + '</textarea>' +
-          '<div style="font-size:12px;opacity:.65;margin:8px 0 4px">Test Script</div>' +
-          '<textarea class="js-script-test" placeholder="test(&quot;status&quot;, function () { pm.response.to.have.status(200); });">' + escapeHtml(tab.scripts?.test || '') + '</textarea>' +
+          '<div class="script-editor-grid">' +
+            '<div class="script-card">' +
+              '<div class="script-card-label">' + escapeHtml(tr('webview.preRequestScript')) + '</div>' +
+              '<div class="script-card-note">' + escapeHtml(tr('webview.preRequestNote')) + '</div>' +
+              '<textarea class="js-script-prerequest" placeholder="' + escapeAttr(tr('webview.preRequestPlaceholder')) + '">' + escapeHtml(tab.scripts?.preRequest || '') + '</textarea>' +
+            '</div>' +
+            '<div class="script-card">' +
+              '<div class="script-card-label">' + escapeHtml(tr('webview.testScript')) + '</div>' +
+              '<div class="script-card-note">' + escapeHtml(tr('webview.testNote')) + '</div>' +
+              '<textarea class="js-script-test" placeholder="' + escapeAttr(tr('webview.testPlaceholder')) + '">' + escapeHtml(tab.scripts?.test || '') + '</textarea>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         '<div class="js-settings-panel settings-section hidden">' +
-          '<div class="settings-row">' +
-            '<label class="settings-label">Timeout (sec)</label>' +
-            '<input class="js-timeout settings-input" type="number" min="0" placeholder="0" title="0 = unlimited" value="' + (tab.timeout || '') + '"/>' +
-            '<span class="settings-hint">0 = unlimited</span>' +
+          '<div class="settings-grid">' +
+            '<div class="settings-card">' +
+              '<div class="settings-group">' +
+                '<div class="settings-group-title">' + escapeHtml(tr('webview.transport')) + '</div>' +
+                '<div class="settings-group-note">' + escapeHtml(tr('webview.transportNote')) + '</div>' +
+                '<div class="settings-row">' +
+                  '<label class="settings-label">' + escapeHtml(tr('webview.timeout')) + '</label>' +
+                  '<input class="js-timeout settings-input" type="number" min="0" placeholder="0" title="' + escapeAttr(tr('webview.unlimited')) + '" value="' + (tab.timeout || '') + '"/>' +
+                  '<div class="settings-field-meta"><span class="settings-hint">' + escapeHtml(tr('webview.unlimited')) + '</span></div>' +
+                '</div>' +
+                '<div class="settings-row">' +
+                  '<label class="settings-label">' + escapeHtml(tr('webview.maxSize')) + '</label>' +
+                  '<input class="js-max-response-size settings-input" type="number" min="0" placeholder="0" title="' + escapeAttr(tr('webview.unlimited')) + '" value="' + (tab.maxResponseSizeKb || '') + '"/>' +
+                  '<div class="settings-field-meta"><span class="settings-hint">' + escapeHtml(tr('webview.unlimited')) + '</span></div>' +
+                '</div>' +
+                '<div class="settings-row">' +
+                  '<label class="settings-label">' + escapeHtml(tr('webview.retryCount')) + '</label>' +
+                  '<input class="js-retry-count settings-input" type="number" min="0" placeholder="0" value="' + (tab.retryCount || '') + '"/>' +
+                  '<div class="settings-field-meta"><span class="settings-hint">' + escapeHtml(tr('webview.off')) + '</span></div>' +
+                '</div>' +
+                '<div class="settings-row">' +
+                  '<label class="settings-label">' + escapeHtml(tr('webview.retryDelay')) + '</label>' +
+                  '<input class="js-retry-delay settings-input" type="number" min="0" placeholder="0" value="' + (tab.retryDelayMs || '') + '"/>' +
+                  '<div class="settings-field-meta"><span class="settings-hint">' + escapeHtml(tr('webview.retryDelayUnit')) + '</span></div>' +
+                '</div>' +
+                '<div class="settings-row">' +
+                  '<label class="settings-label">' + escapeHtml(tr('webview.tls')) + '</label>' +
+                  '<select class="js-tls-validation settings-input settings-select">' +
+                    '<option value="default"' + (tab.tlsValidation !== 'strict' && tab.tlsValidation !== 'insecure' ? ' selected' : '') + '>' + escapeHtml(tr('webview.default')) + '</option>' +
+                    '<option value="strict"' + (tab.tlsValidation === 'strict' ? ' selected' : '') + '>' + escapeHtml(tr('webview.strict')) + '</option>' +
+                    '<option value="insecure"' + (tab.tlsValidation === 'insecure' ? ' selected' : '') + '>' + escapeHtml(tr('webview.insecure')) + '</option>' +
+                  '</select>' +
+                  '<div class="settings-field-meta"><span class="settings-hint">' + escapeHtml(tr('webview.perRequestOverride')) + '</span></div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="settings-card">' +
+              '<div class="settings-group">' +
+                '<div class="settings-group-title">' + escapeHtml(tr('webview.behavior')) + '</div>' +
+                '<div class="settings-group-note">' + escapeHtml(tr('webview.behaviorNote')) + '</div>' +
+                '<div class="settings-toggle-grid">' +
+                  '<label class="settings-toggle"><input class="js-follow-redirects" type="checkbox"' + (tab.followRedirects ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.followRedirects')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.followRedirects.note')) + '</span></span></label>' +
+                  '<label class="settings-toggle"><input class="js-stop-after-headers" type="checkbox"' + (tab.stopAfterHeaders ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.stopAfterHeaders')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.stopAfterHeaders.note')) + '</span></span></label>' +
+                  '<label class="settings-toggle"><input class="js-save-history" type="checkbox"' + (tab.saveToHistory !== false ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.saveToHistory')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.saveToHistory.note')) + '</span></span></label>' +
+                  '<label class="settings-toggle"><input class="js-skip-default-headers" type="checkbox"' + (tab.skipDefaultHeaders ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.skipDefaultHeaders')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.skipDefaultHeaders.note')) + '</span></span></label>' +
+                  '<label class="settings-toggle"><input class="js-disable-scripts" type="checkbox"' + (tab.disableScripts ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.disableScripts')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.disableScripts.note')) + '</span></span></label>' +
+                  '<label class="settings-toggle"><input class="js-open-html-preview" type="checkbox"' + (tab.openHtmlPreviewByDefault ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.openHtmlPreview')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.openHtmlPreview.note')) + '</span></span></label>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -2377,7 +3303,7 @@ function bindContentEvents() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
     pendingSaveBtn = this;
-    vscode.postMessage({ type: 'saveRequest', requestId: tab.requestId || undefined, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' } });
+    vscode.postMessage(buildSaveRequestMessage(tab, tab.requestId || undefined));
   });
 
   // Save As (???대쫫/?꾩튂濡??????requestId ?놁씠 ?꾩넚?섏뿬 ????ぉ ?앹꽦)
@@ -2386,7 +3312,7 @@ function bindContentEvents() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
     pendingSaveBtn = this;
-    vscode.postMessage({ type: 'saveRequest', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' } });
+    vscode.postMessage(buildSaveRequestMessage(tab));
   });
 
   // Copy as cURL (+ "Copied!" ?쇰뱶諛?
@@ -2395,7 +3321,7 @@ function bindContentEvents() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
     vscode.postMessage({ type: 'copyAsCurl', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth });
-    showBtnFeedback(this, 'Copied!', 1200);
+    showBtnFeedback(this, tr('webview.copied'), 1200);
   });
 
   mc.querySelector('.js-generate-code')?.addEventListener('click', function() {
@@ -2403,7 +3329,7 @@ function bindContentEvents() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
     vscode.postMessage({ type: 'generateCode', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth });
-    showBtnFeedback(this, 'Opened!', 1000);
+    showBtnFeedback(this, tr('webview.opened'), 1000);
   });
 
   // Copy Response Body (+ "Copied!" ?쇰뱶諛?
@@ -2417,7 +3343,7 @@ function bindContentEvents() {
       else if (opts.lang === 'xml') body = formatXml(body, opts.style, opts.indent);
     }
     vscode.postMessage({ type: 'copyResponseBody', body: body });
-    showBtnFeedback(this, 'Copied!', 1200);
+    showBtnFeedback(this, tr('webview.copied'), 1200);
   });
 
   // 移섑솚??URL ?대┃ ???대┰蹂대뱶 蹂듭궗
@@ -2427,7 +3353,7 @@ function bindContentEvents() {
     vscode.postMessage({ type: 'copyToClipboard', text: url });
     el.classList.add('copied');
     const orig = el.textContent;
-    el.textContent = 'Copied!';
+    el.textContent = tr('webview.copied');
     setTimeout(() => { el.textContent = orig; el.classList.remove('copied'); }, 1200);
   });
 
@@ -2440,106 +3366,99 @@ function bindContentEvents() {
     vscode.postMessage({ type: 'saveResponseBody', body: tab.response.body, bodyBase64: tab.response.bodyBase64 || '', contentType: ct });
   });
 
-  // Pin Response ???꾩옱 ?묐떟??鍮꾧탳?⑹쑝濡????/ ?좉?
   mc.querySelector('.js-pin-response')?.addEventListener('click', function() {
-    const tab = tabs.find(t => t.id === activeTabId);
-    if (!tab?.response) return;
-    var btn = this;
-    // ?대? ????묐떟?몄? ?뺤씤 (媛숈? ??+ 媛숈? body ???댁젣)
-    var existIdx = pinnedResponses.findIndex(function(p) { return p.tabId === activeTabId && p.body === tab.response.body; });
+    var snapshot = getActiveResponseSnapshot();
+    if (!snapshot) return;
+    var existIdx = pinnedResponses.findIndex(function(p) { return p.signature === snapshot.signature; });
     if (existIdx !== -1) {
-      // Pin ?댁젣
       pinnedResponses.splice(existIdx, 1);
-      btn.innerHTML = 'Unpinned';
       setTimeout(function() { updatePinCompareButtons(mc); }, 1200);
     } else {
-      // Pin 異붽? ???꾩옱 ?щ㎎ ?ㅽ??쇰룄 ?④퍡 ???
-      const ct = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || 'text/plain';
-      const envLabel = currentEnvName ? '[' + currentEnvName + ']' : '';
-      const timeLabel = new Date().toLocaleTimeString();
-      const label = (tab.name || tab.method + ' ' + tab.url) + ' ' + envLabel + ' ' + timeLabel;
-      var fmtOpts = getFormatOptions(mc);
       if (pinnedResponses.length >= 2) {
-        pinnedResponses.shift(); // 媛???ㅻ옒??嫄??쒓굅
+        pinnedResponses.shift();
       }
-      pinnedResponses.push({ label: label.trim(), body: tab.response.body, contentType: ct, timestamp: Date.now(), tabId: activeTabId, formatStyle: fmtOpts ? fmtOpts.style : null, formatIndent: fmtOpts ? fmtOpts.indent : null, formatLang: fmtOpts ? fmtOpts.lang : null });
-      btn.innerHTML = 'Pinned (' + pinnedResponses.length + '/2)';
+      pinnedResponses.push(snapshot);
       setTimeout(function() { updatePinCompareButtons(mc); }, 1200);
     }
-    // Compare 踰꾪듉? 利됱떆 媛깆떊
-    var cmpBtn = mc.querySelector('.js-compare-responses');
-    if (cmpBtn) {
-      if (pinnedResponses.length >= 2) { cmpBtn.disabled = false; cmpBtn.classList.add('ready'); }
-      else { cmpBtn.disabled = true; cmpBtn.classList.remove('ready'); }
-      cmpBtn.innerHTML = diffSvg + ' Compare' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '');
-    }
+    updatePinCompareButtons(mc);
   });
 
-  // Compare Responses ????λ맂 2媛??묐떟??媛곸옄???щ㎎ ?ㅽ??쇰줈 ?щ㎎?낇븯??鍮꾧탳
   mc.querySelector('.js-compare-responses')?.addEventListener('click', function() {
     if (pinnedResponses.length < 2) return;
-    vscode.postMessage({
-      type: 'compareResponses',
-      left: { label: pinnedResponses[0].label, body: formatPinnedBody(pinnedResponses[0]), contentType: pinnedResponses[0].contentType, formatted: true },
-      right: { label: pinnedResponses[1].label, body: formatPinnedBody(pinnedResponses[1]), contentType: pinnedResponses[1].contentType, formatted: true }
-    });
+    requestCompare(pinnedResponses[0], pinnedResponses[1]);
   });
 
-  // ?묐떟 ?곸뿭 ?고겢由???而⑦뀓?ㅽ듃 硫붾돱
+  mc.querySelector('.js-compare-last')?.addEventListener('click', function() {
+    compareCurrentWithLast();
+  });
+
+  mc.querySelector('.js-compare-settings')?.addEventListener('click', function() {
+    showCompareSettings();
+  });
+
   mc.querySelector('.res-area')?.addEventListener('contextmenu', function(e) {
     e.preventDefault();
-    // 湲곗〈 硫붾돱 ?쒓굅
     document.querySelectorAll('.res-ctx-menu').forEach(m => m.remove());
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab?.response) return;
+    const activeSnapshot = getActiveResponseSnapshot();
+    const pinnedOne = pinnedResponses[0] || null;
+    const pinnedTwo = pinnedResponses[1] || null;
 
     const menu = document.createElement('div');
     menu.className = 'res-ctx-menu';
     menu.innerHTML =
-      '<div class="ctx-item js-ctx-compare-last' + (!lastResponse ? ' disabled' : '') + '">Compare with Last Response</div>' +
+      '<div class="ctx-item js-ctx-compare-last' + (!lastResponse ? ' disabled' : '') + '">' + escapeHtml(tr('webview.compareLast')) + '</div>' +
+      '<div class="ctx-item js-ctx-compare-pin1' + (!pinnedOne ? ' disabled' : '') + '">' + escapeHtml(pinnedOne ? tf('webview.compareWith', { label: truncate(pinnedOne.label, 32) }) : tf('webview.compareWith', { label: tf('webview.pinNumber', { count: 1 }) })) + '</div>' +
+      '<div class="ctx-item js-ctx-compare-pin2' + (!pinnedTwo ? ' disabled' : '') + '">' + escapeHtml(pinnedTwo ? tf('webview.compareWith', { label: truncate(pinnedTwo.label, 32) }) : tf('webview.compareWith', { label: tf('webview.pinNumber', { count: 2 }) })) + '</div>' +
+      '<div class="ctx-item js-ctx-compare-pins' + (pinnedResponses.length < 2 ? ' disabled' : '') + '">' + escapeHtml(tr('webview.comparePinned')) + '</div>' +
+      '<div class="ctx-item js-ctx-settings">' + escapeHtml(tr('webview.comparisonSettings')) + '</div>' +
       '<div class="ctx-sep"></div>' +
-      '<div class="ctx-item js-ctx-pin-current">' + pinSvg + ' Pin Current Response</div>' +
-      '<div class="ctx-item js-ctx-clear-pins' + (pinnedResponses.length === 0 ? ' disabled' : '') + '">Clear All Pins' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + ')' : '') + '</div>';
+      '<div class="ctx-item js-ctx-pin-current">' + pinSvg + ' ' + escapeHtml(tr('webview.pinCurrentResponse')) + '</div>' +
+      '<div class="ctx-item js-ctx-clear-pins' + (pinnedResponses.length === 0 ? ' disabled' : '') + '">' + escapeHtml(tr('webview.clearAllPins')) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + ')' : '') + '</div>';
     menu.style.left = e.clientX + 'px';
     menu.style.top = e.clientY + 'px';
     document.body.appendChild(menu);
 
-    // ?붾㈃ 諛뽰쑝濡??섍?吏 ?딅룄濡?議곗젙
     var rect = menu.getBoundingClientRect();
     if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + 'px';
     if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 4) + 'px';
 
-    // Compare with Last Response ??媛곸옄???щ㎎ ?ㅽ??쇰줈 ?щ㎎?낇븯??鍮꾧탳
     menu.querySelector('.js-ctx-compare-last')?.addEventListener('click', function() {
-      if (!lastResponse || !tab.response) return;
-      var ct = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || 'text/plain';
-      var envLabel = currentEnvName ? '[' + currentEnvName + ']' : '';
-      var curLabel = (tab.name || tab.method + ' ' + tab.url) + ' ' + envLabel + ' (current)';
-      // ?꾩옱 ?묐떟? ?꾩옱 ?щ㎎ ?듭뀡 ?ъ슜
-      var curFmt = getFormatOptions(mc);
-      var curBody = tab.response.body;
-      if (curFmt) {
-        if (curFmt.lang === 'json') curBody = formatJson(curBody, curFmt.style, curFmt.indent);
-        else if (curFmt.lang === 'xml') curBody = formatXml(curBody, curFmt.style, curFmt.indent);
-      }
-      // 吏곸쟾 ?묐떟? ??λ맂 ?щ㎎ ?듭뀡 ?ъ슜
-      var lastBody = formatPinnedBody(lastResponse);
-      vscode.postMessage({
-        type: 'compareResponses',
-        left: { label: lastResponse.label, body: lastBody, contentType: lastResponse.contentType, formatted: true },
-        right: { label: curLabel.trim(), body: curBody, contentType: ct, formatted: true }
-      });
+      if (!activeSnapshot || !lastResponse) return;
+      requestCompare(lastResponse, activeSnapshot);
       menu.remove();
     });
 
-    // Pin Current Response
+    menu.querySelector('.js-ctx-compare-pin1')?.addEventListener('click', function() {
+      if (!activeSnapshot || !pinnedOne) return;
+      requestCompare(pinnedOne, activeSnapshot);
+      menu.remove();
+    });
+
+    menu.querySelector('.js-ctx-compare-pin2')?.addEventListener('click', function() {
+      if (!activeSnapshot || !pinnedTwo) return;
+      requestCompare(pinnedTwo, activeSnapshot);
+      menu.remove();
+    });
+
+    menu.querySelector('.js-ctx-compare-pins')?.addEventListener('click', function() {
+      if (pinnedResponses.length < 2) return;
+      requestCompare(pinnedResponses[0], pinnedResponses[1]);
+      menu.remove();
+    });
+
+    menu.querySelector('.js-ctx-settings')?.addEventListener('click', function() {
+      showCompareSettings();
+      menu.remove();
+    });
+
     menu.querySelector('.js-ctx-pin-current')?.addEventListener('click', function() {
       var pinBtn = mc.querySelector('.js-pin-response');
       if (pinBtn) pinBtn.click();
       menu.remove();
     });
 
-    // Clear All Pins ??紐⑤뱺 ? ?댁젣
     menu.querySelector('.js-ctx-clear-pins')?.addEventListener('click', function() {
       if (pinnedResponses.length === 0) return;
       pinnedResponses.length = 0;
@@ -2547,7 +3466,6 @@ function bindContentEvents() {
       menu.remove();
     });
 
-    // ?ㅻⅨ 怨??대┃ ??硫붾돱 ?リ린
     setTimeout(function() {
       document.addEventListener('click', function closeCtx() {
         menu.remove();
@@ -2555,6 +3473,8 @@ function bindContentEvents() {
       }, { once: true });
     }, 0);
   });
+
+  updatePinCompareButtons(mc);
 
   // ?붿껌 ???꾪솚
   mc.querySelector('.js-req-tabs')?.addEventListener('click', (e) => {
@@ -2572,6 +3492,11 @@ function bindContentEvents() {
   mc.querySelector('.js-res-tabs')?.addEventListener('click', (e) => {
     const t = e.target.closest('.tab');
     if (!t) return;
+    const tab = tabs.find(tt => tt.id === activeTabId);
+    if (tab) {
+      tab.responseTab = t.dataset.tab;
+      debouncePersist();
+    }
     mc.querySelectorAll('.js-res-tabs .tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
     const sel = t.dataset.tab;
@@ -2734,8 +3659,9 @@ function bindContentEvents() {
   var initBodyType = mc.querySelector('.js-body-type')?.value || 'none';
   if (initBodyType !== 'none') syncAutoContentType(mc, initBodyType);
 
-  // Timeout ?낅젰 蹂寃?媛먯?
-  mc.querySelector('.js-timeout')?.addEventListener('input', markDirty);
+  // Settings ?낅젰 蹂寃?媛먯?
+  mc.querySelector('.js-settings-panel')?.addEventListener('input', markDirty);
+  mc.querySelector('.js-settings-panel')?.addEventListener('change', markDirty);
 
   // === textarea ?먮룞 ?믪씠 議곗젅 ===
   var bodyTa = mc.querySelector('.js-body');
@@ -2896,6 +3822,7 @@ function sendActiveTab() {
   // auto Content-Type ?ы븿???꾩껜 ?ㅻ뜑 ?섏쭛
   const allHeaders = collectAllKv(mc.querySelector('.js-header-rows'));
   tab.loading = true;
+  tab.lastEvent = 'sending';
   tab.error = null;
   tab.progressVisible = false;
   tab.slideIn = false;
@@ -2937,7 +3864,7 @@ function sendActiveTab() {
 
   vscode.postMessage({
     type: 'sendRequest', tabId: tab.id,
-    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout,
+    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: !!tab.followRedirects, saveToHistory: tab.saveToHistory !== false, tlsValidation: normalizeTlsValidation(tab.tlsValidation), maxResponseSizeKb: normalizeNumberSetting(tab.maxResponseSizeKb), retryCount: normalizeNumberSetting(tab.retryCount), retryDelayMs: normalizeNumberSetting(tab.retryDelayMs), stopAfterHeaders: !!tab.stopAfterHeaders, skipDefaultHeaders: !!tab.skipDefaultHeaders, disableScripts: !!tab.disableScripts, openHtmlPreviewByDefault: !!tab.openHtmlPreviewByDefault,
   });
 }
 
@@ -2946,9 +3873,9 @@ function kvRowsHtml(items) {
   return (items || []).map(kv =>
     '<div class="kv-row">' +
       '<input type="checkbox"' + (kv.enabled !== false ? ' checked' : '') + '/>' +
-      '<input type="text" placeholder="Key" value="' + escapeAttr(kv.key) + '"/>' +
-      '<input type="text" placeholder="Value" value="' + escapeAttr(kv.value) + '"/>' +
-      '<span class="rm" title="Remove">&times;</span>' +
+      '<input type="text" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(kv.key) + '"/>' +
+      '<input type="text" placeholder="' + escapeAttr(tr('webview.value')) + '" value="' + escapeAttr(kv.value) + '"/>' +
+      '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>' +
     '</div>'
   ).join('');
 }
@@ -2959,9 +3886,9 @@ function addKvRow(container, key, value) {
   row.className = 'kv-row';
   row.innerHTML =
     '<input type="checkbox" checked/>' +
-    '<input type="text" placeholder="Key" value="' + escapeAttr(key || '') + '"/>' +
-    '<input type="text" placeholder="Value" value="' + escapeAttr(value || '') + '"/>' +
-    '<span class="rm" title="Remove">&times;</span>';
+    '<input type="text" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(key || '') + '"/>' +
+    '<input type="text" placeholder="' + escapeAttr(tr('webview.value')) + '" value="' + escapeAttr(value || '') + '"/>' +
+    '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>';
   row.querySelector('.rm').addEventListener('click', () => row.remove());
   container.appendChild(row);
 }
@@ -2983,14 +3910,14 @@ function formDataRowsHtml(items) {
     var isFile = field.type === 'file';
     return '<div class="kv-row formdata-row" data-row-id="' + escapeAttr(field.id || ('fd_' + Math.random().toString(36).slice(2, 8))) + '">' +
       '<input type="checkbox"' + (field.enabled !== false ? ' checked' : '') + '/>' +
-      '<input type="text" class="js-formdata-key" placeholder="Key" value="' + escapeAttr(field.key || '') + '"/>' +
+      '<input type="text" class="js-formdata-key" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(field.key || '') + '"/>' +
       '<select class="js-formdata-type body-type-select" style="width:84px;margin-bottom:0">' +
-        '<option value="text"' + (isFile ? '' : ' selected') + '>Text</option>' +
-        '<option value="file"' + (isFile ? ' selected' : '') + '>File</option>' +
+        '<option value="text"' + (isFile ? '' : ' selected') + '>' + escapeHtml(tr('webview.text')) + '</option>' +
+        '<option value="file"' + (isFile ? ' selected' : '') + '>' + escapeHtml(tr('webview.file')) + '</option>' +
       '</select>' +
-      '<input type="text" class="js-formdata-value" placeholder="' + (isFile ? 'File Path' : 'Value') + '" value="' + escapeAttr(field.value || '') + '"/>' +
-      '<button class="btn btn-s js-formdata-browse' + (isFile ? '' : ' hidden') + '" type="button" style="padding:3px 8px">Browse</button>' +
-      '<span class="rm" title="Remove">&times;</span>' +
+      '<input type="text" class="js-formdata-value" placeholder="' + escapeAttr(isFile ? tr('webview.filePath') : tr('webview.value')) + '" value="' + escapeAttr(field.value || '') + '"/>' +
+      '<button class="btn btn-s js-formdata-browse' + (isFile ? '' : ' hidden') + '" type="button" style="padding:3px 8px">' + escapeHtml(tr('webview.browse')) + '</button>' +
+      '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>' +
     '</div>';
   }).join('');
 }
@@ -3002,14 +3929,14 @@ function addFormDataRow(container, type) {
   row.dataset.rowId = 'fd_' + Math.random().toString(36).slice(2, 10);
   row.innerHTML =
     '<input type="checkbox" checked/>' +
-    '<input type="text" class="js-formdata-key" placeholder="Key"/>' +
+    '<input type="text" class="js-formdata-key" placeholder="' + escapeAttr(tr('webview.key')) + '"/>' +
     '<select class="js-formdata-type body-type-select" style="width:84px;margin-bottom:0">' +
-      '<option value="text"' + (type === 'file' ? '' : ' selected') + '>Text</option>' +
-      '<option value="file"' + (type === 'file' ? ' selected' : '') + '>File</option>' +
+      '<option value="text"' + (type === 'file' ? '' : ' selected') + '>' + escapeHtml(tr('webview.text')) + '</option>' +
+      '<option value="file"' + (type === 'file' ? ' selected' : '') + '>' + escapeHtml(tr('webview.file')) + '</option>' +
     '</select>' +
-    '<input type="text" class="js-formdata-value" placeholder="' + (type === 'file' ? 'File Path' : 'Value') + '"/>' +
-    '<button class="btn btn-s js-formdata-browse' + (type === 'file' ? '' : ' hidden') + '" type="button" style="padding:3px 8px">Browse</button>' +
-    '<span class="rm" title="Remove">&times;</span>';
+    '<input type="text" class="js-formdata-value" placeholder="' + escapeAttr(type === 'file' ? tr('webview.filePath') : tr('webview.value')) + '"/>' +
+    '<button class="btn btn-s js-formdata-browse' + (type === 'file' ? '' : ' hidden') + '" type="button" style="padding:3px 8px">' + escapeHtml(tr('webview.browse')) + '</button>' +
+    '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>';
   container.appendChild(row);
 }
 
@@ -3018,7 +3945,7 @@ function syncFormDataRow(row) {
   var type = row.querySelector('.js-formdata-type')?.value || 'text';
   var valueInput = row.querySelector('.js-formdata-value');
   var browseBtn = row.querySelector('.js-formdata-browse');
-  if (valueInput) valueInput.placeholder = type === 'file' ? 'File Path' : 'Value';
+  if (valueInput) valueInput.placeholder = type === 'file' ? tr('webview.filePath') : tr('webview.value');
   if (browseBtn) browseBtn.classList.toggle('hidden', type !== 'file');
 }
 
@@ -3055,7 +3982,7 @@ function authHtml(auth) {
   return '<select class="js-auth-type">' +
     ['none','basic','bearer','apikey'].map(t =>
       '<option value="' + t + '"' + (t === type ? ' selected' : '') + '>' +
-      ({none:'No Auth',basic:'Basic Auth',bearer:'Bearer Token',apikey:'API Key'}[t]) + '</option>'
+      authTypeLabel(t) + '</option>'
     ).join('') +
     '</select><div class="auth-fields js-auth-fields">' + authFieldsHtml(type, auth) + '</div>';
 }
@@ -3064,20 +3991,20 @@ function authFieldsHtml(type, auth) {
   if (type === 'basic') {
     const u = auth?.basic?.username || '';
     const p = auth?.basic?.password || '';
-    return '<div class="auth-row"><label>Username</label><input type="text" class="js-auth-user" value="' + escapeAttr(u) + '"/></div>' +
-           '<div class="auth-row"><label>Password</label><input type="password" class="js-auth-pass" value="' + escapeAttr(p) + '"/></div>';
+    return '<div class="auth-row"><label>' + escapeHtml(tr('webview.username')) + '</label><input type="text" class="js-auth-user" value="' + escapeAttr(u) + '"/></div>' +
+           '<div class="auth-row"><label>' + escapeHtml(tr('webview.password')) + '</label><input type="password" class="js-auth-pass" value="' + escapeAttr(p) + '"/></div>';
   }
   if (type === 'bearer') {
     const t = auth?.bearer?.token || '';
-    return '<div class="auth-row"><label>Token</label><input type="text" class="js-auth-token" value="' + escapeAttr(t) + '"/></div>';
+    return '<div class="auth-row"><label>' + escapeHtml(tr('webview.token')) + '</label><input type="text" class="js-auth-token" value="' + escapeAttr(t) + '"/></div>';
   }
   if (type === 'apikey') {
     const k = auth?.apikey?.key || '';
     const v = auth?.apikey?.value || '';
     const a = auth?.apikey?.addTo || 'header';
-    return '<div class="auth-row"><label>Key</label><input type="text" class="js-auth-apikey" value="' + escapeAttr(k) + '"/></div>' +
-           '<div class="auth-row"><label>Value</label><input type="text" class="js-auth-apival" value="' + escapeAttr(v) + '"/></div>' +
-           '<div class="auth-row"><label>Add to</label><select class="js-auth-addto"><option value="header"' + (a==='header'?' selected':'') + '>Header</option><option value="query"' + (a==='query'?' selected':'') + '>Query</option></select></div>';
+    return '<div class="auth-row"><label>' + escapeHtml(tr('webview.key')) + '</label><input type="text" class="js-auth-apikey" value="' + escapeAttr(k) + '"/></div>' +
+           '<div class="auth-row"><label>' + escapeHtml(tr('webview.value')) + '</label><input type="text" class="js-auth-apival" value="' + escapeAttr(v) + '"/></div>' +
+           '<div class="auth-row"><label>' + escapeHtml(tr('webview.addTo')) + '</label><select class="js-auth-addto"><option value="header"' + (a==='header'?' selected':'') + '>' + escapeHtml(tr('webview.header')) + '</option><option value="query"' + (a==='query'?' selected':'') + '>' + escapeHtml(tr('webview.query')) + '</option></select></div>';
   }
   return '';
 }
@@ -3161,10 +4088,16 @@ defaultHeaderRows.addEventListener('click', (e) => {
 window.addEventListener('message', (event) => {
   const msg = event.data;
 
+  if (msg.type === 'updateLocalization') {
+    applyLocalizationUpdate(msg);
+    return;
+  }
+
   if (msg.type === 'requestCanceled') {
     const tab = tabs.find(t => t.id === msg.tabId);
     if (!tab) return;
     clearTabRequestState(tab);
+    tab.lastEvent = 'canceled';
     tab.error = null;
     if (activeTabId === msg.tabId) {
       var neonEl = mainContent.querySelector('.js-url.neon-active');
@@ -3186,22 +4119,28 @@ window.addEventListener('message', (event) => {
     if (neonEl) neonEl.classList.remove('neon-active');
 
     if (msg.type === 'receiveResponse') {
-      // 吏곸쟾 ?묐떟 ???(鍮좊Ⅸ 鍮꾧탳?? ???꾩옱 ?щ㎎ ?ㅽ??쇰룄 ?④퍡 ???
       if (tab.response) {
-        var prevCt = tab.response.headers?.['content-type'] || tab.response.headers?.['Content-Type'] || 'text/plain';
         var prevEnv = currentEnvName ? '[' + currentEnvName + ']' : '';
-        var prevFmt = getFormatOptions(mainContent);
-        lastResponse = { label: (tab.name || tab.method + ' ' + tab.url) + ' ' + prevEnv + ' (previous)', body: tab.response.body, contentType: prevCt, formatStyle: prevFmt ? prevFmt.style : null, formatIndent: prevFmt ? prevFmt.indent : null, formatLang: prevFmt ? prevFmt.lang : null };
+        lastResponse = createResponseSnapshot(
+          tab,
+          tab.response,
+          ((tab.name || (tab.method + ' ' + tab.url)) + ' ' + prevEnv + ' (previous)').trim()
+        );
       }
       tab.response = msg.response;
+      tab.lastEvent = 'success';
       tab.resolvedUrl = msg.resolvedUrl || '';
       tab.resolvedHeaders = msg.resolvedHeaders || [];
       tab.scriptResults = msg.scriptResults || { logs: [], tests: [] };
+      var contentType = ((msg.response.headers?.['content-type'] || msg.response.headers?.['Content-Type'] || '') + '').toLowerCase();
+      tab.responseTab = (tab.openHtmlPreviewByDefault && contentType.indexOf('html') >= 0) ? 'resPreview' : 'resBody';
       tab.error = null;
     } else {
+      tab.lastEvent = 'error';
       tab.error = msg.error;
       tab.response = null;
       tab.scriptResults = null;
+      tab.responseTab = 'resBody';
     }
     if (activeTabId === msg.tabId) {
       // 珥앹븣 濡쒕뵫 諛? ?앷퉴吏 ?щ젮媛硫??щ씪吏???꾨즺 ?좊땲硫붿씠??
@@ -3260,7 +4199,7 @@ window.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'restoreTabState') {
-    // ??λ맂 ??뱾 蹂듭썝
+    compareSettings = normalizeCompareSettings(msg.compareSettings);
     var restoreTabs = msg.tabs || [];
     var restoreIdx = msg.activeIndex || 0;
     if (restoreTabs.length > 0) {
@@ -3305,6 +4244,17 @@ window.addEventListener('message', (event) => {
       binaryFilePath: msg.binaryFilePath || '',
       auth: msg.auth || { type: 'none' },
       scripts: msg.scripts || { preRequest: '', test: '' },
+      timeout: msg.timeout || 0,
+      followRedirects: msg.followRedirects === true,
+      saveToHistory: msg.saveToHistory !== false,
+      tlsValidation: msg.tlsValidation || 'default',
+      maxResponseSizeKb: msg.maxResponseSizeKb || 0,
+      retryCount: msg.retryCount || 0,
+      retryDelayMs: msg.retryDelayMs || 0,
+      stopAfterHeaders: msg.stopAfterHeaders === true,
+      skipDefaultHeaders: msg.skipDefaultHeaders === true,
+      disableScripts: msg.disableScripts === true,
+      openHtmlPreviewByDefault: msg.openHtmlPreviewByDefault === true,
     });
   }
 
@@ -3360,12 +4310,13 @@ window.addEventListener('message', (event) => {
       if (savedTab) {
         if (msg.requestId) savedTab.requestId = msg.requestId;
         if (msg.name) savedTab.name = msg.name;
+        savedTab.autoName = false;
         savedTab._snapshot = snapshotTab(savedTab);
         savedTab.dirty = false;
       }
       renderTabBar();
       if (pendingSaveBtn) {
-        showBtnFeedback(pendingSaveBtn, 'Saved!', 1200);
+        showBtnFeedback(pendingSaveBtn, tr('webview.saved'), 1200);
       }
       // dirty ?뺤씤 ?ㅼ씠?쇰줈洹몄뿉??"??? ?좏깮 ???リ린
       if (_pendingCloseAfterSave) {
@@ -3381,7 +4332,7 @@ window.addEventListener('message', (event) => {
   }
   if (msg.type === 'saveResponseBodyResult') {
     if (msg.saved && pendingSaveResponseBtn) {
-      showBtnFeedback(pendingSaveResponseBtn, 'Saved!', 1200);
+      showBtnFeedback(pendingSaveResponseBtn, tr('webview.saved'), 1200);
     }
     pendingSaveResponseBtn = null;
   }
@@ -3410,9 +4361,9 @@ function showRunner(name, total) {
   runnerOverlay.className = 'runner-overlay';
   runnerOverlay.innerHTML =
     '<div class="runner-header">' +
-      '<h3>Run: ' + escapeHtml(name) + '</h3>' +
-      '<button class="btn btn-s js-runner-stop" style="padding:2px 10px;font-size:13px">Stop</button>' +
-      '<button class="btn btn-s js-runner-close hidden" style="padding:2px 10px;font-size:13px">Close</button>' +
+      '<h3>' + escapeHtml(tf('webview.runTitle', { name: name })) + '</h3>' +
+      '<button class="btn btn-s js-runner-stop" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runStop')) + '</button>' +
+      '<button class="btn btn-s js-runner-close hidden" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runClose')) + '</button>' +
     '</div>' +
     '<div class="runner-progress">' +
       '<span class="js-runner-counter">0/' + total + '</span>' +
@@ -3420,9 +4371,9 @@ function showRunner(name, total) {
       '<span class="spinner js-runner-spinner"></span>' +
     '</div>' +
     '<div class="runner-summary">' +
-      '<span>Total: <b>' + total + '</b></span>' +
-      '<span class="pass">Passed: <b class="js-runner-pass">0</b></span>' +
-      '<span class="fail">Failed: <b class="js-runner-fail">0</b></span>' +
+      '<span>' + escapeHtml(tr('webview.runTotal')) + ': <b>' + total + '</b></span>' +
+      '<span class="pass">' + escapeHtml(tr('webview.runPassed')) + ': <b class="js-runner-pass">0</b></span>' +
+      '<span class="fail">' + escapeHtml(tr('webview.runFailed')) + ': <b class="js-runner-fail">0</b></span>' +
       '<span class="js-runner-time"></span>' +
     '</div>' +
     '<div class="runner-list js-runner-list"></div>';
@@ -3433,7 +4384,7 @@ function showRunner(name, total) {
   runnerOverlay.querySelector('.js-runner-stop').addEventListener('click', function() {
     vscode.postMessage({ type: 'stopCollectionRun' });
     this.disabled = true;
-    this.textContent = 'Stopping...';
+    this.textContent = tr('webview.runStopping');
   });
   // Close 踰꾪듉
   runnerOverlay.querySelector('.js-runner-close').addEventListener('click', function() {
@@ -3454,16 +4405,16 @@ function showRunner(name, total) {
     var detail = document.createElement('div');
     detail.className = 'runner-detail';
     if (r.error) {
-      detail.textContent = 'Error: ' + r.error;
+      detail.textContent = tr('webview.runError') + ': ' + r.error;
     } else if (r.response) {
       var body = r.response.body || '';
       var ct = (r.response.headers?.['content-type'] || r.response.headers?.['Content-Type'] || '').toLowerCase();
       if (r.response.bodyBase64 && isBinaryContentType(ct)) {
-        body = '[Binary response. Use the Save button to write the original file.]';
+        body = tr('webview.binaryResponse');
       }
       if (body.length > 2000) body = body.substring(0, 2000) + '\\n... (truncated)';
-      detail.textContent = 'Status: ' + r.response.status + ' ' + r.response.statusText +
-        '\\nSize: ' + formatSize(r.response.size) + '\\n\\n' + body;
+      detail.textContent = tr('webview.runStatus') + ': ' + r.response.status + ' ' + r.response.statusText +
+        '\\n' + tr('webview.size') + ': ' + formatSize(r.response.size) + '\\n\\n' + body;
     }
     row.after(detail);
   });
@@ -3513,7 +4464,7 @@ function finishRunner(msg) {
   var closeBtn = runnerOverlay.querySelector('.js-runner-close');
   if (closeBtn) closeBtn.classList.remove('hidden');
   // 理쒖쥌 ?쒓컙 ?쒖떆
-  runnerOverlay.querySelector('.js-runner-time').textContent = 'Time: ' + msg.time + 'ms';
+  runnerOverlay.querySelector('.js-runner-time').textContent = tr('webview.runTime') + ': ' + msg.time + 'ms';
   // 諛?100% (?먮뒗 以묐떒 ???꾩옱 媛??좎?)
   if (!msg.stopped) {
     runnerOverlay.querySelector('.js-runner-bar').style.width = '100%';
@@ -3859,10 +4810,10 @@ function checkUnresolvedVars() {
   function persistTabState() {
     saveActiveTabState();
     var tabData = tabs.map(function(t) {
-    return { name: t.name, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, timeout: t.timeout, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, pinned: t.pinned || false, requestId: t.requestId || undefined };
+    return Object.assign({ name: t.name, autoName: !!t.autoName, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
     });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
-  vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx) });
+  vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx), compareSettings: cloneCompareSettings(compareSettings) });
 }
 
 // ??蹂寃??꾪솚/?リ린 ???먮룞 ???(?붾컮?댁뒪)

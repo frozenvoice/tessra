@@ -1,8 +1,8 @@
-import * as assert from 'assert';
+﻿import * as assert from 'assert';
 import * as http from 'http';
 import { EventEmitter } from 'events';
 import type { RequestOptions as HttpsRequestOptions } from 'https';
-import { HttpService } from '../../services/HttpService';
+import { HttpService, HttpSendOptions } from '../../services/HttpService';
 
 // HttpService 테스트 (로컬 HTTP 서버 사용)
 describe('HttpService', () => {
@@ -14,13 +14,12 @@ describe('HttpService', () => {
     url: string,
     headers: Parameters<HttpService['send']>[2],
     body: string,
-    timeoutSec?: number
-  ) => httpService.send(method, url, headers, body, timeoutSec).promise;
+    options: HttpSendOptions = {}
+  ) => httpService.send(method, url, headers, body, options).promise;
 
-  // 테스트용 로컬 HTTP 서버
   before((done) => {
     server = http.createServer((req, res) => {
-      const url = new URL(req.url || '/', `http://localhost`);
+      const url = new URL(req.url || '/', 'http://localhost');
       let body = '';
       req.on('data', (chunk) => { body += chunk; });
       req.on('end', () => {
@@ -40,14 +39,24 @@ describe('HttpService', () => {
             }));
             break;
 
-          case '/status':
+          case '/status': {
             const code = parseInt(url.searchParams.get('code') || '200', 10);
             res.writeHead(code, { 'Content-Type': 'text/plain' });
             res.end(`Status: ${code}`);
             break;
+          }
+
+          case '/redirect':
+            res.writeHead(302, { Location: '/json' });
+            res.end('redirect');
+            break;
+
+          case '/redirect-303':
+            res.writeHead(303, { Location: '/echo' });
+            res.end('see other');
+            break;
 
           case '/slow':
-            // 지연 응답 (타임아웃 테스트용)
             setTimeout(() => {
               res.writeHead(200, { 'Content-Type': 'text/plain' });
               res.end('slow response');
@@ -82,8 +91,8 @@ describe('HttpService', () => {
     server.close(done);
   });
 
-  describe('GET 요청', () => {
-    it('JSON 응답 수신 및 파싱', async () => {
+  describe('GET requests', () => {
+    it('receives and parses JSON responses', async () => {
       const res = await send('GET', `${baseUrl}/json`, [], '');
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.statusText, 'OK');
@@ -94,39 +103,66 @@ describe('HttpService', () => {
       assert.ok(res.size > 0);
     });
 
-    it('404 응답 처리', async () => {
+    it('handles 404 responses', async () => {
       const res = await send('GET', `${baseUrl}/nonexistent`, [], '');
       assert.strictEqual(res.status, 404);
     });
 
-    it('다양한 상태 코드 처리', async () => {
+    it('handles several status codes', async () => {
       for (const code of [200, 201, 400, 500]) {
         const res = await send('GET', `${baseUrl}/status?code=${code}`, [], '');
         assert.strictEqual(res.status, code);
       }
     });
 
-    it('응답 헤더 수신', async () => {
+    it('reads response headers', async () => {
       const res = await send('GET', `${baseUrl}/json`, [], '');
       assert.ok(res.headers['content-type']?.includes('application/json'));
     });
 
-    it('큰 응답 body 수신', async () => {
+    it('receives a large response body', async () => {
       const res = await send('GET', `${baseUrl}/large`, [], '');
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.body.length, 10000);
       assert.strictEqual(res.size, 10000);
     });
 
-    it('바이너리 응답은 원본 바이트를 base64로 보존', async () => {
+    it('preserves binary responses as base64', async () => {
       const res = await send('GET', `${baseUrl}/binary`, [], '');
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.bodyBase64, Buffer.from([0, 255, 16, 32, 65, 66, 67]).toString('base64'));
     });
+
+    it('does not follow redirects unless enabled', async () => {
+      const res = await send('GET', `${baseUrl}/redirect`, [], '');
+      assert.strictEqual(res.status, 302);
+      assert.strictEqual(res.headers.location, '/json');
+    });
+
+    it('follows redirects when enabled', async () => {
+      const res = await send('GET', `${baseUrl}/redirect`, [], '', { followRedirects: true });
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(JSON.parse(res.body).message, 'ok');
+    });
+
+    it('stops after headers when requested', async () => {
+      const res = await send('GET', `${baseUrl}/json`, [], '', { stopAfterHeaders: true });
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.body, '');
+      assert.strictEqual(res.size, 0);
+      assert.ok(res.headers['content-type']?.includes('application/json'));
+    });
+
+    it('rejects responses that exceed the size limit', async () => {
+      await assert.rejects(
+        () => send('GET', `${baseUrl}/large`, [], '', { maxResponseSizeBytes: 1024 }),
+        /Response exceeded max size/
+      );
+    });
   });
 
-  describe('POST 요청', () => {
-    it('JSON body 전송', async () => {
+  describe('POST requests', () => {
+    it('sends a JSON body', async () => {
       const body = JSON.stringify({ name: 'test', value: 42 });
       const headers = [
         { key: 'Content-Type', value: 'application/json', enabled: true },
@@ -138,7 +174,7 @@ describe('HttpService', () => {
       assert.strictEqual(echo.body, body);
     });
 
-    it('커스텀 헤더 전송', async () => {
+    it('sends custom headers only when enabled', async () => {
       const headers = [
         { key: 'X-Custom', value: 'hello', enabled: true },
         { key: 'X-Disabled', value: 'skip', enabled: false },
@@ -146,51 +182,55 @@ describe('HttpService', () => {
       const res = await send('POST', `${baseUrl}/echo`, headers, 'data');
       const echo = JSON.parse(res.body);
       assert.strictEqual(echo.headers['x-custom'], 'hello');
-      // 비활성 헤더는 전송되지 않음
       assert.strictEqual(echo.headers['x-disabled'], undefined);
+    });
+
+    it('switches POST redirects to GET for 303 responses', async () => {
+      const res = await send('POST', `${baseUrl}/redirect-303`, [], 'payload', { followRedirects: true });
+      const echo = JSON.parse(res.body);
+      assert.strictEqual(echo.method, 'GET');
+      assert.strictEqual(echo.body, '');
     });
   });
 
-  describe('기타 메서드', () => {
-    it('PUT 요청', async () => {
+  describe('other methods', () => {
+    it('supports PUT requests', async () => {
       const res = await send('PUT', `${baseUrl}/echo`, [], '{"update":true}');
       const echo = JSON.parse(res.body);
       assert.strictEqual(echo.method, 'PUT');
     });
 
-    it('DELETE 요청', async () => {
+    it('supports DELETE requests', async () => {
       const res = await send('DELETE', `${baseUrl}/echo`, [], '');
       const echo = JSON.parse(res.body);
       assert.strictEqual(echo.method, 'DELETE');
     });
 
-    it('PATCH 요청', async () => {
+    it('supports PATCH requests', async () => {
       const res = await send('PATCH', `${baseUrl}/echo`, [], '{"patch":true}');
       const echo = JSON.parse(res.body);
       assert.strictEqual(echo.method, 'PATCH');
     });
   });
 
-  describe('타임아웃', () => {
-    it('타임아웃 초과 시 에러 발생', async () => {
-      try {
-        await send('GET', `${baseUrl}/slow`, [], '', 1);
-        assert.fail('타임아웃 에러가 발생해야 함');
-      } catch (err: any) {
-        assert.ok(err.message.includes('timed out') || err.code === 'ECONNRESET');
-      }
+  describe('timeouts', () => {
+    it('throws when the timeout is exceeded', async () => {
+      await assert.rejects(
+        () => send('GET', `${baseUrl}/slow`, [], '', { timeoutSec: 1 }),
+        /timed out|ECONNRESET/
+      );
     });
   });
 
-  describe('응답 시간 측정', () => {
-    it('time 필드가 0 이상의 밀리초', async () => {
+  describe('response timing', () => {
+    it('measures elapsed time', async () => {
       const res = await send('GET', `${baseUrl}/json`, [], '');
       assert.ok(typeof res.time === 'number');
       assert.ok(res.time >= 0);
     });
   });
 
-  describe('HTTPS 인증서 검증', () => {
+  describe('HTTPS certificate validation', () => {
     const nativeHttps = require('https') as typeof import('https');
 
     class MockHttpsRequest extends EventEmitter {
@@ -225,7 +265,7 @@ describe('HttpService', () => {
       }
     }
 
-    it('기본값으로는 인증서 검증을 유지', async () => {
+    it('keeps certificate validation on by default', async () => {
       const originalRequest = nativeHttps.request;
       let capturedOptions: HttpsRequestOptions | undefined;
 
@@ -244,7 +284,7 @@ describe('HttpService', () => {
       }
     });
 
-    it('명시적으로 켠 경우에만 자체 서명 인증서를 허용', async () => {
+    it('disables certificate validation only when explicitly requested', async () => {
       const originalRequest = nativeHttps.request;
       let capturedOptions: HttpsRequestOptions | undefined;
 
@@ -255,7 +295,7 @@ describe('HttpService', () => {
             return new MockHttpsRequest(callback) as unknown as http.ClientRequest;
           }) as typeof nativeHttps.request;
 
-        const res = await httpService.send('GET', 'https://example.com/test', [], '', 0, true).promise;
+        const res = await httpService.send('GET', 'https://example.com/test', [], '', { allowInsecureHttps: true }).promise;
         assert.strictEqual(res.status, 200);
         assert.strictEqual(capturedOptions?.rejectUnauthorized, false);
       } finally {

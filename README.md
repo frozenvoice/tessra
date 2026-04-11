@@ -1,10 +1,10 @@
-# Arc Client
+﻿# Arc Client
 
 The local-first REST API client for VS Code.
 
 No login. No cloud sync. No paywalled core workflows.
 
-[한국어 문서 보기](./README.ko.md)
+[Korean README](./README.ko.md)
 
 Arc Client is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
 
@@ -15,7 +15,7 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - No cloud dependency
 - Local JSON storage only
 - cURL and Postman import/export
-- Scripts, collections, environments, and code generation
+- Scripts, collections, environments, response compare, and code generation
 - Built on VS Code Webview + TreeView
 - Uses Node.js built-in `http` / `https`
 
@@ -23,10 +23,23 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 
 ### Request editing
 - HTTP methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
-- Multi-tab request editor
-- Request timeout per tab
-- Cancel in-flight requests
-- Params / Headers / Auth / Scripts / Settings tabs
+- Multi-tab request editor with pinned tabs
+- `Enter` in the URL field sends the request
+- `Ctrl+Enter` / `Cmd+Enter` also sends the request
+- Cancel in-flight requests without discarding the last good response
+- Request stage strip, richer empty states, status-aware response feedback, and polished response actions
+
+### Request settings
+- Timeout per tab
+- Follow redirects
+- Save to history toggle
+- TLS override: `Default`, `Strict`, `Insecure`
+- Maximum response size limit
+- Retry count and retry delay
+- Stop after headers
+- Skip default headers
+- Disable scripts
+- Open HTML preview by default
 
 ### Body types
 - `none`
@@ -55,14 +68,17 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - Duplicate / Save As
 - Run All Requests
 - History pinning and filtering
+- History snapshots store the executed request state
 - History pruning via `arc-client.historyMaxItems`
 
 ### Response viewer
-- Body / Headers / Cookies / Tests tabs
+- Body / Headers / Cookies / Tests / Preview tabs
 - JSON tree viewer
+- XML formatting with `Pretty`, `Compact`, and `Inline Children`
 - Content-Type based syntax highlighting
 - Save response body to file
-- Compare responses
+- Response compare with `Raw`, `Normalized`, and `Pretty` modes
+- Compare settings with ignored headers and ignored JSON paths
 
 ### Scripts
 - Pre-request scripts
@@ -102,8 +118,8 @@ Then in VS Code:
 1. Open Arc Client from the Activity Bar
 2. Run `Arc: New Request` or click `+`
 3. Select a method and enter a URL
-4. Fill in params, headers, body, auth, or scripts
-5. Click `Send` or press `Ctrl+Enter`
+4. Fill in params, headers, body, auth, scripts, or request settings
+5. Click `Send` or press `Enter`
 
 Example variable usage:
 
@@ -141,7 +157,7 @@ Add images here after capturing them:
 ![Scripts and test results](./images/marketplace/screenshot-03-scripts-and-tests.png)
 ```
 
-## Settings
+## Extension settings
 
 ### `arc-client.historyMaxItems`
 - Type: `number`
@@ -154,10 +170,20 @@ Add images here after capturing them:
 - Disables HTTPS certificate validation only when explicitly enabled
 - Intended for self-signed local development environments
 
+### `arc-client.displayLanguage`
+- Type: `string`
+- Default: `en`
+- Supported values: `en`, `ko`, `ja`
+- Controls Arc Client panels, prompts, and notifications
+- The guide falls back to the English README unless a localized guide file exists
+- VS Code locale does not change Arc Client UI anymore
+- You can also run `Arc: Change Display Language` from the Command Palette
+
 ## Keyboard shortcuts
 
 - `Ctrl+T`: New request tab
 - `Ctrl+W`: Close current tab
+- `Enter`: Send request from the URL field
 - `Ctrl+Enter`: Send request
 
 On macOS, use `Cmd` instead of `Ctrl`.

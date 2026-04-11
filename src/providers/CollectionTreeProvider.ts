@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { StorageService } from '../services/StorageService';
-import { Collection, CollectionItem, Request, RequestBodyType } from '../models/types';
+import { Collection, CollectionItem, Request, RequestBodyType, RequestSettings } from '../models/types';
+import { LocalizationService } from '../services/LocalizationService';
 
 // TreeView에서 사용할 노드 타입
 export type CollectionNode =
@@ -66,7 +67,7 @@ export class CollectionTreeProvider
         item.contextValue = 'request';
         item.command = {
           command: 'arc.loadFromCollection',
-          title: 'Load Request',
+          title: LocalizationService.t('tree.loadRequest'),
           arguments: [node],
         };
         return item;
@@ -145,13 +146,13 @@ export class CollectionTreeProvider
     const draggedIds: string[] = raw.value;
     if (!draggedIds || draggedIds.length === 0) { return; }
     if (!target) {
-      vscode.window.showWarningMessage('Drop onto a collection, folder, or request.');
+      vscode.window.showWarningMessage(LocalizationService.t('collection.dropTarget'));
       return;
     }
 
     const collections = this.storage.getCollections();
     if (this.isInvalidDropTarget(collections, draggedIds, target)) {
-      vscode.window.showWarningMessage('Items cannot be moved into themselves or their child folders.');
+      vscode.window.showWarningMessage(LocalizationService.t('collection.dropInvalid'));
       return;
     }
 
@@ -187,8 +188,8 @@ export class CollectionTreeProvider
 
   async createCollection(): Promise<void> {
     const name = await vscode.window.showInputBox({
-      prompt: 'Collection name',
-      placeHolder: 'My Collection',
+      prompt: LocalizationService.t('collection.name.prompt'),
+      placeHolder: LocalizationService.t('collection.name.placeholder'),
     });
     if (!name) { return; }
 
@@ -200,8 +201,8 @@ export class CollectionTreeProvider
 
   async createFolder(node: CollectionNode): Promise<void> {
     const name = await vscode.window.showInputBox({
-      prompt: 'Folder name',
-      placeHolder: 'New Folder',
+      prompt: LocalizationService.t('folder.name.prompt'),
+      placeHolder: LocalizationService.t('folder.name.placeholder'),
     });
     if (!name) { return; }
 
@@ -238,6 +239,17 @@ export class CollectionTreeProvider
       binaryFilePath?: string;
       auth: Request['auth'];
       scripts?: Request['scripts'];
+      timeout?: RequestSettings['timeout'];
+      followRedirects?: RequestSettings['followRedirects'];
+      saveToHistory?: RequestSettings['saveToHistory'];
+      tlsValidation?: RequestSettings['tlsValidation'];
+      maxResponseSizeKb?: RequestSettings['maxResponseSizeKb'];
+      retryCount?: RequestSettings['retryCount'];
+      retryDelayMs?: RequestSettings['retryDelayMs'];
+      stopAfterHeaders?: RequestSettings['stopAfterHeaders'];
+      skipDefaultHeaders?: RequestSettings['skipDefaultHeaders'];
+      disableScripts?: RequestSettings['disableScripts'];
+      openHtmlPreviewByDefault?: RequestSettings['openHtmlPreviewByDefault'];
     }
   ): Promise<{ requestId: string; name: string } | null> {
     const collections = this.storage.getCollections();
@@ -256,6 +268,17 @@ export class CollectionTreeProvider
           existing.request.binaryFilePath = requestData.binaryFilePath ?? '';
           existing.request.auth = requestData.auth ?? { type: 'none' };
           existing.request.scripts = requestData.scripts ?? { preRequest: '', test: '' };
+          existing.request.timeout = requestData.timeout ?? 0;
+          existing.request.followRedirects = requestData.followRedirects === true;
+          existing.request.saveToHistory = requestData.saveToHistory !== false;
+          existing.request.tlsValidation = requestData.tlsValidation ?? 'default';
+          existing.request.maxResponseSizeKb = requestData.maxResponseSizeKb ?? 0;
+          existing.request.retryCount = requestData.retryCount ?? 0;
+          existing.request.retryDelayMs = requestData.retryDelayMs ?? 0;
+          existing.request.stopAfterHeaders = requestData.stopAfterHeaders === true;
+          existing.request.skipDefaultHeaders = requestData.skipDefaultHeaders === true;
+          existing.request.disableScripts = requestData.disableScripts === true;
+          existing.request.openHtmlPreviewByDefault = requestData.openHtmlPreviewByDefault === true;
           this.storage.saveCollections(collections);
           this.refresh();
         return { requestId: existing.request.id, name: existing.name };
@@ -264,16 +287,16 @@ export class CollectionTreeProvider
 
     // 새로 저장
     if (collections.length === 0) {
-      vscode.window.showWarningMessage('There are no collections yet. Create one first.');
+      vscode.window.showWarningMessage(LocalizationService.t('collection.noneYet'));
       return null;
     }
 
     const picks = this.buildPickList(collections);
-    const selected = await vscode.window.showQuickPick(picks, { placeHolder: 'Choose where to save this request' });
+    const selected = await vscode.window.showQuickPick(picks, { placeHolder: LocalizationService.t('collection.chooseSaveTarget') });
     if (!selected) { return null; }
 
     const name = await vscode.window.showInputBox({
-      prompt: 'Request name',
+      prompt: LocalizationService.t('collection.saveName.prompt'),
       placeHolder: requestData.method + ' ' + requestData.url,
       value: requestData.method + ' ' + this.extractPath(requestData.url),
     });
@@ -297,6 +320,17 @@ export class CollectionTreeProvider
         binaryFilePath: requestData.binaryFilePath ?? '',
         auth: requestData.auth ?? { type: 'none' },
         scripts: requestData.scripts ?? { preRequest: '', test: '' },
+        timeout: requestData.timeout ?? 0,
+        followRedirects: requestData.followRedirects === true,
+        saveToHistory: requestData.saveToHistory !== false,
+        tlsValidation: requestData.tlsValidation ?? 'default',
+        maxResponseSizeKb: requestData.maxResponseSizeKb ?? 0,
+        retryCount: requestData.retryCount ?? 0,
+        retryDelayMs: requestData.retryDelayMs ?? 0,
+        stopAfterHeaders: requestData.stopAfterHeaders === true,
+        skipDefaultHeaders: requestData.skipDefaultHeaders === true,
+        disableScripts: requestData.disableScripts === true,
+        openHtmlPreviewByDefault: requestData.openHtmlPreviewByDefault === true,
       },
     };
 
@@ -310,7 +344,7 @@ export class CollectionTreeProvider
 
     this.storage.saveCollections(collections);
     this.refresh();
-    vscode.window.showInformationMessage(`Saved "${name}".`);
+    vscode.window.showInformationMessage(LocalizationService.t('collection.saved', { name }));
     return { requestId: newRequestId, name };
   }
 
@@ -336,7 +370,7 @@ export class CollectionTreeProvider
 
   async rename(node: CollectionNode): Promise<void> {
     const currentName = node.kind === 'collection' ? node.collection.name : node.item.name;
-    const newName = await vscode.window.showInputBox({ prompt: 'New name', value: currentName });
+    const newName = await vscode.window.showInputBox({ prompt: LocalizationService.t('collection.rename.prompt'), value: currentName });
     if (!newName || newName === currentName) { return; }
 
     const collections = this.storage.getCollections();
@@ -354,9 +388,9 @@ export class CollectionTreeProvider
   async delete(node: CollectionNode): Promise<void> {
     const name = node.kind === 'collection' ? node.collection.name : node.item.name;
     const confirm = await vscode.window.showWarningMessage(
-      `Delete "${name}"?`, { modal: true }, 'Delete'
+      LocalizationService.t('collection.delete.confirm', { name }), { modal: true }, LocalizationService.t('warn.delete')
     );
-    if (confirm !== 'Delete') { return; }
+    if (confirm !== LocalizationService.t('warn.delete')) { return; }
 
     const collections = this.storage.getCollections();
     if (node.kind === 'collection') {
@@ -396,16 +430,16 @@ export class CollectionTreeProvider
 
     const collections = this.storage.getCollections();
     if (collections.length === 0) {
-      vscode.window.showWarningMessage('There are no collections.');
+      vscode.window.showWarningMessage(LocalizationService.t('collection.none'));
       return;
     }
 
     const picks = this.buildPickList(collections);
-    const selected = await vscode.window.showQuickPick(picks, { placeHolder: 'Choose where to save the copy' });
+    const selected = await vscode.window.showQuickPick(picks, { placeHolder: LocalizationService.t('collection.chooseCopyTarget') });
     if (!selected) { return; }
 
     const name = await vscode.window.showInputBox({
-      prompt: 'Name for the copy',
+      prompt: LocalizationService.t('collection.saveName.prompt'),
       value: node.item.name,
     });
     if (!name) { return; }
@@ -423,7 +457,7 @@ export class CollectionTreeProvider
 
     this.storage.saveCollections(collections);
     this.refresh();
-    vscode.window.showInformationMessage(`Saved "${name}".`);
+    vscode.window.showInformationMessage(LocalizationService.t('collection.saved', { name }));
   }
 
   // 항목을 깊은 복사하고 모든 ID를 새로 생성

@@ -22,6 +22,7 @@ import { CurlService } from './services/CurlService';
 import { GuidePanel } from './panels/GuidePanel';
 import { ImportExportService } from './services/ImportExportService';
 import { CodegenService } from './services/CodegenService';
+import { LocalizationService, SUPPORTED_DISPLAY_LANGUAGES } from './services/LocalizationService';
 
 const VALID_HTTP_METHODS: ReadonlySet<HttpMethod> = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 
@@ -31,6 +32,7 @@ interface ImportStats {
 }
 
 export function activate(context: vscode.ExtensionContext) {
+  const t = (key: string, params?: Record<string, string | number>) => LocalizationService.t(key, params);
   const storage = new StorageService(context);
   const collectionProvider = new CollectionTreeProvider(storage);
   const historyProvider = new HistoryTreeProvider(storage);
@@ -70,7 +72,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const envStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   envStatusBar.command = 'arc.switchEnvironment';
-  envStatusBar.tooltip = 'Switch Environment';
+  envStatusBar.tooltip = t('statusBar.switchEnvironment');
   updateStatusBar(envStatusBar, environmentProvider);
   envStatusBar.show();
   context.subscriptions.push(envStatusBar);
@@ -120,8 +122,8 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.importCurl', async () => {
       const input = await vscode.window.showInputBox({
-        prompt: 'Paste a cURL command',
-        placeHolder: "curl -X GET 'https://api.example.com/data'",
+        prompt: t('input.importCurl.prompt'),
+        placeHolder: t('input.importCurl.placeholder'),
         ignoreFocusOut: true,
       });
       if (!input) { return; }
@@ -131,7 +133,7 @@ export function activate(context: vscode.ExtensionContext) {
         RequestPanel.show(context.extensionUri);
         RequestPanel.currentPanel?.loadRequest(req);
       } catch (err: unknown) {
-        vscode.window.showErrorMessage(`Failed to parse cURL: ${err instanceof Error ? err.message : String(err)}`);
+        vscode.window.showErrorMessage(t('error.parseCurl', { message: err instanceof Error ? err.message : String(err) }));
       }
     })
   );
@@ -141,7 +143,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (node.kind === 'request' && node.item.request) {
         const curl = CurlService.generate(node.item.request);
         vscode.env.clipboard.writeText(curl);
-        vscode.window.showInformationMessage('Copied cURL command to the clipboard.');
+        vscode.window.showInformationMessage(t('info.copiedCurl'));
       }
     })
   );
@@ -151,7 +153,7 @@ export function activate(context: vscode.ExtensionContext) {
       const uris = await vscode.window.showOpenDialog({
         canSelectMany: true,
         filters: { 'JSON Files': ['json'] },
-        openLabel: 'Import',
+        openLabel: t('action.import'),
       });
       if (!uris || uris.length === 0) { return; }
 
@@ -181,7 +183,10 @@ export function activate(context: vscode.ExtensionContext) {
           }
         } catch (err: unknown) {
           vscode.window.showErrorMessage(
-            `Import failed (${uri.fsPath}): ${err instanceof Error ? err.message : String(err)}`
+            t('error.importFailed', {
+              path: uri.fsPath,
+              message: err instanceof Error ? err.message : String(err),
+            })
           );
         }
       }
@@ -194,21 +199,20 @@ export function activate(context: vscode.ExtensionContext) {
       if (imported > 0) {
         storage.saveCollections(collections);
         collectionProvider.refresh();
-        vscode.window.showInformationMessage(`Imported ${imported} collection${imported === 1 ? '' : 's'}.`);
+        vscode.window.showInformationMessage(t('info.importedCollections', { count: imported }));
       }
 
       if (importedPostman.environments.length > 0) {
         storage.saveEnvironments(environments);
         environmentProvider.refresh();
-        vscode.window.showInformationMessage(
-          `Imported ${importedPostman.environments.length} environment${importedPostman.environments.length === 1 ? '' : 's'}.`
-        );
+        vscode.window.showInformationMessage(t('info.importedEnvironments', { count: importedPostman.environments.length }));
       }
 
       if (stats.skippedCollections > 0 || stats.skippedItems > 0) {
-        vscode.window.showWarningMessage(
-          `Skipped invalid data while importing: ${stats.skippedCollections} collection${stats.skippedCollections === 1 ? '' : 's'} and ${stats.skippedItems} item${stats.skippedItems === 1 ? '' : 's'}.`
-        );
+        vscode.window.showWarningMessage(t('warn.skippedImportData', {
+          collections: stats.skippedCollections,
+          items: stats.skippedItems,
+        }));
       }
     })
   );
@@ -225,7 +229,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const document = ImportExportService.exportCollection(node.collection);
       await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(document, null, 2), 'utf-8'));
-      vscode.window.showInformationMessage(`Exported Postman collection: ${uri.fsPath}`);
+      vscode.window.showInformationMessage(t('info.exportedPostmanCollection', { path: uri.fsPath }));
     })
   );
 
@@ -240,7 +244,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const document = ImportExportService.exportEnvironment(env);
       await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(document, null, 2), 'utf-8'));
-      vscode.window.showInformationMessage(`Exported Postman environment: ${uri.fsPath}`);
+      vscode.window.showInformationMessage(t('info.exportedPostmanEnvironment', { path: uri.fsPath }));
     })
   );
 
@@ -253,9 +257,9 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.filterCollections', () => {
       const inputBox = vscode.window.createInputBox();
-      inputBox.placeholder = 'Search by request name or URL...';
+      inputBox.placeholder = t('filter.collections.placeholder');
       inputBox.value = collectionProvider.filterText;
-      inputBox.title = 'Filter Collections';
+      inputBox.title = t('filter.collections.title');
       inputBox.onDidChangeValue((value) => {
         collectionProvider.filterText = value;
         collectionTreeView.description = value || undefined;
@@ -278,9 +282,9 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.filterHistory', () => {
       const inputBox = vscode.window.createInputBox();
-      inputBox.placeholder = 'Search by URL, method (GET), or status code (404)...';
+      inputBox.placeholder = t('filter.history.placeholder');
       inputBox.value = historyProvider.filterText;
-      inputBox.title = 'Filter History';
+      inputBox.title = t('filter.history.title');
       inputBox.onDidChangeValue((value) => {
         historyProvider.filterText = value;
         updateHistoryDescription();
@@ -326,7 +330,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       if (items.length === 0) {
-        vscode.window.showInformationMessage('There are no requests to run.');
+        vscode.window.showInformationMessage(t('info.noRequestsToRun'));
         return;
       }
 
@@ -352,11 +356,11 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.deletePinnedHistory', async (entry: HistoryEntry) => {
       const confirm = await vscode.window.showWarningMessage(
-        `Delete this pinned entry?\n${entry.request.method} ${entry.request.url}`,
+        `${t('warn.deletePinned.confirm', { count: 1, suffix: 'y' })}\n${entry.request.method} ${entry.request.url}`,
         { modal: true },
-        'Delete'
+        t('warn.delete')
       );
-      if (confirm === 'Delete') {
+      if (confirm === t('warn.delete')) {
         const history = storage.getHistory().filter((e) => e.id !== entry.id);
         storage.saveHistory(history);
         historyProvider.refresh();
@@ -371,16 +375,21 @@ export function activate(context: vscode.ExtensionContext) {
       const unpinnedCount = history.length - pinned.length;
 
       if (unpinnedCount === 0) {
-        vscode.window.showInformationMessage('There are no entries to delete. All history entries are pinned.');
+        vscode.window.showInformationMessage(t('info.noPinnedHistoryToDelete'));
         return;
       }
 
       const msg = pinned.length > 0
-        ? `${pinned.length} pinned entr${pinned.length === 1 ? 'y is' : 'ies are'} kept. Delete the other ${unpinnedCount}?`
-        : `Delete all ${unpinnedCount} history entr${unpinnedCount === 1 ? 'y' : 'ies'}?`;
+        ? t('warn.clearHistory.confirmPinned', {
+            count: unpinnedCount,
+            suffix: unpinnedCount === 1 ? 'y' : 'ies',
+            pinned: pinned.length,
+            pinnedSuffix: pinned.length === 1 ? 'y' : 'ies',
+          })
+        : t('warn.clearHistory.confirm');
 
-      const confirm = await vscode.window.showWarningMessage(msg, { modal: true }, 'Delete');
-      if (confirm === 'Delete') {
+      const confirm = await vscode.window.showWarningMessage(msg, { modal: true }, t('warn.delete'));
+      if (confirm === t('warn.delete')) {
         storage.saveHistory(pinned);
         historyProvider.refresh();
       }
@@ -481,21 +490,46 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('arc.switchEnvironment', async () => {
       const envs = storage.getEnvironments();
       const picks: (vscode.QuickPickItem & { envId: string | null })[] = [
-        { label: '$(circle-slash) No Environment', envId: null },
+        { label: `$(circle-slash) ${t('picker.deactivateEnvironment')}`, envId: null },
         ...envs.map((env) => ({
           label: `$(symbol-variable) ${env.name}`,
-          description: env.id === environmentProvider.activeEnvId ? '(active)' : '',
+          description: env.id === environmentProvider.activeEnvId ? `(${t('environment.active')})` : '',
           envId: env.id,
         })),
       ];
 
-      const selected = await vscode.window.showQuickPick(picks, { placeHolder: 'Select an environment' });
+      const selected = await vscode.window.showQuickPick(picks, { placeHolder: t('picker.selectEnvironment') });
       if (selected === undefined) { return; }
 
       environmentProvider.activeEnvId = selected.envId;
       environmentProvider.refresh();
       updateStatusBar(envStatusBar, environmentProvider);
       RequestPanel.currentPanel?.updateActiveEnv(environmentProvider.getActiveEnvironmentName());
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('arc.changeDisplayLanguage', async () => {
+      const current = LocalizationService.getDisplayLanguage();
+      const picks = SUPPORTED_DISPLAY_LANGUAGES.map((language) => ({
+        label: LocalizationService.getDisplayLanguageLabel(language),
+        description: language === current ? t('picker.current') : undefined,
+        language,
+      }));
+
+      const selected = await vscode.window.showQuickPick(picks, {
+        placeHolder: t('picker.selectDisplayLanguage'),
+      });
+      if (!selected || selected.language === current) { return; }
+
+      await vscode.workspace.getConfiguration('arc-client').update(
+        'displayLanguage',
+        selected.language,
+        vscode.ConfigurationTarget.Global
+      );
+      vscode.window.showInformationMessage(t('info.displayLanguageUpdated', {
+        language: LocalizationService.getDisplayLanguageLabel(selected.language),
+      }));
     })
   );
 
@@ -515,14 +549,26 @@ export function activate(context: vscode.ExtensionContext) {
     },
   });
   context.subscriptions.push(requestPanelSerializer);
+
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
+    if (!event.affectsConfiguration('arc-client.displayLanguage')) { return; }
+    envStatusBar.tooltip = t('statusBar.switchEnvironment');
+    updateStatusBar(envStatusBar, environmentProvider);
+    collectionProvider.refresh();
+    historyProvider.refresh();
+    environmentProvider.refresh();
+    RequestPanel.refreshCurrentPanel();
+    GuidePanel.refreshCurrentPanel(context.extensionUri);
+  }));
 }
 
 function updateStatusBar(item: vscode.StatusBarItem, provider: EnvironmentTreeProvider): void {
+  const t = (key: string, params?: Record<string, string | number>) => LocalizationService.t(key, params);
   const name = provider.getActiveEnvironmentName();
   if (name) {
     item.text = `$(symbol-variable) ${name}`;
   } else {
-    item.text = '$(symbol-variable) No Env';
+    item.text = `$(symbol-variable) ${t('picker.deactivateEnvironment')}`;
   }
 }
 

@@ -1,33 +1,25 @@
-# Arc Client 프로젝트 메모
+﻿# Arc Client 프로젝트 메모
 
-## 프로젝트 요약
-Arc Client는 VS Code 안에서 동작하는 offline-first REST API 클라이언트다.
+## 제품 정체성
+Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언트다.
 
 - 로그인 없음
-- 클라우드 의존성 없음
+- 클라우드 동기화 없음
 - 텔레메트리 없음
-- 모든 데이터는 로컬 JSON 파일 저장
-- 실제 네트워크 호출은 사용자가 직접 보내는 API 요청만 허용
+- 사용자가 직접 보내는 API 요청 외의 네트워크 호출 없음
+- 모든 데이터는 로컬 JSON 파일로 저장
 
-## 개발 원칙
-- 외부 서비스 연동을 새로 추가하지 않는다.
-- 런타임 의존성은 최소화한다.
-- 요청 전송은 Node.js 내장 `http` / `https` 모듈을 우선 사용한다.
-- Webview는 외부 CDN 없이 번들된 리소스만 사용한다.
-- 코드 주석과 커밋 메시지는 한국어를 우선한다.
+## 현재 구현 범위 (2026-04-11 기준)
 
-## 현재 구현 상태 (2026-04-11 기준)
-
-### 완료된 기능
-
-#### 요청 작성 / 전송
+### 요청 작성 / 전송
 - `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
-- 멀티 탭 요청 편집
-- 요청 타임아웃 설정
-- 전송 중 취소
-- 요청별 응답 보기
+- 멀티 탭 요청 편집기
+- URL 입력창 `Enter` 전송
+- `Ctrl+Enter` / `Cmd+Enter` 전송
+- 진행 중 요청 취소
+- 요청 상태 표시와 응답 상태 애니메이션
 
-#### Body 타입
+### Body 타입
 - `none`
 - `json`
 - `xml`
@@ -36,107 +28,85 @@ Arc Client는 VS Code 안에서 동작하는 offline-first REST API 클라이언
 - `binary`
 - `raw`
 
-#### 인증
+### 인증
 - No Auth
 - Basic Auth
 - Bearer Token
 - API Key (`header`, `query`)
 
-#### 환경변수
-- 환경 CRUD
+### 환경 변수
+- Environment CRUD
 - 활성 환경 전환
-- `{{변수}}` 치환
+- `{{variable}}` 치환
 - URL / Headers / Params / Body / Auth / 파일 경로 치환
 
-#### Collections
-- 컬렉션 / 폴더 / 요청 CRUD
+### Collections / History
+- Collection / folder / request CRUD
 - Duplicate / Save As
 - Drag & Drop 정렬
-- 필터
+- Filter
 - Run All Requests
+- History pin / filter / prune
+- 실행 시점 스냅샷 기반 history 저장
 
-#### History
-- 자동 저장
-- pin / unpin
-- 필터
-- `arc-client.historyMaxItems` 기반 자동 정리
-- 실행 시점 스냅샷 저장
-
-#### Response 뷰어
-- Body / Headers / Cookies / Tests
-- JSON 트리
-- Content-Type 기반 문법 강조
+### Response Viewer
+- Body / Headers / Cookies / Tests / Preview
+- JSON tree viewer
+- XML format options: `Pretty`, `Compact`, `Inline Children`
+- Content-Type 기반 하이라이트
 - 응답 본문 저장
-- 응답 비교
+- 응답 비교: `Raw`, `Normalized`, `Pretty`
+- ignore headers / ignore JSON paths 비교 설정
 
-#### Scripts
+### Scripts
 - Pre-request script
 - Test script
 - `pm.test`, `pm.expect`, `pm.environment`
-- 환경변수 수정 반영
-- 로그 및 테스트 결과 표시
+- 로그와 테스트 결과 표시
 
-#### Import / Export
+### Import / Export
 - cURL import
 - Copy as cURL
 - Arc JSON collection import
 - Postman collection import / export
 - Postman environment import / export
 
-#### 코드 생성
+### 코드 생성
 - `fetch`
 - `axios`
 - `Java HttpURLConnection`
 
-#### 보안 / 설정
-- HTTPS 인증서 검증은 기본적으로 활성화
-- `arc-client.allowInsecureCertificates = false`가 기본값
-- 필요한 경우에만 자체 서명 인증서 허용 가능
+### 요청별 Settings 탭
+- timeout
+- follow redirects
+- save to history
+- TLS override
+- max response size
+- retry count / retry delay
+- stop after headers
+- skip default headers
+- disable scripts
+- open HTML preview by default
 
-## 현재 프로젝트 구조
-```text
-src/
-├── extension.ts
-├── models/
-│   └── types.ts
-├── panels/
-│   ├── GuidePanel.ts
-│   └── RequestPanel.ts
-├── providers/
-│   ├── CollectionTreeProvider.ts
-│   ├── EnvironmentTreeProvider.ts
-│   └── HistoryTreeProvider.ts
-├── services/
-│   ├── AuthService.ts
-│   ├── CodegenService.ts
-│   ├── CurlService.ts
-│   ├── HttpService.ts
-│   ├── ImportExportService.ts
-│   ├── RequestBodyService.ts
-│   ├── ScriptRunner.ts
-│   ├── StorageService.ts
-│   └── VariableService.ts
-├── test/
-│   └── unit/
-└── webview/
-    └── hljs.ts
-```
+### UI 언어
+- `arc-client.displayLanguage` 설정으로 Arc Client UI 언어 선택
+- 기본값은 영어
+- 현재 유지 중인 표시 언어는 `en`, `ko`, `ja`
+- VS Code locale과 분리되어 동작
 
-## 저장 구조
-VS Code `globalStorage` 아래 JSON 파일 사용:
+## 현재 구조 메모
+- 사용자 요청 패널 UI는 `src/panels/RequestPanel.ts`의 webview 문자열 안에 들어 있다
+- highlight.js 관련 리소스는 `src/webview/hljs.ts`에서 관리한다
+- HTTP 요청 실행은 `src/services/HttpService.ts`
+- storage는 `src/services/StorageService.ts`
+- scripts는 `src/services/ScriptRunner.ts`
+- import/export는 `src/services/ImportExportService.ts`
+- compare는 `src/services/ResponseCompareService.ts`
 
-- `collections.json`
-- `history.json`
-- `environments.json`
-- `active-environment.json`
-- `default-headers.json`
-- `tab-state.json`
-
-## 아직 남아 있는 큰 작업
+## 남은 큰 작업
 - WebSocket 지원
-- UI 폴리싱
-- 단축키 및 사용성 추가 개선
-- 회귀 테스트 확대
+- 더 많은 수동 E2E 검증
+- UI/UX 디테일 추가 보강
 
 ## 빌드 / 테스트
 ```bash
@@ -146,9 +116,8 @@ npm test
 npx vsce package
 ```
 
-개발 검증은 VS Code `F5`로 Extension Development Host를 띄워 진행한다.
-
-## 메모
-- `engines.vscode` 버전은 임의 변경하지 않는다.
-- 문서 업데이트 시 실제 코드 기준으로 맞춘다.
-- 저장소 목표는 "로그인 없는 오프라인 REST 클라이언트"를 유지하는 것이다.
+## 작업 원칙 메모
+- 기존 기능 회귀가 가장 큰 리스크라서, webview 문자열 수정 후에는 반드시 파싱/빌드/테스트를 확인한다
+- 사용자에게 보이는 기능이 바뀌면 README와 내부 문서도 같은 턴에 갱신한다
+- 보안 관련 기본값은 안전한 쪽으로 유지한다
+- 오프라인 우선 원칙을 깨는 기능은 추가하지 않는다
