@@ -186,7 +186,7 @@ export class RequestPanel {
   }
 
   private createUnresolvedVariableError(names: string[]): string {
-    return `誘몄꽕???섍꼍蹂?? ${names.map((name) => `{{${name}}}`).join(', ')}`;
+    return `Unresolved environment variables: ${names.map((name) => `{{${name}}}`).join(', ')}`;
   }
 
   private isIncomingMessage(value: unknown): value is IncomingWebviewMessage {
@@ -302,7 +302,7 @@ export class RequestPanel {
     collect(items);
 
     if (requests.length === 0) {
-      vscode.window.showInformationMessage('?ㅽ뻾???붿껌???놁뒿?덈떎.');
+      vscode.window.showInformationMessage('There are no requests to run.');
       return;
     }
 
@@ -515,12 +515,12 @@ export class RequestPanel {
           auth: message.auth ?? { type: 'none' },
         });
         vscode.env.clipboard.writeText(curl);
-        vscode.window.showInformationMessage('cURL 紐낅졊?닿? ?대┰蹂대뱶??蹂듭궗?섏뿀?듬땲??');
+        vscode.window.showInformationMessage('Copied cURL command to the clipboard.');
         break;
       }
       case MessageType.CopyResponseBody:
         await vscode.env.clipboard.writeText(message.body ?? '');
-        vscode.window.showInformationMessage('?묐떟 蹂몃Ц???대┰蹂대뱶??蹂듭궗?섏뿀?듬땲??');
+        vscode.window.showInformationMessage('Copied response body to the clipboard.');
         break;
       case MessageType.CopyToClipboard:
         await vscode.env.clipboard.writeText(message.text ?? '');
@@ -539,7 +539,7 @@ export class RequestPanel {
         break;
       case MessageType.SaveDefaultHeaders:
         RequestPanel.storage.saveDefaultHeaders(message.headers);
-        vscode.window.showInformationMessage('湲곕낯 ?ㅻ뜑媛 ??λ릺?덉뒿?덈떎.');
+        vscode.window.showInformationMessage('Saved default headers.');
         break;
       case MessageType.SaveTabState:
         RequestPanel.storage.saveTabState(message.tabs ?? [], message.activeIndex ?? 0);
@@ -714,7 +714,7 @@ export class RequestPanel {
       this.postMessage({
         type: MessageType.ResponseError,
         tabId,
-        error: `?섎せ??URL?낅땲?? ${resolvedUrl}`,
+        error: `Invalid URL: ${resolvedUrl}`,
       });
       return;
     }
@@ -961,10 +961,10 @@ export class RequestPanel {
     try {
       const bytes = bodyBase64 ? Buffer.from(bodyBase64, 'base64') : Buffer.from(body, 'utf-8');
       await vscode.workspace.fs.writeFile(uri, bytes);
-      vscode.window.showInformationMessage(`?묐떟 ????꾨즺: ${uri.fsPath}`);
+      vscode.window.showInformationMessage(`Saved response body: ${uri.fsPath}`);
       return true;
     } catch (err: unknown) {
-      vscode.window.showErrorMessage(`????ㅽ뙣: ${err instanceof Error ? err.message : String(err)}`);
+      vscode.window.showErrorMessage(`Failed to save response body: ${err instanceof Error ? err.message : String(err)}`);
       return false;
     }
   }
@@ -992,7 +992,7 @@ export class RequestPanel {
 
       await vscode.commands.executeCommand('vscode.diff', uriL, uriR, `${left.label} ??${right.label}`);
     } catch (err: unknown) {
-      vscode.window.showErrorMessage(`?묐떟 鍮꾧탳 ?ㅽ뙣: ${err instanceof Error ? err.message : String(err)}`);
+      vscode.window.showErrorMessage(`Failed to compare responses: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -1024,7 +1024,7 @@ export class RequestPanel {
       { label: 'axios', target: 'axios' as const },
       { label: 'Java HttpURLConnection', target: 'java' as const },
     ], {
-      placeHolder: '생성할 코드 형식을 선택하세요',
+      placeHolder: 'Choose a code generation format',
     });
     if (!target) { return; }
 
@@ -1053,7 +1053,7 @@ export class RequestPanel {
         });
 
     await vscode.env.clipboard.writeText(code);
-    vscode.window.showInformationMessage(`${target.label} 코드를 클립보드에 복사했습니다.`);
+    vscode.window.showInformationMessage(`Copied ${target.label} code to the clipboard.`);
   }
 
   // XML/HTML Pretty ?щ㎎??(?몃뜶???곸슜)
@@ -1722,7 +1722,7 @@ function showDirtyConfirm(tabId) {
       '<div class="dirty-confirm-actions">' +
         '<button class="dirty-btn dirty-btn-save" data-action="save">Save</button>' +
         '<button class="dirty-btn dirty-btn-discard" data-action="discard">Discard</button>' +
-        '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">痍⑥냼</button>' +
+        '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">Cancel</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(overlay);
@@ -1780,7 +1780,7 @@ function closeTabs(ids) {
         '<div class="dirty-confirm-msg">"' + escapeHtml(tabLabel) + '" has unsaved changes.</div>' +
         '<div class="dirty-confirm-actions">' +
           '<button class="dirty-btn dirty-btn-discard" data-action="discard">Discard</button>' +
-          '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">痍⑥냼</button>' +
+          '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">Cancel</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -1934,7 +1934,7 @@ function renderTabBar() {
       '<span class="pin-icon">\u{1F4CC}</span>' +
       '<span class="method-badge method-' + tab.method + '">' + tab.method + '</span>' +
       '<span class="tab-name">' + escapeHtml(truncate(tab.name, 25)) + '</span>' +
-      (tab.dirty ? '<span class="dirty-dot" title="誘몄???蹂寃쎌궗??>\u25CF</span>' : '') +
+      (tab.dirty ? '<span class="dirty-dot" title="Unsaved changes">\u25CF</span>' : '') +
       '<span class="close-tab" data-id="' + tab.id + '">&times;</span>';
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('close-tab')) {
@@ -2058,7 +2058,7 @@ function renderContent() {
 
   let resHtml = '';
   if (tab.loading) {
-    resHtml = '<div style="padding:6px"><span class="spinner"></span>?붿껌 ?꾩넚 以?..</div>' +
+    resHtml = '<div style="padding:6px"><span class="spinner"></span>Sending request...</div>' +
       '<div class="skeleton-loader"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>';
   } else if (tab.error) {
     resHtml = '<div class="error-msg">' + escapeHtml(tab.error) + '</div>';
@@ -2068,7 +2068,7 @@ function renderContent() {
     const ct = (r.headers?.['content-type'] || r.headers?.['Content-Type'] || '').toLowerCase();
     const isBinary = !!r.bodyBase64 && isBinaryContentType(ct);
     const displayBody = isBinary
-      ? '[諛붿씠?덈━ ?묐떟?낅땲?? Save 踰꾪듉?쇰줈 ?먮낯 ?뚯씪????ν븯?몄슂.]'
+      ? '[Binary response. Use the Save button to write the original file.]'
       : r.body;
     const lang = isBinary ? 'text' : detectLang(ct, displayBody);
     const rawBodyHtml = isBinary ? escapeHtml(displayBody) : highlightBody(displayBody, lang);
@@ -2169,7 +2169,7 @@ function renderContent() {
       : '';
     // 移섑솚???ㅼ젣 URL ?쒖떆
     const resolvedUrlDisplay = tab.resolvedUrl
-      ? '<div class="resolved-url js-resolved-url" title="?대┃?섏뿬 蹂듭궗">' + escapeHtml(tab.resolvedUrl) + '</div>'
+      ? '<div class="resolved-url js-resolved-url" title="Click to copy">' + escapeHtml(tab.resolvedUrl) + '</div>'
       : '';
     resHtml =
       '<div class="response-meta">' +
@@ -2212,7 +2212,7 @@ function renderContent() {
           ? '<table class="res-header-table"><thead><tr><th class="res-header-key-col">Test</th><th>Result</th></tr></thead><tbody>' +
             tab.scriptResults.tests.map(function(test) {
               var status = test.passed ? 'PASS' : 'FAIL';
-              var detail = test.passed ? '성공' : escapeHtml(test.error || '실패');
+              var detail = test.passed ? 'Passed' : escapeHtml(test.error || 'Failed');
               return '<tr><td class="res-header-key">' + escapeHtml(test.name) + '</td><td class="res-header-value" title="' + escapeAttr(detail) + '">' + status + ' - ' + detail + '</td></tr>';
             }).join('') +
             '</tbody></table>' +
@@ -2342,6 +2342,13 @@ function bindContentEvents() {
       checkUnresolvedVars();
       markDirty();
       debouncePersist();
+    });
+    urlInputEl.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      if (e.isComposing || e.keyCode === 229) return;
+      e.preventDefault();
+      handlePrimaryAction();
     });
     urlInputEl.addEventListener('scroll', function() {
       var ov = mc.querySelector('.js-var-overlay');
@@ -3452,7 +3459,7 @@ function showRunner(name, total) {
       var body = r.response.body || '';
       var ct = (r.response.headers?.['content-type'] || r.response.headers?.['Content-Type'] || '').toLowerCase();
       if (r.response.bodyBase64 && isBinaryContentType(ct)) {
-        body = '[諛붿씠?덈━ ?묐떟?낅땲?? Save 踰꾪듉?쇰줈 ?먮낯 ?뚯씪????ν븯?몄슂.]';
+        body = '[Binary response. Use the Save button to write the original file.]';
       }
       if (body.length > 2000) body = body.substring(0, 2000) + '\\n... (truncated)';
       detail.textContent = 'Status: ' + r.response.status + ' ' + r.response.statusText +

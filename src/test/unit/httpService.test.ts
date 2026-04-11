@@ -177,7 +177,7 @@ describe('HttpService', () => {
         await send('GET', `${baseUrl}/slow`, [], '', 1);
         assert.fail('타임아웃 에러가 발생해야 함');
       } catch (err: any) {
-        assert.ok(err.message.includes('타임아웃') || err.code === 'ECONNRESET');
+        assert.ok(err.message.includes('timed out') || err.code === 'ECONNRESET');
       }
     });
   });

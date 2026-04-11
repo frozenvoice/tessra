@@ -70,6 +70,13 @@ describe('RequestPanel Webview', () => {
     assert.ok(!script.includes("private static createEmptyScripts"), 'webview script should not contain class syntax');
   });
 
+  it('전송 중 상태 문구가 정상 문자열로 표시된다', () => {
+    assert.ok(
+      html.includes('<span class="spinner"></span>Sending request...'),
+      'loading state should render a readable status message'
+    );
+  });
+
   it('XML 포맷 기본값과 포맷 상태 저장 로직이 유지된다', () => {
     assert.match(script, /jsonFormatStyle:\s*data\?\.jsonFormatStyle\s*\|\|\s*'pretty'/);
     assert.match(script, /xmlFormatStyle:\s*data\?\.xmlFormatStyle\s*\|\|\s*'inline'/);
@@ -79,5 +86,13 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /tab\.formatIndent = opts\.indentKey;/);
     assert.match(script, /xmlFormatStyle:\s*t\.xmlFormatStyle/);
     assert.match(script, /formatIndent:\s*t\.formatIndent/);
+  });
+
+  it('URL 입력창에서 plain Enter로 요청을 전송한다', () => {
+    assert.match(script, /urlInputEl\.addEventListener\('keydown', function\(e\) \{/);
+    assert.match(script, /if \(e\.key !== 'Enter'\) return;/);
+    assert.match(script, /if \(e\.ctrlKey \|\| e\.metaKey \|\| e\.shiftKey \|\| e\.altKey\) return;/);
+    assert.match(script, /if \(e\.isComposing \|\| e\.keyCode === 229\) return;/);
+    assert.match(script, /e\.preventDefault\(\);[\s\S]*handlePrimaryAction\(\);/);
   });
 });

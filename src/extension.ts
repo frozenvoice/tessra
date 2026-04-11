@@ -70,7 +70,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const envStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   envStatusBar.command = 'arc.switchEnvironment';
-  envStatusBar.tooltip = '환경 전환';
+  envStatusBar.tooltip = 'Switch Environment';
   updateStatusBar(envStatusBar, environmentProvider);
   envStatusBar.show();
   context.subscriptions.push(envStatusBar);
@@ -120,7 +120,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.importCurl', async () => {
       const input = await vscode.window.showInputBox({
-        prompt: 'cURL 명령어를 붙여넣으세요',
+        prompt: 'Paste a cURL command',
         placeHolder: "curl -X GET 'https://api.example.com/data'",
         ignoreFocusOut: true,
       });
@@ -131,7 +131,7 @@ export function activate(context: vscode.ExtensionContext) {
         RequestPanel.show(context.extensionUri);
         RequestPanel.currentPanel?.loadRequest(req);
       } catch (err: unknown) {
-        vscode.window.showErrorMessage(`cURL 파싱 실패: ${err instanceof Error ? err.message : String(err)}`);
+        vscode.window.showErrorMessage(`Failed to parse cURL: ${err instanceof Error ? err.message : String(err)}`);
       }
     })
   );
@@ -141,7 +141,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (node.kind === 'request' && node.item.request) {
         const curl = CurlService.generate(node.item.request);
         vscode.env.clipboard.writeText(curl);
-        vscode.window.showInformationMessage('cURL 명령어가 클립보드에 복사되었습니다.');
+        vscode.window.showInformationMessage('Copied cURL command to the clipboard.');
       }
     })
   );
@@ -181,7 +181,7 @@ export function activate(context: vscode.ExtensionContext) {
           }
         } catch (err: unknown) {
           vscode.window.showErrorMessage(
-            `가져오기 실패 (${uri.fsPath}): ${err instanceof Error ? err.message : String(err)}`
+            `Import failed (${uri.fsPath}): ${err instanceof Error ? err.message : String(err)}`
           );
         }
       }
@@ -194,18 +194,20 @@ export function activate(context: vscode.ExtensionContext) {
       if (imported > 0) {
         storage.saveCollections(collections);
         collectionProvider.refresh();
-        vscode.window.showInformationMessage(`${imported}개 컬렉션을 가져왔습니다.`);
+        vscode.window.showInformationMessage(`Imported ${imported} collection${imported === 1 ? '' : 's'}.`);
       }
 
       if (importedPostman.environments.length > 0) {
         storage.saveEnvironments(environments);
         environmentProvider.refresh();
-        vscode.window.showInformationMessage(`환경 ${importedPostman.environments.length}개를 가져왔습니다.`);
+        vscode.window.showInformationMessage(
+          `Imported ${importedPostman.environments.length} environment${importedPostman.environments.length === 1 ? '' : 's'}.`
+        );
       }
 
       if (stats.skippedCollections > 0 || stats.skippedItems > 0) {
         vscode.window.showWarningMessage(
-          `가져오는 동안 잘못된 데이터가 있어 컬렉션 ${stats.skippedCollections}개, 항목 ${stats.skippedItems}개를 건너뛰었습니다.`
+          `Skipped invalid data while importing: ${stats.skippedCollections} collection${stats.skippedCollections === 1 ? '' : 's'} and ${stats.skippedItems} item${stats.skippedItems === 1 ? '' : 's'}.`
         );
       }
     })
@@ -223,7 +225,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const document = ImportExportService.exportCollection(node.collection);
       await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(document, null, 2), 'utf-8'));
-      vscode.window.showInformationMessage(`Postman 컬렉션을 내보냈습니다: ${uri.fsPath}`);
+      vscode.window.showInformationMessage(`Exported Postman collection: ${uri.fsPath}`);
     })
   );
 
@@ -238,7 +240,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       const document = ImportExportService.exportEnvironment(env);
       await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(document, null, 2), 'utf-8'));
-      vscode.window.showInformationMessage(`Postman 환경을 내보냈습니다: ${uri.fsPath}`);
+      vscode.window.showInformationMessage(`Exported Postman environment: ${uri.fsPath}`);
     })
   );
 
@@ -251,7 +253,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.filterCollections', () => {
       const inputBox = vscode.window.createInputBox();
-      inputBox.placeholder = '요청 이름, URL로 검색...';
+      inputBox.placeholder = 'Search by request name or URL...';
       inputBox.value = collectionProvider.filterText;
       inputBox.title = 'Filter Collections';
       inputBox.onDidChangeValue((value) => {
@@ -276,7 +278,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.filterHistory', () => {
       const inputBox = vscode.window.createInputBox();
-      inputBox.placeholder = 'URL, 메서드(GET), 상태코드(404)로 검색...';
+      inputBox.placeholder = 'Search by URL, method (GET), or status code (404)...';
       inputBox.value = historyProvider.filterText;
       inputBox.title = 'Filter History';
       inputBox.onDidChangeValue((value) => {
@@ -324,7 +326,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       if (items.length === 0) {
-        vscode.window.showInformationMessage('실행할 요청이 없습니다.');
+        vscode.window.showInformationMessage('There are no requests to run.');
         return;
       }
 
@@ -350,11 +352,11 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.deletePinnedHistory', async (entry: HistoryEntry) => {
       const confirm = await vscode.window.showWarningMessage(
-        `고정된 항목을 삭제하시겠습니까?\n${entry.request.method} ${entry.request.url}`,
+        `Delete this pinned entry?\n${entry.request.method} ${entry.request.url}`,
         { modal: true },
-        '삭제'
+        'Delete'
       );
-      if (confirm === '삭제') {
+      if (confirm === 'Delete') {
         const history = storage.getHistory().filter((e) => e.id !== entry.id);
         storage.saveHistory(history);
         historyProvider.refresh();
@@ -369,16 +371,16 @@ export function activate(context: vscode.ExtensionContext) {
       const unpinnedCount = history.length - pinned.length;
 
       if (unpinnedCount === 0) {
-        vscode.window.showInformationMessage('삭제할 항목이 없습니다. (모두 Pin 상태)');
+        vscode.window.showInformationMessage('There are no entries to delete. All history entries are pinned.');
         return;
       }
 
       const msg = pinned.length > 0
-        ? `Pin된 ${pinned.length}개 항목은 유지됩니다. 나머지 ${unpinnedCount}개를 삭제하시겠습니까?`
-        : `히스토리 ${unpinnedCount}개를 모두 삭제하시겠습니까?`;
+        ? `${pinned.length} pinned entr${pinned.length === 1 ? 'y is' : 'ies are'} kept. Delete the other ${unpinnedCount}?`
+        : `Delete all ${unpinnedCount} history entr${unpinnedCount === 1 ? 'y' : 'ies'}?`;
 
-      const confirm = await vscode.window.showWarningMessage(msg, { modal: true }, '삭제');
-      if (confirm === '삭제') {
+      const confirm = await vscode.window.showWarningMessage(msg, { modal: true }, 'Delete');
+      if (confirm === 'Delete') {
         storage.saveHistory(pinned);
         historyProvider.refresh();
       }
@@ -487,7 +489,7 @@ export function activate(context: vscode.ExtensionContext) {
         })),
       ];
 
-      const selected = await vscode.window.showQuickPick(picks, { placeHolder: '환경 선택' });
+      const selected = await vscode.window.showQuickPick(picks, { placeHolder: 'Select an environment' });
       if (selected === undefined) { return; }
 
       environmentProvider.activeEnvId = selected.envId;
@@ -691,13 +693,13 @@ function normalizeImportedCollectionItem(value: unknown, stats: ImportStats): Co
     return {
       id,
       type: 'folder',
-      name: name || '가져온 폴더',
+      name: name || 'Imported Folder',
       children,
     };
   }
 
   if (value.type === 'request' || (!value.type && hasRequest)) {
-    const request = normalizeImportedRequest(value.request, name || '가져온 요청');
+    const request = normalizeImportedRequest(value.request, name || 'Imported Request');
     if (!request) {
       stats.skippedItems++;
       return null;

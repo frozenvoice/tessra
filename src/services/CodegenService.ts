@@ -24,7 +24,7 @@ export class CodegenService {
         return this.generateJava(request);
       case 'curl':
       default:
-        throw new Error('지원하지 않는 코드 생성 대상입니다.');
+        throw new Error('Unsupported code generation target.');
     }
   }
 

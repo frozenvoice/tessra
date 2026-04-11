@@ -109,7 +109,7 @@ export class HttpService {
       if (timeoutSec > 0) {
         const ms = timeoutSec * 1000;
         reqRef.setTimeout(ms, () => {
-          reqRef.destroy(new Error(`요청 타임아웃 (${timeoutSec}초)`));
+          reqRef.destroy(new Error(`Request timed out (${timeoutSec}s)`));
         });
       }
 
@@ -123,7 +123,7 @@ export class HttpService {
 
     return {
       promise,
-      abort: () => { reqRef.destroy(new Error('요청이 취소되었습니다')); },
+      abort: () => { reqRef.destroy(new Error('Request was canceled')); },
     };
   }
 

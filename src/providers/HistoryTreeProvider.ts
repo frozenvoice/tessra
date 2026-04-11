@@ -44,13 +44,13 @@ export class HistoryTreeProvider
     const pinLabel = entry.pinned ? '📌 ' : '';
     const item = new vscode.TreeItem(pinLabel + label, vscode.TreeItemCollapsibleState.None);
     item.description = `${status} ${time}`;
-    item.tooltip = `${entry.pinned ? '[고정] ' : ''}${method} ${entry.request.url}\n${status} ${time}\n${new Date(entry.timestamp).toLocaleString()}`;
+    item.tooltip = `${entry.pinned ? '[Pinned] ' : ''}${method} ${entry.request.url}\n${status} ${time}\n${new Date(entry.timestamp).toLocaleString()}`;
     item.iconPath = this.getMethodIcon(method);
     item.contextValue = entry.pinned ? 'history-pinned' : 'history';
 
     item.command = {
       command: 'arc.loadFromHistory',
-      title: '요청 로드',
+      title: 'Load Request',
       arguments: [entry],
     };
 

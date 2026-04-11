@@ -102,7 +102,7 @@ export class ScriptRunner {
       new vm.Script(source).runInContext(context, { timeout: 1000 });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`스크립트 실행 실패: ${message}`);
+      throw new Error(`Script execution failed: ${message}`);
     }
   }
 
@@ -135,7 +135,7 @@ export class ScriptRunner {
             have: {
               status(expectedStatus: number): void {
                 if (response.status !== expectedStatus) {
-                  throw new Error(`응답 상태가 ${expectedStatus}가 아닙니다. (actual: ${response.status})`);
+                  throw new Error(`Expected response status ${expectedStatus}, received ${response.status}.`);
                 }
               },
             },
@@ -180,7 +180,7 @@ export class ScriptRunner {
       expect,
       assert: (condition: unknown, message?: string) => {
         if (!condition) {
-          throw new Error(message ?? 'assert 실패');
+          throw new Error(message ?? 'Assertion failed');
         }
       },
       pm: {
@@ -264,19 +264,19 @@ export class ScriptRunner {
     const assertInclude = (expected: unknown): void => {
       if (typeof actual === 'string') {
         if (!actual.includes(String(expected))) {
-          throw new Error(`"${actual}" 안에 "${String(expected)}"가 없습니다.`);
+          throw new Error(`"${String(actual)}" does not include "${String(expected)}".`);
         }
         return;
       }
 
       if (Array.isArray(actual)) {
         if (!actual.includes(expected)) {
-          throw new Error('배열에 기대한 값이 없습니다.');
+          throw new Error('The array does not contain the expected value.');
         }
         return;
       }
 
-      throw new Error('include 검사는 문자열 또는 배열에서만 지원합니다.');
+      throw new Error('The include assertion only supports strings or arrays.');
     };
 
     Object.assign(to, {
@@ -291,7 +291,7 @@ export class ScriptRunner {
       },
       match(pattern: RegExp): void {
         if (typeof actual !== 'string' || !pattern.test(actual)) {
-          throw new Error(`"${String(actual)}"가 ${pattern.toString()}와 일치하지 않습니다.`);
+          throw new Error(`"${String(actual)}" does not match ${pattern.toString()}.`);
         }
       },
       have,
@@ -301,7 +301,7 @@ export class ScriptRunner {
     Object.assign(have, {
       property(name: string, expectedValue?: unknown): void {
         if (actual === null || typeof actual !== 'object' || !(name in (actual as Record<string, unknown>))) {
-          throw new Error(`property "${name}"가 없습니다.`);
+          throw new Error(`Property "${name}" does not exist.`);
         }
         if (arguments.length >= 2) {
           assert.deepStrictEqual((actual as Record<string, unknown>)[name], expectedValue);
@@ -324,7 +324,7 @@ export class ScriptRunner {
     Object.defineProperty(be, 'ok', {
       get() {
         if (!actual) {
-          throw new Error('값이 truthy가 아닙니다.');
+          throw new Error('The value is not truthy.');
         }
         return api;
       },

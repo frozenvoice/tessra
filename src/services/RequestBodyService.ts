@@ -53,7 +53,7 @@ export class RequestBodyService {
     binaryFilePath: string
   ): Promise<PreparedRequestBody> {
     if (!binaryFilePath) {
-      throw new Error('바이너리 바디 파일 경로가 비어 있습니다.');
+      throw new Error('Binary body file path is empty.');
     }
 
     const data = await fs.readFile(binaryFilePath);
@@ -81,7 +81,7 @@ export class RequestBodyService {
     for (const field of formData) {
       if (field.type === 'file') {
         if (!field.value) {
-          throw new Error(`form-data 파일 경로가 비어 있습니다. (${field.key})`);
+          throw new Error(`Form-data file path is empty. (${field.key})`);
         }
 
         const fileBuffer = await fs.readFile(field.value);

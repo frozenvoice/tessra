@@ -95,7 +95,7 @@ export class EnvironmentTreeProvider
     // 싱글클릭: 변수 편집, 더블클릭: 활성/비활성 토글
     item.command = {
       command: 'arc.onEnvironmentClick',
-      title: '환경 클릭',
+      title: 'Environment Click',
       arguments: [env],
     };
 
@@ -109,7 +109,7 @@ export class EnvironmentTreeProvider
   // 새 환경 생성
   async createEnvironment(): Promise<void> {
     const name = await vscode.window.showInputBox({
-      prompt: '환경 이름',
+      prompt: 'Environment name',
       placeHolder: 'Development',
     });
     if (!name) { return; }
@@ -127,7 +127,7 @@ export class EnvironmentTreeProvider
   // 이름 변경
   async renameEnvironment(env: Environment): Promise<void> {
     const newName = await vscode.window.showInputBox({
-      prompt: '새 이름',
+      prompt: 'New name',
       value: env.name,
     });
     if (!newName || newName === env.name) { return; }
@@ -142,11 +142,11 @@ export class EnvironmentTreeProvider
   // 삭제
   async deleteEnvironment(env: Environment): Promise<void> {
     const confirm = await vscode.window.showWarningMessage(
-      `"${env.name}" 환경을 삭제하시겠습니까?`,
+      `Delete environment "${env.name}"?`,
       { modal: true },
-      '삭제'
+      'Delete'
     );
-    if (confirm !== '삭제') { return; }
+    if (confirm !== 'Delete') { return; }
 
     const envs = this.storage.getEnvironments();
     const idx = envs.findIndex((e) => e.id === env.id);

@@ -19,7 +19,7 @@ export class GuidePanel {
     try {
       markdown = fs.readFileSync(readmePath, 'utf-8');
     } catch {
-      markdown = '# Arc Client\n\nREADME.md 파일을 찾을 수 없습니다.';
+      markdown = '# Arc Client\n\nREADME.md could not be found.';
     }
 
     this.panel.webview.html = this.getHtml(markdown);

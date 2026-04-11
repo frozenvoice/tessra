@@ -66,7 +66,7 @@ export class CollectionTreeProvider
         item.contextValue = 'request';
         item.command = {
           command: 'arc.loadFromCollection',
-          title: '요청 로드',
+          title: 'Load Request',
           arguments: [node],
         };
         return item;
@@ -145,13 +145,13 @@ export class CollectionTreeProvider
     const draggedIds: string[] = raw.value;
     if (!draggedIds || draggedIds.length === 0) { return; }
     if (!target) {
-      vscode.window.showWarningMessage('이동할 컬렉션, 폴더 또는 요청 위에 드롭해주세요.');
+      vscode.window.showWarningMessage('Drop onto a collection, folder, or request.');
       return;
     }
 
     const collections = this.storage.getCollections();
     if (this.isInvalidDropTarget(collections, draggedIds, target)) {
-      vscode.window.showWarningMessage('항목을 자기 자신이나 하위 폴더 안으로 이동할 수 없습니다.');
+      vscode.window.showWarningMessage('Items cannot be moved into themselves or their child folders.');
       return;
     }
 
@@ -187,7 +187,7 @@ export class CollectionTreeProvider
 
   async createCollection(): Promise<void> {
     const name = await vscode.window.showInputBox({
-      prompt: '컬렉션 이름',
+      prompt: 'Collection name',
       placeHolder: 'My Collection',
     });
     if (!name) { return; }
@@ -200,7 +200,7 @@ export class CollectionTreeProvider
 
   async createFolder(node: CollectionNode): Promise<void> {
     const name = await vscode.window.showInputBox({
-      prompt: '폴더 이름',
+      prompt: 'Folder name',
       placeHolder: 'New Folder',
     });
     if (!name) { return; }
@@ -264,16 +264,16 @@ export class CollectionTreeProvider
 
     // 새로 저장
     if (collections.length === 0) {
-      vscode.window.showWarningMessage('컬렉션이 없습니다. 먼저 컬렉션을 생성하세요.');
+      vscode.window.showWarningMessage('There are no collections yet. Create one first.');
       return null;
     }
 
     const picks = this.buildPickList(collections);
-    const selected = await vscode.window.showQuickPick(picks, { placeHolder: '저장할 위치 선택' });
+    const selected = await vscode.window.showQuickPick(picks, { placeHolder: 'Choose where to save this request' });
     if (!selected) { return null; }
 
     const name = await vscode.window.showInputBox({
-      prompt: '요청 이름',
+      prompt: 'Request name',
       placeHolder: requestData.method + ' ' + requestData.url,
       value: requestData.method + ' ' + this.extractPath(requestData.url),
     });
@@ -310,7 +310,7 @@ export class CollectionTreeProvider
 
     this.storage.saveCollections(collections);
     this.refresh();
-    vscode.window.showInformationMessage(`"${name}" 저장 완료`);
+    vscode.window.showInformationMessage(`Saved "${name}".`);
     return { requestId: newRequestId, name };
   }
 
@@ -336,7 +336,7 @@ export class CollectionTreeProvider
 
   async rename(node: CollectionNode): Promise<void> {
     const currentName = node.kind === 'collection' ? node.collection.name : node.item.name;
-    const newName = await vscode.window.showInputBox({ prompt: '새 이름', value: currentName });
+    const newName = await vscode.window.showInputBox({ prompt: 'New name', value: currentName });
     if (!newName || newName === currentName) { return; }
 
     const collections = this.storage.getCollections();
@@ -354,9 +354,9 @@ export class CollectionTreeProvider
   async delete(node: CollectionNode): Promise<void> {
     const name = node.kind === 'collection' ? node.collection.name : node.item.name;
     const confirm = await vscode.window.showWarningMessage(
-      `"${name}" 삭제하시겠습니까?`, { modal: true }, '삭제'
+      `Delete "${name}"?`, { modal: true }, 'Delete'
     );
-    if (confirm !== '삭제') { return; }
+    if (confirm !== 'Delete') { return; }
 
     const collections = this.storage.getCollections();
     if (node.kind === 'collection') {
@@ -396,16 +396,16 @@ export class CollectionTreeProvider
 
     const collections = this.storage.getCollections();
     if (collections.length === 0) {
-      vscode.window.showWarningMessage('컬렉션이 없습니다.');
+      vscode.window.showWarningMessage('There are no collections.');
       return;
     }
 
     const picks = this.buildPickList(collections);
-    const selected = await vscode.window.showQuickPick(picks, { placeHolder: '저장할 위치 선택' });
+    const selected = await vscode.window.showQuickPick(picks, { placeHolder: 'Choose where to save the copy' });
     if (!selected) { return; }
 
     const name = await vscode.window.showInputBox({
-      prompt: '저장할 이름',
+      prompt: 'Name for the copy',
       value: node.item.name,
     });
     if (!name) { return; }
@@ -423,7 +423,7 @@ export class CollectionTreeProvider
 
     this.storage.saveCollections(collections);
     this.refresh();
-    vscode.window.showInformationMessage(`"${name}" 저장 완료`);
+    vscode.window.showInformationMessage(`Saved "${name}".`);
   }
 
   // 항목을 깊은 복사하고 모든 ID를 새로 생성
