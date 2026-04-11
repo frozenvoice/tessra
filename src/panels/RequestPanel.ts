@@ -65,13 +65,14 @@ export class RequestPanel {
   private currentCollectionRequest: SendHandle | null = null;
   private canceledRequestTabs = new Set<string>();
   private activeRequests = new Map<string, { abort: () => void }>();
+  private webviewReady = false;
 
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.httpService = new HttpService();
 
-    this.panel.webview.html = this.getHtmlContent();
+    this.reloadWebview();
 
     this.panel.webview.onDidReceiveMessage(
       (message) => this.handleMessage(message),
@@ -206,6 +207,9 @@ export class RequestPanel {
   // ?⑤꼸 ?쒖떆. createNewTab=true?대㈃ ????룄 ?앹꽦
   public static show(extensionUri: vscode.Uri, createNewTab: boolean = false) {
     if (RequestPanel.currentPanel) {
+      if (!RequestPanel.currentPanel.webviewReady) {
+        RequestPanel.currentPanel.reloadWebview();
+      }
       RequestPanel.currentPanel.panel.reveal();
       if (createNewTab) {
         RequestPanel.currentPanel.newTab();
@@ -229,6 +233,11 @@ export class RequestPanel {
 
   public static revive(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     RequestPanel.currentPanel = new RequestPanel(panel, extensionUri);
+  }
+
+  private reloadWebview(): void {
+    this.webviewReady = false;
+    this.panel.webview.html = this.getHtmlContent();
   }
 
   public newTab() {
@@ -448,6 +457,7 @@ export class RequestPanel {
     if (!this.isIncomingMessage(message)) { return; }
     // Webview 珥덇린???꾨즺 ????λ맂 ??蹂듭썝
     if (message.type === 'webviewReady') {
+      this.webviewReady = true;
       // 留?webviewReady留덈떎 ??μ냼?먯꽌 ???곹깭瑜??쎌뼱 蹂듭썝
       // (retainContextWhenHidden ?놁씠 蹂듭썝???⑤꼸? ?④??믫몴????webview媛 ?ъ깮?깅맖)
       const state = this.pendingRestore ?? RequestPanel.storage.getTabState();
@@ -1616,10 +1626,10 @@ function markDirty() {
   if (tab.dirty !== wasDirty) renderTabBar();
 }
 
-function createTab(data) {
-  const id = 'tab_' + (++tabIdCounter);
-  const tab = {
-    id,
+  function createTab(data) {
+    const id = 'tab_' + (++tabIdCounter);
+    const tab = {
+      id,
     requestId: data?.requestId || null,  // 而щ젆???덉뒪?좊━ ?붿껌 ID (以묐났 ??諛⑹?)
     name: data?.name || 'New Request',
     method: data?.method || 'GET',
@@ -1631,10 +1641,13 @@ function createTab(data) {
     formData: data?.formData || [],
     binaryFilePath: data?.binaryFilePath || '',
     auth: data?.auth || { type: 'none' },
-    scripts: data?.scripts || { preRequest: '', test: '' },
-    timeout: data?.timeout ?? 0,
-    pinned: data?.pinned || false,
-    dirty: false,
+      scripts: data?.scripts || { preRequest: '', test: '' },
+      timeout: data?.timeout ?? 0,
+      jsonFormatStyle: data?.jsonFormatStyle || 'pretty',
+      xmlFormatStyle: data?.xmlFormatStyle || 'inline',
+      formatIndent: data?.formatIndent || '2',
+      pinned: data?.pinned || false,
+      dirty: false,
     _snapshot: null,  // 而щ젆?섏뿉??遺덈윭????쓽 ?먮낯 ?ㅻ깄??
     response: null,
     resolvedUrl: '',
@@ -1705,10 +1718,10 @@ function showDirtyConfirm(tabId) {
   overlay.className = 'dirty-confirm-overlay';
   overlay.innerHTML =
     '<div class="dirty-confirm-dialog">' +
-      '<div class="dirty-confirm-msg">??ν븯吏 ?딆? 蹂寃쎌궗??씠 ?덉뒿?덈떎. ?レ쑝?쒓쿋?듬땲源?</div>' +
+      '<div class="dirty-confirm-msg">There are unsaved changes. Close this tab?</div>' +
       '<div class="dirty-confirm-actions">' +
-        '<button class="dirty-btn dirty-btn-save" data-action="save">???/button>' +
-        '<button class="dirty-btn dirty-btn-discard" data-action="discard">???????/button>' +
+        '<button class="dirty-btn dirty-btn-save" data-action="save">Save</button>' +
+        '<button class="dirty-btn dirty-btn-discard" data-action="discard">Discard</button>' +
         '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">痍⑥냼</button>' +
       '</div>' +
     '</div>';
@@ -1764,9 +1777,9 @@ function closeTabs(ids) {
     overlay.className = 'dirty-confirm-overlay';
     overlay.innerHTML =
       '<div class="dirty-confirm-dialog">' +
-        '<div class="dirty-confirm-msg">"' + escapeHtml(tabLabel) + '"????ν븯吏 ?딆? 蹂寃쎌궗??씠 ?덉뒿?덈떎.</div>' +
+        '<div class="dirty-confirm-msg">"' + escapeHtml(tabLabel) + '" has unsaved changes.</div>' +
         '<div class="dirty-confirm-actions">' +
-          '<button class="dirty-btn dirty-btn-discard" data-action="discard">???????/button>' +
+          '<button class="dirty-btn dirty-btn-discard" data-action="discard">Discard</button>' +
           '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">痍⑥냼</button>' +
         '</div>' +
       '</div>';
@@ -2017,7 +2030,7 @@ function showTabContextMenu(x, y, tabId) {
         break;
       case 'duplicate':
         saveActiveTabState();
-        createTab({ name: tab.name, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout });
+        createTab({ name: tab.name, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent });
         break;
     }
   });
@@ -2122,31 +2135,35 @@ function renderContent() {
       cookiesTableHtml += '</tbody></table>';
     }
     const hasFormat = (lang === 'json' || lang === 'xml');
+    const formatStyle = lang === 'xml'
+      ? (tab.xmlFormatStyle || 'inline')
+      : (tab.jsonFormatStyle || 'pretty');
+    const formatIndent = tab.formatIndent || '2';
     const fmtMenuHtml = hasFormat
       ? '<div class="fmt-wrap">' +
-          '<button class="tb-btn ripple-btn js-fmt-btn">Format ??/button>' +
+          '<button class="tb-btn ripple-btn js-fmt-btn">Format</button>' +
           '<div class="fmt-menu js-fmt-menu">' +
             '<div class="fmt-menu-label">Style</div>' +
-            '<div class="fmt-menu-item js-fmt-style" data-style="pretty"><span class="check">' + (lang === 'xml' ? ' ' : '??) + '</span>Pretty</div>' +
-            '<div class="fmt-menu-item js-fmt-style" data-style="compact"><span class="check"> </span>Compact</div>' +
-            (lang === 'xml' ? '<div class="fmt-menu-item js-fmt-style" data-style="inline"><span class="check">??/span>Inline Children</div>' : '') +
+            '<div class="fmt-menu-item js-fmt-style" data-style="pretty"><span class="check">' + (formatStyle === 'pretty' ? 'x' : ' ') + '</span>Pretty</div>' +
+            '<div class="fmt-menu-item js-fmt-style" data-style="compact"><span class="check">' + (formatStyle === 'compact' ? 'x' : ' ') + '</span>Compact</div>' +
+            (lang === 'xml' ? '<div class="fmt-menu-item js-fmt-style" data-style="inline"><span class="check">' + (formatStyle === 'inline' ? 'x' : ' ') + '</span>Inline Children</div>' : '') +
             '<div class="fmt-menu-sep"></div>' +
             '<div class="fmt-menu-label">Indent</div>' +
-            '<div class="fmt-menu-item js-fmt-indent" data-indent="2"><span class="check">??/span>2 spaces</div>' +
-            '<div class="fmt-menu-item js-fmt-indent" data-indent="4"><span class="check"> </span>4 spaces</div>' +
-            '<div class="fmt-menu-item js-fmt-indent" data-indent="tab"><span class="check"> </span>Tab</div>' +
+            '<div class="fmt-menu-item js-fmt-indent" data-indent="2"><span class="check">' + (formatIndent === '2' ? 'x' : ' ') + '</span>2 spaces</div>' +
+            '<div class="fmt-menu-item js-fmt-indent" data-indent="4"><span class="check">' + (formatIndent === '4' ? 'x' : ' ') + '</span>4 spaces</div>' +
+            '<div class="fmt-menu-item js-fmt-indent" data-indent="tab"><span class="check">' + (formatIndent === 'tab' ? 'x' : ' ') + '</span>Tab</div>' +
           '</div>' +
         '</div>'
       : '';
     const toolbarHtml = (lang === 'json' || lang === 'xml')
       ? '<div class="res-body-toolbar js-res-body-toolbar" data-lang="' + lang + '">' +
           (lang === 'json'
-            ? '<div class="toggle-group">' +
-                '<button class="toggle-btn active" data-mode="tree">Tree</button>' +
-                '<button class="toggle-btn" data-mode="raw">Raw</button>' +
-              '</div>' +
-              '<button class="tb-btn js-expand-all" title="Expand All">??Expand</button>' +
-              '<button class="tb-btn js-collapse-all" title="Collapse All">??Collapse</button>'
+              ? '<div class="toggle-group">' +
+                  '<button class="toggle-btn active" data-mode="tree">Tree</button>' +
+                  '<button class="toggle-btn" data-mode="raw">Raw</button>' +
+                '</div>' +
+              '<button class="tb-btn js-expand-all" title="Expand All">Expand</button>' +
+              '<button class="tb-btn js-collapse-all" title="Collapse All">Collapse</button>'
             : '') +
           fmtMenuHtml +
         '</div>'
@@ -2179,7 +2196,7 @@ function renderContent() {
       '<div class="json-body js-res-raw js-res-body' + (lang === 'json' ? ' hidden' : '') + '">' + rawBodyHtml + '</div>' +
       '<div class="res-headers-panel hidden js-res-headers">' +
         (tab.resolvedHeaders && tab.resolvedHeaders.length
-          ? '<div class="resolved-headers-section"><div class="resolved-headers-title">Request Headers (移섑솚 ??</div>' +
+          ? '<div class="resolved-headers-section"><div class="resolved-headers-title">Request Headers (Resolved)</div>' +
             '<table class="res-header-table"><thead><tr><th class="res-header-key-col">Key</th><th>Value</th></tr></thead><tbody>' +
             tab.resolvedHeaders.map(function(h) {
               return '<tr><td class="res-header-key">' + escapeHtml(h.key) + '</td><td class="res-header-value" title="' + escapeAttr(h.value) + '">' + escapeHtml(h.value) + '</td></tr>';
@@ -2232,7 +2249,7 @@ function renderContent() {
         : '<button class="btn-send ripple-btn js-send"><span class="send-streak"></span><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1.5l14 6.5-14 6.5V9l10-1-10-1V1.5z"/></svg> Send</button>') +
       '<span class="url-bar-spacer"></span>' +
       '<button class="res-action-btn ripple-btn js-save"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> Save</button>' +
-      (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="?ㅻⅨ ?대쫫?쇰줈 ???>Save As</button>' : '') +
+      (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="Save as a new request">Save As</button>' : '') +
       '<button class="res-action-btn ripple-btn js-copy-curl" title="Copy as cURL"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l4.5 4L1 10l1 1.5L7.5 6 2 0.5 1 2zm7 8h7v1.5H8V10z"/></svg> cURL</button>' +
       '<button class="res-action-btn ripple-btn js-generate-code" title="Generate Code">Code</button>' +
     '</div>' +
@@ -2279,15 +2296,15 @@ function renderContent() {
         '</div>' +
         '<div class="js-scripts-panel body-section hidden">' +
           '<div style="font-size:12px;opacity:.65;margin-bottom:4px">Pre-request Script</div>' +
-          '<textarea class="js-script-prerequest" placeholder="env.set(''token'', ''123'');">' + escapeHtml(tab.scripts?.preRequest || '') + '</textarea>' +
+          '<textarea class="js-script-prerequest" placeholder="env.set(&quot;token&quot;, &quot;123&quot;);">' + escapeHtml(tab.scripts?.preRequest || '') + '</textarea>' +
           '<div style="font-size:12px;opacity:.65;margin:8px 0 4px">Test Script</div>' +
-          '<textarea class="js-script-test" placeholder="test(''status'', function () { pm.response.to.have.status(200); });">' + escapeHtml(tab.scripts?.test || '') + '</textarea>' +
+          '<textarea class="js-script-test" placeholder="test(&quot;status&quot;, function () { pm.response.to.have.status(200); });">' + escapeHtml(tab.scripts?.test || '') + '</textarea>' +
         '</div>' +
         '<div class="js-settings-panel settings-section hidden">' +
           '<div class="settings-row">' +
-            '<label class="settings-label">Timeout (珥?</label>' +
-            '<input class="js-timeout settings-input" type="number" min="0" placeholder="0" title="0 = 臾댁젣?? value="' + (tab.timeout || '') + '"/>' +
-            '<span class="settings-hint">0 = 臾댁젣??/span>' +
+            '<label class="settings-label">Timeout (sec)</label>' +
+            '<input class="js-timeout settings-input" type="number" min="0" placeholder="0" title="0 = unlimited" value="' + (tab.timeout || '') + '"/>' +
+            '<span class="settings-hint">0 = unlimited</span>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -2372,7 +2389,7 @@ function bindContentEvents() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
     vscode.postMessage({ type: 'copyAsCurl', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth });
-    showBtnFeedback(this, '??Copied!', 1200);
+    showBtnFeedback(this, 'Copied!', 1200);
   });
 
   mc.querySelector('.js-generate-code')?.addEventListener('click', function() {
@@ -2394,7 +2411,7 @@ function bindContentEvents() {
       else if (opts.lang === 'xml') body = formatXml(body, opts.style, opts.indent);
     }
     vscode.postMessage({ type: 'copyResponseBody', body: body });
-    showBtnFeedback(this, '??Copied!', 1200);
+    showBtnFeedback(this, 'Copied!', 1200);
   });
 
   // 移섑솚??URL ?대┃ ???대┰蹂대뱶 蹂듭궗
@@ -2404,7 +2421,7 @@ function bindContentEvents() {
     vscode.postMessage({ type: 'copyToClipboard', text: url });
     el.classList.add('copied');
     const orig = el.textContent;
-    el.textContent = '??Copied!';
+    el.textContent = 'Copied!';
     setTimeout(() => { el.textContent = orig; el.classList.remove('copied'); }, 1200);
   });
 
@@ -2440,7 +2457,7 @@ function bindContentEvents() {
         pinnedResponses.shift(); // 媛???ㅻ옒??嫄??쒓굅
       }
       pinnedResponses.push({ label: label.trim(), body: tab.response.body, contentType: ct, timestamp: Date.now(), tabId: activeTabId, formatStyle: fmtOpts ? fmtOpts.style : null, formatIndent: fmtOpts ? fmtOpts.indent : null, formatLang: fmtOpts ? fmtOpts.lang : null });
-      btn.innerHTML = '??Pinned (' + pinnedResponses.length + '/2)';
+      btn.innerHTML = 'Pinned (' + pinnedResponses.length + '/2)';
       setTimeout(function() { updatePinCompareButtons(mc); }, 1200);
     }
     // Compare 踰꾪듉? 利됱떆 媛깆떊
@@ -2473,10 +2490,10 @@ function bindContentEvents() {
     const menu = document.createElement('div');
     menu.className = 'res-ctx-menu';
     menu.innerHTML =
-      '<div class="ctx-item js-ctx-compare-last' + (!lastResponse ? ' disabled' : '') + '">??Compare with Last Response</div>' +
+      '<div class="ctx-item js-ctx-compare-last' + (!lastResponse ? ' disabled' : '') + '">Compare with Last Response</div>' +
       '<div class="ctx-sep"></div>' +
       '<div class="ctx-item js-ctx-pin-current">' + pinSvg + ' Pin Current Response</div>' +
-      '<div class="ctx-item js-ctx-clear-pins' + (pinnedResponses.length === 0 ? ' disabled' : '') + '">??Clear All Pins' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + ')' : '') + '</div>';
+      '<div class="ctx-item js-ctx-clear-pins' + (pinnedResponses.length === 0 ? ' disabled' : '') + '">Clear All Pins' + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + ')' : '') + '</div>';
     menu.style.left = e.clientX + 'px';
     menu.style.top = e.clientY + 'px';
     document.body.appendChild(menu);
@@ -2615,14 +2632,14 @@ function bindContentEvents() {
   // Expand All
   mc.querySelector('.js-expand-all')?.addEventListener('click', () => {
     mc.querySelectorAll('.js-res-tree .jt-children').forEach(el => el.classList.remove('collapsed'));
-    mc.querySelectorAll('.js-res-tree .jt-toggle').forEach(el => { el.textContent = '??; });
+    mc.querySelectorAll('.js-res-tree .jt-toggle').forEach(el => { el.textContent = '-'; });
     mc.querySelectorAll('.js-res-tree .jt-ellipsis').forEach(el => el.classList.add('hidden'));
   });
 
   // Collapse All
   mc.querySelector('.js-collapse-all')?.addEventListener('click', () => {
     mc.querySelectorAll('.js-res-tree .jt-children').forEach(el => el.classList.add('collapsed'));
-    mc.querySelectorAll('.js-res-tree .jt-toggle').forEach(el => { el.textContent = '??; });
+    mc.querySelectorAll('.js-res-tree .jt-toggle').forEach(el => { el.textContent = '+'; });
     mc.querySelectorAll('.js-res-tree .jt-ellipsis').forEach(el => el.classList.remove('hidden'));
   });
 
@@ -2641,7 +2658,7 @@ function bindContentEvents() {
     fmtMenu.querySelectorAll('.js-fmt-style').forEach(item => {
       item.addEventListener('click', () => {
         fmtMenu.querySelectorAll('.js-fmt-style .check').forEach(c => { c.textContent = ' '; });
-        item.querySelector('.check').textContent = '??;
+        item.querySelector('.check').textContent = 'x';
         applyFormat(mc);
       });
     });
@@ -2649,7 +2666,7 @@ function bindContentEvents() {
     fmtMenu.querySelectorAll('.js-fmt-indent').forEach(item => {
       item.addEventListener('click', () => {
         fmtMenu.querySelectorAll('.js-fmt-indent .check').forEach(c => { c.textContent = ' '; });
-        item.querySelector('.check').textContent = '??;
+        item.querySelector('.check').textContent = 'x';
         applyFormat(mc);
       });
     });
@@ -3153,10 +3170,6 @@ window.addEventListener('message', (event) => {
     }
   }
 
-  private static createEmptyScripts(): RequestScripts {
-    return { preRequest: '', test: '' };
-  }
-
   if (msg.type === 'receiveResponse' || msg.type === 'responseError') {
     const tab = tabs.find(t => t.id === msg.tabId);
     if (!tab) return;
@@ -3347,7 +3360,7 @@ window.addEventListener('message', (event) => {
       }
       renderTabBar();
       if (pendingSaveBtn) {
-        showBtnFeedback(pendingSaveBtn, '??Saved!', 1200);
+        showBtnFeedback(pendingSaveBtn, 'Saved!', 1200);
       }
       // dirty ?뺤씤 ?ㅼ씠?쇰줈洹몄뿉??"??? ?좏깮 ???リ린
       if (_pendingCloseAfterSave) {
@@ -3363,7 +3376,7 @@ window.addEventListener('message', (event) => {
   }
   if (msg.type === 'saveResponseBodyResult') {
     if (msg.saved && pendingSaveResponseBtn) {
-      showBtnFeedback(pendingSaveResponseBtn, '??Saved!', 1200);
+      showBtnFeedback(pendingSaveResponseBtn, 'Saved!', 1200);
     }
     pendingSaveResponseBtn = null;
   }
@@ -3540,7 +3553,7 @@ function buildJsonTree(val, key, isLast) {
   const summary = isArr ? count + ' items' : count + ' keys';
 
   return '<div class="jt-row">' +
-      '<span class="jt-toggle">??/span>' + keyHtml +
+      '<span class="jt-toggle">-</span>' + keyHtml +
       '<span class="jt-brace">' + open + '</span>' +
       '<span class="jt-ellipsis hidden" title="' + summary + '"> ... ' + summary + ' </span>' +
     '</div>' +
@@ -3564,7 +3577,7 @@ function bindTreeToggles(container) {
     if (!children || !children.classList.contains('jt-children')) return;
 
     const collapsed = children.classList.toggle('collapsed');
-    tgl.textContent = collapsed ? '?? : '??;
+    tgl.textContent = collapsed ? '+' : '-';
     const ell = row.querySelector('.jt-ellipsis');
     if (ell) ell.classList.toggle('hidden', !collapsed);
   });
@@ -3629,14 +3642,14 @@ function getFormatOptions(mc) {
   var styleEl = toolbar.querySelector('.js-fmt-style .check');
   var style = 'pretty';
   toolbar.querySelectorAll('.js-fmt-style').forEach(function(el) {
-    if (el.querySelector('.check').textContent.trim() === '??) style = el.dataset.style;
+    if (el.querySelector('.check').textContent.trim() === 'x') style = el.dataset.style;
   });
   var indent = '2';
   toolbar.querySelectorAll('.js-fmt-indent').forEach(function(el) {
-    if (el.querySelector('.check').textContent.trim() === '??) indent = el.dataset.indent;
+    if (el.querySelector('.check').textContent.trim() === 'x') indent = el.dataset.indent;
   });
   var indentStr = indent === 'tab' ? '\\t' : ' '.repeat(parseInt(indent));
-  return { style: style, indent: indentStr, lang: toolbar.dataset.lang };
+  return { style: style, indent: indentStr, indentKey: indent, lang: toolbar.dataset.lang };
 }
 
 function applyFormat(mc) {
@@ -3645,6 +3658,9 @@ function applyFormat(mc) {
   if (!opts) return;
   var tab = tabs.find(function(t) { return t.id === activeTabId; });
   if (!tab || !tab.response) return;
+  if (opts.lang === 'json') tab.jsonFormatStyle = opts.style;
+  if (opts.lang === 'xml') tab.xmlFormatStyle = opts.style;
+  tab.formatIndent = opts.indentKey;
   var body = tab.response.body;
   var formatted;
   if (opts.lang === 'json') {
@@ -3668,6 +3684,7 @@ function applyFormat(mc) {
       } catch {}
     }
   }
+  debouncePersist();
 }
 
 function formatJson(body, style, indent) {
@@ -3839,7 +3856,7 @@ function checkUnresolvedVars() {
   function persistTabState() {
     saveActiveTabState();
     var tabData = tabs.map(function(t) {
-    return { name: t.name, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, timeout: t.timeout, pinned: t.pinned || false, requestId: t.requestId || undefined };
+    return { name: t.name, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, timeout: t.timeout, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, pinned: t.pinned || false, requestId: t.requestId || undefined };
     });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
   vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx) });

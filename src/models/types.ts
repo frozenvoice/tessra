@@ -72,6 +72,9 @@ export interface TabState {
   auth: AuthConfig;
   scripts?: RequestScripts;
   timeout: number;
+  jsonFormatStyle?: 'pretty' | 'compact';
+  xmlFormatStyle?: 'pretty' | 'compact' | 'inline';
+  formatIndent?: '2' | '4' | 'tab';
   pinned?: boolean;
   requestId?: string;
 }
