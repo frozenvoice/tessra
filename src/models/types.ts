@@ -77,6 +77,7 @@ export interface AuthConfig {
 export interface TabState {
   name: string;
   autoName?: boolean;
+  requestEditorTab?: 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'settings';
   method: HttpMethod;
   url: string;
   headers: KeyValue[];

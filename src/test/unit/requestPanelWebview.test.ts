@@ -55,6 +55,9 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.loading.hint': 'You can keep editing headers, body, or settings while the response comes back.',
   'webview.empty.hero.title': 'Ready to ship requests',
   'webview.followRedirects': 'Follow redirects',
+  'webview.followRedirectsStatus': 'Redirects on',
+  'webview.stopAfterHeaders': 'Stop after headers',
+  'webview.stopAfterHeadersStatus': 'Headers only',
   'webview.saveToHistory': 'Save to history',
   'webview.skipDefaultHeaders': 'Skip default headers',
   'webview.disableScripts': 'Disable scripts',
@@ -230,6 +233,238 @@ function extractInlineScript(html: string): string {
   return html.slice(scriptStart, end);
 }
 
+function extractScriptSegment(script: string, startMarker: string, endMarker: string): string {
+  const start = script.indexOf(startMarker);
+  const end = script.indexOf(endMarker, start);
+
+  assert.ok(start >= 0, `script start marker should exist: ${startMarker}`);
+  assert.ok(end > start, `script end marker should exist: ${endMarker}`);
+
+  return script.slice(start, end);
+}
+
+class FakeClassList {
+  private readonly values = new Set<string>();
+
+  constructor(initial: string[] = []) {
+    initial.forEach((value) => this.values.add(value));
+  }
+
+  add(...tokens: string[]) {
+    tokens.forEach((token) => this.values.add(token));
+  }
+
+  remove(...tokens: string[]) {
+    tokens.forEach((token) => this.values.delete(token));
+  }
+
+  contains(token: string) {
+    return this.values.has(token);
+  }
+
+  toggle(token: string, force?: boolean) {
+    const nextValue = force === undefined ? !this.contains(token) : force;
+    if (nextValue) {
+      this.add(token);
+    } else {
+      this.remove(token);
+    }
+    return nextValue;
+  }
+}
+
+class FakeElement {
+  public readonly classList: FakeClassList;
+  public readonly dataset: Record<string, string> = {};
+  public readonly children: FakeElement[] = [];
+  public parent: FakeElement | null = null;
+  public focusCalls: unknown[] = [];
+  public scrollCalls: unknown[] = [];
+  public isConnected = true;
+  public tabindex?: string;
+
+  constructor(public readonly tagName = 'div', initialClasses: string[] = []) {
+    this.classList = new FakeClassList(initialClasses);
+  }
+
+  append(child: FakeElement): FakeElement {
+    child.parent = this;
+    this.children.push(child);
+    return child;
+  }
+
+  querySelector(selector: string): FakeElement | null {
+    return this.querySelectorAll(selector)[0] ?? null;
+  }
+
+  querySelectorAll(selector: string): FakeElement[] {
+    if (selector === '.linked-focus-active') {
+      return this.collect((node) => node.classList.contains('linked-focus-active'));
+    }
+    if (selector === 'input, textarea, select, button, [tabindex]:not([tabindex="-1"])') {
+      return this.collect(
+        (node) =>
+          ['input', 'textarea', 'select', 'button'].includes(node.tagName.toLowerCase())
+          || (typeof node.tabindex === 'string' && node.tabindex !== '-1')
+      );
+    }
+    return [];
+  }
+
+  closest(selector: string): FakeElement | null {
+    const selectors = selector.split(',').map((value) => value.trim()).filter(Boolean);
+    let current: FakeElement | null = this;
+    while (current) {
+      const node = current;
+      if (selectors.some((value) => node.matches(value))) {
+        return node;
+      }
+      current = current.parent;
+    }
+    return null;
+  }
+
+  focus(options?: unknown) {
+    this.focusCalls.push(options);
+  }
+
+  scrollIntoView(options?: unknown) {
+    this.scrollCalls.push(options);
+  }
+
+  private collect(predicate: (node: FakeElement) => boolean): FakeElement[] {
+    const result: FakeElement[] = [];
+    const visit = (node: FakeElement) => {
+      if (predicate(node)) {
+        result.push(node);
+      }
+      node.children.forEach(visit);
+    };
+    visit(this);
+    return result;
+  }
+
+  private matches(selector: string): boolean {
+    if (!selector) {
+      return false;
+    }
+    if (selector.startsWith('.')) {
+      const classNames = selector.slice(1).split('.').filter(Boolean);
+      return classNames.every((className) => this.classList.contains(className));
+    }
+    if (selector === 'input' || selector === 'textarea' || selector === 'select' || selector === 'button') {
+      return this.tagName.toLowerCase() === selector;
+    }
+    if (selector === '[tabindex]:not([tabindex="-1"])') {
+      return typeof this.tabindex === 'string' && this.tabindex !== '-1';
+    }
+    return false;
+  }
+}
+
+class FakeRootElement extends FakeElement {
+  private readonly selectorMap = new Map<string, FakeElement>();
+  private readonly selectorListMap = new Map<string, FakeElement[]>();
+
+  register(selector: string, element: FakeElement): FakeElement {
+    this.selectorMap.set(selector, element);
+    return element;
+  }
+
+  registerAll(selector: string, elements: FakeElement[]): FakeElement[] {
+    this.selectorListMap.set(selector, elements);
+    return elements;
+  }
+
+  querySelector(selector: string): FakeElement | null {
+    return this.selectorMap.get(selector) ?? super.querySelector(selector);
+  }
+
+  querySelectorAll(selector: string): FakeElement[] {
+    return this.selectorListMap.get(selector) ?? super.querySelectorAll(selector);
+  }
+}
+
+function createAnimationHarness() {
+  let nextFrameId = 1;
+  let nextTimerId = 1;
+  const frameOrder: number[] = [];
+  const frameCallbacks = new Map<number, (time: number) => void>();
+  const timerCallbacks = new Map<number, () => void>();
+
+  return {
+    requestAnimationFrame(callback: (time: number) => void) {
+      const frameId = nextFrameId++;
+      frameOrder.push(frameId);
+      frameCallbacks.set(frameId, callback);
+      return frameId;
+    },
+    cancelAnimationFrame(frameId: number) {
+      frameCallbacks.delete(frameId);
+      const index = frameOrder.indexOf(frameId);
+      if (index >= 0) {
+        frameOrder.splice(index, 1);
+      }
+    },
+    flushFrame() {
+      const pending = frameOrder.splice(0, frameOrder.length);
+      pending.forEach((frameId) => {
+        const callback = frameCallbacks.get(frameId);
+        if (!callback) {
+          return;
+        }
+        frameCallbacks.delete(frameId);
+        callback(0);
+      });
+    },
+    setTimeout(callback: () => void) {
+      const timerId = nextTimerId++;
+      timerCallbacks.set(timerId, callback);
+      return timerId;
+    },
+    clearTimeout(timerId: number) {
+      timerCallbacks.delete(timerId);
+    },
+    flushTimers() {
+      const pending = [...timerCallbacks.entries()];
+      timerCallbacks.clear();
+      pending.forEach(([, callback]) => callback());
+    },
+  };
+}
+
+function createLinkedFocusHarness() {
+  const mc = new FakeRootElement();
+
+  const panels = {
+    params: mc.register('.js-params-panel', mc.append(new FakeElement('div', ['js-params-panel', 'hidden']))),
+    headers: mc.register('.js-headers-panel', mc.append(new FakeElement('div', ['js-headers-panel', 'hidden']))),
+    body: mc.register('.js-body-panel', mc.append(new FakeElement('div', ['js-body-panel', 'hidden']))),
+    auth: mc.register('.js-auth-panel', mc.append(new FakeElement('div', ['js-auth-panel', 'hidden']))),
+    scripts: mc.register('.js-scripts-panel', mc.append(new FakeElement('div', ['js-scripts-panel', 'hidden']))),
+    settings: mc.register('.js-settings-panel', mc.append(new FakeElement('div', ['js-settings-panel', 'hidden']))),
+  };
+
+  const tabButtons = ['params', 'headers', 'body', 'auth', 'scripts', 'settings'].map((name) => {
+    const button = new FakeElement('button', ['tab']);
+    button.dataset.tab = name;
+    return button;
+  });
+  mc.registerAll('.js-req-tabs .tab', tabButtons);
+
+  const saveHistoryToggle = panels.settings.append(new FakeElement('label', ['settings-toggle']));
+  const saveHistoryInput = saveHistoryToggle.append(new FakeElement('input', ['js-save-history']));
+  mc.register('.js-save-history', saveHistoryInput);
+
+  return {
+    mc,
+    settingsPanel: panels.settings,
+    settingsTabButton: tabButtons.find((button) => button.dataset.tab === 'settings')!,
+    saveHistoryToggle,
+    saveHistoryInput,
+  };
+}
+
 describe('RequestPanel Webview', () => {
   let source: string;
   let html: string;
@@ -377,6 +612,19 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /autoName: !!t\.autoName/);
   });
 
+  it('preserves the active request editor tab across rerenders and saved tab restore', () => {
+    assert.match(script, /const REQUEST_EDITOR_TABS = \['params', 'headers', 'body', 'auth', 'scripts', 'settings'\];/);
+    assert.match(script, /function normalizeRequestEditorTab\(value\)/);
+    assert.match(script, /requestEditorTab: normalizeRequestEditorTab\(data\?\.requestEditorTab\),/);
+    assert.match(script, /requestEditorTab: normalizeRequestEditorTab\(mc\.querySelector\('\.js-req-tabs \.tab\.active'\)\?\.dataset\.tab \|\| tab\.requestEditorTab\),/);
+    assert.match(script, /tab\.requestEditorTab = normalizeRequestEditorTab\(mc\.querySelector\('\.js-req-tabs \.tab\.active'\)\?\.dataset\.tab \|\| tab\.requestEditorTab\);/);
+    assert.match(script, /activeTab\.requestEditorTab = normalizedTabName;/);
+    assert.match(script, /const activeRequestEditorTab = normalizeRequestEditorTab\(tab\.requestEditorTab\);/);
+    assert.match(script, /requestEditorTab: normalizeRequestEditorTab\(t\.requestEditorTab\),/);
+    assert.match(script, /<div class="tab' \+ \(showScriptsEditor \? ' active' : ''\) \+ '" data-tab="scripts">/);
+    assert.match(script, /<div class="js-scripts-panel body-section' \+ \(showScriptsEditor \? '' : ' hidden'\) \+ '">/);
+  });
+
   it('localizes dirty-close prompts and file picker labels', () => {
     assert.match(script, /tr\('webview\.unsavedClosePrompt'\)/);
     assert.match(script, /tf\('webview\.unsavedCloseNamedPrompt', \{ name: tabLabel \}\)/);
@@ -414,6 +662,7 @@ describe('RequestPanel Webview', () => {
 
   it('renders the expanded request settings controls', () => {
     assert.ok(html.includes('Follow redirects'), 'settings tab should include redirect toggle');
+    assert.ok(html.includes('Stop after headers'), 'settings tab should include headers-only toggle');
     assert.ok(html.includes('Save to history'), 'settings tab should include history toggle');
     assert.ok(html.includes('Skip default headers'), 'settings tab should include default header toggle');
     assert.ok(html.includes('Disable scripts'), 'settings tab should include script toggle');
@@ -421,6 +670,14 @@ describe('RequestPanel Webview', () => {
     assert.ok(html.includes('Retry Count'), 'settings tab should include retry count');
     assert.ok(html.includes('Retry Delay'), 'settings tab should include retry delay');
     assert.ok(html.includes('TLS'), 'settings tab should include TLS override');
+    assert.match(script, /function syncSettingsToggleStates\(mc\)/);
+    assert.match(script, /settingsPanel\.addEventListener\('change', function\(e\)/);
+    const settingsSegment = extractScriptSegment(
+      script,
+      "var settingsPanel = mc.querySelector('.js-settings-panel');",
+      '// === textarea'
+    );
+    assert.doesNotMatch(settingsSegment, /renderContent\(\);/);
   });
 
   it('renders the upgraded workspace UI affordances', () => {
@@ -429,11 +686,34 @@ describe('RequestPanel Webview', () => {
     assert.ok(html.includes('script-card'), 'scripts tab should use cards');
     assert.ok(html.includes('script-helper-grid'), 'scripts tab should render helper cards');
     assert.ok(html.includes('btn-keyhint'), 'send button should show the Enter key hint');
+    assert.ok(html.includes('url-action-group'), 'url bar should group secondary actions for responsive layouts');
+    assert.ok(html.includes('res-response-shell'), 'response area should use a dedicated flex shell');
+    assert.ok(html.includes('res-empty-shell'), 'response empty states should render inside a scrollable shell');
     assert.match(script, /function getRequestStageInfo\(tab\)/);
     assert.match(script, /function renderEmptyState\(kicker, title, copy, cards, actions, badge\)/);
     assert.match(script, /function buildCompareChipMarkup\(currentSignature\)/);
     assert.match(script, /function scriptTemplateSource\(name\)/);
     assert.match(script, /function insertScriptTemplate\(mc, targetName, templateName\)/);
+  });
+
+  it('keeps response panes scrollable and preserves an adaptive response-first split', () => {
+    assert.match(script, /function getSplitPanelBounds\(splitEl, dividerEl, progressEl\)/);
+    assert.match(script, /function applyManualRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, requestedHeight\)/);
+    assert.match(script, /function shouldPreferResponseLayout\(tab\)/);
+    assert.match(script, /function applyAdaptiveRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, tab\)/);
+    assert.match(script, /var targetRatio = panelSpace < 420 \? 0\.34 : panelSpace < 560 \? 0\.38 : 0\.42;/);
+    assert.match(script, /window\.addEventListener\('resize', function\(\) \{/);
+    assert.match(script, /var splitEl = mainContent\.querySelector\('\.split'\);/);
+    assert.match(script, /applyManualRequestAreaHeight\(\s*reqArea,\s*splitEl,\s*dividerEl,\s*progressEl,/);
+    assert.match(script, /applyManualRequestAreaHeight\(\s*splitDragState\.reqArea,\s*splitDragState\.splitEl,/);
+    assert.match(script, /if \(reqArea\.dataset\.manualHeight === '1'\) \{/);
+    assert.match(script, /var activeTab = tabs\.find\(function\(t\) \{ return t\.id === activeTabId; \}\);/);
+    assert.match(script, /applyAdaptiveRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, activeTab\);/);
+    assert.match(script, /if \(savedHeight\) \{[\s\S]*?\} else \{[\s\S]*?applyAdaptiveRequestAreaHeight\(\s*adaptiveReqArea,\s*mainContent\.querySelector\('\.split'\),/);
+    assert.match(source, /\.res-area\{flex:1 1 0;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:0 10px\}/);
+    assert.match(source, /\.res-empty-shell\{flex:1;min-height:0;overflow:auto;padding:8px 0 12px\}/);
+    assert.match(source, /\.json-body\{background:var\(--vscode-input-background\);padding:6px;border-radius:3px;font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;white-space:pre-wrap;word-break:break-all;overflow:auto;flex:1;min-height:0;line-height:1\.45\}/);
+    assert.match(source, /\.json-tree\{background:var\(--vscode-input-background\);padding:6px;border-radius:3px;font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;overflow:auto;flex:1;min-height:0;line-height:1\.6;user-select:text\}/);
   });
 
   it('normalizes and persists request settings in tab state and save actions', () => {
@@ -476,6 +756,7 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /let workspaceDefaultHeaders = \[\];/);
     assert.match(script, /function renderDefaultHeadersBanner\(tab\)/);
     assert.match(script, /function refreshDefaultHeadersBanner\(mc\)/);
+    assert.match(script, /function revealDefaultHeadersEditor\(\)/);
     assert.match(script, /function getOverriddenDefaultHeaders\(tab\)/);
     assert.match(script, /function renderDefaultHeaderKeyGroup\(labelKey, headers, chipClass\)/);
     assert.match(script, /js-open-default-headers-top/);
@@ -483,6 +764,7 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /vscode\.postMessage\(\{ type: 'openDefaultHeaders' \}\)/);
     assert.match(script, /workspaceDefaultHeaders = msg\.headers \|\| \[\];/);
     assert.match(script, /if \(msg\.reveal !== false\)/);
+    assert.match(script, /revealDefaultHeadersEditor\(\);/);
     assert.match(script, /tfCount\('webview\.defaultHeadersApplied', applied\.length\)/);
     assert.match(script, /tfCount\('webview\.defaultHeadersOverridden', overridden\.length\)/);
     assert.match(script, /renderDefaultHeaderKeyGroup\('webview\.defaultHeadersAppliedLabel', applied, ''\)/);
@@ -492,6 +774,7 @@ describe('RequestPanel Webview', () => {
   it('renders request-diff, variable usage, form-data, and response quick-copy helpers', () => {
     assert.match(script, /function renderRequestChangeSummary\(tab\)/);
     assert.match(script, /function refreshRequestChangeSummary\(mc\)/);
+    assert.match(script, /function renderRequestDirtyTitle\(tab\)/);
     assert.match(script, /function collectVariableUsage\(tab\)/);
     assert.match(script, /function renderVariableUsage\(tab\)/);
     assert.match(script, /function renderFormDataSummary\(fields\)/);
@@ -500,6 +783,8 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /js-copy-response-status/);
     assert.match(script, /js-copy-response-headers/);
     assert.match(script, /js-empty-action/);
+    assert.match(script, /dirty-dot" title="' \+ escapeAttr\(renderRequestDirtyTitle\(tab\)\)/);
+    assert.strictEqual(script.includes('requestDiffHtml +'), false, 'request change summary should not reserve its own layout row');
   });
 
   it('shows the current environment with a localized label instead of raw template syntax', () => {
@@ -510,6 +795,8 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /tr\('webview\.noEnvironment'\)/);
     assert.match(script, /tfCount\('webview\.defaultHeadersStatus', appliedDefaultHeaders\.length\)/);
     assert.match(script, /tr\('webview\.disableScriptsStatus'\)/);
+    assert.match(script, /tr\('webview\.followRedirectsStatus'\)/);
+    assert.match(script, /tr\('webview\.stopAfterHeadersStatus'\)/);
     assert.match(script, /tr\('webview\.saveToHistoryOffStatus'\)/);
     assert.match(script, /tr\('webview\.environment'\)/);
     assert.doesNotMatch(script, /<span class="var-name">\{\{env\}\}<\/span>/);
@@ -539,6 +826,7 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function parseBulkKeyValueText\(text, target\)/);
     assert.match(script, /function applyBulkEditor\(mc, target\)/);
     assert.match(script, /js-open-bulk-editor/);
+    assert.match(script, /tab\.disableScripts \? 'settings:disable-scripts' : 'scripts:pre-request'/);
   });
 
   it('persists enriched response search state and supports environment-switch actions', () => {
@@ -556,13 +844,82 @@ describe('RequestPanel Webview', () => {
 
   it('reveals linked settings targets from request chips and summaries', () => {
     assert.match(script, /function clearLinkedFocusInContent\(mc\)/);
+    assert.match(script, /var linkedFocusFrame = null;/);
+    assert.match(script, /function queueLinkedFocusReveal\(callback\)/);
     assert.match(script, /function revealLinkedTargetInContent\(mc, targetKey\)/);
     assert.match(script, /function switchRequestEditorTabAndRevealInContent\(mc, meta\)/);
     assert.match(script, /linked-focus-active/);
     assert.match(script, /settings:save-history/);
     assert.match(script, /settings:skip-default-headers/);
     assert.match(script, /settings:disable-scripts/);
+    assert.match(script, /settings:follow-redirects/);
+    assert.match(script, /settings:stop-after-headers/);
     assert.match(script, /switchRequestEditorTabAndRevealInContent\(mc, meta\)/);
+  });
+
+  it('reveals linked settings targets after the target tab is shown and focuses the mapped control', () => {
+    const linkedFocusScript = extractScriptSegment(
+      script,
+      'function switchRequestEditorTabInContent',
+      'function switchResponseTabInContent'
+    );
+    const animation = createAnimationHarness();
+    const harness = createLinkedFocusHarness();
+    const linkedFocusContext: Record<string, unknown> = {
+      tabs: [{ id: 'tab_1', requestEditorTab: 'params' }],
+      activeTabId: 'tab_1',
+      normalizeRequestEditorTab: (value: string) => {
+        return ['params', 'headers', 'body', 'auth', 'scripts', 'settings'].includes(String(value || ''))
+          ? String(value)
+          : 'params';
+      },
+      requestAnimationFrame: animation.requestAnimationFrame,
+      cancelAnimationFrame: animation.cancelAnimationFrame,
+      setTimeout: animation.setTimeout,
+      clearTimeout: animation.clearTimeout,
+      refreshDefaultHeadersBanner: () => undefined,
+    };
+
+    vm.createContext(linkedFocusContext);
+    vm.runInContext(linkedFocusScript, linkedFocusContext);
+
+    const switchRequestEditorTabAndRevealInContent = linkedFocusContext.switchRequestEditorTabAndRevealInContent as (
+      mc: FakeRootElement,
+      meta: string
+    ) => void;
+    switchRequestEditorTabAndRevealInContent(harness.mc, 'settings:save-history');
+
+    assert.ok(harness.settingsTabButton.classList.contains('active'), 'settings tab button should become active immediately');
+    assert.ok(!harness.settingsPanel.classList.contains('hidden'), 'settings panel should be shown before reveal work runs');
+    assert.strictEqual(
+      (linkedFocusContext.tabs as Array<{ requestEditorTab: string }>)[0].requestEditorTab,
+      'settings',
+      'active request editor tab should update before reveal work runs'
+    );
+    assert.ok(
+      !harness.saveHistoryToggle.classList.contains('linked-focus-active'),
+      'highlight should wait until the reveal frames run'
+    );
+
+    animation.flushFrame();
+    assert.ok(
+      !harness.saveHistoryToggle.classList.contains('linked-focus-active'),
+      'first frame should only queue the reveal'
+    );
+
+    animation.flushFrame();
+    assert.ok(
+      harness.saveHistoryToggle.classList.contains('linked-focus-active'),
+      'second frame should apply the highlight once the target is visible'
+    );
+    assert.strictEqual(harness.saveHistoryToggle.scrollCalls.length, 1, 'target container should scroll into view');
+    assert.strictEqual(harness.saveHistoryInput.focusCalls.length, 1, 'target input should receive focus');
+
+    animation.flushTimers();
+    assert.ok(
+      !harness.saveHistoryToggle.classList.contains('linked-focus-active'),
+      'highlight should clear after the reveal timeout'
+    );
   });
 
   it('renders collapsible script helpers with a stepper layout', () => {
@@ -570,12 +927,21 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function renderScriptHelpers\(tab\)/);
     assert.match(script, /class="script-helper-shell/);
     assert.match(script, /class="script-helper-stepper"/);
+    assert.match(script, /var helperLeadCopy = collapsed \? tr\('webview\.scriptHelpCollapsedCopy'\) : tr\('webview\.scriptHelpRuntimeWhen'\);/);
+    assert.match(script, /\(collapsed\s*\?\s*'<div class="script-helper-collapsed">'/);
     assert.match(script, /class="script-helper-card tinted"/);
     assert.match(script, /class="script-helper-columns flow"/);
     assert.match(script, /tr\('webview\.scriptHelpQuickInsertTitle'\)/);
     assert.match(script, /data-template="testCaptureValue"/);
     assert.match(script, /js-toggle-script-help/);
-    assert.match(script, /tab\.scriptHelpCollapsed = tab\.scriptHelpCollapsed !== true/);
+    assert.match(script, /const activeTab = tabs\.find\(t => t\.id === activeTabId\);/);
+    assert.match(script, /activeTab\.scriptHelpCollapsed = activeTab\.scriptHelpCollapsed !== true/);
+    assert.match(source, /\.req-area\{flex:1 1 0;min-height:0;overflow-y:auto;padding:4px 10px\}/);
+    assert.match(source, /\.url-action-group\{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-left:auto\}/);
+    assert.match(source, /\.env-editor\.linked-focus-active\{border-color:rgba\(87,166,255,.26\)\}/);
+    assert.match(source, /\.script-helper-shell\.collapsed\{gap:10px\}/);
+    assert.match(source, /@media \(max-width: 1220px\)\{/);
+    assert.match(source, /@media \(max-height: 820px\)\{/);
   });
 
   it('shows richer collection runner status updates', () => {

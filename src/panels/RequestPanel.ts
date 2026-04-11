@@ -1612,10 +1612,11 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .request-status-chip.info{background:rgba(87,166,255,.08);border-color:rgba(87,166,255,.16);color:#93c8ff}
 .request-status-chip.warning{background:rgba(229,192,123,.08);border-color:rgba(229,192,123,.16);color:#f1cf8a}
 .request-status-chip.muted{opacity:.78}
-.linked-focus-active{position:relative;animation:linked-focus-pulse 1.6s ease}
-.linked-focus-active::after{content:"";position:absolute;inset:-4px;border-radius:14px;border:1px solid rgba(87,166,255,.5);box-shadow:0 0 0 1px rgba(87,166,255,.18),0 0 0 10px rgba(87,166,255,.06);pointer-events:none}
+.linked-focus-active{position:relative;animation:linked-focus-pulse 1.9s ease;z-index:0}
+.linked-focus-active::after{content:"";position:absolute;inset:-6px;border-radius:14px;border:1px solid rgba(87,166,255,.58);box-shadow:0 0 0 1px rgba(87,166,255,.22),0 0 0 14px rgba(87,166,255,.08),0 12px 28px rgba(0,0,0,.18);pointer-events:none;z-index:1}
 .settings-toggle.linked-focus-active::after{border-radius:16px}
 .script-card.linked-focus-active::after,.script-helper-shell.linked-focus-active::after{border-radius:16px}
+.settings-toggle.linked-focus-active,.script-card.linked-focus-active,.script-helper-shell.linked-focus-active,.default-headers-banner.linked-focus-active,.env-editor.linked-focus-active{border-color:rgba(87,166,255,.26)}
 @keyframes linked-focus-pulse{
   0%{transform:translateY(0);box-shadow:0 0 0 0 rgba(87,166,255,0)}
   20%{transform:translateY(-1px);box-shadow:0 0 0 0 rgba(87,166,255,.16)}
@@ -1642,8 +1643,10 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .url-bar select{width:100px;padding:6px 8px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:6px;font-size:13px;font-weight:700}
 .url-bar input{flex:1;padding:6px 10px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:6px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
 .url-bar input:focus{outline:1px solid var(--vscode-focusBorder)}
-.url-input-wrap{position:relative;flex:1;display:flex}
+.url-input-wrap{position:relative;flex:1 1 360px;min-width:220px;display:flex}
 .url-input-wrap input{flex:1;width:100%}
+.url-action-group{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-left:auto}
+.url-action-group > *{flex-shrink:0}
 .var-overlay{position:absolute;top:0;left:0;right:0;bottom:0;padding:6px 10px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace);pointer-events:none;white-space:nowrap;overflow:hidden;color:transparent}
 .var-preview-popover{position:fixed;z-index:150;padding:10px 12px;max-width:360px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(30,30,30,.96);box-shadow:0 18px 40px rgba(0,0,0,.35);font-size:12px;line-height:1.5;pointer-events:none}
 .var-preview-popover.hidden{display:none}
@@ -1669,7 +1672,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .btn-s{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
 .btn-s:hover{background:var(--vscode-button-secondaryHoverBackground)}
 /* Send 踰꾪듉 */
-.btn-send{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:10px;padding:7px 16px;background:linear-gradient(135deg,#0078d4,#1683eb);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s,filter .15s;box-shadow:0 8px 18px rgba(0,120,212,.24);min-height:42px}
+.btn-send{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:10px;padding:7px 16px;background:linear-gradient(135deg,#0078d4,#1683eb);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s,filter .15s;box-shadow:0 8px 18px rgba(0,120,212,.24);min-height:42px;flex-shrink:0}
 .btn-send:hover{background:linear-gradient(135deg,#1683eb,#2697ff);transform:translateY(-1px);box-shadow:0 12px 24px rgba(0,120,212,.28)}
 .btn-send svg{flex-shrink:0}
 .btn-send-labels{display:flex;flex-direction:column;align-items:flex-start;line-height:1.1}
@@ -1684,10 +1687,9 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .btn-send.state-ready .btn-send-secondary{opacity:.95}
 .btn-keyhint{padding:2px 6px;border-radius:999px;background:rgba(255,255,255,.18);font-size:11px;line-height:1;letter-spacing:.02em}
 /* Stop 踰꾪듉 (?꾩넚 以? */
-.btn-stop{display:inline-flex;align-items:center;gap:10px;padding:7px 16px;background:linear-gradient(135deg,#c42b1c,#e04535);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 8px 18px rgba(224,69,53,.18);min-height:42px}
+.btn-stop{display:inline-flex;align-items:center;gap:10px;padding:7px 16px;background:linear-gradient(135deg,#c42b1c,#e04535);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 8px 18px rgba(224,69,53,.18);min-height:42px;flex-shrink:0}
 .btn-stop:hover{background:linear-gradient(135deg,#d53b2c,#f05f4c);transform:translateY(-1px);box-shadow:0 12px 24px rgba(224,69,53,.24)}
 .btn-stop .stop-icon{display:inline-block;width:10px;height:10px;background:#fff;border-radius:1px}
-.url-bar-spacer{flex:1}
 
 /* ?대? ??*/
 .tabs{display:flex;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;padding:0 10px;gap:4px;flex-wrap:wrap}
@@ -1697,12 +1699,14 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 
 /* ?⑤꼸 ?덉씠?꾩썐 */
 .split{flex:1;overflow:hidden;display:flex;flex-direction:column}
-.req-area{flex:none;min-height:60px;overflow-y:auto;padding:4px 10px}
+.req-area{flex:1 1 0;min-height:0;overflow-y:auto;padding:4px 10px}
 .divider{height:5px;background:var(--vscode-panel-border,#444);flex-shrink:0;cursor:row-resize;position:relative;z-index:10;border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(0,0,0,.2)}
 .divider:hover,.divider.active{background:#0078d4}
 .divider::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:2px;background:var(--vscode-foreground);opacity:.2;border-radius:2px}
-.res-area{flex:1;min-height:40px;overflow:hidden;display:flex;flex-direction:column;padding:0 10px}
-.res-preview{width:100%;flex:1;overflow:auto;background:#fff;color:#111}
+.res-area{flex:1 1 0;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:0 10px}
+.res-response-shell{display:flex;flex-direction:column;flex:1;min-height:0}
+.res-empty-shell{flex:1;min-height:0;overflow:auto;padding:8px 0 12px}
+.res-preview{width:100%;flex:1;min-height:0;overflow:auto;background:#fff;color:#111}
 .preview-shell{max-width:1080px;margin:0 auto;padding:24px}
 .preview-kicker{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6a6f77;margin-bottom:8px}
 .preview-title{font-size:28px;font-weight:800;line-height:1.2;margin:0 0 10px}
@@ -1821,8 +1825,8 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .res-header-key{font-weight:700;color:var(--vscode-foreground);white-space:nowrap}
 .res-header-value{color:var(--vscode-descriptionForeground,#aaa);max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .res-header-value:hover{white-space:normal;word-break:break-all;overflow:visible}
-.res-headers-panel{overflow:auto;flex:1;padding:4px 0}
-.res-cookies-panel{overflow:auto;flex:1;padding:4px 0}
+.res-headers-panel{overflow:auto;flex:1;min-height:0;padding:4px 0}
+.res-cookies-panel{overflow:auto;flex:1;min-height:0;padding:4px 0}
 .res-cookie-table th,.res-cookie-table td{font-size:13px;padding:3px 6px}
 .cookie-badge{display:inline-block;background:var(--vscode-badge-background,#4d4d4d);color:var(--vscode-badge-foreground,#ccc);font-size:13px;padding:0 4px;border-radius:3px;font-weight:600}
 .tab-count{display:inline-block;background:var(--vscode-badge-background,#4d4d4d);color:var(--vscode-badge-foreground,#ccc);font-size:13px;padding:0 5px;border-radius:8px;margin-left:3px;min-width:14px;text-align:center;line-height:15px;vertical-align:middle}
@@ -1857,7 +1861,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .res-ctx-menu .ctx-item.disabled:hover{background:transparent}
 .res-ctx-menu .ctx-sep{height:1px;margin:4px 0;background:var(--vscode-menu-separatorBackground,#454545)}
 
-.json-body{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;white-space:pre-wrap;word-break:break-all;overflow:auto;flex:1;line-height:1.45}
+.json-body{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;white-space:pre-wrap;word-break:break-all;overflow:auto;flex:1;min-height:0;line-height:1.45}
 .json-key{color:#9cdcfe}.json-str{color:#ce9178}.json-num{color:#b5cea8}.json-bool{color:#569cd6}.json-null{color:#569cd6}
 
 /* ?묐떟 諛붾뵒 ?대컮 */
@@ -1897,7 +1901,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .formdata-file-chip.hidden{display:none}
 
 /* JSON ?몃━ 酉?*/
-.json-tree{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;overflow:auto;flex:1;line-height:1.6;user-select:text}
+.json-tree{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;overflow:auto;flex:1;min-height:0;line-height:1.6;user-select:text}
 .jt-node{padding-left:16px}
 .jt-row{display:flex;align-items:baseline;white-space:nowrap;gap:6px}
 .jt-toggle{display:inline-block;width:14px;cursor:pointer;text-align:center;color:var(--vscode-foreground);opacity:.5;flex-shrink:0;user-select:none}
@@ -2053,7 +2057,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .empty-state-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:rgba(87,166,255,.08);border:1px solid rgba(87,166,255,.16);font-size:12px;color:#93c8ff}
 .empty-state-action{display:inline-flex;align-items:center;justify-content:center;padding:7px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:var(--vscode-foreground);font-size:12px;font-weight:600;cursor:pointer}
 .empty-state-action:hover{background:rgba(255,255,255,.08)}
-.request-change-summary{display:flex;flex-direction:column;gap:8px;padding:0 10px 10px}
+.request-change-summary{display:flex;flex-direction:column;gap:8px;padding:8px 10px 10px}
 .request-change-summary.empty{display:none}
 .request-change-summary-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .request-change-summary-title{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--vscode-descriptionForeground,#9a9a9a)}
@@ -2088,6 +2092,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .empty-tab-hint{display:flex;align-items:center;justify-content:center;flex:1;color:var(--vscode-descriptionForeground,#888);font-size:13px;opacity:.5;text-align:center;padding:20px;user-select:none}
 .script-editor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 .script-helper-shell{padding:12px;border-radius:14px;border:1px solid rgba(87,166,255,.12);background:linear-gradient(180deg,rgba(87,166,255,.06),rgba(255,255,255,.02));display:flex;flex-direction:column;gap:12px;margin-bottom:12px}
+.script-helper-shell.collapsed{gap:10px}
 .script-helper-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .script-helper-toolbar-copy{max-width:880px}
 .script-helper-toggle{white-space:nowrap;flex-shrink:0}
@@ -2167,15 +2172,25 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 /* ?쒖꽦 ?섍꼍 ?쒖떆 */
 .env-indicator{font-size:13px;opacity:.6;padding:0 10px 2px;flex-shrink:0}
 .env-indicator .var-name{color:#dcdcaa}
+@media (max-width: 1220px){
+  .url-bar{flex-wrap:wrap}
+  .url-action-group{width:100%;margin-left:0}
+}
 @media (max-width: 900px){
   .request-topline{align-items:flex-start}
   .request-topline-right{margin-left:0}
-  .url-bar{flex-wrap:wrap}
-  .url-bar-spacer{display:none}
+  .url-action-group{justify-content:flex-start}
   .btn-send,.btn-stop{margin-left:auto}
   .settings-grid,.script-editor-grid,.empty-state-grid{grid-template-columns:1fr}
   .response-meta{align-items:flex-start}
   .default-headers-banner{flex-direction:column}
+}
+@media (max-height: 820px){
+  .script-helper-shell{padding:10px;gap:10px}
+  .script-helper-stepper{gap:8px}
+  .script-helper-grid{gap:10px}
+  .script-helper-columns{gap:10px}
+  .script-card textarea{min-height:120px;max-height:32vh}
 }
 </style>
 </head>
@@ -2241,6 +2256,7 @@ const VALID_BODY_TYPES = ['none', 'json', 'xml', 'form', 'formdata', 'binary', '
 const DEFAULT_COMPARE_IGNORE_HEADERS = ['date', 'set-cookie', 'x-request-id', 'x-correlation-id', 'x-amzn-trace-id'];
 const DEFAULT_COMPARE_IGNORE_JSON_PATHS = ['$.timestamp', '$.traceId', '$.requestId', '$.correlationId'];
 const DEFAULT_COMPARE_FOLD_UNCHANGED = true;
+const REQUEST_EDITOR_TABS = ['params', 'headers', 'body', 'auth', 'scripts', 'settings'];
 var pinnedResponses = [];
 var lastResponse = null;
 var compareSettings = normalizeCompareSettings();
@@ -2259,6 +2275,67 @@ function releaseSplitDrag() {
   document.body.style.cursor = '';
   document.body.style.userSelect = '';
   splitDragState = null;
+}
+
+function getSplitPanelBounds(splitEl, dividerEl, progressEl) {
+  var chromeHeight = (dividerEl?.offsetHeight || 0) + (progressEl?.offsetHeight || 0);
+  var panelSpace = Math.max(0, (splitEl?.offsetHeight || 0) - chromeHeight);
+  var preferredMin = Math.max(120, Math.floor(panelSpace * 0.28));
+  var minPanel = panelSpace >= preferredMin * 2
+    ? preferredMin
+    : Math.max(80, Math.floor(panelSpace / 2));
+  var minReq = Math.min(minPanel, Math.max(0, panelSpace - minPanel));
+  var maxReq = Math.max(minReq, panelSpace - minPanel);
+  return { minReq: minReq, maxReq: maxReq };
+}
+
+function applyManualRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, requestedHeight) {
+  if (!reqArea || !splitEl) return;
+  var nextHeight = typeof requestedHeight === 'number'
+    ? requestedHeight
+    : Number.parseFloat(String(requestedHeight || ''));
+  if (!Number.isFinite(nextHeight)) return;
+  var bounds = getSplitPanelBounds(splitEl, dividerEl, progressEl);
+  var clampedHeight = Math.min(bounds.maxReq, Math.max(bounds.minReq, nextHeight));
+  reqArea.style.height = clampedHeight + 'px';
+  reqArea.style.flex = 'none';
+  reqArea.dataset.manualHeight = '1';
+}
+
+function shouldPreferResponseLayout(tab) {
+  return !!(tab && (tab.response || tab.loading || tab.error));
+}
+
+function clearAdaptiveRequestAreaHeight(reqArea) {
+  if (!reqArea) return;
+  reqArea.style.height = '';
+  reqArea.style.flex = '';
+  delete reqArea.dataset.autoHeight;
+}
+
+function applyAdaptiveRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, tab) {
+  if (!reqArea || !splitEl) return;
+  if (reqArea.dataset.manualHeight === '1') return;
+  if (!shouldPreferResponseLayout(tab)) {
+    clearAdaptiveRequestAreaHeight(reqArea);
+    return;
+  }
+  var chromeHeight = (dividerEl?.offsetHeight || 0) + (progressEl?.offsetHeight || 0);
+  var panelSpace = Math.max(0, (splitEl?.offsetHeight || 0) - chromeHeight);
+  if (!panelSpace) return;
+  var bounds = getSplitPanelBounds(splitEl, dividerEl, progressEl);
+  var targetRatio = panelSpace < 420 ? 0.34 : panelSpace < 560 ? 0.38 : 0.42;
+  var requestEditorTab = normalizeRequestEditorTab(tab.requestEditorTab);
+  if (requestEditorTab === 'scripts' || requestEditorTab === 'body') {
+    targetRatio += 0.04;
+  } else if (requestEditorTab === 'settings' || requestEditorTab === 'headers') {
+    targetRatio += 0.02;
+  }
+  var targetHeight = Math.round(panelSpace * Math.min(0.48, targetRatio));
+  var clampedHeight = Math.min(bounds.maxReq, Math.max(bounds.minReq, targetHeight));
+  reqArea.style.height = clampedHeight + 'px';
+  reqArea.style.flex = 'none';
+  reqArea.dataset.autoHeight = '1';
 }
 
 document.addEventListener('click', function(e) {
@@ -2280,12 +2357,14 @@ document.addEventListener('mousemove', function(e) {
     return;
   }
   var dy = e.clientY - splitDragState.startY;
-  var newH = Math.max(60, splitDragState.startH + dy);
-  var maxH = splitDragState.splitEl.offsetHeight - 40 - splitDragState.divider.offsetHeight;
-  newH = Math.min(newH, maxH);
-  splitDragState.reqArea.style.height = newH + 'px';
-  splitDragState.reqArea.style.flex = 'none';
-  splitDragState.reqArea.dataset.manualHeight = '1';
+  var newH = splitDragState.startH + dy;
+  applyManualRequestAreaHeight(
+    splitDragState.reqArea,
+    splitDragState.splitEl,
+    splitDragState.divider,
+    splitDragState.progressEl,
+    newH
+  );
 });
 
 document.addEventListener('mouseup', function() {
@@ -2304,6 +2383,10 @@ function tf(key, params) {
 
 function tfCount(key, count) {
   return tf(key, { count: String(count) });
+}
+
+function normalizeRequestEditorTab(value) {
+  return REQUEST_EDITOR_TABS.indexOf(String(value || '')) >= 0 ? String(value) : 'params';
 }
 
 function renderEnvironmentIndicator(envName) {
@@ -2410,6 +2493,7 @@ function buildDraftTabFromContent(mc) {
   var stopAfterHeadersInput = mc.querySelector('.js-stop-after-headers');
   var tlsValidationInput = mc.querySelector('.js-tls-validation');
   return Object.assign({}, tab, {
+    requestEditorTab: normalizeRequestEditorTab(mc.querySelector('.js-req-tabs .tab.active')?.dataset.tab || tab.requestEditorTab),
     method: methodEl ? methodEl.value : tab.method,
     url: mc.querySelector('.js-url')?.value || tab.url || '',
     headers: collectKv(mc.querySelector('.js-header-rows')),
@@ -2611,6 +2695,14 @@ function refreshRequestChangeSummary(mc) {
   wrap.innerHTML = renderRequestChangeSummary(draftTab);
 }
 
+function renderRequestDirtyTitle(tab) {
+  var baseTitle = tr('webview.unsavedChanges');
+  if (!tab) return baseTitle;
+  var items = buildRequestChangeItems(tab);
+  if (!items.length) return baseTitle;
+  return baseTitle + ' · ' + tfCount('webview.requestDiffCount', items.length);
+}
+
 function addVariableUsage(usageMap, value, scopeLabel) {
   if (!value) return;
   var matches = String(value).match(/\{\{([^}]+)\}\}/g) || [];
@@ -2705,12 +2797,25 @@ function refreshFormDataSummary(mc) {
   wrap.innerHTML = renderFormDataSummary(collectFormData(mc.querySelector('.js-formdata-rows')));
 }
 
+function syncSettingsToggleStates(mc) {
+  if (!mc) return;
+  var syncTone = function(selector, className, enabled) {
+    var label = mc.querySelector(selector)?.closest('.settings-toggle');
+    if (!label) return;
+    label.classList.toggle(className, enabled === true);
+  };
+  syncTone('.js-stop-after-headers', 'risk-muted', mc.querySelector('.js-stop-after-headers')?.checked === true);
+  syncTone('.js-save-history', 'risk-muted', mc.querySelector('.js-save-history')?.checked !== true);
+  syncTone('.js-skip-default-headers', 'risk-warning', mc.querySelector('.js-skip-default-headers')?.checked === true);
+  syncTone('.js-disable-scripts', 'risk-warning', mc.querySelector('.js-disable-scripts')?.checked === true);
+}
+
 function refreshDraftInsights(mc, options) {
   var opts = options || {};
+  syncSettingsToggleStates(mc);
   refreshDefaultHeadersBanner(mc);
   refreshToplineStatusChips(mc);
   refreshRequestPreflight(mc);
-  refreshRequestChangeSummary(mc);
   refreshVariableUsage(mc);
   refreshFormDataSummary(mc);
   syncVariablePreviewHints(mc);
@@ -2742,7 +2847,7 @@ function renderRequestPreflight(tab) {
     renderPreflightPill(tf('webview.summaryAuth', { value: authSummaryLabel(tab.auth) }), tab.auth?.type && tab.auth.type !== 'none' ? 'accent' : 'muted', 'switch-tab', 'auth'),
     renderPreflightPill(tfCount('webview.summaryHeaders', headerCount), headerCount > 0 ? 'accent' : 'muted', 'switch-tab', 'headers'),
     renderPreflightPill(tfCount('webview.summaryParams', paramCount), paramCount > 0 ? 'accent' : 'muted', 'switch-tab', 'params'),
-    renderPreflightPill(tab.disableScripts ? tr('webview.summaryScriptsOff') : tr('webview.summaryScriptsOn'), tab.disableScripts ? 'warning' : 'info', 'switch-tab', tab.disableScripts ? 'settings:disable-scripts' : 'scripts'),
+    renderPreflightPill(tab.disableScripts ? tr('webview.summaryScriptsOff') : tr('webview.summaryScriptsOn'), tab.disableScripts ? 'warning' : 'info', 'switch-tab', tab.disableScripts ? 'settings:disable-scripts' : 'scripts:pre-request'),
     renderPreflightPill(tab.saveToHistory === false ? tr('webview.summaryHistoryOff') : tr('webview.summaryHistoryOn'), tab.saveToHistory === false ? 'muted' : 'info', 'switch-tab', 'settings:save-history')
   ];
   if (unresolved.length > 0) {
@@ -2799,6 +2904,7 @@ function renderScriptHelpStep(index, titleKey, copyKey) {
 
 function renderScriptHelpers(tab) {
   var collapsed = tab?.scriptHelpCollapsed === true;
+  var helperLeadCopy = collapsed ? tr('webview.scriptHelpCollapsedCopy') : tr('webview.scriptHelpRuntimeWhen');
   var summaryChips =
     '<span class="script-helper-chip">pm.response.json()</span>' +
     '<span class="script-helper-chip">pm.environment.set(...)</span>' +
@@ -2808,22 +2914,21 @@ function renderScriptHelpers(tab) {
       '<div>' +
         '<div class="script-helper-label">' + escapeHtml(tr('webview.scriptHelpTitle')) + '</div>' +
         '<div class="script-helper-title">' + escapeHtml(tr('webview.scriptHelpStepperTitle')) + '</div>' +
-        '<div class="script-helper-copy script-helper-toolbar-copy">' + escapeHtml(tr('webview.scriptHelpRuntimeWhen')) + '</div>' +
+        '<div class="script-helper-copy script-helper-toolbar-copy">' + escapeHtml(helperLeadCopy) + '</div>' +
       '</div>' +
       '<button class="ghost-btn ripple-btn script-helper-toggle js-toggle-script-help" type="button">' + escapeHtml(tr(collapsed ? 'webview.scriptHelpExpand' : 'webview.scriptHelpCollapse')) + '</button>' +
     '</div>' +
-    '<div class="script-helper-stepper">' +
-      renderScriptHelpStep('1', 'webview.scriptHelpStageFixed', 'webview.scriptHelpRuleFixed') +
-      renderScriptHelpStep('2', 'webview.scriptHelpStageSend', 'webview.scriptHelpSequenceSend') +
-      renderScriptHelpStep('3', 'webview.scriptHelpStageTest', 'webview.scriptHelpSequenceTest') +
-      renderScriptHelpStep('4', 'webview.scriptHelpStageReuse', 'webview.scriptHelpSequencePersist') +
-    '</div>' +
     (collapsed
       ? '<div class="script-helper-collapsed">' +
-          '<div class="script-helper-collapsed-copy">' + escapeHtml(tr('webview.scriptHelpCollapsedCopy')) + '</div>' +
           '<div class="script-helper-chip-row">' + summaryChips + '</div>' +
         '</div>'
-      : '<div class="script-helper-grid">' +
+      : '<div class="script-helper-stepper">' +
+          renderScriptHelpStep('1', 'webview.scriptHelpStageFixed', 'webview.scriptHelpRuleFixed') +
+          renderScriptHelpStep('2', 'webview.scriptHelpStageSend', 'webview.scriptHelpSequenceSend') +
+          renderScriptHelpStep('3', 'webview.scriptHelpStageTest', 'webview.scriptHelpSequenceTest') +
+          renderScriptHelpStep('4', 'webview.scriptHelpStageReuse', 'webview.scriptHelpSequencePersist') +
+        '</div>' +
+        '<div class="script-helper-grid">' +
           '<div class="script-helper-card">' +
             '<div class="script-helper-label">' + escapeHtml(tr('webview.scriptHelpTitle')) + '</div>' +
             '<div class="script-helper-title">' + escapeHtml(tr('webview.scriptHelpRuntimeTitle')) + '</div>' +
@@ -3245,6 +3350,26 @@ const addTabBtn = document.getElementById('addTabBtn');
 const mainContent = document.getElementById('mainContent');
 const emptyPlaceholder = document.getElementById('emptyPlaceholder');
 
+window.addEventListener('resize', function() {
+  var reqArea = mainContent?.querySelector('.req-area');
+  if (!reqArea) return;
+  var splitEl = mainContent.querySelector('.split');
+  var dividerEl = mainContent.querySelector('.divider');
+  var progressEl = mainContent.querySelector('.bullet-progress');
+  if (reqArea.dataset.manualHeight === '1') {
+    applyManualRequestAreaHeight(
+      reqArea,
+      splitEl,
+      dividerEl,
+      progressEl,
+      reqArea.offsetHeight || reqArea.style.height
+    );
+    return;
+  }
+  var activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+  applyAdaptiveRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, activeTab);
+});
+
 function setTextContent(id, value) {
   var el = document.getElementById(id);
   if (el) el.textContent = value;
@@ -3495,6 +3620,7 @@ function markDirty() {
       || (data?.autoName !== false && !data?.requestId && isKnownDefaultTabName(incomingName || ''));
     const tab = applyRequestSettings({
       id,
+    requestEditorTab: normalizeRequestEditorTab(data?.requestEditorTab),
     requestId: data?.requestId || null,  // 而щ젆???덉뒪?좊━ ?붿껌 ID (以묐났 ??諛⑹?)
     name: autoName ? tr('webview.stage.newRequest') : (incomingName || tr('webview.stage.newRequest')),
     autoName: autoName,
@@ -3799,25 +3925,39 @@ function saveActiveTabState() {
   tab.stopAfterHeaders = mc.querySelector('.js-stop-after-headers')?.checked === true;
   tab.skipDefaultHeaders = mc.querySelector('.js-skip-default-headers')?.checked === true;
   tab.disableScripts = mc.querySelector('.js-disable-scripts')?.checked === true;
+  tab.requestEditorTab = normalizeRequestEditorTab(mc.querySelector('.js-req-tabs .tab.active')?.dataset.tab || tab.requestEditorTab);
 }
 
 function switchRequestEditorTabInContent(mc, tabName) {
   if (!mc) return;
+  var normalizedTabName = normalizeRequestEditorTab(tabName);
   var tabsEl = mc.querySelectorAll('.js-req-tabs .tab');
-  tabsEl.forEach(function(x) { x.classList.toggle('active', x.dataset.tab === tabName); });
+  tabsEl.forEach(function(x) { x.classList.toggle('active', x.dataset.tab === normalizedTabName); });
   var panels = { params: '.js-params-panel', headers: '.js-headers-panel', body: '.js-body-panel', auth: '.js-auth-panel', scripts: '.js-scripts-panel', settings: '.js-settings-panel' };
   Object.keys(panels).forEach(function(key) {
-    mc.querySelector(panels[key])?.classList.toggle('hidden', key !== tabName);
+    mc.querySelector(panels[key])?.classList.toggle('hidden', key !== normalizedTabName);
   });
-  if (tabName === 'headers') refreshDefaultHeadersBanner(mc);
+  var activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+  if (activeTab) {
+    activeTab.requestEditorTab = normalizedTabName;
+  }
+  if (normalizedTabName === 'headers') refreshDefaultHeadersBanner(mc);
 }
 
 var linkedFocusTimer = null;
+var linkedFocusFrame = null;
+var editorLinkedFocusTimer = null;
 
 function clearLinkedFocusInContent(mc) {
   if (linkedFocusTimer) {
     clearTimeout(linkedFocusTimer);
     linkedFocusTimer = null;
+  }
+  if (linkedFocusFrame) {
+    if (typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(linkedFocusFrame);
+    }
+    linkedFocusFrame = null;
   }
   mc?.querySelectorAll('.linked-focus-active').forEach(function(node) {
     node.classList.remove('linked-focus-active');
@@ -3877,12 +4017,23 @@ function focusLinkedTarget(target) {
   }
 }
 
+function queueLinkedFocusReveal(callback) {
+  if (linkedFocusFrame && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(linkedFocusFrame);
+  }
+  linkedFocusFrame = requestAnimationFrame(function() {
+    linkedFocusFrame = requestAnimationFrame(function() {
+      linkedFocusFrame = null;
+      callback();
+    });
+  });
+}
+
 function revealLinkedTargetInContent(mc, targetKey) {
   var target = resolveLinkedFocusTargetInContent(mc, targetKey);
-  if (!target) return;
+  if (!target) return false;
   var container = resolveLinkedFocusContainer(target);
   clearLinkedFocusInContent(mc);
-  container.classList.add('linked-focus-active');
   if (typeof container.scrollIntoView === 'function') {
     try {
       container.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
@@ -3890,11 +4041,43 @@ function revealLinkedTargetInContent(mc, targetKey) {
       container.scrollIntoView();
     }
   }
-  focusLinkedTarget(target);
-  linkedFocusTimer = setTimeout(function() {
-    container.classList.remove('linked-focus-active');
-    linkedFocusTimer = null;
-  }, 1800);
+  queueLinkedFocusReveal(function() {
+    if (!container?.isConnected || !target?.isConnected) return;
+    container.classList.add('linked-focus-active');
+    focusLinkedTarget(target);
+    linkedFocusTimer = setTimeout(function() {
+      container.classList.remove('linked-focus-active');
+      linkedFocusTimer = null;
+    }, 2200);
+  });
+  return true;
+}
+
+function revealDefaultHeadersEditor() {
+  if (!defaultHeadersEditor) return;
+  defaultHeadersEditor.classList.remove('hidden');
+  if (editorLinkedFocusTimer) {
+    clearTimeout(editorLinkedFocusTimer);
+    editorLinkedFocusTimer = null;
+  }
+  defaultHeadersEditor.classList.remove('linked-focus-active');
+  if (typeof defaultHeadersEditor.scrollIntoView === 'function') {
+    try {
+      defaultHeadersEditor.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    } catch (_) {
+      defaultHeadersEditor.scrollIntoView();
+    }
+  }
+  queueLinkedFocusReveal(function() {
+    if (!defaultHeadersEditor?.isConnected) return;
+    defaultHeadersEditor.classList.add('linked-focus-active');
+    var focusTarget = defaultHeaderRows?.querySelector('input[type="text"], input[type="password"]') || document.getElementById('addDefaultHeaderBtn') || defaultHeadersEditor;
+    focusLinkedTarget(focusTarget);
+    editorLinkedFocusTimer = setTimeout(function() {
+      defaultHeadersEditor.classList.remove('linked-focus-active');
+      editorLinkedFocusTimer = null;
+    }, 2200);
+  });
 }
 
 function switchRequestEditorTabAndRevealInContent(mc, meta) {
@@ -3902,9 +4085,7 @@ function switchRequestEditorTabAndRevealInContent(mc, meta) {
   var metaValue = String(meta);
   var tabName = metaValue.split(':')[0];
   switchRequestEditorTabInContent(mc, tabName);
-  requestAnimationFrame(function() {
-    revealLinkedTargetInContent(mc, metaValue);
-  });
+  revealLinkedTargetInContent(mc, metaValue);
 }
 
 function switchResponseTabInContent(mc, tabName) {
@@ -4010,7 +4191,7 @@ function renderTabBar() {
       '<span class="pin-icon">\u{1F4CC}</span>' +
       '<span class="method-badge method-' + tab.method + '">' + tab.method + '</span>' +
       '<span class="tab-name">' + escapeHtml(truncate(tab.name, 25)) + '</span>' +
-      (tab.dirty ? '<span class="dirty-dot" title="' + escapeAttr(tr('webview.unsavedChanges')) + '">\u25CF</span>' : '') +
+      (tab.dirty ? '<span class="dirty-dot" title="' + escapeAttr(renderRequestDirtyTitle(tab)) + '">\u25CF</span>' : '') +
       '<span class="close-tab" data-id="' + tab.id + '">&times;</span>';
     el.addEventListener('click', (e) => {
       if (e.target.classList.contains('close-tab')) {
@@ -4105,7 +4286,7 @@ function showTabContextMenu(x, y, tabId) {
         break;
       case 'duplicate':
         saveActiveTabState();
-        createTab({ name: tab.name, autoName: !!tab.autoName, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent, responseSearchQuery: tab.responseSearchQuery || '', responseSearchIndex: typeof tab.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0, responseSearchCaseSensitive: tab.responseSearchCaseSensitive === true, responseSearchRegex: tab.responseSearchRegex === true, scriptHelpCollapsed: tab.scriptHelpCollapsed === true });
+        createTab({ name: tab.name, autoName: !!tab.autoName, requestEditorTab: tab.requestEditorTab, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent, responseSearchQuery: tab.responseSearchQuery || '', responseSearchIndex: typeof tab.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0, responseSearchCaseSensitive: tab.responseSearchCaseSensitive === true, responseSearchRegex: tab.responseSearchRegex === true, scriptHelpCollapsed: tab.scriptHelpCollapsed === true });
         break;
     }
   });
@@ -4409,6 +4590,14 @@ function renderToplineStatusChips(tab) {
     chips.push(renderStatusChip(tr('webview.disableScriptsStatus'), 'warning', 'switch-tab', 'settings:disable-scripts'));
   }
 
+  if (tab?.followRedirects) {
+    chips.push(renderStatusChip(tr('webview.followRedirectsStatus'), 'info', 'switch-tab', 'settings:follow-redirects'));
+  }
+
+  if (tab?.stopAfterHeaders) {
+    chips.push(renderStatusChip(tr('webview.stopAfterHeadersStatus'), 'warning', 'switch-tab', 'settings:stop-after-headers'));
+  }
+
   if (tab?.saveToHistory === false) {
     chips.push(renderStatusChip(tr('webview.saveToHistoryOffStatus'), 'muted', 'switch-tab', 'settings:save-history'));
   }
@@ -4614,6 +4803,13 @@ function renderContent() {
   if (!tab) return;
 
   const stage = getRequestStageInfo(tab);
+  const activeRequestEditorTab = normalizeRequestEditorTab(tab.requestEditorTab);
+  const showParamsEditor = activeRequestEditorTab === 'params';
+  const showHeadersEditor = activeRequestEditorTab === 'headers';
+  const showBodyEditor = activeRequestEditorTab === 'body';
+  const showAuthEditor = activeRequestEditorTab === 'auth';
+  const showScriptsEditor = activeRequestEditorTab === 'scripts';
+  const showSettingsEditor = activeRequestEditorTab === 'settings';
   const envLine =
     '<div class="request-topline">' +
       '<div class="request-stage stage-' + stage.tone + '"><span class="stage-dot"></span>' + escapeHtml(stage.label) + '</div>' +
@@ -4624,16 +4820,17 @@ function renderContent() {
       '</div>' +
     '</div>';
   const preflightHtml = '<div class="js-request-preflight-wrap">' + renderRequestPreflight(tab) + '</div>';
-  const requestDiffHtml = '<div class="js-request-change-summary-wrap">' + renderRequestChangeSummary(tab) + '</div>';
   const variableUsageHtml = '<div class="js-variable-usage-wrap">' + renderVariableUsage(tab) + '</div>';
 
   let resHtml = '';
   if (tab.loading) {
-    resHtml = '<div style="padding:6px"><span class="spinner"></span>' + escapeHtml(tr('webview.loading')) + '</div>' +
+    resHtml = '<div class="res-empty-shell">' +
+      '<div class="js-loading-summary" style="padding:6px"><span class="spinner"></span>' + escapeHtml(tr('webview.loading')) + '</div>' +
       '<div class="request-stage-hint" style="padding:0 6px 6px">' + escapeHtml(tr('webview.loading.hint')) + '</div>' +
-      '<div class="skeleton-loader"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>';
+      '<div class="skeleton-loader"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>' +
+    '</div>';
   } else if (tab.error) {
-    resHtml = '<div class="error-msg">' + escapeHtml(tab.error) + '</div>';
+    resHtml = '<div class="res-empty-shell"><div class="error-msg">' + escapeHtml(tab.error) + '</div></div>';
   } else if (tab.response) {
     const r = tab.response;
     const sc = Math.floor(r.status / 100);
@@ -4805,6 +5002,7 @@ function renderContent() {
             '<div>' + escapeHtml(firstFailedTest?.name || '') + (firstFailedTest?.error ? ' - ' + escapeHtml(firstFailedTest.error) : '') + '</div>' +
           '</div>');
     resHtml =
+      '<div class="res-response-shell">' +
       '<div class="res-sticky-shell">' +
       '<div class="response-summary">' +
       '<div class="response-meta ' + responseToneClass + '">' +
@@ -4873,9 +5071,10 @@ function renderContent() {
               : '')
           : renderInlineEmptyState(tr('webview.inline.tests.none.kicker'), tr('webview.inline.tests.none.title'), tr('webview.inline.tests.none.copy'))) +
       '</div>' +
-      (previewAvailable ? '<div class="res-preview' + (showPreview ? '' : ' hidden') + ' js-res-preview"></div>' : '');
+      (previewAvailable ? '<div class="res-preview' + (showPreview ? '' : ' hidden') + ' js-res-preview"></div>' : '') +
+      '</div>';
   } else {
-    resHtml = tab.url
+    resHtml = '<div class="res-empty-shell">' + (tab.url
       ? renderEmptyState(
           tr('webview.empty.response.kicker'),
           tr('webview.empty.response.title'),
@@ -4904,7 +5103,7 @@ function renderContent() {
             { label: tr('webview.openEnvironmentPicker'), action: 'switch-environment' },
             { label: tr('webview.emptyActionGuide'), action: 'open-guide' }
           ]
-        );
+        )) + '</div>';
   }
 
   mainContent.innerHTML = envLine +
@@ -4919,26 +5118,26 @@ function renderContent() {
         '<div class="var-overlay js-var-overlay hidden"></div>' +
       '</div>' +
       renderPrimaryActionButton(tab) +
-      '<span class="url-bar-spacer"></span>' +
-      '<button class="res-action-btn ripple-btn js-save"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> ' + escapeHtml(tr('webview.save')) + '</button>' +
-      (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="' + escapeAttr(tr('webview.saveAs')) + '">' + escapeHtml(tr('webview.saveAs')) + '</button>' : '') +
-      '<button class="res-action-btn ripple-btn js-copy-curl" title="' + escapeAttr(tr('webview.copyAsCurl')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l4.5 4L1 10l1 1.5L7.5 6 2 0.5 1 2zm7 8h7v1.5H8V10z"/></svg> cURL</button>' +
-      '<button class="res-action-btn ripple-btn js-generate-code" title="' + escapeAttr(tr('webview.generateCode')) + '">' + escapeHtml(tr('webview.code')) + '</button>' +
+      '<div class="url-action-group">' +
+        '<button class="res-action-btn ripple-btn js-save"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> ' + escapeHtml(tr('webview.save')) + '</button>' +
+        (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="' + escapeAttr(tr('webview.saveAs')) + '">' + escapeHtml(tr('webview.saveAs')) + '</button>' : '') +
+        '<button class="res-action-btn ripple-btn js-copy-curl" title="' + escapeAttr(tr('webview.copyAsCurl')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l4.5 4L1 10l1 1.5L7.5 6 2 0.5 1 2zm7 8h7v1.5H8V10z"/></svg> cURL</button>' +
+        '<button class="res-action-btn ripple-btn js-generate-code" title="' + escapeAttr(tr('webview.generateCode')) + '">' + escapeHtml(tr('webview.code')) + '</button>' +
+      '</div>' +
     '</div>' +
     preflightHtml +
-    requestDiffHtml +
     variableUsageHtml +
     '<div class="split">' +
       '<div class="req-area">' +
         '<div class="tabs js-req-tabs">' +
-          '<div class="tab active" data-tab="params">' + escapeHtml(tr('webview.params')) + '</div>' +
-          '<div class="tab" data-tab="headers">' + escapeHtml(tr('webview.headers')) + '</div>' +
-          '<div class="tab" data-tab="body">' + escapeHtml(tr('webview.body')) + '</div>' +
-          '<div class="tab" data-tab="auth">' + escapeHtml(tr('webview.auth')) + '</div>' +
-          '<div class="tab" data-tab="scripts">' + escapeHtml(tr('webview.scripts')) + '</div>' +
-          '<div class="tab" data-tab="settings">' + escapeHtml(tr('webview.settings')) + '</div>' +
+          '<div class="tab' + (showParamsEditor ? ' active' : '') + '" data-tab="params">' + escapeHtml(tr('webview.params')) + '</div>' +
+          '<div class="tab' + (showHeadersEditor ? ' active' : '') + '" data-tab="headers">' + escapeHtml(tr('webview.headers')) + '</div>' +
+          '<div class="tab' + (showBodyEditor ? ' active' : '') + '" data-tab="body">' + escapeHtml(tr('webview.body')) + '</div>' +
+          '<div class="tab' + (showAuthEditor ? ' active' : '') + '" data-tab="auth">' + escapeHtml(tr('webview.auth')) + '</div>' +
+          '<div class="tab' + (showScriptsEditor ? ' active' : '') + '" data-tab="scripts">' + escapeHtml(tr('webview.scripts')) + '</div>' +
+          '<div class="tab' + (showSettingsEditor ? ' active' : '') + '" data-tab="settings">' + escapeHtml(tr('webview.settings')) + '</div>' +
         '</div>' +
-        '<div class="js-params-panel kv-section">' +
+        '<div class="js-params-panel kv-section' + (showParamsEditor ? '' : ' hidden') + '">' +
           '<div class="js-param-rows">' + kvRowsHtml(tab.params) + '</div>' +
           '<div class="kv-actions">' +
             '<button class="add-btn js-add-param">' + escapeHtml(tr('webview.addParam')) + '</button>' +
@@ -4953,7 +5152,7 @@ function renderContent() {
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="js-headers-panel kv-section hidden">' +
+        '<div class="js-headers-panel kv-section' + (showHeadersEditor ? '' : ' hidden') + '">' +
           '<div class="js-default-headers-banner-wrap">' + renderDefaultHeadersBanner(tab) + '</div>' +
           '<div class="js-header-rows">' + kvRowsHtml(tab.headers) + '</div>' +
           '<div class="kv-actions">' +
@@ -4969,7 +5168,7 @@ function renderContent() {
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="js-body-panel body-section hidden">' +
+        '<div class="js-body-panel body-section' + (showBodyEditor ? '' : ' hidden') + '">' +
           '<select class="js-body-type body-type-select">' +
             ['none','json','xml','form','formdata','binary','raw'].map(function(t) {
               var label = bodyTypeLabel(t);
@@ -4990,10 +5189,10 @@ function renderContent() {
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="js-auth-panel auth-section hidden">' +
+        '<div class="js-auth-panel auth-section' + (showAuthEditor ? '' : ' hidden') + '">' +
           authHtml(tab.auth) +
         '</div>' +
-        '<div class="js-scripts-panel body-section hidden">' +
+        '<div class="js-scripts-panel body-section' + (showScriptsEditor ? '' : ' hidden') + '">' +
           renderScriptHelpers(tab) +
           '<div class="script-editor-grid">' +
             '<div class="script-card">' +
@@ -5015,7 +5214,7 @@ function renderContent() {
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="js-settings-panel settings-section hidden">' +
+        '<div class="js-settings-panel settings-section' + (showSettingsEditor ? '' : ' hidden') + '">' +
           '<div class="settings-grid">' +
             '<div class="settings-card">' +
               '<div class="settings-group">' +
@@ -5085,9 +5284,24 @@ function renderContent() {
   if (savedHeight) {
     var newReqArea = mainContent.querySelector('.req-area');
     if (newReqArea) {
-      newReqArea.style.height = savedHeight;
-      newReqArea.style.flex = 'none';
-      newReqArea.dataset.manualHeight = '1';
+      applyManualRequestAreaHeight(
+        newReqArea,
+        mainContent.querySelector('.split'),
+        mainContent.querySelector('.divider'),
+        mainContent.querySelector('.bullet-progress'),
+        savedHeight
+      );
+    }
+  } else {
+    var adaptiveReqArea = mainContent.querySelector('.req-area');
+    if (adaptiveReqArea) {
+      applyAdaptiveRequestAreaHeight(
+        adaptiveReqArea,
+        mainContent.querySelector('.split'),
+        mainContent.querySelector('.divider'),
+        mainContent.querySelector('.bullet-progress'),
+        tab
+      );
     }
   }
 }
@@ -5656,15 +5870,22 @@ function bindContentEvents() {
   if (initBodyType !== 'none') syncAutoContentType(mc, initBodyType);
 
   // Settings ?낅젰 蹂寃?媛먯?
-  mc.querySelector('.js-settings-panel')?.addEventListener('input', function() {
-    markDirty();
-    refreshDraftInsights(mc);
-  });
-  mc.querySelector('.js-settings-panel')?.addEventListener('change', function() {
-    markDirty();
-    refreshDraftInsights(mc);
-    renderContent();
-  });
+  var settingsPanel = mc.querySelector('.js-settings-panel');
+  if (settingsPanel) {
+    var refreshSettingsDraftUi = function() {
+      syncSettingsToggleStates(mc);
+      markDirty();
+      refreshDraftInsights(mc);
+    };
+    settingsPanel.addEventListener('input', function(e) {
+      if (e.target?.matches?.('input[type="checkbox"]')) return;
+      refreshSettingsDraftUi();
+    });
+    settingsPanel.addEventListener('change', function(e) {
+      if (!e.target?.matches?.('input[type="checkbox"], select')) return;
+      refreshSettingsDraftUi();
+    });
+  }
 
   // === textarea ?먮룞 ?믪씠 議곗젅 ===
   var bodyTa = mc.querySelector('.js-body');
@@ -5739,7 +5960,9 @@ function bindContentEvents() {
     });
   });
   mc.querySelector('.js-toggle-script-help')?.addEventListener('click', function() {
-    tab.scriptHelpCollapsed = tab.scriptHelpCollapsed !== true;
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (!activeTab) return;
+    activeTab.scriptHelpCollapsed = activeTab.scriptHelpCollapsed !== true;
     renderContent();
     debouncePersist();
   });
@@ -5756,6 +5979,7 @@ function bindContentEvents() {
         divider: divider,
         splitEl: splitEl,
         reqArea: reqArea,
+        progressEl: mc.querySelector('.bullet-progress'),
         startY: e.clientY,
         startH: reqArea.offsetHeight
       };
@@ -5859,12 +6083,12 @@ function sendActiveTab() {
     if (!tab.loading) return;
     tab.progressVisible = true;
     // 寃쎄낵?쒓컙 ?쒖떆 ?쒖옉
-    var timerEl = mc.querySelector('.js-elapsed-timer');
-    if (!timerEl) {
-      var loadingDiv = mc.querySelector('.res-area > div');
-      if (loadingDiv) {
-        var sp = document.createElement('span');
-        sp.className = 'elapsed-timer js-elapsed-timer';
+      var timerEl = mc.querySelector('.js-elapsed-timer');
+      if (!timerEl) {
+        var loadingDiv = mc.querySelector('.js-loading-summary') || mc.querySelector('.res-area > div');
+        if (loadingDiv) {
+          var sp = document.createElement('span');
+          sp.className = 'elapsed-timer js-elapsed-timer';
         loadingDiv.appendChild(sp);
       }
       timerEl = mc.querySelector('.js-elapsed-timer');
@@ -6242,7 +6466,10 @@ document.getElementById('addDefaultHeaderBtn').addEventListener('click', () => {
   addKvRow(defaultHeaderRows);
   defaultHeaderRows?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
 });
-document.getElementById('defaultHeadersCloseBtn').addEventListener('click', () => defaultHeadersEditor.classList.add('hidden'));
+document.getElementById('defaultHeadersCloseBtn').addEventListener('click', () => {
+  defaultHeadersEditor.classList.remove('linked-focus-active');
+  defaultHeadersEditor.classList.add('hidden');
+});
 bindKvRow(defaultHeaderRows, { onChange: function() {} });
 document.getElementById('defaultHeadersSaveBtn').addEventListener('click', () => {
   const headers = collectKv(defaultHeaderRows);
@@ -6473,7 +6700,7 @@ window.addEventListener('message', (event) => {
     refreshToplineStatusChips(mainContent);
     refreshRequestPreflight(mainContent);
     if (msg.reveal !== false) {
-      defaultHeadersEditor.classList.remove('hidden');
+      revealDefaultHeadersEditor();
     }
   }
 
@@ -7595,7 +7822,7 @@ function handleVariableAutocompleteKeydown(event) {
 function persistTabState() {
     saveActiveTabState();
     var tabData = tabs.map(function(t) {
-    return Object.assign({ name: t.name, autoName: !!t.autoName, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, scriptHelpCollapsed: t.scriptHelpCollapsed === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
+    return Object.assign({ name: t.name, autoName: !!t.autoName, requestEditorTab: normalizeRequestEditorTab(t.requestEditorTab), method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, scriptHelpCollapsed: t.scriptHelpCollapsed === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
     });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
   vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx), compareSettings: cloneCompareSettings(compareSettings) });

@@ -133,6 +133,8 @@ describe('LocalizationService source', () => {
       'webview.summaryScriptsOff',
       'webview.summaryHistoryOn',
       'webview.summaryHistoryOff',
+      'webview.followRedirectsStatus',
+      'webview.stopAfterHeadersStatus',
       'webview.unresolvedVariablesCount',
       'webview.openEnvironmentPicker',
       'webview.reviewRequestInputs',

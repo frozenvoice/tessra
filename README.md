@@ -30,7 +30,7 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - Request stage strip, richer empty states, status-aware response feedback, and polished response actions
 - Topline request summary chips for environment, auth, default headers, scripts, and history behavior
 - Preflight warnings for unresolved `{{variables}}` before you send
-- Clickable status chips that jump to the relevant request area
+- Clickable status chips that jump to the relevant request area, focus it, and briefly highlight the linked card
 - Draft change chips that summarize which request sections changed before you save or send
 - Variable usage cards that show where each `{{variable}}` is used across the request
 - Masked auth and sensitive key/value inputs with reveal controls
