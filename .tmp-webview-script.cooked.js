@@ -14,6 +14,7 @@ var _pendingCloseAfterSave = null;  // dirty ???リ린 ????????レ쓣 ??ID
 const VALID_BODY_TYPES = ['none', 'json', 'xml', 'form', 'formdata', 'binary', 'raw'];
 
 // === ?묐떟 鍮꾧탳 (Pin / Compare) ===
+// 理쒕? 2媛쒓퉴吏 ??? 3踰덉㎏ 異붽? ??媛???ㅻ옒??嫄???뼱?곌린
 var pinnedResponses = [];  // [{ label, body, contentType, timestamp, tabId, formatStyle, formatIndent, formatLang }]
 var lastResponse = null;   // 吏곸쟾 ?묐떟 (鍮좊Ⅸ 鍮꾧탳??
 
