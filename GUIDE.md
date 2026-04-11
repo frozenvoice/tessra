@@ -32,6 +32,7 @@ Body: {"env":"{{envName}}"}
 
 - Tabs: `Body`, `Headers`, `Cookies`, `Tests`, plus `Preview` when the response contains meaningful static HTML
 - Dynamic HTML pages stay in `Body`, and you can use `Open URL` to jump to the resolved page
+- Search within the response body
 - JSON tree viewer
 - XML formatting: `Pretty`, `Compact`, `Inline Children`
 - Save or copy the response body

@@ -74,6 +74,7 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 ### 응답 뷰어
 - Body / Headers / Cookies / Tests 탭과, 의미 있는 정적 HTML이 있을 때만 표시되는 Preview 탭
 - 동적인 HTML 페이지는 Body 탭에 남고, 대신 `URL 열기` 액션을 사용할 수 있음
+- 응답 본문 검색
 - JSON 트리 뷰어
 - XML `Pretty`, `Compact`, `Inline Children` 포맷
 - Content-Type 기반 문법 강조

@@ -151,7 +151,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('arc.copyAsCurl', (node: CollectionNode) => {
       if (node.kind === 'request' && node.item.request) {
         const curl = CurlService.generate(
-          RequestExportService.resolve(node.item.request, environmentProvider.getActiveVariables())
+          RequestExportService.resolve(node.item.request, environmentProvider.getActiveVariables(), {
+            defaultHeaders: storage.getDefaultHeaders(),
+            skipDefaultHeaders: node.item.request.skipDefaultHeaders === true,
+          })
         );
         vscode.env.clipboard.writeText(curl);
         vscode.window.showInformationMessage(t('info.copiedCurl'));

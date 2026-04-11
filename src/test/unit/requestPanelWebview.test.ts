@@ -164,6 +164,22 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /e\.preventDefault\(\);[\s\S]*handlePrimaryAction\(\);/);
   });
 
+  it('renders and collects every auth type from the auth tab UI', () => {
+    assert.match(script, /function authHtml\(auth\)/);
+    assert.match(script, /function authFieldsHtml\(type, auth\)/);
+    assert.match(script, /function collectAuth\(mc\)/);
+    assert.match(script, /\['none','basic','bearer','apikey'\]\.map\(t/);
+    assert.match(script, /class="js-auth-user"/);
+    assert.match(script, /class="js-auth-pass"/);
+    assert.match(script, /class="js-auth-token"/);
+    assert.match(script, /class="js-auth-apikey"/);
+    assert.match(script, /class="js-auth-apival"/);
+    assert.match(script, /class="js-auth-addto"/);
+    assert.match(script, /if \(type === 'basic'\) auth\.basic =/);
+    assert.match(script, /if \(type === 'bearer'\) auth\.bearer =/);
+    assert.match(script, /if \(type === 'apikey'\) auth\.apikey =/);
+  });
+
   it('persists compare settings through tab state', () => {
     assert.match(script, /var compareSettings = normalizeCompareSettings\(\);/);
     assert.match(script, /options:\s*cloneCompareSettings\(compareSettings\)/);
@@ -178,6 +194,8 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /let appDateLocale = "en-US";/);
     assert.match(script, /function tr\(key\)/);
     assert.match(script, /function tf\(key, params\)/);
+    assert.match(script, /function tfCount\(key, count\)/);
+    assert.match(script, /replace\(\/\{\(\[A-Za-z0-9_\]\+\)\}\/g, function\(_, name\)/);
   });
 
   it('updates localization without reloading the whole webview state', () => {
@@ -223,8 +241,11 @@ describe('RequestPanel Webview', () => {
   it('resolves active environment variables before copying or generating code', () => {
     assert.match(source, /const exported = RequestExportService\.resolve\(\{/);
     assert.match(source, /RequestPanel\.environmentProvider\.getActiveVariables\(\)/);
+    assert.match(source, /defaultHeaders:\s*RequestPanel\.storage\.getDefaultHeaders\(\)/);
+    assert.match(source, /skipDefaultHeaders:\s*message\.skipDefaultHeaders === true/);
     assert.match(source, /const curl = CurlService\.generate\(exported\);/);
     assert.match(source, /CodegenService\.generate\(target\.target, exported\)/);
+    assert.match(script, /skipDefaultHeaders:\s*!!tab\.skipDefaultHeaders/);
   });
 
   it('renders the expanded request settings controls', () => {
@@ -266,6 +287,7 @@ describe('RequestPanel Webview', () => {
   });
 
   it('opens HTML preview automatically when meaningful static HTML exists', () => {
+    assert.match(script, /function collapseWhitespace\(text\)/);
     assert.match(script, /function hasMeaningfulStaticPreview\(rawHtml\)/);
     assert.match(script, /function hasHtmlPreview\(tab\)/);
     assert.match(script, /tab\.responseTab = \(contentType\.indexOf\('html'\) >= 0 && hasMeaningfulStaticPreview\(msg\.response\.body \|\| ''\)\) \? 'resPreview' : 'resBody';/);
@@ -292,9 +314,34 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /vscode\.postMessage\(\{ type: 'openDefaultHeaders' \}\)/);
     assert.match(script, /workspaceDefaultHeaders = msg\.headers \|\| \[\];/);
     assert.match(script, /if \(msg\.reveal !== false\)/);
-    assert.match(script, /tf\('webview\.defaultHeadersApplied', \{ count: applied\.length \}\)/);
-    assert.match(script, /tf\('webview\.defaultHeadersOverridden', \{ count: overridden\.length \}\)/);
+    assert.match(script, /tfCount\('webview\.defaultHeadersApplied', applied\.length\)/);
+    assert.match(script, /tfCount\('webview\.defaultHeadersOverridden', overridden\.length\)/);
     assert.match(script, /renderDefaultHeaderKeyGroup\('webview\.defaultHeadersAppliedLabel', applied, ''\)/);
     assert.match(script, /renderDefaultHeaderKeyGroup\('webview\.defaultHeadersOverriddenLabel', overridden, ' override'\)/);
+  });
+
+  it('shows the current environment with a localized label instead of raw template syntax', () => {
+    assert.match(script, /function renderEnvironmentIndicator\(envName\)/);
+    assert.match(script, /function renderToplineStatusChips\(tab\)/);
+    assert.match(script, /function refreshToplineStatusChips\(mc\)/);
+    assert.match(script, /class="request-status-chips js-topline-status-chips"/);
+    assert.match(script, /tr\('webview\.noEnvironment'\)/);
+    assert.match(script, /tfCount\('webview\.defaultHeadersStatus', appliedDefaultHeaders\.length\)/);
+    assert.match(script, /tr\('webview\.disableScriptsStatus'\)/);
+    assert.match(script, /tr\('webview\.saveToHistoryOffStatus'\)/);
+    assert.match(script, /tr\('webview\.environment'\)/);
+    assert.doesNotMatch(script, /<span class="var-name">\{\{env\}\}<\/span>/);
+  });
+
+  it('renders response search controls and search syncing helpers', () => {
+    assert.match(script, /function getResponseSearchState\(tab\)/);
+    assert.match(script, /function findResponseSearchMatches\(body, query\)/);
+    assert.match(script, /function renderResponseBody\(body, lang, searchQuery, searchIndex\)/);
+    assert.match(script, /function syncResponseSearch\(mc\)/);
+    assert.match(script, /placeholder="' \+ escapeAttr\(tr\('webview\.searchPlaceholder'\)\) \+ '"/);
+    assert.match(script, /class="response-search-input js-response-search"/);
+    assert.match(script, /js-response-search-prev/);
+    assert.match(script, /js-response-search-next/);
+    assert.match(script, /js-response-search-clear/);
   });
 });

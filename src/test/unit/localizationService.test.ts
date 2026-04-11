@@ -48,19 +48,29 @@ describe('LocalizationService source', () => {
   });
   it('keeps default-header visibility copy translated for every supported language', () => {
     const appliedMatches = source.match(/'webview\.defaultHeadersApplied':/g) ?? [];
+    const statusMatches = source.match(/'webview\.defaultHeadersStatus':/g) ?? [];
     const overriddenMatches = source.match(/'webview\.defaultHeadersOverridden':/g) ?? [];
     const appliedLabelMatches = source.match(/'webview\.defaultHeadersAppliedLabel':/g) ?? [];
     const overriddenLabelMatches = source.match(/'webview\.defaultHeadersOverriddenLabel':/g) ?? [];
     const skippedMatches = source.match(/'webview\.defaultHeadersSkippedState':/g) ?? [];
+    const skippedStatusMatches = source.match(/'webview\.skipDefaultHeadersStatus':/g) ?? [];
     const emptyMatches = source.match(/'webview\.defaultHeadersEmptyState':/g) ?? [];
+    const noEnvironmentMatches = source.match(/'webview\.noEnvironment':/g) ?? [];
+    const disableScriptsStatusMatches = source.match(/'webview\.disableScriptsStatus':/g) ?? [];
+    const historyOffStatusMatches = source.match(/'webview\.saveToHistoryOffStatus':/g) ?? [];
     const manageMatches = source.match(/'webview\.manage':/g) ?? [];
 
     assert.strictEqual(appliedMatches.length, 3);
+    assert.strictEqual(statusMatches.length, 3);
     assert.strictEqual(overriddenMatches.length, 3);
     assert.strictEqual(appliedLabelMatches.length, 3);
     assert.strictEqual(overriddenLabelMatches.length, 3);
     assert.strictEqual(skippedMatches.length, 3);
+    assert.strictEqual(skippedStatusMatches.length, 3);
     assert.strictEqual(emptyMatches.length, 3);
+    assert.strictEqual(noEnvironmentMatches.length, 3);
+    assert.strictEqual(disableScriptsStatusMatches.length, 3);
+    assert.strictEqual(historyOffStatusMatches.length, 3);
     assert.strictEqual(manageMatches.length, 3);
   });
 
@@ -88,5 +98,21 @@ describe('LocalizationService source', () => {
 
     assert.strictEqual(openUrlMatches.length, 3);
     assert.strictEqual(failedOpenUrlMatches.length, 3);
+  });
+
+  it('keeps response search copy translated for every supported language', () => {
+    const placeholderMatches = source.match(/'webview\.searchPlaceholder':/g) ?? [];
+    const prevMatches = source.match(/'webview\.searchPrev':/g) ?? [];
+    const nextMatches = source.match(/'webview\.searchNext':/g) ?? [];
+    const clearMatches = source.match(/'webview\.searchClear':/g) ?? [];
+    const countMatches = source.match(/'webview\.searchCount':/g) ?? [];
+    const emptyMatches = source.match(/'webview\.searchNoMatches':/g) ?? [];
+
+    assert.strictEqual(placeholderMatches.length, 3);
+    assert.strictEqual(prevMatches.length, 3);
+    assert.strictEqual(nextMatches.length, 3);
+    assert.strictEqual(clearMatches.length, 3);
+    assert.strictEqual(countMatches.length, 3);
+    assert.strictEqual(emptyMatches.length, 3);
   });
 });

@@ -44,4 +44,47 @@ describe('RequestExportService', () => {
     assert.strictEqual(exported.auth?.basic?.username, 'demo-user');
     assert.strictEqual(exported.auth?.basic?.password, 'secret');
   });
+
+  it('merges workspace default headers unless the tab skips them or already overrides the key', () => {
+    const exported = RequestExportService.resolve({
+      method: 'GET',
+      url: '{{baseUrl}}/items',
+      headers: [
+        { key: 'Accept', value: 'application/json', enabled: true },
+        { key: 'X-Trace-Id', value: 'trace-1', enabled: true },
+      ],
+      params: [],
+      body: '',
+      bodyType: 'none',
+      auth: { type: 'none' },
+    }, vars, {
+      defaultHeaders: [
+        { key: 'Accept', value: '*/*', enabled: true },
+        { key: 'X-Tenant', value: '{{user}}', enabled: true },
+      ],
+    });
+
+    assert.deepStrictEqual(exported.headers, [
+      { key: 'X-Tenant', value: 'demo-user', enabled: true },
+      { key: 'Accept', value: 'application/json', enabled: true },
+      { key: 'X-Trace-Id', value: 'trace-1', enabled: true },
+    ]);
+
+    const skipped = RequestExportService.resolve({
+      method: 'GET',
+      url: '{{baseUrl}}/items',
+      headers: [],
+      params: [],
+      body: '',
+      bodyType: 'none',
+      auth: { type: 'none' },
+    }, vars, {
+      defaultHeaders: [
+        { key: 'X-Tenant', value: '{{user}}', enabled: true },
+      ],
+      skipDefaultHeaders: true,
+    });
+
+    assert.deepStrictEqual(skipped.headers, []);
+  });
 });

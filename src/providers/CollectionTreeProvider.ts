@@ -257,6 +257,7 @@ export class CollectionTreeProvider
     if (requestData.requestId) {
       const existing = this.findItemByRequestId(collections, requestData.requestId);
       if (existing?.request) {
+        existing.request.name = existing.name;
         existing.request.method = requestData.method as any;
         existing.request.url = requestData.url;
         existing.request.headers = requestData.headers ?? [];
@@ -376,7 +377,12 @@ export class CollectionTreeProvider
       if (col) { col.name = newName; }
     } else {
       const item = this.findItem(collections, node.item.id);
-      if (item) { item.name = newName; }
+      if (item) {
+        item.name = newName;
+        if (item.request) {
+          item.request.name = newName;
+        }
+      }
     }
     this.storage.saveCollections(collections);
     this.refresh();
@@ -409,6 +415,9 @@ export class CollectionTreeProvider
     const collections = this.storage.getCollections();
     const clone = this.deepCloneItem(node.item);
     clone.name = `${node.item.name} Copy`;
+    if (clone.request) {
+      clone.request.name = clone.name;
+    }
 
     // 원본 바로 뒤에 삽입
     const parentList = this.findParentList(collections, node.item.id);
@@ -443,6 +452,9 @@ export class CollectionTreeProvider
 
     const clone = this.deepCloneItem(node.item);
     clone.name = name;
+    if (clone.request) {
+      clone.request.name = name;
+    }
 
     if (selected.targetType === 'collection') {
       const col = collections.find((c) => c.id === selected.targetId);

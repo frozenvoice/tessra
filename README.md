@@ -75,6 +75,7 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 ### Response viewer
 - Body / Headers / Cookies / Tests tabs, plus Preview when the response contains meaningful static HTML
 - Dynamic HTML pages stay in Body while `Open URL` remains available for the resolved page
+- Search within the response body
 - JSON tree viewer
 - XML formatting with `Pretty`, `Compact`, and `Inline Children`
 - Content-Type based syntax highlighting

@@ -194,13 +194,26 @@ export class CurlService {
 
     // URL + 쿼리 파라미터 조합
     let fullUrl = req.url || '';
-    const activeParams = [...(req.params ?? []).filter((p) => p.enabled && p.key)];
-    if (req.auth?.type === 'apikey' && req.auth.apikey?.addTo === 'query' && req.auth.apikey.key) {
-      activeParams.push({
-        key: req.auth.apikey.key,
-        value: req.auth.apikey.value,
-        enabled: true,
-      });
+    const activeHeaders = (req.headers ?? [])
+      .filter((header) => header.enabled && header.key)
+      .map((header) => ({ ...header }));
+    const activeParams = (req.params ?? [])
+      .filter((param) => param.enabled && param.key)
+      .map((param) => ({ ...param }));
+
+    if (req.auth?.type === 'basic' || req.auth?.type === 'bearer') {
+      this.removeHeader(activeHeaders, 'Authorization');
+    } else if (req.auth?.type === 'apikey' && req.auth.apikey?.key) {
+      if (req.auth.apikey.addTo === 'query') {
+        this.removeParam(activeParams, req.auth.apikey.key);
+        activeParams.push({
+          key: req.auth.apikey.key,
+          value: req.auth.apikey.value,
+          enabled: true,
+        });
+      } else {
+        this.removeHeader(activeHeaders, req.auth.apikey.key);
+      }
     }
     if (activeParams.length > 0) {
       try {
@@ -247,7 +260,7 @@ export class CurlService {
     }
 
     // 헤더
-    for (const h of (req.headers ?? []).filter((h) => h.enabled && h.key)) {
+    for (const h of activeHeaders) {
       parts.push(`-H '${CurlService.shellEscape(h.key)}: ${CurlService.shellEscape(h.value)}'`);
     }
 
@@ -272,6 +285,23 @@ export class CurlService {
   // 쉘 이스케이프 (싱글쿼트)
   private static shellEscape(s: string): string {
     return s.replace(/'/g, "'\\''");
+  }
+
+  private static removeHeader(headers: KeyValue[], key: string): void {
+    const target = key.toLowerCase();
+    for (let i = headers.length - 1; i >= 0; i--) {
+      if (headers[i].key.toLowerCase() === target) {
+        headers.splice(i, 1);
+      }
+    }
+  }
+
+  private static removeParam(params: KeyValue[], key: string): void {
+    for (let i = params.length - 1; i >= 0; i--) {
+      if (params[i].key === key) {
+        params.splice(i, 1);
+      }
+    }
   }
 
   private static inferBodyType(contentType: string): RequestBodyType {

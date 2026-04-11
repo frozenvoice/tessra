@@ -25,13 +25,28 @@ export interface ResolvedExportRequest {
   auth: AuthConfig;
 }
 
+export interface RequestExportOptions {
+  defaultHeaders?: KeyValue[];
+  skipDefaultHeaders?: boolean;
+}
+
 export class RequestExportService {
-  public static resolve(request: ExportableRequest, variables: KeyValue[]): ResolvedExportRequest {
+  public static resolve(
+    request: ExportableRequest,
+    variables: KeyValue[],
+    options?: RequestExportOptions
+  ): ResolvedExportRequest {
+    const resolvedHeaders = VariableService.resolveKeyValues(request.headers ?? [], variables);
+    const resolvedParams = VariableService.resolveKeyValues(request.params ?? [], variables);
+    const defaultHeaders = options?.skipDefaultHeaders
+      ? []
+      : VariableService.resolveKeyValues(options?.defaultHeaders ?? [], variables);
+
     return {
       method: request.method,
       url: VariableService.resolve(request.url ?? '', variables),
-      headers: VariableService.resolveKeyValues(request.headers ?? [], variables),
-      params: VariableService.resolveKeyValues(request.params ?? [], variables),
+      headers: this.mergeDefaultHeaders(defaultHeaders, resolvedHeaders),
+      params: resolvedParams,
       body: VariableService.resolve(request.body ?? '', variables),
       bodyType: request.bodyType ?? 'none',
       formData: (request.formData ?? []).map((field) => ({
@@ -42,6 +57,20 @@ export class RequestExportService {
       binaryFilePath: VariableService.resolve(request.binaryFilePath ?? '', variables),
       auth: RequestExportService.resolveAuth(request.auth, variables),
     };
+  }
+
+  private static mergeDefaultHeaders(defaultHeaders: KeyValue[], requestHeaders: KeyValue[]): KeyValue[] {
+    const requestHeaderKeys = new Set(
+      requestHeaders
+        .filter((header) => header.enabled !== false && header.key)
+        .map((header) => header.key.toLowerCase())
+    );
+
+    const mergedDefaults = defaultHeaders.filter(
+      (header) => header.enabled !== false && header.key && !requestHeaderKeys.has(header.key.toLowerCase())
+    );
+
+    return [...mergedDefaults, ...requestHeaders];
   }
 
   private static resolveAuth(auth: AuthConfig | undefined, variables: KeyValue[]): AuthConfig {

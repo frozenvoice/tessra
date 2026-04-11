@@ -1,4 +1,5 @@
 import { AuthConfig, CodegenTarget, FormDataField, KeyValue, RequestBodyType } from '../models/types';
+import { AuthService } from './AuthService';
 
 export interface CodegenRequest {
   method: string;
@@ -226,9 +227,11 @@ export class CodegenService {
 
   private static prepareRequest(request: CodegenRequest) {
     const headers = request.headers.filter((header) => header.enabled !== false && header.key).map((header) => ({ ...header }));
-    const params = request.params.filter((param) => param.enabled !== false && param.key);
+    const params = request.params
+      .filter((param) => param.enabled !== false && param.key)
+      .map((param) => ({ ...param }));
     const formData = request.formData.filter((field) => field.enabled !== false && field.key).map((field) => ({ ...field }));
-    this.applyAuth(request.auth, headers, params);
+    AuthService.applyAuth(request.auth, headers, params, []);
 
     return {
       method: request.method,
@@ -265,35 +268,4 @@ export class CodegenService {
     }
   }
 
-  private static applyAuth(auth: AuthConfig, headers: KeyValue[], params: KeyValue[]): void {
-    switch (auth.type) {
-      case 'basic':
-        if (auth.basic) {
-          headers.push({
-            key: 'Authorization',
-            value: `Basic ${Buffer.from(`${auth.basic.username}:${auth.basic.password}`).toString('base64')}`,
-            enabled: true,
-          });
-        }
-        break;
-      case 'bearer':
-        if (auth.bearer) {
-          headers.push({
-            key: 'Authorization',
-            value: `Bearer ${auth.bearer.token}`,
-            enabled: true,
-          });
-        }
-        break;
-      case 'apikey':
-        if (auth.apikey) {
-          if (auth.apikey.addTo === 'query') {
-            params.push({ key: auth.apikey.key, value: auth.apikey.value, enabled: true });
-          } else {
-            headers.push({ key: auth.apikey.key, value: auth.apikey.value, enabled: true });
-          }
-        }
-        break;
-    }
-  }
 }

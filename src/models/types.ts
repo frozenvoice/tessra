@@ -267,6 +267,7 @@ export interface CopyAsCurlMessage {
   formData?: FormDataField[];
   binaryFilePath?: string;
   auth: AuthConfig;
+  skipDefaultHeaders?: boolean;
 }
 
 export interface CopyResponseBodyMessage {
@@ -355,6 +356,7 @@ export interface GenerateCodeMessage {
   formData?: FormDataField[];
   binaryFilePath?: string;
   auth: AuthConfig;
+  skipDefaultHeaders?: boolean;
 }
 
 export interface OpenDefaultHeadersMessage {
