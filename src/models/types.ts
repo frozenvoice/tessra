@@ -104,6 +104,7 @@ export interface TabState {
   responseSearchIndex?: number;
   responseSearchCaseSensitive?: boolean;
   responseSearchRegex?: boolean;
+  scriptHelpCollapsed?: boolean;
   pinned?: boolean;
   requestId?: string;
 }

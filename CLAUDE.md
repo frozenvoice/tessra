@@ -72,6 +72,7 @@ Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언�
 - Test script
 - `pm.test`, `pm.expect`, `pm.environment`
 - 로그와 테스트 결과 표시
+- 응답값을 환경 변수로 저장해 다음 요청에 넘기는 접이식 stepper 도움말과 삽입 버튼
 
 ### Import / Export
 - cURL import

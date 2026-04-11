@@ -109,6 +109,16 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - `pm.test`, `pm.expect`, `pm.environment`
 - script logs / test 결과 표시
 - pass / fail / log 요약 배지와 첫 실패 강조
+- 1번 요청 응답값을 2번 요청으로 넘길 수 있는 접이식 stepper 도움말과 예제 삽입 버튼
+
+예시:
+
+```js
+const body = pm.response.json();
+pm.environment.set("sessionKey", String(body.key));
+```
+
+그다음 2번 요청에서 `{{sessionKey}}`를 사용하면 됩니다.
 
 ### Import / Export
 - cURL import

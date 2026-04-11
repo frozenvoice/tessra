@@ -1612,6 +1612,15 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .request-status-chip.info{background:rgba(87,166,255,.08);border-color:rgba(87,166,255,.16);color:#93c8ff}
 .request-status-chip.warning{background:rgba(229,192,123,.08);border-color:rgba(229,192,123,.16);color:#f1cf8a}
 .request-status-chip.muted{opacity:.78}
+.linked-focus-active{position:relative;animation:linked-focus-pulse 1.6s ease}
+.linked-focus-active::after{content:"";position:absolute;inset:-4px;border-radius:14px;border:1px solid rgba(87,166,255,.5);box-shadow:0 0 0 1px rgba(87,166,255,.18),0 0 0 10px rgba(87,166,255,.06);pointer-events:none}
+.settings-toggle.linked-focus-active::after{border-radius:16px}
+.script-card.linked-focus-active::after,.script-helper-shell.linked-focus-active::after{border-radius:16px}
+@keyframes linked-focus-pulse{
+  0%{transform:translateY(0);box-shadow:0 0 0 0 rgba(87,166,255,0)}
+  20%{transform:translateY(-1px);box-shadow:0 0 0 0 rgba(87,166,255,.16)}
+  100%{transform:translateY(0);box-shadow:0 0 0 0 rgba(87,166,255,0)}
+}
 .request-status-chip .env-label{opacity:.75;margin-right:4px}
 .request-status-chip .env-name{color:#dcdcaa}
 .request-preflight{display:flex;flex-direction:column;gap:10px;padding:0 10px 8px}
@@ -2078,9 +2087,49 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 /* 鍮??붿껌 ???덈궡 */
 .empty-tab-hint{display:flex;align-items:center;justify-content:center;flex:1;color:var(--vscode-descriptionForeground,#888);font-size:13px;opacity:.5;text-align:center;padding:20px;user-select:none}
 .script-editor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
-.script-card{padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015))}
+.script-helper-shell{padding:12px;border-radius:14px;border:1px solid rgba(87,166,255,.12);background:linear-gradient(180deg,rgba(87,166,255,.06),rgba(255,255,255,.02));display:flex;flex-direction:column;gap:12px;margin-bottom:12px}
+.script-helper-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.script-helper-toolbar-copy{max-width:880px}
+.script-helper-toggle{white-space:nowrap;flex-shrink:0}
+.script-helper-stepper{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.script-helper-stage{position:relative;padding:12px 12px 12px 44px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.018));display:flex;flex-direction:column;gap:6px}
+.script-helper-stage-index{position:absolute;left:12px;top:12px;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:999px;background:rgba(87,166,255,.16);border:1px solid rgba(87,166,255,.28);color:#9dc9ff;font-size:11px;font-weight:700}
+.script-helper-stage-title{font-size:13px;font-weight:700;line-height:1.35}
+.script-helper-stage-copy{font-size:12px;line-height:1.55;color:var(--vscode-descriptionForeground,#b8b8b8)}
+.script-helper-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.script-helper-card{padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015));display:flex;flex-direction:column;gap:8px}
+.script-helper-card.wide{grid-column:1/-1}
+.script-helper-card.tinted{border-color:rgba(87,166,255,.14);background:linear-gradient(180deg,rgba(87,166,255,.06),rgba(255,255,255,.02))}
+.script-helper-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.7}
+.script-helper-title{font-size:14px;font-weight:700;line-height:1.35}
+.script-helper-copy{font-size:12px;line-height:1.55;color:var(--vscode-descriptionForeground,#989898)}
+.script-helper-chip-row{display:flex;flex-wrap:wrap;gap:6px}
+.script-helper-chip{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;background:rgba(87,166,255,.09);border:1px solid rgba(87,166,255,.18);font-size:11px;font-weight:600;color:#9dc9ff}
+.script-helper-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.script-helper-columns.flow{grid-template-columns:minmax(320px,1.25fr) minmax(220px,.9fr) minmax(220px,.95fr)}
+.script-helper-list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.script-helper-list li{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.55;color:var(--vscode-descriptionForeground,#c0c0c0)}
+.script-helper-dot{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;background:rgba(87,166,255,.12);color:#9dc9ff;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px}
+.script-helper-flow-step{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.55;color:var(--vscode-descriptionForeground,#c0c0c0)}
+.script-helper-flow-step + .script-helper-flow-step{margin-top:2px}
+.script-helper-subtitle{font-size:12px;font-weight:700;opacity:.82}
+.script-helper-code{margin:0;padding:10px 12px;border-radius:10px;background:var(--vscode-input-background);border:1px solid rgba(255,255,255,.06);font-size:12px;line-height:1.6;font-family:var(--vscode-editor-font-family,monospace);white-space:pre-wrap;word-break:break-word}
+.script-helper-actions{display:flex;flex-direction:column;gap:8px}
+.script-helper-actions .ghost-btn{justify-content:flex-start}
+.script-helper-quick-note{font-size:12px;line-height:1.55;color:var(--vscode-descriptionForeground,#b8b8b8)}
+.script-helper-mini-list{display:flex;flex-direction:column;gap:8px}
+.script-helper-mini-item{padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.03)}
+.script-helper-mini-item strong{display:block;font-size:12px;line-height:1.4;margin-bottom:4px}
+.script-helper-mini-item span{display:block;font-size:12px;line-height:1.55;color:var(--vscode-descriptionForeground,#b8b8b8)}
+.script-helper-collapsed{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:2px}
+.script-helper-collapsed-copy{font-size:12px;line-height:1.55;color:var(--vscode-descriptionForeground,#b8b8b8)}
+@media (max-width: 1260px){
+  .script-helper-columns.flow{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+}
+  .script-card{padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.07);background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015))}
 .script-card-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.7;margin-bottom:4px}
 .script-card-note{font-size:12px;line-height:1.45;color:var(--vscode-descriptionForeground,#989898);margin-bottom:8px}
+.script-card-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
 .script-card textarea{min-height:160px}
 .default-headers-banner{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.025);margin-bottom:10px}
 .default-headers-banner.active{border-color:rgba(78,201,78,.18);background:rgba(78,201,78,.05)}
@@ -2693,8 +2742,8 @@ function renderRequestPreflight(tab) {
     renderPreflightPill(tf('webview.summaryAuth', { value: authSummaryLabel(tab.auth) }), tab.auth?.type && tab.auth.type !== 'none' ? 'accent' : 'muted', 'switch-tab', 'auth'),
     renderPreflightPill(tfCount('webview.summaryHeaders', headerCount), headerCount > 0 ? 'accent' : 'muted', 'switch-tab', 'headers'),
     renderPreflightPill(tfCount('webview.summaryParams', paramCount), paramCount > 0 ? 'accent' : 'muted', 'switch-tab', 'params'),
-    renderPreflightPill(tab.disableScripts ? tr('webview.summaryScriptsOff') : tr('webview.summaryScriptsOn'), tab.disableScripts ? 'warning' : 'info', 'switch-tab', tab.disableScripts ? 'settings' : 'scripts'),
-    renderPreflightPill(tab.saveToHistory === false ? tr('webview.summaryHistoryOff') : tr('webview.summaryHistoryOn'), tab.saveToHistory === false ? 'muted' : 'info', 'switch-tab', 'settings')
+    renderPreflightPill(tab.disableScripts ? tr('webview.summaryScriptsOff') : tr('webview.summaryScriptsOn'), tab.disableScripts ? 'warning' : 'info', 'switch-tab', tab.disableScripts ? 'settings:disable-scripts' : 'scripts'),
+    renderPreflightPill(tab.saveToHistory === false ? tr('webview.summaryHistoryOff') : tr('webview.summaryHistoryOn'), tab.saveToHistory === false ? 'muted' : 'info', 'switch-tab', 'settings:save-history')
   ];
   if (unresolved.length > 0) {
     pills.unshift(renderPreflightPill(tfCount('webview.unresolvedVariablesCount', unresolved.length), 'warning', 'switch-environment'));
@@ -2703,6 +2752,148 @@ function renderRequestPreflight(tab) {
     '<div class="request-preflight-pills">' + pills.join('') + '</div>' +
     renderUnresolvedVariableBanner(tab) +
   '</div>';
+}
+
+function scriptTemplateSource(name) {
+  var nl = String.fromCharCode(10);
+  if (name === 'preRequestEnv') {
+    return [
+      'pm.environment.set("requestStartedAt", String(Date.now()));',
+      'console.log("requestStartedAt", pm.environment.get("requestStartedAt"));'
+    ].join(nl);
+  }
+  if (name === 'testCaptureValue') {
+    return [
+      'const body = pm.response.json();',
+      '',
+      'pm.test("response has key", function () {',
+      '  pm.expect(body).to.have.property("key");',
+      '});',
+      '',
+      'pm.environment.set("sessionKey", String(body.key));'
+    ].join(nl);
+  }
+  if (name === 'testStatusCheck') {
+    return [
+      'pm.test("status is 200", function () {',
+      '  pm.response.to.have.status(200);',
+      '});',
+      '',
+      'const body = pm.response.json();',
+      '',
+      'pm.test("title exists", function () {',
+      '  pm.expect(body).to.have.property("title");',
+      '});'
+    ].join(nl);
+  }
+  return '';
+}
+
+function renderScriptHelpStep(index, titleKey, copyKey) {
+  return '<div class="script-helper-stage">' +
+    '<span class="script-helper-stage-index">' + escapeHtml(index) + '</span>' +
+    '<div class="script-helper-stage-title">' + escapeHtml(tr(titleKey)) + '</div>' +
+    '<div class="script-helper-stage-copy">' + escapeHtml(tr(copyKey)) + '</div>' +
+  '</div>';
+}
+
+function renderScriptHelpers(tab) {
+  var collapsed = tab?.scriptHelpCollapsed === true;
+  var summaryChips =
+    '<span class="script-helper-chip">pm.response.json()</span>' +
+    '<span class="script-helper-chip">pm.environment.set(...)</span>' +
+    '<span class="script-helper-chip">{{sessionKey}}</span>';
+  return '<div class="script-helper-shell' + (collapsed ? ' collapsed' : '') + '">' +
+    '<div class="script-helper-toolbar">' +
+      '<div>' +
+        '<div class="script-helper-label">' + escapeHtml(tr('webview.scriptHelpTitle')) + '</div>' +
+        '<div class="script-helper-title">' + escapeHtml(tr('webview.scriptHelpStepperTitle')) + '</div>' +
+        '<div class="script-helper-copy script-helper-toolbar-copy">' + escapeHtml(tr('webview.scriptHelpRuntimeWhen')) + '</div>' +
+      '</div>' +
+      '<button class="ghost-btn ripple-btn script-helper-toggle js-toggle-script-help" type="button">' + escapeHtml(tr(collapsed ? 'webview.scriptHelpExpand' : 'webview.scriptHelpCollapse')) + '</button>' +
+    '</div>' +
+    '<div class="script-helper-stepper">' +
+      renderScriptHelpStep('1', 'webview.scriptHelpStageFixed', 'webview.scriptHelpRuleFixed') +
+      renderScriptHelpStep('2', 'webview.scriptHelpStageSend', 'webview.scriptHelpSequenceSend') +
+      renderScriptHelpStep('3', 'webview.scriptHelpStageTest', 'webview.scriptHelpSequenceTest') +
+      renderScriptHelpStep('4', 'webview.scriptHelpStageReuse', 'webview.scriptHelpSequencePersist') +
+    '</div>' +
+    (collapsed
+      ? '<div class="script-helper-collapsed">' +
+          '<div class="script-helper-collapsed-copy">' + escapeHtml(tr('webview.scriptHelpCollapsedCopy')) + '</div>' +
+          '<div class="script-helper-chip-row">' + summaryChips + '</div>' +
+        '</div>'
+      : '<div class="script-helper-grid">' +
+          '<div class="script-helper-card">' +
+            '<div class="script-helper-label">' + escapeHtml(tr('webview.scriptHelpTitle')) + '</div>' +
+            '<div class="script-helper-title">' + escapeHtml(tr('webview.scriptHelpRuntimeTitle')) + '</div>' +
+            '<div class="script-helper-copy">' + escapeHtml(tr('webview.scriptHelpRuntimeCopy')) + '</div>' +
+            '<div class="script-helper-chip-row">' +
+              '<span class="script-helper-chip">pm.request / pm.response / pm.environment</span>' +
+              '<span class="script-helper-chip">env.get() / env.set() / env.unset()</span>' +
+              '<span class="script-helper-chip">pm.test() / test() / pm.expect() / expect() / assert()</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="script-helper-card">' +
+            '<div class="script-helper-label">' + escapeHtml(tr('webview.scriptHelpTitle')) + '</div>' +
+            '<div class="script-helper-title">' + escapeHtml(tr('webview.scriptHelpWhenTitle')) + '</div>' +
+            '<ul class="script-helper-list">' +
+              '<li><span class="script-helper-dot">1</span><span>' + escapeHtml(tr('webview.scriptHelpRuleFixed')) + '</span></li>' +
+              '<li><span class="script-helper-dot">2</span><span>' + escapeHtml(tr('webview.scriptHelpRuleDerived')) + '</span></li>' +
+              '<li><span class="script-helper-dot">3</span><span>' + escapeHtml(tr('webview.scriptHelpRulePreRequest')) + '</span></li>' +
+            '</ul>' +
+          '</div>' +
+          '<div class="script-helper-card tinted">' +
+            '<div class="script-helper-label">' + escapeHtml(tr('webview.scriptHelpTitle')) + '</div>' +
+            '<div class="script-helper-title">' + escapeHtml(tr('webview.scriptHelpSequenceTitle')) + '</div>' +
+            '<div class="script-helper-mini-list">' +
+              '<div class="script-helper-mini-item"><strong>1. ' + escapeHtml(tr('webview.scriptHelpStageFixed')) + '</strong><span>' + escapeHtml(tr('webview.scriptHelpSequencePre')) + '</span></div>' +
+              '<div class="script-helper-mini-item"><strong>2. ' + escapeHtml(tr('webview.scriptHelpStageSend')) + '</strong><span>' + escapeHtml(tr('webview.scriptHelpSequenceSend')) + '</span></div>' +
+              '<div class="script-helper-mini-item"><strong>3-4. ' + escapeHtml(tr('webview.scriptHelpStageTest')) + ' / ' + escapeHtml(tr('webview.scriptHelpStageReuse')) + '</strong><span>' + escapeHtml(tr('webview.scriptHelpSequenceTest')) + ' ' + escapeHtml(tr('webview.scriptHelpSequencePersist')) + '</span></div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="script-helper-card wide">' +
+            '<div class="script-helper-label">' + escapeHtml(tr('webview.scriptHelpTitle')) + '</div>' +
+            '<div class="script-helper-title">' + escapeHtml(tr('webview.scriptHelpFlowTitle')) + '</div>' +
+            '<div class="script-helper-copy">' + escapeHtml(tr('webview.scriptHelpFlowCopy')) + '</div>' +
+            '<div class="script-helper-columns flow">' +
+              '<div>' +
+                '<div class="script-helper-subtitle">' + escapeHtml(tr('webview.scriptHelpRequestOne')) + '</div>' +
+                '<pre class="script-helper-code">' + escapeHtml(scriptTemplateSource('testCaptureValue')) + '</pre>' +
+              '</div>' +
+              '<div>' +
+                '<div class="script-helper-subtitle">' + escapeHtml(tr('webview.scriptHelpRequestTwo')) + '</div>' +
+                '<pre class="script-helper-code">{{sessionKey}}</pre>' +
+                '<div class="script-helper-quick-note">' + escapeHtml(tr('webview.scriptHelpSequencePersist')) + '</div>' +
+              '</div>' +
+              '<div>' +
+                '<div class="script-helper-subtitle">' + escapeHtml(tr('webview.scriptHelpQuickInsertTitle')) + '</div>' +
+                '<div class="script-helper-quick-note">' + escapeHtml(tr('webview.scriptHelpQuickInsertCopy')) + '</div>' +
+                '<div class="script-helper-actions">' +
+                  '<button class="ghost-btn ripple-btn js-insert-script-template" type="button" data-target="preRequest" data-template="preRequestEnv">' + escapeHtml(tr('webview.scriptHelpInsertPreRequest')) + '</button>' +
+                  '<button class="ghost-btn ripple-btn js-insert-script-template" type="button" data-target="test" data-template="testCaptureValue">' + escapeHtml(tr('webview.scriptHelpInsertCapture')) + '</button>' +
+                  '<button class="ghost-btn ripple-btn js-insert-script-template" type="button" data-target="test" data-template="testStatusCheck">' + escapeHtml(tr('webview.scriptHelpInsertStatus')) + '</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+    ) +
+  '</div>';
+}
+
+function insertScriptTemplate(mc, targetName, templateName) {
+  var input = mc?.querySelector(targetName === 'preRequest' ? '.js-script-prerequest' : '.js-script-test');
+  if (!input) return;
+  var template = scriptTemplateSource(templateName);
+  if (!template) return;
+  var existing = String(input.value || '').trim();
+  var doubleBreak = String.fromCharCode(10) + String.fromCharCode(10);
+  input.value = existing ? (existing + doubleBreak + template) : template;
+  input.focus();
+  input.selectionStart = input.selectionEnd = input.value.length;
+  markDirty();
+  refreshDraftInsights(mc);
 }
 
 function collapseWhitespace(text) {
@@ -3324,6 +3515,7 @@ function markDirty() {
       responseSearchIndex: typeof data?.responseSearchIndex === 'number' ? data.responseSearchIndex : 0,
       responseSearchCaseSensitive: data?.responseSearchCaseSensitive === true,
       responseSearchRegex: data?.responseSearchRegex === true,
+      scriptHelpCollapsed: data?.scriptHelpCollapsed === true,
       pinned: data?.pinned || false,
       dirty: false,
     _snapshot: null,  // 而щ젆?섏뿉??遺덈윭????쓽 ?먮낯 ?ㅻ깄??
@@ -3620,6 +3812,101 @@ function switchRequestEditorTabInContent(mc, tabName) {
   if (tabName === 'headers') refreshDefaultHeadersBanner(mc);
 }
 
+var linkedFocusTimer = null;
+
+function clearLinkedFocusInContent(mc) {
+  if (linkedFocusTimer) {
+    clearTimeout(linkedFocusTimer);
+    linkedFocusTimer = null;
+  }
+  mc?.querySelectorAll('.linked-focus-active').forEach(function(node) {
+    node.classList.remove('linked-focus-active');
+  });
+}
+
+function resolveLinkedFocusTargetInContent(mc, targetKey) {
+  if (!mc || !targetKey) return null;
+  var selectors = {
+    'params': '.js-params-panel',
+    'headers': '.js-headers-panel',
+    'body': '.js-body-panel',
+    'auth': '.js-auth-panel',
+    'scripts': '.js-scripts-panel',
+    'scripts:pre-request': '.js-script-prerequest',
+    'scripts:test': '.js-script-test',
+    'settings': '.js-settings-panel',
+    'settings:save-history': '.js-save-history',
+    'settings:skip-default-headers': '.js-skip-default-headers',
+    'settings:disable-scripts': '.js-disable-scripts',
+    'settings:follow-redirects': '.js-follow-redirects',
+    'settings:stop-after-headers': '.js-stop-after-headers',
+    'settings:timeout': '.js-timeout',
+    'settings:max-response-size': '.js-max-response-size',
+    'settings:retry-count': '.js-retry-count',
+    'settings:retry-delay': '.js-retry-delay',
+    'settings:tls-validation': '.js-tls-validation'
+  };
+  var selector = selectors[targetKey] || selectors[String(targetKey).split(':')[0]] || null;
+  if (!selector) return null;
+  return mc.querySelector(selector);
+}
+
+function resolveLinkedFocusContainer(target) {
+  if (!target) return null;
+  return target.closest('.settings-toggle, .script-card, .script-helper-shell, .default-headers-banner, .body-section') || target;
+}
+
+function focusLinkedTarget(target) {
+  if (!target) return;
+  if (typeof target.focus === 'function') {
+    try {
+      target.focus({ preventScroll: true });
+      return;
+    } catch (_) {
+      target.focus();
+      return;
+    }
+  }
+  var focusable = target.querySelector('input, textarea, select, button, [tabindex]:not([tabindex="-1"])');
+  if (focusable && typeof focusable.focus === 'function') {
+    try {
+      focusable.focus({ preventScroll: true });
+    } catch (_) {
+      focusable.focus();
+    }
+  }
+}
+
+function revealLinkedTargetInContent(mc, targetKey) {
+  var target = resolveLinkedFocusTargetInContent(mc, targetKey);
+  if (!target) return;
+  var container = resolveLinkedFocusContainer(target);
+  clearLinkedFocusInContent(mc);
+  container.classList.add('linked-focus-active');
+  if (typeof container.scrollIntoView === 'function') {
+    try {
+      container.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    } catch (_) {
+      container.scrollIntoView();
+    }
+  }
+  focusLinkedTarget(target);
+  linkedFocusTimer = setTimeout(function() {
+    container.classList.remove('linked-focus-active');
+    linkedFocusTimer = null;
+  }, 1800);
+}
+
+function switchRequestEditorTabAndRevealInContent(mc, meta) {
+  if (!mc || !meta) return;
+  var metaValue = String(meta);
+  var tabName = metaValue.split(':')[0];
+  switchRequestEditorTabInContent(mc, tabName);
+  requestAnimationFrame(function() {
+    revealLinkedTargetInContent(mc, metaValue);
+  });
+}
+
 function switchResponseTabInContent(mc, tabName) {
   if (!mc) return;
   const tab = tabs.find(function(tt) { return tt.id === activeTabId; });
@@ -3818,7 +4105,7 @@ function showTabContextMenu(x, y, tabId) {
         break;
       case 'duplicate':
         saveActiveTabState();
-        createTab({ name: tab.name, autoName: !!tab.autoName, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent, responseSearchQuery: tab.responseSearchQuery || '', responseSearchIndex: typeof tab.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0, responseSearchCaseSensitive: tab.responseSearchCaseSensitive === true, responseSearchRegex: tab.responseSearchRegex === true });
+        createTab({ name: tab.name, autoName: !!tab.autoName, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent, responseSearchQuery: tab.responseSearchQuery || '', responseSearchIndex: typeof tab.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0, responseSearchCaseSensitive: tab.responseSearchCaseSensitive === true, responseSearchRegex: tab.responseSearchRegex === true, scriptHelpCollapsed: tab.scriptHelpCollapsed === true });
         break;
     }
   });
@@ -4110,7 +4397,7 @@ function renderToplineStatusChips(tab) {
   }
 
   if (tab?.skipDefaultHeaders) {
-    chips.push(renderStatusChip(tr('webview.skipDefaultHeadersStatus'), 'warning', 'switch-tab', 'settings'));
+    chips.push(renderStatusChip(tr('webview.skipDefaultHeadersStatus'), 'warning', 'switch-tab', 'settings:skip-default-headers'));
   } else {
     var appliedDefaultHeaders = getAppliedDefaultHeaders(tab);
     if (appliedDefaultHeaders.length > 0) {
@@ -4119,11 +4406,11 @@ function renderToplineStatusChips(tab) {
   }
 
   if (tab?.disableScripts) {
-    chips.push(renderStatusChip(tr('webview.disableScriptsStatus'), 'warning', 'switch-tab', 'settings'));
+    chips.push(renderStatusChip(tr('webview.disableScriptsStatus'), 'warning', 'switch-tab', 'settings:disable-scripts'));
   }
 
   if (tab?.saveToHistory === false) {
-    chips.push(renderStatusChip(tr('webview.saveToHistoryOffStatus'), 'muted', 'switch-tab', 'settings'));
+    chips.push(renderStatusChip(tr('webview.saveToHistoryOffStatus'), 'muted', 'switch-tab', 'settings:save-history'));
   }
 
   return chips.join('');
@@ -4707,15 +4994,23 @@ function renderContent() {
           authHtml(tab.auth) +
         '</div>' +
         '<div class="js-scripts-panel body-section hidden">' +
+          renderScriptHelpers(tab) +
           '<div class="script-editor-grid">' +
             '<div class="script-card">' +
               '<div class="script-card-label">' + escapeHtml(tr('webview.preRequestScript')) + '</div>' +
               '<div class="script-card-note">' + escapeHtml(tr('webview.preRequestNote')) + '</div>' +
+              '<div class="script-card-actions">' +
+                '<button class="ghost-btn ripple-btn js-insert-script-template" type="button" data-target="preRequest" data-template="preRequestEnv">' + escapeHtml(tr('webview.scriptHelpInsertPreRequest')) + '</button>' +
+              '</div>' +
               '<textarea class="js-script-prerequest" placeholder="' + escapeAttr(tr('webview.preRequestPlaceholder')) + '">' + escapeHtml(tab.scripts?.preRequest || '') + '</textarea>' +
             '</div>' +
             '<div class="script-card">' +
               '<div class="script-card-label">' + escapeHtml(tr('webview.testScript')) + '</div>' +
               '<div class="script-card-note">' + escapeHtml(tr('webview.testNote')) + '</div>' +
+              '<div class="script-card-actions">' +
+                '<button class="ghost-btn ripple-btn js-insert-script-template" type="button" data-target="test" data-template="testCaptureValue">' + escapeHtml(tr('webview.scriptHelpInsertCapture')) + '</button>' +
+                '<button class="ghost-btn ripple-btn js-insert-script-template" type="button" data-target="test" data-template="testStatusCheck">' + escapeHtml(tr('webview.scriptHelpInsertStatus')) + '</button>' +
+              '</div>' +
               '<textarea class="js-script-test" placeholder="' + escapeAttr(tr('webview.testPlaceholder')) + '">' + escapeHtml(tab.scripts?.test || '') + '</textarea>' +
             '</div>' +
           '</div>' +
@@ -4896,7 +5191,7 @@ function bindContentEvents() {
       return;
     }
     if (action === 'switch-tab' && meta) {
-      switchRequestEditorTabInContent(mc, meta);
+      switchRequestEditorTabAndRevealInContent(mc, meta);
     }
   });
   mc.addEventListener('click', function(e) {
@@ -5436,6 +5731,17 @@ function bindContentEvents() {
   mc.querySelector('.js-script-test')?.addEventListener('input', function() {
     markDirty();
     refreshDraftInsights(mc);
+  });
+  mc.querySelectorAll('.js-insert-script-template').forEach(function(button) {
+    button.addEventListener('click', function() {
+      insertScriptTemplate(mc, button.dataset.target, button.dataset.template);
+      showBtnFeedback(button, tr('webview.inserted'), 1000);
+    });
+  });
+  mc.querySelector('.js-toggle-script-help')?.addEventListener('click', function() {
+    tab.scriptHelpCollapsed = tab.scriptHelpCollapsed !== true;
+    renderContent();
+    debouncePersist();
   });
 
   // === ?쒕옒洹?援щ텇??===
@@ -7289,7 +7595,7 @@ function handleVariableAutocompleteKeydown(event) {
 function persistTabState() {
     saveActiveTabState();
     var tabData = tabs.map(function(t) {
-    return Object.assign({ name: t.name, autoName: !!t.autoName, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
+    return Object.assign({ name: t.name, autoName: !!t.autoName, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, scriptHelpCollapsed: t.scriptHelpCollapsed === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
     });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
   vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx), compareSettings: cloneCompareSettings(compareSettings) });

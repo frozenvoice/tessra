@@ -94,6 +94,36 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.runRetryDelay': 'Retry in {count} ms',
   'webview.runRerunFailed': 'Rerun Failed',
   'webview.preRequestPlaceholder': 'env.set("token", "123");',
+  'webview.scriptHelpTitle': 'Script helpers',
+  'webview.scriptHelpRuntimeTitle': 'Built-ins',
+  'webview.scriptHelpRuntimeCopy': 'pm, env, test(), expect(), and assert() are available without importing anything.',
+  'webview.scriptHelpStepperTitle': 'Follow the 4-step request flow',
+  'webview.scriptHelpCollapse': 'Collapse help',
+  'webview.scriptHelpExpand': 'Expand help',
+  'webview.scriptHelpCollapsedCopy': 'Open the helper again anytime for built-ins, chaining examples, and step-by-step reminders.',
+  'webview.scriptHelpWhenTitle': 'When to use scripts',
+  'webview.scriptHelpRuntimeWhen': 'Use environment variables directly for fixed values. Use scripts when a value needs to come from a previous response.',
+  'webview.scriptHelpStageFixed': 'Start with environments',
+  'webview.scriptHelpStageSend': 'Send the resolved request',
+  'webview.scriptHelpStageTest': 'Read the response in tests',
+  'webview.scriptHelpStageReuse': 'Reuse the saved value',
+  'webview.scriptHelpRuleFixed': 'If the value is already known, keep it in environments and just reference {{variable}}.',
+  'webview.scriptHelpRuleDerived': 'If request 2 depends on request 1, save the response value in a test script and reuse it.',
+  'webview.scriptHelpRulePreRequest': 'If something must be prepared right before sending, use the pre-request script.',
+  'webview.scriptHelpSequenceTitle': 'Execution order',
+  'webview.scriptHelpSequencePre': 'Pre-request script runs first and can prepare variables before the request is sent.',
+  'webview.scriptHelpSequenceSend': 'Arc Client sends the request with the latest resolved URL, headers, body, and auth.',
+  'webview.scriptHelpSequenceTest': 'After the response arrives, the test script can inspect pm.response and assert values.',
+  'webview.scriptHelpSequencePersist': 'Values saved with pm.environment.set(...) are available to the next request right away.',
+  'webview.scriptHelpFlowTitle': 'Chain request 1 -> request 2',
+  'webview.scriptHelpFlowCopy': 'Save a response value in request 1, then reference it as {{sessionKey}} in request 2.',
+  'webview.scriptHelpRequestOne': 'Request 1 · Test script',
+  'webview.scriptHelpRequestTwo': 'Request 2 · Use in URL, headers, body, or auth',
+  'webview.scriptHelpQuickInsertTitle': 'Quick inserts',
+  'webview.scriptHelpQuickInsertCopy': 'Drop a starter snippet into the editor below, then only adjust the variable names you need.',
+  'webview.scriptHelpInsertPreRequest': 'Insert pre-request example',
+  'webview.scriptHelpInsertCapture': 'Insert capture example',
+  'webview.scriptHelpInsertStatus': 'Insert status test',
   'webview.sampleRequestName': 'Sample Request',
   'webview.requestDiffTitle': 'Request changes',
   'webview.requestDiffCount': '{count} updates',
@@ -131,6 +161,7 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.testSummaryAllPassed': 'All tests passed',
   'webview.testSummaryFirstFailure': 'First failure',
   'webview.testPlaceholder': 'test("status", function () { pm.response.to.have.status(200); });',
+  'webview.inserted': 'Inserted',
   'webview.comparisonSettings': 'Comparison Settings',
   'webview.discard': 'Discard',
   'webview.unsavedClosePrompt': 'There are unsaved changes. Close this tab?',
@@ -396,10 +427,13 @@ describe('RequestPanel Webview', () => {
     assert.ok(html.includes('Ready to ship requests'), 'empty state hero should be rendered');
     assert.ok(html.includes('settings-grid'), 'settings layout should use cards');
     assert.ok(html.includes('script-card'), 'scripts tab should use cards');
+    assert.ok(html.includes('script-helper-grid'), 'scripts tab should render helper cards');
     assert.ok(html.includes('btn-keyhint'), 'send button should show the Enter key hint');
     assert.match(script, /function getRequestStageInfo\(tab\)/);
     assert.match(script, /function renderEmptyState\(kicker, title, copy, cards, actions, badge\)/);
     assert.match(script, /function buildCompareChipMarkup\(currentSignature\)/);
+    assert.match(script, /function scriptTemplateSource\(name\)/);
+    assert.match(script, /function insertScriptTemplate\(mc, targetName, templateName\)/);
   });
 
   it('normalizes and persists request settings in tab state and save actions', () => {
@@ -511,11 +545,37 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /responseSearchQuery: typeof data\?\.responseSearchQuery === 'string'/);
     assert.match(script, /responseSearchCaseSensitive: data\?\.responseSearchCaseSensitive === true/);
     assert.match(script, /responseSearchRegex: data\?\.responseSearchRegex === true/);
+    assert.match(script, /scriptHelpCollapsed: data\?\.scriptHelpCollapsed === true/);
     assert.match(script, /responseSearchQuery: t\.responseSearchQuery \|\| ''/);
     assert.match(script, /responseSearchCaseSensitive: t\.responseSearchCaseSensitive === true/);
     assert.match(script, /responseSearchRegex: t\.responseSearchRegex === true/);
+    assert.match(script, /scriptHelpCollapsed: t\.scriptHelpCollapsed === true/);
     assert.match(script, /data-action="switch-environment"/);
     assert.match(script, /type: 'switchEnvironment'/);
+  });
+
+  it('reveals linked settings targets from request chips and summaries', () => {
+    assert.match(script, /function clearLinkedFocusInContent\(mc\)/);
+    assert.match(script, /function revealLinkedTargetInContent\(mc, targetKey\)/);
+    assert.match(script, /function switchRequestEditorTabAndRevealInContent\(mc, meta\)/);
+    assert.match(script, /linked-focus-active/);
+    assert.match(script, /settings:save-history/);
+    assert.match(script, /settings:skip-default-headers/);
+    assert.match(script, /settings:disable-scripts/);
+    assert.match(script, /switchRequestEditorTabAndRevealInContent\(mc, meta\)/);
+  });
+
+  it('renders collapsible script helpers with a stepper layout', () => {
+    assert.match(script, /function renderScriptHelpStep\(index, titleKey, copyKey\)/);
+    assert.match(script, /function renderScriptHelpers\(tab\)/);
+    assert.match(script, /class="script-helper-shell/);
+    assert.match(script, /class="script-helper-stepper"/);
+    assert.match(script, /class="script-helper-card tinted"/);
+    assert.match(script, /class="script-helper-columns flow"/);
+    assert.match(script, /tr\('webview\.scriptHelpQuickInsertTitle'\)/);
+    assert.match(script, /data-template="testCaptureValue"/);
+    assert.match(script, /js-toggle-script-help/);
+    assert.match(script, /tab\.scriptHelpCollapsed = tab\.scriptHelpCollapsed !== true/);
   });
 
   it('shows richer collection runner status updates', () => {

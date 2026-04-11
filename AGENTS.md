@@ -78,7 +78,7 @@ arc-client/
 5. History 저장, pin, filter, 자동 정리
 6. 인증: Basic, Bearer, API Key
 7. Body 타입: JSON, XML, form-urlencoded, form-data, binary, raw
-8. Pre-request / Test scripts
+8. Pre-request / Test scripts (`pm`, `env`, `test`, `expect`, `assert` 내장 지원, 접이식 stepper 도움말, 인앱 예제 힌트 포함)
 9. OpenAPI / Postman collection/environment import/export
 10. cURL import / copy as cURL
 11. 코드 생성: `fetch`, `axios`, `Java HttpURLConnection`

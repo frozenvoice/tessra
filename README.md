@@ -110,6 +110,16 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - `pm.test`, `pm.expect`, `pm.environment`
 - Script logs and test results
 - Pass/fail/log summary badges and first-failure highlighting
+- Collapsible in-app script helper stepper plus insertable examples for chaining request 1 response values into request 2
+
+Example flow:
+
+```js
+const body = pm.response.json();
+pm.environment.set("sessionKey", String(body.key));
+```
+
+Then use `{{sessionKey}}` in request 2.
 
 ### Import / Export
 - cURL import
