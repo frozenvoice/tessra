@@ -22,7 +22,11 @@ import { CurlService } from './services/CurlService';
 import { GuidePanel } from './panels/GuidePanel';
 import { ImportExportService } from './services/ImportExportService';
 import { CodegenService } from './services/CodegenService';
-import { LocalizationService, SUPPORTED_DISPLAY_LANGUAGES } from './services/LocalizationService';
+import {
+  LocalizationService,
+  SUPPORTED_DISPLAY_LANGUAGES,
+  SUPPORTED_REQUEST_PANEL_THEMES,
+} from './services/LocalizationService';
 import { RequestExportService } from './services/RequestExportService';
 
 const VALID_HTTP_METHODS: ReadonlySet<HttpMethod> = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
@@ -615,6 +619,32 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('arc.changeRequestPanelTheme', async () => {
+      const current = LocalizationService.getRequestPanelTheme();
+      const language = LocalizationService.getDisplayLanguage();
+      const picks = SUPPORTED_REQUEST_PANEL_THEMES.map((theme) => ({
+        label: LocalizationService.getRequestPanelThemeLabel(theme, language),
+        description: theme === current ? t('picker.current') : undefined,
+        theme,
+      }));
+
+      const selected = await vscode.window.showQuickPick(picks, {
+        placeHolder: t('picker.selectRequestPanelTheme'),
+      });
+      if (!selected || selected.theme === current) { return; }
+
+      await vscode.workspace.getConfiguration('arc-client').update(
+        'requestPanelTheme',
+        selected.theme,
+        vscode.ConfigurationTarget.Global
+      );
+      vscode.window.showInformationMessage(t('info.requestPanelThemeUpdated', {
+        theme: LocalizationService.getRequestPanelThemeLabel(selected.theme, language),
+      }));
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('arc.changeWorkspaceProfile', async () => {
       const current = storage.getWorkspaceProfileName();
       const existingProfiles = storage.listProfiles();
@@ -694,8 +724,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
     const displayLanguageChanged = event.affectsConfiguration('arc-client.displayLanguage');
+    const requestPanelThemeChanged = event.affectsConfiguration('arc-client.requestPanelTheme');
     const workspaceProfileChanged = event.affectsConfiguration('arc-client.workspaceProfile');
-    if (!displayLanguageChanged && !workspaceProfileChanged) { return; }
+    if (!displayLanguageChanged && !requestPanelThemeChanged && !workspaceProfileChanged) { return; }
 
     if (displayLanguageChanged) {
       envStatusBar.tooltip = t('statusBar.switchEnvironment');
@@ -708,11 +739,16 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
 
-    updateStatusBar(envStatusBar, environmentProvider);
-    collectionProvider.refresh();
-    historyProvider.refresh();
-    environmentProvider.refresh();
-    RequestPanel.refreshCurrentPanel();
+    if (displayLanguageChanged) {
+      updateStatusBar(envStatusBar, environmentProvider);
+      collectionProvider.refresh();
+      historyProvider.refresh();
+      environmentProvider.refresh();
+    }
+
+    if (displayLanguageChanged || requestPanelThemeChanged) {
+      RequestPanel.refreshCurrentPanel();
+    }
   }));
 }
 

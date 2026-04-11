@@ -21,6 +21,10 @@ describe('LocalizationService source', () => {
       source,
       /export const SUPPORTED_DISPLAY_LANGUAGES = \[\s*'en',\s*'ko',\s*'ja',\s*\] as const;/
     );
+    assert.match(
+      source,
+      /export const SUPPORTED_REQUEST_PANEL_THEMES = \[\s*'default',\s*'minimal-cool',\s*'product',\s*'bold-color',\s*\] as const;/
+    );
   });
 
   it('keeps dirty-close and file-picker strings translated for every supported language', () => {
@@ -209,5 +213,21 @@ describe('LocalizationService source', () => {
       const matches = source.match(new RegExp(`'${key.replace(/\./g, '\\.')}'\\s*:`, 'g')) ?? [];
       assert.strictEqual(matches.length, 3, `${key} should exist for every supported language`);
     }
+  });
+
+  it('keeps request-panel theme picker guidance translated for every supported language', () => {
+    const keys = [
+      'picker.selectRequestPanelTheme',
+      'info.requestPanelThemeUpdated',
+    ];
+
+    for (const key of keys) {
+      const matches = source.match(new RegExp(`'${key.replace(/\./g, '\\.')}'\\s*:`, 'g')) ?? [];
+      assert.strictEqual(matches.length, 3, `${key} should exist for every supported language`);
+    }
+
+    assert.match(source, /const REQUEST_PANEL_THEME_LABELS: Record<RequestPanelTheme, Record<DisplayLanguage, string>> = \{/);
+    assert.match(source, /public static getRequestPanelTheme\(\): RequestPanelTheme \{/);
+    assert.match(source, /public static getRequestPanelThemeLabel\(/);
   });
 });

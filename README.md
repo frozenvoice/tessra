@@ -192,6 +192,14 @@ Run `Arc: Open Guide` to open the user guide inside VS Code.
 - VS Code locale does not change Arc Client UI anymore
 - You can also run `Arc: Change Display Language` from the Command Palette
 
+### `arc-client.requestPanelTheme`
+- Type: `string`
+- Default: `default`
+- Supported values: `default`, `minimal-cool`, `product`, `bold-color`
+- Controls the visual preset used by the Arc Client request panel webview
+- Available presets: balanced default polish, minimal cool, stronger product feel, and bolder color accents
+- You can also run `Arc: Change Request Panel Theme` from the Command Palette
+
 ### `arc-client.workspaceProfile`
 - Type: `string`
 - Default: `default`

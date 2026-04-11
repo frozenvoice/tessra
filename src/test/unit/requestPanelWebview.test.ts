@@ -193,6 +193,7 @@ function renderHtml(template: string): string {
     'nonce',
     'hljsUri',
     'displayLanguage',
+    'requestPanelTheme',
     'localizedStrings',
     'dateLocale',
     'LocalizationService',
@@ -202,6 +203,7 @@ function renderHtml(template: string): string {
     nonce: string,
     hljsUri: string,
     displayLanguage: string,
+    requestPanelTheme: string,
     localizedStrings: string,
     dateLocale: string,
     localizationService: { t: (key: string) => string }
@@ -212,6 +214,7 @@ function renderHtml(template: string): string {
     'test-nonce',
     'hljs.js',
     'en',
+    'default',
     JSON.stringify(TEST_STRINGS).replace(/</g, '\\u003c'),
     'en-US',
     {
@@ -589,6 +592,7 @@ describe('RequestPanel Webview', () => {
 
   it('injects display language resources into the webview', () => {
     assert.ok(html.includes('<html lang="en">'), 'webview should render with the configured display language');
+    assert.ok(html.includes('<body data-panel-theme="default">'), 'webview should render with the configured request panel theme');
     assert.match(script, /let i18n = \{/);
     assert.match(script, /let appDateLocale = "en-US";/);
     assert.match(script, /function tr\(key\)/);
@@ -600,9 +604,21 @@ describe('RequestPanel Webview', () => {
   it('updates localization without reloading the whole webview state', () => {
     assert.match(script, /function applyLocalizationUpdate\(msg\)/);
     assert.match(script, /if \(msg\.type === 'updateLocalization'\)/);
+    assert.match(script, /const REQUEST_PANEL_THEMES = \['default', 'minimal-cool', 'product', 'bold-color'\];/);
+    assert.match(script, /let currentRequestPanelTheme = "default";/);
+    assert.match(script, /function normalizeRequestPanelTheme\(theme\)/);
+    assert.match(script, /function applyRequestPanelTheme\(theme\)/);
+    assert.match(script, /document\.body\.setAttribute\('data-panel-theme', currentRequestPanelTheme\);/);
+    assert.match(script, /if \(typeof msg\.requestPanelTheme === 'string' && msg\.requestPanelTheme\) \{/);
     assert.match(script, /function knownDefaultTabNames\(\)/);
     assert.match(script, /if \(tab\.autoName \|\| isKnownDefaultTabName\(tab\.name\)\) \{/);
     assert.match(script, /updateStaticLocalizedText\(\);[\s\S]*renderTabBar\(\);[\s\S]*renderContent\(\);/);
+  });
+
+  it('ships distinct visual signatures for the request panel theme presets', () => {
+    assert.match(source, /body\[data-panel-theme="minimal-cool"\] \.tab\.active\{[\s\S]*box-shadow:inset 0 -2px 0 rgba\(125,200,255,.9\);/);
+    assert.match(source, /body\[data-panel-theme="product"\] \.settings-group-title,\s*body\[data-panel-theme="product"\] \.script-helper-label,/);
+    assert.match(source, /body\[data-panel-theme="bold-color"\] \.status-2xx\{[\s\S]*linear-gradient\(135deg,#133a22,#1f7a34\)/);
   });
 
   it('preserves auto-generated tab names across restore so localization can update them after restart', () => {

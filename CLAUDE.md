@@ -104,6 +104,12 @@ Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언�
 - 현재 유지 중인 표시 언어는 `en`, `ko`, `ja`
 - VS Code locale과 분리되어 동작
 
+### 요청 패널 테마
+- `arc-client.requestPanelTheme` 설정으로 요청 패널 webview 테마 프리셋 전환
+- 지원 프리셋: `default`, `minimal-cool`, `product`, `bold-color`
+- Command Palette에서 `Arc: Change Request Panel Theme` 제공
+- 열린 요청 패널에서도 즉시 테마가 반영되도록 유지
+
 ### 워크스페이스 프로필
 - `arc-client.workspaceProfile` 설정으로 로컬 저장 프로필 전환
 - collections / history / environments / default headers / saved tabs를 프로필별로 분리

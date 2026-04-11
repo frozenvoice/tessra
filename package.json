@@ -68,6 +68,24 @@
           ],
           "description": "%configuration.displayLanguage.description%"
         },
+        "arc-client.requestPanelTheme": {
+          "type": "string",
+          "scope": "window",
+          "default": "default",
+          "enum": [
+            "default",
+            "minimal-cool",
+            "product",
+            "bold-color"
+          ],
+          "enumDescriptions": [
+            "%configuration.requestPanelTheme.enum.default%",
+            "%configuration.requestPanelTheme.enum.minimalCool%",
+            "%configuration.requestPanelTheme.enum.product%",
+            "%configuration.requestPanelTheme.enum.boldColor%"
+          ],
+          "description": "%configuration.requestPanelTheme.description%"
+        },
         "arc-client.workspaceProfile": {
           "type": "string",
           "scope": "window",
@@ -162,6 +180,10 @@
       {
         "command": "arc.changeDisplayLanguage",
         "title": "%command.changeDisplayLanguage%"
+      },
+      {
+        "command": "arc.changeRequestPanelTheme",
+        "title": "%command.changeRequestPanelTheme%"
       },
       {
         "command": "arc.editDefaultHeaders",

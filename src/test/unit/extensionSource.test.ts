@@ -32,9 +32,14 @@ describe('extension source', () => {
     assert.match(source, /skipDefaultHeaders:\s*node\.item\.request\.skipDefaultHeaders === true/);
   });
 
-  it('registers dedicated OpenAPI import and workspace profile commands', () => {
+  it('registers dedicated OpenAPI import, request panel theme, and workspace profile commands', () => {
     assert.match(source, /registerCommand\('arc\.importOpenApi'/);
     assert.match(source, /ImportExportService\.importOpenApiDocuments\(openApiDocuments\)/);
+    assert.match(source, /registerCommand\('arc\.changeRequestPanelTheme'/);
+    assert.match(source, /SUPPORTED_REQUEST_PANEL_THEMES\.map\(\(theme\)/);
+    assert.match(source, /picker\.selectRequestPanelTheme/);
+    assert.match(source, /info\.requestPanelThemeUpdated/);
+    assert.match(source, /update\(\s*'requestPanelTheme'/);
     assert.match(source, /registerCommand\('arc\.changeWorkspaceProfile'/);
     assert.match(source, /picker\.workspaceProfileDefaultDescription/);
     assert.match(source, /info\.workspaceProfileCreated/);
@@ -43,7 +48,10 @@ describe('extension source', () => {
     assert.match(source, /update\(\s*'workspaceProfile'/);
   });
 
-  it('reloads workspace-scoped state when the workspace profile changes', () => {
+  it('refreshes the current panel when the request panel theme changes and reloads storage when the workspace profile changes', () => {
+    assert.match(source, /const requestPanelThemeChanged = event\.affectsConfiguration\('arc-client\.requestPanelTheme'\);/);
+    assert.match(source, /if \(!displayLanguageChanged && !requestPanelThemeChanged && !workspaceProfileChanged\) \{ return; \}/);
+    assert.match(source, /if \(displayLanguageChanged \|\| requestPanelThemeChanged\) \{[\s\S]*RequestPanel\.refreshCurrentPanel\(\);/);
     assert.match(source, /event\.affectsConfiguration\('arc-client\.workspaceProfile'\)/);
     assert.match(source, /refreshWorkspaceScopedState\(\{ reloadPanel: true \}\);/);
     assert.match(source, /RequestPanel\.reloadCurrentPanelForStorageChange\(\)/);

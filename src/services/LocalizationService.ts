@@ -8,9 +8,19 @@ export const SUPPORTED_DISPLAY_LANGUAGES = [
 
 export type DisplayLanguage = typeof SUPPORTED_DISPLAY_LANGUAGES[number];
 
+export const SUPPORTED_REQUEST_PANEL_THEMES = [
+  'default',
+  'minimal-cool',
+  'product',
+  'bold-color',
+] as const;
+
+export type RequestPanelTheme = typeof SUPPORTED_REQUEST_PANEL_THEMES[number];
+
 type TranslationDictionary = Record<string, string>;
 
 const DEFAULT_LANGUAGE: DisplayLanguage = 'en';
+const DEFAULT_REQUEST_PANEL_THEME: RequestPanelTheme = 'default';
 
 const DATE_LOCALES: Record<DisplayLanguage, string> = {
   en: 'en-US',
@@ -22,6 +32,29 @@ const DISPLAY_LANGUAGE_LABELS: Record<DisplayLanguage, string> = {
   en: 'English',
   ko: 'Korean / 한국어',
   ja: 'Japanese / 日本語',
+};
+
+const REQUEST_PANEL_THEME_LABELS: Record<RequestPanelTheme, Record<DisplayLanguage, string>> = {
+  'default': {
+    en: 'Default',
+    ko: '기본',
+    ja: 'デフォルト',
+  },
+  'minimal-cool': {
+    en: 'Minimal Cool',
+    ko: '미니멀 쿨',
+    ja: 'ミニマル・クール',
+  },
+  'product': {
+    en: 'Product Feel',
+    ko: '더 프로덕트 감성',
+    ja: 'プロダクト感強め',
+  },
+  'bold-color': {
+    en: 'Bolder Color',
+    ko: '조금 더 대담한 컬러',
+    ja: '大胆なカラー',
+  },
 };
 
 const EN_STRINGS: TranslationDictionary = {
@@ -50,12 +83,14 @@ const EN_STRINGS: TranslationDictionary = {
   'picker.deactivateEnvironment': 'No Environment',
   'picker.current': 'Current',
   'picker.selectDisplayLanguage': 'Select Arc Client display language',
+  'picker.selectRequestPanelTheme': 'Select an Arc Client request panel theme',
   'picker.selectWorkspaceProfile': 'Select an Arc Client workspace profile',
   'picker.createWorkspaceProfile': 'Create New Profile',
   'picker.createWorkspaceProfileDescription': 'Use a separate local storage space for another project or workflow.',
   'picker.workspaceProfileDefaultDescription': 'Main local storage for your everyday Arc Client work.',
   'action.import': 'Import',
   'info.displayLanguageUpdated': 'Arc Client display language set to {language}.',
+  'info.requestPanelThemeUpdated': 'Arc Client request panel theme set to {theme}.',
   'input.workspaceProfile.prompt': 'Workspace profile name',
   'input.workspaceProfile.placeholder': 'client-a',
   'tree.loadRequest': 'Load Request',
@@ -494,12 +529,14 @@ const KO_STRINGS: Partial<TranslationDictionary> = {
   'picker.deactivateEnvironment': '환경 없음',
   'picker.current': '현재 사용 중',
   'picker.selectDisplayLanguage': 'Arc Client 표시 언어를 선택하세요',
+  'picker.selectRequestPanelTheme': 'Arc Client 요청 패널 테마를 선택하세요',
   'picker.selectWorkspaceProfile': 'Arc Client 워크스페이스 프로필을 선택하세요',
   'picker.createWorkspaceProfile': '새 프로필 만들기',
   'picker.createWorkspaceProfileDescription': '다른 프로젝트나 작업 흐름용 로컬 저장 공간을 분리합니다.',
   'picker.workspaceProfileDefaultDescription': '평소 Arc Client 작업을 두는 기본 로컬 저장 공간입니다.',
   'action.import': '가져오기',
   'info.displayLanguageUpdated': 'Arc Client 표시 언어를 {language}(으)로 변경했습니다.',
+  'info.requestPanelThemeUpdated': 'Arc Client 요청 패널 테마를 {theme}(으)로 변경했습니다.',
   'input.workspaceProfile.prompt': '워크스페이스 프로필 이름',
   'input.workspaceProfile.placeholder': 'client-a',
   'tree.loadRequest': '요청 불러오기',
@@ -938,12 +975,14 @@ const JA_STRINGS: Partial<TranslationDictionary> = {
   'picker.deactivateEnvironment': '環境なし',
   'picker.current': '現在使用中',
   'picker.selectDisplayLanguage': 'Arc Client の表示言語を選択してください',
+  'picker.selectRequestPanelTheme': 'Arc Client のリクエストパネルテーマを選択してください',
   'picker.selectWorkspaceProfile': 'Arc Client のワークスペースプロファイルを選択してください',
   'picker.createWorkspaceProfile': '新しいプロファイルを作成',
   'picker.createWorkspaceProfileDescription': '別のプロジェクトや作業用にローカル保存領域を分けます。',
   'picker.workspaceProfileDefaultDescription': '普段の Arc Client 作業を置くメインのローカル保存領域です。',
   'action.import': 'インポート',
   'info.displayLanguageUpdated': 'Arc Client の表示言語を {language} に変更しました。',
+  'info.requestPanelThemeUpdated': 'Arc Client のリクエストパネルテーマを {theme} に変更しました。',
   'input.workspaceProfile.prompt': 'ワークスペースプロファイル名',
   'input.workspaceProfile.placeholder': 'client-a',
   'tree.loadRequest': 'リクエストを読み込む',
@@ -1366,6 +1405,10 @@ function isDisplayLanguage(value: string | undefined): value is DisplayLanguage 
   return !!value && SUPPORTED_DISPLAY_LANGUAGES.includes(value as DisplayLanguage);
 }
 
+function isRequestPanelTheme(value: string | undefined): value is RequestPanelTheme {
+  return !!value && SUPPORTED_REQUEST_PANEL_THEMES.includes(value as RequestPanelTheme);
+}
+
 function interpolate(template: string, params?: Record<string, string | number>): string {
   if (!params) { return template; }
   return template.replace(/\{(\w+)\}/g, (_, key) => String(params[key] ?? `{${key}}`));
@@ -1377,12 +1420,26 @@ export class LocalizationService {
     return isDisplayLanguage(configured) ? configured : DEFAULT_LANGUAGE;
   }
 
+  public static getRequestPanelTheme(): RequestPanelTheme {
+    const configured = vscode.workspace.getConfiguration('arc-client').get<string>('requestPanelTheme', DEFAULT_REQUEST_PANEL_THEME);
+    return isRequestPanelTheme(configured) ? configured : DEFAULT_REQUEST_PANEL_THEME;
+  }
+
   public static getDateLocale(language: DisplayLanguage = LocalizationService.getDisplayLanguage()): string {
     return DATE_LOCALES[language] ?? DATE_LOCALES[DEFAULT_LANGUAGE];
   }
 
   public static getDisplayLanguageLabel(language: DisplayLanguage): string {
     return DISPLAY_LANGUAGE_LABELS[language] ?? DISPLAY_LANGUAGE_LABELS[DEFAULT_LANGUAGE];
+  }
+
+  public static getRequestPanelThemeLabel(
+    theme: RequestPanelTheme,
+    language: DisplayLanguage = LocalizationService.getDisplayLanguage()
+  ): string {
+    return REQUEST_PANEL_THEME_LABELS[theme]?.[language]
+      ?? REQUEST_PANEL_THEME_LABELS[theme]?.[DEFAULT_LANGUAGE]
+      ?? REQUEST_PANEL_THEME_LABELS[DEFAULT_REQUEST_PANEL_THEME][DEFAULT_LANGUAGE];
   }
 
   public static getStrings(language: DisplayLanguage = LocalizationService.getDisplayLanguage()): TranslationDictionary {

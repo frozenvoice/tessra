@@ -473,6 +473,7 @@ export interface UpdateLocalizationMessage {
   displayLanguage: string;
   strings: Record<string, string>;
   dateLocale: string;
+  requestPanelTheme?: string;
 }
 
 export interface LoadDefaultHeadersMessage {
