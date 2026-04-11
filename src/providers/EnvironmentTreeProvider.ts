@@ -106,7 +106,7 @@ export class EnvironmentTreeProvider
       ? `${LocalizationService.t('environment.active')} · ${LocalizationService.t('environment.vars', { count: env.variables.length })}`
       : LocalizationService.t('environment.vars', { count: env.variables.length });
     item.tooltip = isActive
-      ? `${env.name}\n${LocalizationService.t('environment.active')} 쨌 ${varsLabel}`
+      ? `${env.name}\n${LocalizationService.t('environment.active')} · ${varsLabel}`
       : `${env.name}\n${varsLabel}`;
     item.description = isActive
       ? `${LocalizationService.t('environment.active')} | ${varsLabel}`
