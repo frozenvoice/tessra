@@ -11,6 +11,13 @@ export type CollectionNode =
 
 const MIME = 'application/vnd.arc.collection-node';
 
+interface CollectionFilter {
+  terms: string[];
+  methods: string[];
+  hosts: string[];
+  types: string[];
+}
+
 // 컬렉션 TreeView 프로바이더 (드래그앤드롭 지원)
 export class CollectionTreeProvider
   implements vscode.TreeDataProvider<CollectionNode>, vscode.TreeDragAndDropController<CollectionNode>
@@ -36,6 +43,14 @@ export class CollectionTreeProvider
     this._onDidChangeTreeData.fire();
   }
 
+  get totalCollectionCount(): number {
+    return this.storage.getCollections().length;
+  }
+
+  get visibleCollectionCount(): number {
+    return this.getChildren().length;
+  }
+
   getTreeItem(node: CollectionNode): vscode.TreeItem {
     switch (node.kind) {
       case 'collection': {
@@ -44,6 +59,7 @@ export class CollectionTreeProvider
           vscode.TreeItemCollapsibleState.Expanded
         );
         item.iconPath = new vscode.ThemeIcon('folder-library');
+        item.description = this.describeItemStats(this.countItemStats(node.collection.items));
         item.contextValue = 'collection';
         return item;
       }
@@ -53,6 +69,7 @@ export class CollectionTreeProvider
           vscode.TreeItemCollapsibleState.Expanded
         );
         item.iconPath = new vscode.ThemeIcon('folder');
+        item.description = this.describeItemStats(this.countItemStats(node.item.children ?? []));
         item.contextValue = 'folder';
         return item;
       }
@@ -62,8 +79,10 @@ export class CollectionTreeProvider
           node.item.name,
           vscode.TreeItemCollapsibleState.None
         );
-        item.description = req.method;
+        item.description = `${req.method} · ${this.extractHost(req.url)}`;
+        item.description = `${req.method} · ${this.extractHost(req.url)}`;
         item.iconPath = this.getMethodIcon(req.method);
+        item.description = `${req.method} · ${this.extractHost(req.url)}`;
         item.contextValue = 'request';
         item.command = {
           command: 'arc.loadFromCollection',
@@ -76,16 +95,16 @@ export class CollectionTreeProvider
   }
 
   getChildren(node?: CollectionNode): CollectionNode[] {
-    const q = this._filterText.toLowerCase();
+    const filter = this.parseFilter(this._filterText);
 
     if (!node) {
       const collections = this.storage.getCollections();
-      if (!q) {
+      if (!this.hasActiveFilter(filter)) {
         return collections.map((c) => ({ kind: 'collection' as const, collection: c }));
       }
       // 필터 활성: 매칭 항목이 있는 컬렉션만 표시
       return collections
-        .filter((c) => this.hasMatchInItems(c.items, q))
+        .filter((c) => this.collectionMatches(c, filter))
         .map((c) => ({ kind: 'collection' as const, collection: c }));
     }
 
@@ -101,8 +120,8 @@ export class CollectionTreeProvider
     }
 
     // 필터 활성 시 매칭 항목만
-    if (q) {
-      items = items.filter((child) => this.itemMatches(child, q));
+    if (this.hasActiveFilter(filter)) {
+      items = items.filter((child) => this.itemMatches(child, filter));
     }
 
     return items.map((child) => ({
@@ -113,23 +132,110 @@ export class CollectionTreeProvider
   }
 
   // 항목이 검색어에 매칭되는지 (하위 포함)
-  private itemMatches(item: CollectionItem, q: string): boolean {
+  private itemMatches(item: CollectionItem, filter: CollectionFilter): boolean {
     if (item.type === 'request') {
-      const name = item.name.toLowerCase();
-      const url = (item.request?.url ?? '').toLowerCase();
-      const method = (item.request?.method ?? '').toLowerCase();
-      return name.includes(q) || url.includes(q) || method.includes(q);
+      return this.requestMatches(item, filter);
     }
     // 폴더: 이름 매칭 또는 하위에 매칭 항목 존재
-    if (item.name.toLowerCase().includes(q)) { return true; }
-    return this.hasMatchInItems(item.children ?? [], q);
+    const folderDirectMatch = this.matchesItemType(filter.types, 'folder')
+      && this.matchesTerms([item.name], filter.terms);
+    return folderDirectMatch || this.hasMatchInItems(item.children ?? [], filter);
   }
 
-  private hasMatchInItems(items: CollectionItem[], q: string): boolean {
-    return items.some((item) => this.itemMatches(item, q));
+  private hasMatchInItems(items: CollectionItem[], filter: CollectionFilter): boolean {
+    return items.some((item) => this.itemMatches(item, filter));
   }
 
   // === 드래그앤드롭 ===
+
+  private collectionMatches(collection: Collection, filter: CollectionFilter): boolean {
+    const directMatch = this.matchesItemType(filter.types, 'collection')
+      && this.matchesTerms([collection.name], filter.terms);
+    return directMatch || this.hasMatchInItems(collection.items, filter);
+  }
+
+  private requestMatches(item: CollectionItem, filter: CollectionFilter): boolean {
+    const request = item.request;
+    if (!request) { return false; }
+    const haystacks = [item.name, request.method, request.url, this.extractHost(request.url)];
+    if (!this.matchesItemType(filter.types, 'request')) { return false; }
+    if (!this.matchesTerms(haystacks, filter.terms)) { return false; }
+    if (!this.matchesValues(filter.methods, request.method)) { return false; }
+    if (!this.matchesValues(filter.hosts, this.extractHost(request.url))) { return false; }
+    return true;
+  }
+
+  private parseFilter(text: string): CollectionFilter {
+    const filter: CollectionFilter = { terms: [], methods: [], hosts: [], types: [] };
+    for (const token of String(text || '').trim().split(/\s+/).filter(Boolean)) {
+      const match = token.match(/^([a-z]+):(.*)$/i);
+      if (!match) {
+        filter.terms.push(token.toLowerCase());
+        continue;
+      }
+      const key = match[1].toLowerCase();
+      const value = match[2].toLowerCase();
+      if (!value) { continue; }
+      if (key === 'method') filter.methods.push(value);
+      else if (key === 'host') filter.hosts.push(value);
+      else if (key === 'type') filter.types.push(value);
+      else filter.terms.push(token.toLowerCase());
+    }
+    return filter;
+  }
+
+  private hasActiveFilter(filter: CollectionFilter): boolean {
+    return filter.terms.length > 0 || filter.methods.length > 0 || filter.hosts.length > 0 || filter.types.length > 0;
+  }
+
+  private matchesTerms(haystacks: Array<string | undefined>, terms: string[]): boolean {
+    if (terms.length === 0) { return true; }
+    const blob = haystacks.filter(Boolean).join(' ').toLowerCase();
+    return terms.every((term) => blob.includes(term));
+  }
+
+  private matchesValues(filters: string[], value: string): boolean {
+    if (filters.length === 0) { return true; }
+    const normalized = String(value || '').toLowerCase();
+    return filters.some((filter) => normalized.includes(filter));
+  }
+
+  private matchesItemType(filters: string[], itemType: 'collection' | 'folder' | 'request'): boolean {
+    if (filters.length === 0) { return true; }
+    return filters.includes(itemType);
+  }
+
+  private extractHost(url: string): string {
+    try {
+      return new URL(url).host;
+    } catch {
+      return url || '-';
+    }
+  }
+
+  private countItemStats(items: CollectionItem[]): { requestCount: number; folderCount: number } {
+    let requestCount = 0;
+    let folderCount = 0;
+    for (const item of items) {
+      if (item.type === 'folder') {
+        folderCount += 1;
+        const nested = this.countItemStats(item.children ?? []);
+        requestCount += nested.requestCount;
+        folderCount += nested.folderCount;
+      } else {
+        requestCount += 1;
+      }
+    }
+    return { requestCount, folderCount };
+  }
+
+  private describeItemStats(stats: { requestCount: number; folderCount: number }): string | undefined {
+    const parts: string[] = [];
+    if (stats.requestCount > 0) { parts.push(`${stats.requestCount} req`); }
+    if (stats.folderCount > 0) { parts.push(`${stats.folderCount} folders`); }
+    if (parts.length > 0) { return parts.join(' · '); }
+    return parts.length > 0 ? parts.join(' · ') : undefined;
+  }
 
   handleDrag(source: readonly CollectionNode[], dataTransfer: vscode.DataTransfer): void {
     // 컬렉션 자체는 드래그 불가

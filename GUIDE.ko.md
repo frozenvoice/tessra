@@ -45,6 +45,17 @@ Body: {"env":"{{envName}}"}
 - 실행 시점 스냅샷 기반 history 저장
 - 활성 환경 전환과 `{{variables}}` 치환
 
+## 워크스페이스 프로필
+
+- `default`는 평소 Arc Client 작업을 두는 메인 로컬 저장 공간입니다
+- 다른 프로젝트, 가져온 OpenAPI/Postman 데이터, 임시 실험이 기존 작업과 섞이면 안 될 때 새 프로필을 만드세요
+- 프로필은 collections, history, environments, default headers, saved tabs를 통째로 분리합니다
+- 실전 기준으로는 이렇게 나누면 가장 덜 헷갈립니다
+  - 프로필: 서로 다른 프로젝트나 작업 흐름
+  - 환경: 같은 프로젝트 안의 `local`, `staging`, `prod`
+- 전환이나 생성은 `Arc: Change Workspace Profile`에서 할 수 있습니다
+- 요청 상단의 프로필 배지에 현재 프로필이 보이고, `default` 배지에는 의미 설명 툴팁이 붙습니다
+
 ## Scripts
 
 - Pre-request script

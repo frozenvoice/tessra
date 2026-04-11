@@ -53,6 +53,17 @@ Body: {"env":"{{envName}}"}
 - Store request history as executed snapshots
 - Switch active environments and use `{{variables}}` across the request
 
+## Workspace profiles
+
+- `default` is the main local storage space for your everyday Arc Client work
+- Create another profile when a different project, imported spec, or experiment should not mix with your current collections and history
+- Profiles split collections, history, environments, default headers, and saved tabs
+- A practical rule:
+  - Use profiles for different projects or workflows
+  - Use environments for `local`, `staging`, and `prod` inside one project
+- Use `Arc: Change Workspace Profile` to switch or create profiles
+- The request header shows the current profile, and the `default` profile chip explains what it means when you hover it
+
 ## Scripts
 
 - Pre-request scripts

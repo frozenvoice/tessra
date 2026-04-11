@@ -7,6 +7,7 @@ export type CompareMode = 'raw' | 'normalized' | 'pretty';
 export interface CompareSettings {
   mode: CompareMode;
   includeMetadataSummary: boolean;
+  foldUnchangedSections: boolean;
   ignoreHeaders: string[];
   ignoreJsonPaths: string[];
 }
@@ -48,6 +49,11 @@ interface NormalizedCompareSide {
   metadataContent: string;
   bodyHash: string;
   parsedJson?: unknown;
+}
+
+interface FoldedBodyPair {
+  left: string;
+  right: string;
 }
 
 interface JsonIgnorePattern {
@@ -92,6 +98,7 @@ export class ResponseCompareService {
     return {
       mode: settings?.mode === 'raw' || settings?.mode === 'pretty' ? settings.mode : 'normalized',
       includeMetadataSummary: settings?.includeMetadataSummary !== false,
+      foldUnchangedSections: settings?.foldUnchangedSections !== false,
       ignoreHeaders: this.normalizeStringList(settings?.ignoreHeaders, this.DEFAULT_IGNORE_HEADERS),
       ignoreJsonPaths: this.normalizeStringList(settings?.ignoreJsonPaths, this.DEFAULT_IGNORE_JSON_PATHS),
     };
@@ -105,17 +112,20 @@ export class ResponseCompareService {
     const options = this.normalizeSettings(settings);
     const leftSide = this.prepareSide(left, options);
     const rightSide = this.prepareSide(right, options);
-    const sharedSummary = this.buildSharedSummary(leftSide.parsedJson, rightSide.parsedJson, options);
+    const sharedSummary = this.buildSharedSummary(leftSide, rightSide, options);
+    const foldedBodies = options.foldUnchangedSections
+      ? this.foldUnchangedPair(leftSide.bodyContent, rightSide.bodyContent)
+      : null;
 
     return {
       title: `Response Compare: ${left.label} vs ${right.label} (${options.mode})`,
       left: {
         extension: leftSide.extension,
-        content: this.buildDocument(left.label, sharedSummary, leftSide, options),
+        content: this.buildDocument(left.label, sharedSummary, leftSide, options, foldedBodies?.left),
       },
       right: {
         extension: rightSide.extension,
-        content: this.buildDocument(right.label, sharedSummary, rightSide, options),
+        content: this.buildDocument(right.label, sharedSummary, rightSide, options, foldedBodies?.right),
       },
     };
   }
@@ -201,10 +211,12 @@ export class ResponseCompareService {
     label: string,
     sharedSummary: string,
     side: NormalizedCompareSide,
-    options: CompareSettings
+    options: CompareSettings,
+    foldedBodyContent?: string
   ): string {
+    const renderedBody = foldedBodyContent ?? side.bodyContent;
     if (!options.includeMetadataSummary) {
-      return side.bodyContent || '[Empty body]';
+      return renderedBody || '[Empty body]';
     }
 
     const sections: string[] = [
@@ -214,27 +226,172 @@ export class ResponseCompareService {
     sections.push(side.metadataContent);
 
     sections.push('=== Body ===');
-    sections.push(side.bodyContent || '[Empty body]');
+    sections.push(renderedBody || '[Empty body]');
     return sections.join('\n\n');
   }
 
-  private static buildSharedSummary(leftJson: unknown, rightJson: unknown, options: CompareSettings): string {
+  private static buildSharedSummary(leftSide: NormalizedCompareSide, rightSide: NormalizedCompareSide, options: CompareSettings): string {
     const lines = [
       '=== Comparison Summary ===',
       `Mode: ${this.capitalize(options.mode)}`,
       `Metadata Summary: ${options.includeMetadataSummary ? 'Included' : 'Hidden'}`,
+      `Fold Unchanged: ${options.foldUnchangedSections ? 'Enabled' : 'Disabled'}`,
       `Ignored Headers: ${options.ignoreHeaders.length > 0 ? options.ignoreHeaders.join(', ') : '(none)'}`,
       `Ignored JSON Paths: ${options.ignoreJsonPaths.length > 0 ? options.ignoreJsonPaths.join(', ') : '(none)'}`,
     ];
 
-    const changedPaths = this.collectChangedJsonPaths(leftJson, rightJson);
+    const changedPaths = this.collectChangedJsonPaths(leftSide.parsedJson, rightSide.parsedJson);
     if (changedPaths.length > 0) {
       lines.push(`Changed JSON Paths: ${changedPaths.join(', ')}`);
-    } else if (leftJson !== undefined && rightJson !== undefined) {
+    } else if (leftSide.parsedJson !== undefined && rightSide.parsedJson !== undefined) {
       lines.push('Changed JSON Paths: (none)');
     }
 
+    lines.push(this.buildBodyComparisonStats(leftSide.bodyContent, rightSide.bodyContent));
+
     return lines.join('\n');
+  }
+
+  private static buildBodyComparisonStats(leftBody: string, rightBody: string): string {
+    const leftLines = String(leftBody || '').split('\n');
+    const rightLines = String(rightBody || '').split('\n');
+    const max = Math.max(leftLines.length, rightLines.length);
+    let changed = 0;
+    let leftOnly = 0;
+    let rightOnly = 0;
+
+    for (let index = 0; index < max; index += 1) {
+      const leftLine = leftLines[index];
+      const rightLine = rightLines[index];
+      if (leftLine === rightLine) { continue; }
+      changed += 1;
+      if (leftLine !== undefined && rightLine === undefined) { leftOnly += 1; }
+      else if (leftLine === undefined && rightLine !== undefined) { rightOnly += 1; }
+    }
+
+    return `Body Lines: left ${leftLines.length}, right ${rightLines.length}, changed ${changed}, left-only ${leftOnly}, right-only ${rightOnly}`;
+  }
+
+  private static foldUnchangedPair(leftBody: string, rightBody: string): FoldedBodyPair {
+    const leftLines = String(leftBody || '').split('\n');
+    const rightLines = String(rightBody || '').split('\n');
+
+    if (
+      leftLines.length === 0 ||
+      rightLines.length === 0 ||
+      leftLines.length > 2000 ||
+      rightLines.length > 2000
+    ) {
+      return { left: leftBody, right: rightBody };
+    }
+
+    const matches = this.computeLineMatches(leftLines, rightLines);
+    if (matches.length === 0) {
+      return { left: leftBody, right: rightBody };
+    }
+
+    const context = 2;
+    const leftOutput: string[] = [];
+    const rightOutput: string[] = [];
+    let leftCursor = 0;
+    let rightCursor = 0;
+    let matchCursor = 0;
+
+    while (matchCursor < matches.length) {
+      const runStart = matchCursor;
+      let runEnd = matchCursor;
+      while (
+        runEnd + 1 < matches.length &&
+        matches[runEnd + 1].left === matches[runEnd].left + 1 &&
+        matches[runEnd + 1].right === matches[runEnd].right + 1
+      ) {
+        runEnd += 1;
+      }
+
+      const run = matches.slice(runStart, runEnd + 1);
+      const runLeftStart = run[0].left;
+      const runRightStart = run[0].right;
+      const runLength = run.length;
+
+      if (leftCursor < runLeftStart) {
+        leftOutput.push(...leftLines.slice(leftCursor, runLeftStart));
+      }
+      if (rightCursor < runRightStart) {
+        rightOutput.push(...rightLines.slice(rightCursor, runRightStart));
+      }
+
+      if (runLength <= (context * 2) + 1) {
+        for (const match of run) {
+          leftOutput.push(leftLines[match.left]);
+          rightOutput.push(rightLines[match.right]);
+        }
+      } else {
+        for (let index = 0; index < context; index += 1) {
+          leftOutput.push(leftLines[run[index].left]);
+          rightOutput.push(rightLines[run[index].right]);
+        }
+
+        const foldedCount = runLength - (context * 2);
+        const placeholder = `… ${foldedCount} unchanged lines folded …`;
+        leftOutput.push(placeholder);
+        rightOutput.push(placeholder);
+
+        for (let index = runLength - context; index < runLength; index += 1) {
+          leftOutput.push(leftLines[run[index].left]);
+          rightOutput.push(rightLines[run[index].right]);
+        }
+      }
+
+      leftCursor = run[runLength - 1].left + 1;
+      rightCursor = run[runLength - 1].right + 1;
+      matchCursor = runEnd + 1;
+    }
+
+    if (leftCursor < leftLines.length) {
+      leftOutput.push(...leftLines.slice(leftCursor));
+    }
+    if (rightCursor < rightLines.length) {
+      rightOutput.push(...rightLines.slice(rightCursor));
+    }
+
+    return {
+      left: leftOutput.join('\n'),
+      right: rightOutput.join('\n'),
+    };
+  }
+
+  private static computeLineMatches(
+    leftLines: string[],
+    rightLines: string[],
+  ): Array<{ left: number; right: number }> {
+    const leftLength = leftLines.length;
+    const rightLength = rightLines.length;
+    const matrix: number[][] = Array.from({ length: leftLength + 1 }, () => new Array<number>(rightLength + 1).fill(0));
+
+    for (let leftIndex = leftLength - 1; leftIndex >= 0; leftIndex -= 1) {
+      for (let rightIndex = rightLength - 1; rightIndex >= 0; rightIndex -= 1) {
+        matrix[leftIndex][rightIndex] = leftLines[leftIndex] === rightLines[rightIndex]
+          ? matrix[leftIndex + 1][rightIndex + 1] + 1
+          : Math.max(matrix[leftIndex + 1][rightIndex], matrix[leftIndex][rightIndex + 1]);
+      }
+    }
+
+    const matches: Array<{ left: number; right: number }> = [];
+    let leftIndex = 0;
+    let rightIndex = 0;
+    while (leftIndex < leftLength && rightIndex < rightLength) {
+      if (leftLines[leftIndex] === rightLines[rightIndex]) {
+        matches.push({ left: leftIndex, right: rightIndex });
+        leftIndex += 1;
+        rightIndex += 1;
+      } else if (matrix[leftIndex + 1][rightIndex] >= matrix[leftIndex][rightIndex + 1]) {
+        leftIndex += 1;
+      } else {
+        rightIndex += 1;
+      }
+    }
+
+    return matches;
   }
 
   private static buildMetadata(

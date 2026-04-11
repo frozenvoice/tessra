@@ -50,15 +50,31 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   // 히스토리 뷰 타이틀 갱신 (개수 + 필터 표시)
+  function updateCollectionDescription(): void {
+    const visible = collectionProvider.visibleCollectionCount;
+    const total = collectionProvider.totalCollectionCount;
+    const filter = collectionProvider.filterText.trim();
+    const parts: string[] = [];
+    if (total > 0) { parts.push(filter ? `${visible}/${total}` : String(total)); }
+    if (filter) { parts.push(filter); }
+    collectionTreeView.description = parts.length > 0 ? parts.join(' · ') : undefined;
+    collectionTreeView.description = parts.length > 0 ? parts.join(' · ') : undefined;
+    collectionTreeView.description = parts.length > 0 ? parts.join(' · ') : undefined;
+  }
+
   function updateHistoryDescription(): void {
     const count = storage.getHistory().length;
-    const filter = historyProvider.filterText;
+    const visible = historyProvider.visibleCount;
+    const filter = historyProvider.filterText.trim();
     const parts: string[] = [];
-    if (count > 0) { parts.push(`(${count})`); }
+    if (count > 0) { parts.push(filter ? `${visible}/${count}` : String(count)); }
     if (filter) { parts.push(filter); }
-    historyTreeView.description = parts.length > 0 ? parts.join(' ') : undefined;
+    historyTreeView.description = parts.length > 0 ? parts.join(' · ') : undefined;
   }
   historyProvider.onCountChanged = () => updateHistoryDescription();
+  collectionProvider.onDidChangeTreeData(() => updateCollectionDescription());
+  historyProvider.onDidChangeTreeData(() => updateHistoryDescription());
+  updateCollectionDescription();
   updateHistoryDescription();
   const environmentTreeView = vscode.window.createTreeView('arc.environments', {
     treeDataProvider: environmentProvider,
@@ -85,6 +101,102 @@ export function activate(context: vscode.ExtensionContext) {
   updateStatusBar(envStatusBar, environmentProvider);
   envStatusBar.show();
   context.subscriptions.push(envStatusBar);
+
+  function refreshWorkspaceScopedState(options: { reloadPanel?: boolean } = {}): void {
+    environmentProvider.reloadFromStorage();
+    collectionProvider.refresh();
+    historyProvider.refresh();
+    environmentProvider.refresh();
+    updateCollectionDescription();
+    updateHistoryDescription();
+    updateStatusBar(envStatusBar, environmentProvider);
+
+    if (options.reloadPanel) {
+      RequestPanel.reloadCurrentPanelForStorageChange();
+    } else {
+      RequestPanel.currentPanel?.updateActiveEnv(environmentProvider.getActiveEnvironmentName());
+    }
+  }
+
+  async function importStructuredDocuments(
+    uris: readonly vscode.Uri[],
+    options: { openApiOnly?: boolean } = {}
+  ): Promise<void> {
+    const collections = storage.getCollections();
+    const environments = storage.getEnvironments();
+    const stats: ImportStats = { skippedCollections: 0, skippedItems: 0 };
+    const postmanDocuments: unknown[] = [];
+    const openApiDocuments: unknown[] = [];
+    let importedCollections = 0;
+
+    for (const uri of uris) {
+      try {
+        const raw = await vscode.workspace.fs.readFile(uri);
+        const data = JSON.parse(Buffer.from(raw).toString('utf-8'));
+        const items = Array.isArray(data) ? data : [data];
+
+        for (const item of items) {
+          if (ImportExportService.isOpenApiDocument(item)) {
+            openApiDocuments.push(item);
+            continue;
+          }
+          if (!options.openApiOnly && ImportExportService.isPostmanDocument(item)) {
+            postmanDocuments.push(item);
+            continue;
+          }
+          if (options.openApiOnly) {
+            continue;
+          }
+
+          const normalized = normalizeImportedCollection(item, stats);
+          if (!normalized) { continue; }
+          collections.push(normalized);
+          importedCollections++;
+        }
+      } catch (err: unknown) {
+        vscode.window.showErrorMessage(
+          t('error.importFailed', {
+            path: uri.fsPath,
+            message: err instanceof Error ? err.message : String(err),
+          })
+        );
+      }
+    }
+
+    const importedOpenApi = ImportExportService.importOpenApiDocuments(openApiDocuments);
+    const importedPostman = options.openApiOnly
+      ? { collections: [] as Collection[], environments: [] as Environment[] }
+      : ImportExportService.importDocuments(postmanDocuments);
+
+    collections.push(...importedOpenApi.collections, ...importedPostman.collections);
+    environments.push(...importedOpenApi.environments, ...importedPostman.environments);
+    importedCollections += importedOpenApi.collections.length + importedPostman.collections.length;
+
+    if (importedCollections > 0) {
+      storage.saveCollections(collections);
+      collectionProvider.refresh();
+      vscode.window.showInformationMessage(t('info.importedCollections', { count: importedCollections }));
+    } else if (options.openApiOnly) {
+      vscode.window.showWarningMessage(t('warn.noOpenApiDocuments'));
+    }
+
+    const importedEnvironmentCount = importedOpenApi.environments.length + importedPostman.environments.length;
+    if (importedEnvironmentCount > 0) {
+      storage.saveEnvironments(environments);
+      environmentProvider.reloadFromStorage();
+      environmentProvider.refresh();
+      updateStatusBar(envStatusBar, environmentProvider);
+      RequestPanel.currentPanel?.updateActiveEnv(environmentProvider.getActiveEnvironmentName());
+      vscode.window.showInformationMessage(t('info.importedEnvironments', { count: importedEnvironmentCount }));
+    }
+
+    if (!options.openApiOnly && (stats.skippedCollections > 0 || stats.skippedItems > 0)) {
+      vscode.window.showWarningMessage(t('warn.skippedImportData', {
+        collections: stats.skippedCollections,
+        items: stats.skippedItems,
+      }));
+    }
+  }
 
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.newRequest', () => {
@@ -170,64 +282,19 @@ export function activate(context: vscode.ExtensionContext) {
         openLabel: t('action.import'),
       });
       if (!uris || uris.length === 0) { return; }
+      await importStructuredDocuments(uris);
+    })
+  );
 
-      const collections = storage.getCollections();
-      const environments = storage.getEnvironments();
-      const stats: ImportStats = { skippedCollections: 0, skippedItems: 0 };
-      const postmanDocuments: unknown[] = [];
-      let imported = 0;
-
-      for (const uri of uris) {
-        try {
-          const raw = await vscode.workspace.fs.readFile(uri);
-          const data = JSON.parse(Buffer.from(raw).toString('utf-8'));
-          const items = Array.isArray(data) ? data : [data];
-
-          for (const item of items) {
-            if (looksLikePostmanDocument(item)) {
-              postmanDocuments.push(item);
-              continue;
-            }
-            const normalized = normalizeImportedCollection(item, stats);
-            if (!normalized) {
-              continue;
-            }
-            collections.push(normalized);
-            imported++;
-          }
-        } catch (err: unknown) {
-          vscode.window.showErrorMessage(
-            t('error.importFailed', {
-              path: uri.fsPath,
-              message: err instanceof Error ? err.message : String(err),
-            })
-          );
-        }
-      }
-
-      const importedPostman = ImportExportService.importDocuments(postmanDocuments);
-      collections.push(...importedPostman.collections);
-      environments.push(...importedPostman.environments);
-      imported += importedPostman.collections.length;
-
-      if (imported > 0) {
-        storage.saveCollections(collections);
-        collectionProvider.refresh();
-        vscode.window.showInformationMessage(t('info.importedCollections', { count: imported }));
-      }
-
-      if (importedPostman.environments.length > 0) {
-        storage.saveEnvironments(environments);
-        environmentProvider.refresh();
-        vscode.window.showInformationMessage(t('info.importedEnvironments', { count: importedPostman.environments.length }));
-      }
-
-      if (stats.skippedCollections > 0 || stats.skippedItems > 0) {
-        vscode.window.showWarningMessage(t('warn.skippedImportData', {
-          collections: stats.skippedCollections,
-          items: stats.skippedItems,
-        }));
-      }
+  context.subscriptions.push(
+    vscode.commands.registerCommand('arc.importOpenApi', async () => {
+      const uris = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        filters: { 'OpenAPI JSON': ['json'] },
+        openLabel: t('action.import'),
+      });
+      if (!uris || uris.length === 0) { return; }
+      await importStructuredDocuments(uris, { openApiOnly: true });
     })
   );
 
@@ -276,7 +343,7 @@ export function activate(context: vscode.ExtensionContext) {
       inputBox.title = t('filter.collections.title');
       inputBox.onDidChangeValue((value) => {
         collectionProvider.filterText = value;
-        collectionTreeView.description = value || undefined;
+        updateCollectionDescription();
         vscode.commands.executeCommand('setContext', 'arc.collectionFilterActive', !!value);
       });
       inputBox.onDidAccept(() => inputBox.hide());
@@ -288,7 +355,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('arc.clearCollectionFilter', () => {
       collectionProvider.filterText = '';
-      collectionTreeView.description = undefined;
+      updateCollectionDescription();
       vscode.commands.executeCommand('setContext', 'arc.collectionFilterActive', false);
     })
   );
@@ -548,6 +615,67 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('arc.changeWorkspaceProfile', async () => {
+      const current = storage.getWorkspaceProfileName();
+      const existingProfiles = storage.listProfiles();
+      const existingCustomProfiles = existingProfiles.filter((profileName) => profileName !== 'default');
+      const picks: Array<vscode.QuickPickItem & { profileName: string }> = [
+        ...storage.listProfiles().map((profileName) => ({
+          label: profileName,
+          description: profileName === current ? t('picker.current') : undefined,
+          detail: profileName === 'default' ? t('picker.workspaceProfileDefaultDescription') : undefined,
+          profileName,
+        })),
+        {
+          label: t('picker.createWorkspaceProfile'),
+          description: t('picker.createWorkspaceProfileDescription'),
+          profileName: '__create__',
+        },
+      ];
+
+      const selected = await vscode.window.showQuickPick(picks, {
+        placeHolder: t('picker.selectWorkspaceProfile'),
+      });
+      if (!selected) { return; }
+
+      let nextProfile = selected.profileName;
+      let isCreatingNewProfile = false;
+      if (nextProfile === '__create__') {
+        const entered = await vscode.window.showInputBox({
+          prompt: t('input.workspaceProfile.prompt'),
+          placeHolder: t('input.workspaceProfile.placeholder'),
+          ignoreFocusOut: true,
+          value: current === 'default' ? '' : current,
+        });
+        const normalized = String(entered || '').trim();
+        if (!normalized) { return; }
+        nextProfile = normalized;
+        isCreatingNewProfile = existingProfiles.indexOf(nextProfile) < 0;
+      }
+
+      if (nextProfile === current) { return; }
+
+      await RequestPanel.flushCurrentPanelState();
+      await vscode.workspace.getConfiguration('arc-client').update(
+        'workspaceProfile',
+        nextProfile,
+        vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
+          ? vscode.ConfigurationTarget.Workspace
+          : vscode.ConfigurationTarget.Global
+      );
+
+      if (isCreatingNewProfile) {
+        const createdKey = existingCustomProfiles.length === 0
+          ? 'info.workspaceProfileFirstCreated'
+          : 'info.workspaceProfileCreated';
+        vscode.window.showInformationMessage(t(createdKey, { profile: nextProfile }));
+      } else {
+        vscode.window.showInformationMessage(t('info.workspaceProfileUpdated', { profile: nextProfile }));
+      }
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('arc.openGuide', () => {
       GuidePanel.show(context.extensionUri);
     })
@@ -565,15 +693,26 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(requestPanelSerializer);
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
-    if (!event.affectsConfiguration('arc-client.displayLanguage')) { return; }
-    envStatusBar.tooltip = t('statusBar.switchEnvironment');
+    const displayLanguageChanged = event.affectsConfiguration('arc-client.displayLanguage');
+    const workspaceProfileChanged = event.affectsConfiguration('arc-client.workspaceProfile');
+    if (!displayLanguageChanged && !workspaceProfileChanged) { return; }
+
+    if (displayLanguageChanged) {
+      envStatusBar.tooltip = t('statusBar.switchEnvironment');
+      updateLocalizedViewTitles();
+      GuidePanel.refreshCurrentPanel(context.extensionUri);
+    }
+
+    if (workspaceProfileChanged) {
+      refreshWorkspaceScopedState({ reloadPanel: true });
+      return;
+    }
+
     updateStatusBar(envStatusBar, environmentProvider);
-    updateLocalizedViewTitles();
     collectionProvider.refresh();
     historyProvider.refresh();
     environmentProvider.refresh();
     RequestPanel.refreshCurrentPanel();
-    GuidePanel.refreshCurrentPanel(context.extensionUri);
   }));
 }
 

@@ -44,10 +44,12 @@ Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언�
 - Collection / folder / request CRUD
 - Duplicate / Save As
 - Drag & Drop 정렬
-- Filter
+- method / host / type / status / pinned 토큰 필터
 - Run All Requests
+- 컬렉션 러너에서 실패한 요청만 재실행
 - History pin / filter / prune
 - 실행 시점 스냅샷 기반 history 저장
+- 더 촘촘한 사이드바 설명 정보와 컬렉션 / 폴더 개수 표시
 
 ### Response Viewer
 - Body / Headers / Cookies / Tests / Preview
@@ -57,6 +59,13 @@ Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언�
 - 응답 본문 저장
 - 응답 비교: `Raw`, `Normalized`, `Pretty`
 - ignore headers / ignore JSON paths 비교 설정
+- resolved URL / status / raw headers 빠른 복사
+- 활성 환경 / 현재 프로필 / 기본 헤더 / 스크립트 / 히스토리 동작 상태 배지
+- 응답 검색, 요청 변경 요약, 변수 사용처, richer empty states
+- 테스트 pass / fail / log 요약과 첫 실패 강조
+
+### Environment UX
+- URL / Headers / Body / Auth / Scripts 등 편집 가능한 텍스트 입력에서 `{{variable}}` 자동완성
 
 ### Scripts
 - Pre-request script
@@ -67,6 +76,7 @@ Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언�
 ### Import / Export
 - cURL import
 - Copy as cURL
+- OpenAPI import
 - Arc JSON collection import
 - Postman collection import / export
 - Postman environment import / export
@@ -86,13 +96,23 @@ Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언�
 - stop after headers
 - skip default headers
 - disable scripts
-- open HTML preview by default
 
 ### UI 언어
 - `arc-client.displayLanguage` 설정으로 Arc Client UI 언어 선택
 - 기본값은 영어
 - 현재 유지 중인 표시 언어는 `en`, `ko`, `ja`
 - VS Code locale과 분리되어 동작
+
+### 워크스페이스 프로필
+- `arc-client.workspaceProfile` 설정으로 로컬 저장 프로필 전환
+- collections / history / environments / default headers / saved tabs를 프로필별로 분리
+- Command Palette에서 `Arc: Change Workspace Profile` 제공
+- 요청 패널 상단 상태 배지에 현재 프로필 표시
+- `default`는 메인 작업용으로 두고, 다른 프로젝트나 import 실험이 기존 작업과 섞이면 안 될 때 새 프로필을 만드는 방향을 권장
+
+### OpenAPI import 사용
+- Command Palette에서 `Arc: Import OpenAPI` 실행
+- OpenAPI JSON 파일을 선택하면 paths, methods, base URL 예시를 컬렉션과 환경으로 변환
 
 ## 현재 구조 메모
 - 사용자 요청 패널 UI는 `src/panels/RequestPanel.ts`의 webview 문자열 안에 들어 있다
@@ -102,6 +122,7 @@ Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언�
 - scripts는 `src/services/ScriptRunner.ts`
 - import/export는 `src/services/ImportExportService.ts`
 - compare는 `src/services/ResponseCompareService.ts`
+- 로컬 저장 분리는 `src/services/StorageService.ts`
 
 ## 남은 큰 작업
 - WebSocket 지원

@@ -69,11 +69,15 @@ export class RequestPanel {
     MessageType.SaveTabState,
     MessageType.CompareResponses,
     MessageType.StopCollectionRun,
+    MessageType.RerunFailedCollection,
     MessageType.PickFile,
     MessageType.GenerateCode,
     MessageType.OpenDefaultHeaders,
     MessageType.SwitchEnvironment,
+    MessageType.ChangeWorkspaceProfile,
     MessageType.OpenResponseUrl,
+    MessageType.OpenGuide,
+    MessageType.FlushedTabState,
     'webviewReady',
   ]);
   private static readonly UNRESOLVED_VAR_PATTERN = /\{\{([^}]+)\}\}/g;
@@ -86,9 +90,13 @@ export class RequestPanel {
   private collectionRunAbort = false;
   private currentCollectionRequest: SendHandle | null = null;
   private currentCollectionDelayCancel: (() => void) | null = null;
+  private lastCollectionRunRequests: Array<{ name: string; request: Request }> = [];
+  private lastCollectionRunName: string | null = null;
+  private lastCollectionRunBaseName: string | null = null;
   private canceledRequestTabs = new Set<string>();
   private activeRequests = new Map<string, { abort: () => void }>();
   private webviewReady = false;
+  private pendingFlushResolvers: Array<() => void> = [];
 
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
@@ -343,9 +351,40 @@ export class RequestPanel {
     RequestPanel.currentPanel.refreshLocalization();
   }
 
+  public static async flushCurrentPanelState(): Promise<void> {
+    if (!RequestPanel.currentPanel) { return; }
+    await RequestPanel.currentPanel.flushTabStateNow();
+  }
+
+  public static reloadCurrentPanelForStorageChange(): void {
+    if (!RequestPanel.currentPanel) { return; }
+    RequestPanel.currentPanel.pendingRestore = RequestPanel.storage.getTabState();
+    RequestPanel.currentPanel.reloadWebview();
+  }
+
   private reloadWebview(): void {
     this.webviewReady = false;
     this.panel.webview.html = this.getHtmlContent();
+  }
+
+  private flushTabStateNow(): Promise<void> {
+    if (!this.webviewReady || this.isDisposed) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) { return; }
+        settled = true;
+        this.pendingFlushResolvers = this.pendingFlushResolvers.filter((item) => item !== finish);
+        resolve();
+      };
+
+      this.pendingFlushResolvers.push(finish);
+      this.postMessage({ type: MessageType.FlushTabState });
+      setTimeout(finish, 250);
+    });
   }
 
   private refreshLocalization(): void {
@@ -412,6 +451,7 @@ export class RequestPanel {
     this.postMessage({
       type: MessageType.UpdateActiveEnv,
       envName,
+      profileName: RequestPanel.storage.getWorkspaceProfileName(),
     });
     this.sendActiveVarsToWebview();
   }
@@ -427,6 +467,16 @@ export class RequestPanel {
 
   // 컬렉션 전체 실행 (재귀적으로 하위 폴더 포함)
   public async runCollection(name: string, items: CollectionItem[]) {
+    const requests = this.flattenCollectionRequests(items);
+    if (requests.length === 0) {
+      vscode.window.showInformationMessage(LocalizationService.t('info.noRequestsToRun'));
+      return;
+    }
+    this.lastCollectionRunBaseName = name;
+    await this.runCollectionRequests(name, requests);
+  }
+
+  private flattenCollectionRequests(items: CollectionItem[]): Array<{ name: string; request: Request }> {
     const requests: { name: string; request: Request }[] = [];
     const collect = (list: CollectionItem[]) => {
       for (const item of list) {
@@ -438,14 +488,46 @@ export class RequestPanel {
       }
     };
     collect(items);
+    return requests;
+  }
 
-    if (requests.length === 0) {
-      vscode.window.showInformationMessage(LocalizationService.t('info.noRequestsToRun'));
+  private async rerunFailedCollectionRequests(failedIndices: number[]): Promise<void> {
+    const validIndices = Array.from(new Set(failedIndices.filter((index) => Number.isInteger(index) && index >= 0)));
+    if (validIndices.length === 0 || this.lastCollectionRunRequests.length === 0) {
       return;
     }
 
+    const requests = validIndices
+      .map((index) => this.lastCollectionRunRequests[index])
+      .filter((entry): entry is { name: string; request: Request } => !!entry);
+
+    if (requests.length === 0) {
+      return;
+    }
+
+    const baseName = this.lastCollectionRunBaseName ?? this.lastCollectionRunName ?? LocalizationService.t('panel.collectionRun');
+    const runName = LocalizationService.t('panel.rerunFailedCollectionLabel', {
+      name: baseName,
+    });
+    await this.runCollectionRequests(runName, requests);
+    this.lastCollectionRunBaseName = baseName;
+  }
+
+  private async runCollectionRequests(name: string, requests: Array<{ name: string; request: Request }>): Promise<void> {
     this.collectionRunAbort = false;
     this.currentCollectionRequest = null;
+    this.lastCollectionRunName = name;
+    this.lastCollectionRunRequests = requests.map(({ name: requestName, request }) => ({
+      name: requestName,
+      request: {
+        ...request,
+        headers: this.cloneKeyValues(request.headers ?? []),
+        params: this.cloneKeyValues(request.params ?? []),
+        formData: this.cloneFormDataFields(request.formData ?? []),
+        auth: JSON.parse(JSON.stringify(request.auth ?? { type: 'none' })),
+        scripts: request.scripts ? { ...request.scripts } : undefined,
+      },
+    }));
     this.postMessage({
       type: MessageType.RunCollectionStart,
       name,
@@ -695,6 +777,11 @@ export class RequestPanel {
       return;
     }
     switch (message.type) {
+      case MessageType.FlushedTabState: {
+        const resolver = this.pendingFlushResolvers.shift();
+        resolver?.();
+        break;
+      }
       case MessageType.SendRequest:
         await this.executeRequest(message);
         break;
@@ -790,6 +877,9 @@ export class RequestPanel {
         this.currentCollectionDelayCancel?.();
         this.currentCollectionDelayCancel = null;
         break;
+      case MessageType.RerunFailedCollection:
+        await this.rerunFailedCollectionRequests(message.failedIndices ?? []);
+        break;
       case MessageType.PickFile: {
         const selected = await vscode.window.showOpenDialog({
           canSelectMany: false,
@@ -813,8 +903,14 @@ export class RequestPanel {
       case MessageType.SwitchEnvironment:
         await vscode.commands.executeCommand('arc.switchEnvironment');
         break;
+      case MessageType.ChangeWorkspaceProfile:
+        await vscode.commands.executeCommand('arc.changeWorkspaceProfile');
+        break;
       case MessageType.OpenResponseUrl:
         await this.openResponseUrl(message.url);
+        break;
+      case MessageType.OpenGuide:
+        await vscode.commands.executeCommand('arc.openGuide');
         break;
     }
   }
@@ -838,7 +934,12 @@ export class RequestPanel {
   private sendActiveVarsToWebview() {
     const vars = RequestPanel.environmentProvider.getActiveVariables();
     const varKeys = vars.filter(v => v.enabled && v.key).map(v => v.key);
-    this.postMessage({ type: 'activeVarKeys', varKeys });
+    const varValues = Object.fromEntries(
+      vars
+        .filter((variable) => variable.enabled !== false && variable.key)
+        .map((variable) => [variable.key, variable.value])
+    );
+    this.postMessage({ type: 'activeVarKeys', varKeys, varValues });
   }
 
   private cloneFormDataFields(fields: FormDataField[]): FormDataField[] {
@@ -1535,6 +1636,23 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .url-input-wrap{position:relative;flex:1;display:flex}
 .url-input-wrap input{flex:1;width:100%}
 .var-overlay{position:absolute;top:0;left:0;right:0;bottom:0;padding:6px 10px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace);pointer-events:none;white-space:nowrap;overflow:hidden;color:transparent}
+.var-preview-popover{position:fixed;z-index:150;padding:10px 12px;max-width:360px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(30,30,30,.96);box-shadow:0 18px 40px rgba(0,0,0,.35);font-size:12px;line-height:1.5;pointer-events:none}
+.var-preview-popover.hidden{display:none}
+.var-preview-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--vscode-descriptionForeground,#a8a8a8);margin-bottom:6px}
+.var-preview-line{display:flex;gap:8px;align-items:flex-start}
+.var-preview-name{color:#dcdcaa;font-family:var(--vscode-editor-font-family,monospace);white-space:nowrap}
+.var-preview-value{color:var(--vscode-foreground);word-break:break-word}
+.var-preview-value.missing{color:#f48771}
+.var-autocomplete{position:fixed;z-index:170;min-width:260px;max-width:420px;padding:8px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(30,30,30,.98);box-shadow:0 18px 40px rgba(0,0,0,.35);font-size:12px;line-height:1.45}
+.var-autocomplete.hidden{display:none}
+.var-autocomplete-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--vscode-descriptionForeground,#a8a8a8);padding:4px 8px 6px}
+.var-autocomplete-list{display:flex;flex-direction:column;gap:4px}
+.var-autocomplete-item{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;width:100%;padding:8px 10px;border:none;border-radius:10px;background:transparent;color:var(--vscode-foreground);cursor:pointer;text-align:left;font:inherit}
+.var-autocomplete-item:hover,.var-autocomplete-item.active{background:rgba(55,148,255,.14);color:#fff}
+.var-autocomplete-key{font-family:var(--vscode-editor-font-family,monospace);color:#dcdcaa;white-space:nowrap}
+.var-autocomplete-value{max-width:220px;color:var(--vscode-descriptionForeground,#c8c8c8);word-break:break-word}
+.var-autocomplete-item.active .var-autocomplete-value,.var-autocomplete-item:hover .var-autocomplete-value{color:#dfefff}
+.var-autocomplete-empty{padding:10px;border-radius:10px;background:rgba(255,255,255,.04);color:var(--vscode-descriptionForeground,#c8c8c8)}
 .unresolved-var{text-decoration:wavy underline #e06c75;text-decoration-skip-ink:none;color:transparent}
 .btn{padding:4px 12px;background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}
 .btn:hover{background:var(--vscode-button-hoverBackground)}
@@ -1542,12 +1660,22 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .btn-s{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
 .btn-s:hover{background:var(--vscode-button-secondaryHoverBackground)}
 /* Send 踰꾪듉 */
-.btn-send{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:7px;padding:6px 16px;background:linear-gradient(135deg,#0078d4,#1683eb);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 8px 18px rgba(0,120,212,.24)}
+.btn-send{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:10px;padding:7px 16px;background:linear-gradient(135deg,#0078d4,#1683eb);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s,filter .15s;box-shadow:0 8px 18px rgba(0,120,212,.24);min-height:42px}
 .btn-send:hover{background:linear-gradient(135deg,#1683eb,#2697ff);transform:translateY(-1px);box-shadow:0 12px 24px rgba(0,120,212,.28)}
 .btn-send svg{flex-shrink:0}
+.btn-send-labels{display:flex;flex-direction:column;align-items:flex-start;line-height:1.1}
+.btn-send-primary{font-size:13px;font-weight:700}
+.btn-send-secondary{font-size:11px;font-weight:500;opacity:.82}
+.btn-send.state-success{background:linear-gradient(135deg,#1f7a34,#2ca146);box-shadow:0 8px 18px rgba(46,161,70,.22)}
+.btn-send.state-success:hover{background:linear-gradient(135deg,#2a8d3f,#36b650)}
+.btn-send.state-error{background:linear-gradient(135deg,#a52b2b,#cf4545);box-shadow:0 8px 18px rgba(207,69,69,.2)}
+.btn-send.state-error:hover{background:linear-gradient(135deg,#b83636,#e05b5b)}
+.btn-send.state-canceled{background:linear-gradient(135deg,#8b5e1a,#c2882d);box-shadow:0 8px 18px rgba(194,136,45,.2)}
+.btn-send.state-canceled:hover{background:linear-gradient(135deg,#9f6d1e,#d59a37)}
+.btn-send.state-ready .btn-send-secondary{opacity:.95}
 .btn-keyhint{padding:2px 6px;border-radius:999px;background:rgba(255,255,255,.18);font-size:11px;line-height:1;letter-spacing:.02em}
 /* Stop 踰꾪듉 (?꾩넚 以? */
-.btn-stop{display:inline-flex;align-items:center;gap:7px;padding:6px 16px;background:linear-gradient(135deg,#c42b1c,#e04535);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 8px 18px rgba(224,69,53,.18)}
+.btn-stop{display:inline-flex;align-items:center;gap:10px;padding:7px 16px;background:linear-gradient(135deg,#c42b1c,#e04535);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 8px 18px rgba(224,69,53,.18);min-height:42px}
 .btn-stop:hover{background:linear-gradient(135deg,#d53b2c,#f05f4c);transform:translateY(-1px);box-shadow:0 12px 24px rgba(224,69,53,.24)}
 .btn-stop .stop-icon{display:inline-block;width:10px;height:10px;background:#fff;border-radius:1px}
 .url-bar-spacer{flex:1}
@@ -1689,6 +1817,18 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .res-cookie-table th,.res-cookie-table td{font-size:13px;padding:3px 6px}
 .cookie-badge{display:inline-block;background:var(--vscode-badge-background,#4d4d4d);color:var(--vscode-badge-foreground,#ccc);font-size:13px;padding:0 4px;border-radius:3px;font-weight:600}
 .tab-count{display:inline-block;background:var(--vscode-badge-background,#4d4d4d);color:var(--vscode-badge-foreground,#ccc);font-size:13px;padding:0 5px;border-radius:8px;margin-left:3px;min-width:14px;text-align:center;line-height:15px;vertical-align:middle}
+.test-summary{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.test-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font-size:12px}
+.test-badge.pass{background:rgba(78,201,78,.08);border-color:rgba(78,201,78,.18);color:#93e493}
+.test-badge.fail{background:rgba(255,122,122,.08);border-color:rgba(255,122,122,.18);color:#ffb3b3}
+.test-badge.log{background:rgba(87,166,255,.08);border-color:rgba(87,166,255,.16);color:#93c8ff}
+.test-alert{margin-bottom:10px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+.test-alert.fail{border-color:rgba(255,122,122,.2);background:rgba(255,122,122,.08)}
+.test-alert.pass{border-color:rgba(78,201,78,.18);background:rgba(78,201,78,.08)}
+.test-alert-title{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.test-alert-copy{font-size:12px;line-height:1.55;color:var(--vscode-foreground)}
+.test-row-fail .res-header-key,.test-row-fail .res-header-value{color:#ffb3b3}
+.test-row-pass .res-header-key,.test-row-pass .res-header-value{color:inherit}
 
 /* ?묐떟 鍮꾧탳 (Pin / Compare) */
 .pin-response-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border:1px solid var(--vscode-input-border,#555);border-radius:6px;background:transparent;color:var(--vscode-foreground);font-size:13px;cursor:pointer;transition:background .15s,transform .1s;user-select:none}
@@ -1737,18 +1877,37 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .runner-row.active{background:rgba(87,166,255,.1);border-left:2px solid rgba(87,166,255,.6)}
 .response-search-hit{background:rgba(255,215,0,.22);color:inherit;border-radius:2px;padding:0 1px}
 .response-search-hit.active{background:rgba(255,165,0,.42);box-shadow:0 0 0 1px rgba(255,165,0,.4)}
+.formdata-summary{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.formdata-summary .meta-stat{font-size:12px}
+.formdata-row{align-items:flex-start;flex-wrap:wrap;padding:8px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.025);margin-bottom:8px;gap:8px}
+.formdata-row.is-file{border-color:rgba(87,166,255,.18);background:rgba(87,166,255,.04)}
+.formdata-kind{display:inline-flex;align-items:center;justify-content:center;min-width:54px;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:rgba(255,255,255,.06);color:var(--vscode-descriptionForeground,#c0c0c0)}
+.formdata-row.is-file .formdata-kind{background:rgba(87,166,255,.12);color:#93c8ff}
+.formdata-meta{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:26px}
+.formdata-file-chip{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);font-size:12px;color:var(--vscode-descriptionForeground,#c2c2c2)}
+.formdata-file-chip.hidden{display:none}
 
 /* JSON ?몃━ 酉?*/
 .json-tree{background:var(--vscode-input-background);padding:6px;border-radius:3px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;overflow:auto;flex:1;line-height:1.6;user-select:text}
 .jt-node{padding-left:16px}
-.jt-row{display:flex;align-items:baseline;white-space:nowrap}
+.jt-row{display:flex;align-items:baseline;white-space:nowrap;gap:6px}
 .jt-toggle{display:inline-block;width:14px;cursor:pointer;text-align:center;color:var(--vscode-foreground);opacity:.5;flex-shrink:0;user-select:none}
 .jt-toggle:hover{opacity:1}
+.jt-copy-path{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--vscode-descriptionForeground,#bdbdbd);font-size:10px;letter-spacing:.08em;cursor:pointer;opacity:0;transition:opacity .12s ease,transform .12s ease;border:none}
+.jt-row:hover .jt-copy-path,.jt-copy-path:focus{opacity:1}
+.jt-copy-path:hover{transform:translateY(-1px);background:rgba(87,166,255,.12);color:#93c8ff}
 .jt-key{color:#9cdcfe;margin-right:4px}
 .jt-str{color:#ce9178}.jt-num{color:#b5cea8}.jt-bool{color:#569cd6}.jt-null{color:#569cd6}
 .jt-brace{color:var(--vscode-foreground);opacity:.6}
 .jt-children{overflow:hidden}
 .jt-children.collapsed{display:none}
+.xml-path-body{font-family:var(--vscode-editor-font-family,monospace);background:var(--vscode-input-background);padding:6px;border-radius:3px;overflow:auto;line-height:1.6}
+.xml-path-line{display:block;position:relative;padding-right:54px;white-space:pre;cursor:pointer}
+.xml-path-line:hover{background:rgba(87,166,255,.08)}
+.xml-path-copy{position:absolute;right:0;top:0;padding:0 8px;border:none;background:transparent;color:var(--vscode-descriptionForeground,#bdbdbd);cursor:pointer;opacity:0;font-size:11px}
+.xml-path-line:hover .xml-path-copy,.xml-path-copy:focus{opacity:1}
+.xml-path-copy:hover{color:#93c8ff}
+.response-path-hint{display:inline-flex;align-items:center;padding:0 6px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font-size:11px;color:var(--vscode-descriptionForeground,#a5a5a5)}
 
 /* Format ?쒕∼?ㅼ슫 */
 .fmt-wrap{position:relative;display:inline-block}
@@ -1883,6 +2042,29 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .empty-state-card span{display:block;font-size:12px;line-height:1.5;color:var(--vscode-descriptionForeground,#a0a0a0)}
 .empty-state-actions{display:flex;flex-wrap:wrap;gap:8px}
 .empty-state-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:rgba(87,166,255,.08);border:1px solid rgba(87,166,255,.16);font-size:12px;color:#93c8ff}
+.empty-state-action{display:inline-flex;align-items:center;justify-content:center;padding:7px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:var(--vscode-foreground);font-size:12px;font-weight:600;cursor:pointer}
+.empty-state-action:hover{background:rgba(255,255,255,.08)}
+.request-change-summary{display:flex;flex-direction:column;gap:8px;padding:0 10px 10px}
+.request-change-summary.empty{display:none}
+.request-change-summary-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.request-change-summary-title{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--vscode-descriptionForeground,#9a9a9a)}
+.request-change-summary-copy{font-size:12px;color:var(--vscode-descriptionForeground,#a4a4a4)}
+.request-change-chip-row{display:flex;flex-wrap:wrap;gap:8px}
+.request-change-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);font-size:12px;color:var(--vscode-foreground)}
+.request-change-chip.clickable{cursor:pointer;transition:transform .12s ease,background .12s ease,border-color .12s ease}
+.request-change-chip.clickable:hover{transform:translateY(-1px);background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.16)}
+.request-change-chip .delta-label{opacity:.72}
+.request-change-chip .delta-value{font-weight:700}
+.var-usage{display:flex;flex-direction:column;gap:8px;padding:0 10px 10px}
+.var-usage.hidden{display:none}
+.var-usage-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.var-usage-title{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--vscode-descriptionForeground,#9a9a9a)}
+.var-usage-copy{font-size:12px;color:var(--vscode-descriptionForeground,#a0a0a0)}
+.var-usage-grid{display:flex;flex-wrap:wrap;gap:8px}
+.var-usage-card{padding:8px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);min-width:120px}
+.var-usage-name{font-size:12px;font-weight:700;color:#dcdcaa;font-family:var(--vscode-editor-font-family,monospace);margin-bottom:4px}
+.var-usage-scopes{display:flex;flex-wrap:wrap;gap:4px}
+.var-usage-scope{display:inline-flex;align-items:center;padding:2px 6px;border-radius:999px;font-size:11px;background:rgba(87,166,255,.1);color:#93c8ff;border:1px solid rgba(87,166,255,.16)}
 
 /* ?ㅼ펷?덊넠 濡쒕뵫 UI */
 @keyframes skeleton-pulse{0%{opacity:.15}50%{opacity:.3}100%{opacity:.15}}
@@ -1997,8 +2179,10 @@ let tabs = [];       // { id, name, method, url, headers, params, body, auth, re
 let activeTabId = null;
 let tabIdCounter = 0;
 let currentEnvName = null;
+let currentWorkspaceProfile = 'default';
 let editingEnvId = null;
 let activeVarKeys = [];  // ?쒖꽦 ?섍꼍??蹂????紐⑸줉
+let activeVarValues = {};
 let workspaceDefaultHeaders = [];
 let pendingSaveBtn = null;          // Save 踰꾪듉 ?ㅼ씠?쇰줈洹??꾨즺 ?湲?
 let pendingSaveResponseBtn = null;  // Save Response Body 踰꾪듉 ?ㅼ씠?쇰줈洹??꾨즺 ?湲?
@@ -2007,6 +2191,7 @@ const VALID_BODY_TYPES = ['none', 'json', 'xml', 'form', 'formdata', 'binary', '
 
 const DEFAULT_COMPARE_IGNORE_HEADERS = ['date', 'set-cookie', 'x-request-id', 'x-correlation-id', 'x-amzn-trace-id'];
 const DEFAULT_COMPARE_IGNORE_JSON_PATHS = ['$.timestamp', '$.traceId', '$.requestId', '$.correlationId'];
+const DEFAULT_COMPARE_FOLD_UNCHANGED = true;
 var pinnedResponses = [];
 var lastResponse = null;
 var compareSettings = normalizeCompareSettings();
@@ -2076,11 +2261,16 @@ function renderEnvironmentIndicator(envName) {
   return '<span class="env-label">' + escapeHtml(tr('webview.environment')) + '</span><span class="env-name">' + escapeHtml(envName) + '</span>';
 }
 
-function renderStatusChip(label, tone, action, meta) {
+function renderProfileIndicator(profileName) {
+  return tf('webview.summaryProfile', { name: profileName || 'default' });
+}
+
+function renderStatusChip(label, tone, action, meta, tooltip) {
   var attrs = action
     ? ' type="button" data-action="' + escapeAttr(action) + '"' + (meta ? ' data-meta="' + escapeAttr(meta) + '"' : '')
     : '';
-  return '<button class="request-status-chip' + (tone ? ' ' + tone : '') + (action ? ' clickable' : '') + '"' + attrs + '>' + escapeHtml(label) + '</button>';
+  var titleAttr = tooltip ? ' title="' + escapeAttr(tooltip) + '"' : '';
+  return '<button class="request-status-chip' + (tone ? ' ' + tone : '') + (action ? ' clickable' : '') + '"' + attrs + titleAttr + '>' + escapeHtml(label) + '</button>';
 }
 
 function renderEnvironmentStatusChip(envName) {
@@ -2167,6 +2357,9 @@ function buildDraftTabFromContent(mc) {
   var saveHistoryInput = mc.querySelector('.js-save-history');
   var skipDefaultHeadersInput = mc.querySelector('.js-skip-default-headers');
   var disableScriptsInput = mc.querySelector('.js-disable-scripts');
+  var followRedirectsInput = mc.querySelector('.js-follow-redirects');
+  var stopAfterHeadersInput = mc.querySelector('.js-stop-after-headers');
+  var tlsValidationInput = mc.querySelector('.js-tls-validation');
   return Object.assign({}, tab, {
     method: methodEl ? methodEl.value : tab.method,
     url: mc.querySelector('.js-url')?.value || tab.url || '',
@@ -2178,10 +2371,303 @@ function buildDraftTabFromContent(mc) {
     binaryFilePath: mc.querySelector('.js-binary-path')?.value || '',
     auth: collectAuth(mc),
     scripts: collectScripts(mc),
+    timeout: normalizeNumberSetting(mc.querySelector('.js-timeout')?.value),
+    followRedirects: followRedirectsInput ? followRedirectsInput.checked === true : !!tab.followRedirects,
     saveToHistory: saveHistoryInput ? saveHistoryInput.checked !== false : tab.saveToHistory !== false,
+    tlsValidation: normalizeTlsValidation(tlsValidationInput?.value || tab.tlsValidation),
+    maxResponseSizeKb: normalizeNumberSetting(mc.querySelector('.js-max-response-size')?.value),
+    retryCount: normalizeNumberSetting(mc.querySelector('.js-retry-count')?.value),
+    retryDelayMs: normalizeNumberSetting(mc.querySelector('.js-retry-delay')?.value),
+    stopAfterHeaders: stopAfterHeadersInput ? stopAfterHeadersInput.checked === true : !!tab.stopAfterHeaders,
     skipDefaultHeaders: skipDefaultHeadersInput ? skipDefaultHeadersInput.checked === true : !!tab.skipDefaultHeaders,
     disableScripts: disableScriptsInput ? disableScriptsInput.checked === true : !!tab.disableScripts
   });
+}
+
+function countEnabledKeyValues(items) {
+  return (items || []).filter(function(item) {
+    return item && item.enabled !== false && item.key;
+  }).length;
+}
+
+function countEnabledFormData(items) {
+  return (items || []).filter(function(item) {
+    return item && item.enabled !== false && (item.key || item.value);
+  }).length;
+}
+
+function createRequestChangeBaseline(tab) {
+  var baseline = {
+    method: 'GET',
+    url: '',
+    headers: [],
+    params: [],
+    body: '',
+    bodyType: 'none',
+    formData: [],
+    binaryFilePath: '',
+    auth: { type: 'none' },
+    scripts: { preRequest: '', test: '' },
+    timeout: 0,
+    followRedirects: false,
+    saveToHistory: true,
+    tlsValidation: 'default',
+    maxResponseSizeKb: 0,
+    retryCount: 0,
+    retryDelayMs: 0,
+    stopAfterHeaders: false,
+    skipDefaultHeaders: false,
+    disableScripts: false,
+  };
+  if (!tab?._snapshot) {
+    return baseline;
+  }
+  try {
+    var raw = JSON.parse(tab._snapshot);
+    var settings = raw.settings || {};
+    baseline.method = raw.method || baseline.method;
+    baseline.url = raw.url || '';
+    baseline.headers = raw.headers || [];
+    baseline.params = raw.params || [];
+    baseline.body = raw.body || '';
+    baseline.bodyType = normalizeBodyType(raw.bodyType || baseline.bodyType);
+    baseline.formData = raw.formData || [];
+    baseline.binaryFilePath = raw.binaryFilePath || '';
+    baseline.auth = raw.auth || baseline.auth;
+    baseline.scripts = raw.scripts || baseline.scripts;
+    baseline.timeout = normalizeNumberSetting(settings.timeout);
+    baseline.followRedirects = settings.followRedirects === true;
+    baseline.saveToHistory = settings.saveToHistory !== false;
+    baseline.tlsValidation = normalizeTlsValidation(settings.tlsValidation);
+    baseline.maxResponseSizeKb = normalizeNumberSetting(settings.maxResponseSizeKb);
+    baseline.retryCount = normalizeNumberSetting(settings.retryCount);
+    baseline.retryDelayMs = normalizeNumberSetting(settings.retryDelayMs);
+    baseline.stopAfterHeaders = settings.stopAfterHeaders === true;
+    baseline.skipDefaultHeaders = settings.skipDefaultHeaders === true;
+    baseline.disableScripts = settings.disableScripts === true;
+  } catch {}
+  return baseline;
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+function changeDetailWithCounts(beforeCount, afterCount) {
+  if (beforeCount !== afterCount) {
+    return beforeCount + '→' + afterCount;
+  }
+  return tr('webview.requestDiffEdited');
+}
+
+function buildRequestChangeItems(tab) {
+  if (!tab) return [];
+  var baseline = createRequestChangeBaseline(tab);
+  var items = [];
+  if (baseline.method !== tab.method || baseline.url !== tab.url) {
+    items.push({
+      label: tr('webview.requestDiffRequest'),
+      detail: baseline.method !== tab.method ? baseline.method + '→' + tab.method : tr('webview.requestDiffEdited'),
+      action: 'focus-url'
+    });
+  }
+  if (!sameJson(baseline.params, tab.params)) {
+    items.push({
+      label: tr('webview.requestDiffParams'),
+      detail: changeDetailWithCounts(countEnabledKeyValues(baseline.params), countEnabledKeyValues(tab.params)),
+      action: 'switch-tab',
+      meta: 'params'
+    });
+  }
+  if (!sameJson(baseline.headers, tab.headers)) {
+    items.push({
+      label: tr('webview.requestDiffHeaders'),
+      detail: changeDetailWithCounts(countEnabledKeyValues(baseline.headers), countEnabledKeyValues(tab.headers)),
+      action: 'switch-tab',
+      meta: 'headers'
+    });
+  }
+  if (
+    baseline.body !== tab.body ||
+    baseline.bodyType !== tab.bodyType ||
+    baseline.binaryFilePath !== tab.binaryFilePath ||
+    !sameJson(baseline.formData, tab.formData)
+  ) {
+    var bodyDetail = baseline.bodyType !== tab.bodyType
+      ? String(baseline.bodyType || 'none') + '→' + String(tab.bodyType || 'none')
+      : (tab.bodyType === 'formdata'
+        ? changeDetailWithCounts(countEnabledFormData(baseline.formData), countEnabledFormData(tab.formData))
+        : tr('webview.requestDiffEdited'));
+    items.push({
+      label: tr('webview.requestDiffBody'),
+      detail: bodyDetail,
+      action: 'switch-tab',
+      meta: 'body'
+    });
+  }
+  if (!sameJson(baseline.auth, tab.auth)) {
+    items.push({
+      label: tr('webview.requestDiffAuth'),
+      detail: tr('webview.requestDiffUpdated'),
+      action: 'switch-tab',
+      meta: 'auth'
+    });
+  }
+  if (!sameJson(baseline.scripts, tab.scripts)) {
+    items.push({
+      label: tr('webview.requestDiffScripts'),
+      detail: tr('webview.requestDiffUpdated'),
+      action: 'switch-tab',
+      meta: 'scripts'
+    });
+  }
+  if (!sameJson(requestSettingsSnapshot(baseline), requestSettingsSnapshot(tab))) {
+    items.push({
+      label: tr('webview.requestDiffSettings'),
+      detail: tr('webview.requestDiffUpdated'),
+      action: 'switch-tab',
+      meta: 'settings'
+    });
+  }
+  return items;
+}
+
+function renderRequestChangeSummary(tab) {
+  if (!tab) return '<div class="request-change-summary empty"></div>';
+  tab.dirty = isTabDirty(tab);
+  if (!tab.dirty) return '<div class="request-change-summary empty"></div>';
+  var items = buildRequestChangeItems(tab);
+  if (!items.length) return '<div class="request-change-summary empty"></div>';
+  return '<div class="request-change-summary">' +
+    '<div class="request-change-summary-head">' +
+      '<div class="request-change-summary-title">' + escapeHtml(tr('webview.requestDiffTitle')) + '</div>' +
+      '<div class="request-change-summary-copy">' + escapeHtml(tfCount('webview.requestDiffCount', items.length)) + '</div>' +
+    '</div>' +
+    '<div class="request-change-chip-row">' +
+      items.map(function(item) {
+        var attrs = ' type="button" class="request-change-chip clickable" data-action="' + escapeAttr(item.action) + '"' + (item.meta ? ' data-meta="' + escapeAttr(item.meta) + '"' : '') + '>';
+        return '<button' + attrs +
+          '<span class="delta-label">' + escapeHtml(item.label) + '</span>' +
+          '<span class="delta-value">' + escapeHtml(item.detail) + '</span>' +
+        '</button>';
+      }).join('') +
+    '</div>' +
+  '</div>';
+}
+
+function refreshRequestChangeSummary(mc) {
+  var wrap = mc?.querySelector('.js-request-change-summary-wrap');
+  if (!wrap) return;
+  var draftTab = buildDraftTabFromContent(mc);
+  wrap.innerHTML = renderRequestChangeSummary(draftTab);
+}
+
+function addVariableUsage(usageMap, value, scopeLabel) {
+  if (!value) return;
+  var matches = String(value).match(/\{\{([^}]+)\}\}/g) || [];
+  matches.forEach(function(token) {
+    var name = token.slice(2, -2).trim();
+    if (!name) return;
+    if (!usageMap[name]) {
+      usageMap[name] = new Set();
+    }
+    usageMap[name].add(scopeLabel);
+  });
+}
+
+function collectVariableUsage(tab) {
+  var usageMap = {};
+  addVariableUsage(usageMap, tab.url, tr('webview.varScopeUrl'));
+  (tab.params || []).forEach(function(item) {
+    if (!item || item.enabled === false) return;
+    addVariableUsage(usageMap, item.key, tr('webview.varScopeParams'));
+    addVariableUsage(usageMap, item.value, tr('webview.varScopeParams'));
+  });
+  (tab.headers || []).forEach(function(item) {
+    if (!item || item.enabled === false) return;
+    addVariableUsage(usageMap, item.key, tr('webview.varScopeHeaders'));
+    addVariableUsage(usageMap, item.value, tr('webview.varScopeHeaders'));
+  });
+  if (!tab.skipDefaultHeaders) {
+    (workspaceDefaultHeaders || []).forEach(function(item) {
+      if (!item || item.enabled === false) return;
+      addVariableUsage(usageMap, item.key, tr('webview.varScopeDefaultHeaders'));
+      addVariableUsage(usageMap, item.value, tr('webview.varScopeDefaultHeaders'));
+    });
+  }
+  addVariableUsage(usageMap, tab.body, tr('webview.varScopeBody'));
+  (tab.formData || []).forEach(function(field) {
+    if (!field || field.enabled === false) return;
+    addVariableUsage(usageMap, field.key, tr('webview.varScopeFormData'));
+    addVariableUsage(usageMap, field.value, tr('webview.varScopeFormData'));
+  });
+  addVariableUsage(usageMap, tab.binaryFilePath, tr('webview.varScopeBinary'));
+  if (tab.auth?.basic) {
+    addVariableUsage(usageMap, tab.auth.basic.username, tr('webview.varScopeAuth'));
+    addVariableUsage(usageMap, tab.auth.basic.password, tr('webview.varScopeAuth'));
+  }
+  if (tab.auth?.bearer) {
+    addVariableUsage(usageMap, tab.auth.bearer.token, tr('webview.varScopeAuth'));
+  }
+  if (tab.auth?.apikey) {
+    addVariableUsage(usageMap, tab.auth.apikey.key, tr('webview.varScopeAuth'));
+    addVariableUsage(usageMap, tab.auth.apikey.value, tr('webview.varScopeAuth'));
+  }
+  addVariableUsage(usageMap, tab.scripts?.preRequest, tr('webview.varScopeScripts'));
+  addVariableUsage(usageMap, tab.scripts?.test, tr('webview.varScopeScripts'));
+  return Object.keys(usageMap).sort(function(left, right) { return left.localeCompare(right); }).map(function(name) {
+    return { name: name, scopes: Array.from(usageMap[name]).sort() };
+  });
+}
+
+function renderVariableUsage(tab) {
+  var usage = collectVariableUsage(tab);
+  if (!usage.length) return '<div class="var-usage hidden"></div>';
+  return '<div class="var-usage">' +
+    '<div class="var-usage-head">' +
+      '<div class="var-usage-title">' + escapeHtml(tr('webview.variableUsageTitle')) + '</div>' +
+      '<div class="var-usage-copy">' + escapeHtml(tfCount('webview.variableUsageCount', usage.length)) + '</div>' +
+    '</div>' +
+    '<div class="var-usage-grid">' +
+      usage.map(function(item) {
+        return '<div class="var-usage-card">' +
+          '<div class="var-usage-name">{{' + escapeHtml(item.name) + '}}</div>' +
+          '<div class="var-usage-scopes">' +
+            item.scopes.map(function(scope) {
+              return '<span class="var-usage-scope">' + escapeHtml(scope) + '</span>';
+            }).join('') +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+  '</div>';
+}
+
+function refreshVariableUsage(mc) {
+  var wrap = mc?.querySelector('.js-variable-usage-wrap');
+  if (!wrap) return;
+  var draftTab = buildDraftTabFromContent(mc);
+  wrap.innerHTML = renderVariableUsage(draftTab);
+}
+
+function refreshFormDataSummary(mc) {
+  var wrap = mc?.querySelector('.js-formdata-summary');
+  if (!wrap) return;
+  wrap.innerHTML = renderFormDataSummary(collectFormData(mc.querySelector('.js-formdata-rows')));
+}
+
+function refreshDraftInsights(mc, options) {
+  var opts = options || {};
+  refreshDefaultHeadersBanner(mc);
+  refreshToplineStatusChips(mc);
+  refreshRequestPreflight(mc);
+  refreshRequestChangeSummary(mc);
+  refreshVariableUsage(mc);
+  refreshFormDataSummary(mc);
+  syncVariablePreviewHints(mc);
+  if (opts.renderContent === true) {
+    renderContent();
+  }
 }
 
 function renderUnresolvedVariableBanner(tab) {
@@ -2286,6 +2772,7 @@ function normalizeCompareSettings(value) {
   return {
     mode: mode,
     includeMetadataSummary: value ? value.includeMetadataSummary !== false : true,
+    foldUnchangedSections: value ? value.foldUnchangedSections !== false : DEFAULT_COMPARE_FOLD_UNCHANGED,
     ignoreHeaders: normalizeCompareList(value && value.ignoreHeaders, DEFAULT_COMPARE_IGNORE_HEADERS),
     ignoreJsonPaths: normalizeCompareList(value && value.ignoreJsonPaths, DEFAULT_COMPARE_IGNORE_JSON_PATHS)
   };
@@ -2296,6 +2783,7 @@ function cloneCompareSettings(value) {
   return {
     mode: normalized.mode,
     includeMetadataSummary: normalized.includeMetadataSummary,
+    foldUnchangedSections: normalized.foldUnchangedSections,
     ignoreHeaders: normalized.ignoreHeaders.slice(),
     ignoreJsonPaths: normalized.ignoreJsonPaths.slice()
   };
@@ -2397,8 +2885,10 @@ function compareCurrentWithLast() {
 }
 
 function buildCompareChipMarkup(currentSignature) {
+  var compareContextActive = !!lastResponse || pinnedResponses.length > 0;
   return '<span class="compare-chip mode"><strong>' + escapeHtml(tr('webview.mode')) + '</strong> ' + escapeHtml(compareModeShort(compareSettings.mode)) + '</span>' +
     (compareSettings.includeMetadataSummary ? '<span class="compare-chip ready">' + escapeHtml(tr('webview.includeMetadata')) + '</span>' : '') +
+    (compareContextActive && compareSettings.foldUnchangedSections ? '<span class="compare-chip ready">' + escapeHtml(tr('webview.compareFoldUnchanged')) + '</span>' : '') +
     (lastResponse ? '<span class="compare-chip ready"><strong>' + escapeHtml(tr('webview.last')) + '</strong> ' + escapeHtml(tr('webview.lastReady')) + '</span>' : '') +
     (pinnedResponses.length >= 2 ? '<span class="compare-chip ready">' + escapeHtml(tr('webview.comparePinned')) + '</span>' : '') +
     pinnedResponses.map(function(pin, index) {
@@ -2477,6 +2967,9 @@ function showCompareSettings() {
           '<label><input type="checkbox" class="js-compare-metadata"' + (draft.includeMetadataSummary ? ' checked' : '') + '/> ' + escapeHtml(tr('webview.includeMetadata')) + '</label>' +
         '</div>' +
         '<div class="compare-settings-row">' +
+          '<label><input type="checkbox" class="js-compare-fold-unchanged"' + (draft.foldUnchangedSections ? ' checked' : '') + '/> ' + escapeHtml(tr('webview.compareFoldUnchanged')) + '</label>' +
+        '</div>' +
+        '<div class="compare-settings-row">' +
           '<label>' + escapeHtml(tr('webview.ignoredHeaders')) + '</label>' +
           '<input type="text" class="compare-settings-input js-compare-ignore-headers" value="' + escapeAttr(draft.ignoreHeaders.join(', ')) + '"/>' +
         '</div>' +
@@ -2524,6 +3017,7 @@ function showCompareSettings() {
       compareSettings = cloneCompareSettings({
         mode: 'normalized',
         includeMetadataSummary: true,
+        foldUnchangedSections: DEFAULT_COMPARE_FOLD_UNCHANGED,
         ignoreHeaders: DEFAULT_COMPARE_IGNORE_HEADERS,
         ignoreJsonPaths: DEFAULT_COMPARE_IGNORE_JSON_PATHS
       });
@@ -2533,6 +3027,7 @@ function showCompareSettings() {
     }
 
     draft.includeMetadataSummary = !!overlay.querySelector('.js-compare-metadata')?.checked;
+    draft.foldUnchangedSections = !!overlay.querySelector('.js-compare-fold-unchanged')?.checked;
     draft.ignoreHeaders = normalizeCompareList(
       overlay.querySelector('.js-compare-ignore-headers')?.value || '',
       []
@@ -2603,9 +3098,66 @@ function applyLocalizationUpdate(msg) {
 
 addTabBtn.addEventListener('click', () => createTab());
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 't') { e.preventDefault(); createTab(); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'w' && activeTabId) { e.preventDefault(); closeTab(activeTabId); }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handlePrimaryAction(); }
+  const isPrimaryModifier = e.ctrlKey || e.metaKey;
+  const digitMatch = /^Digit([1-6])$/.exec(e.code || '');
+
+  if (isPrimaryModifier && e.key.toLowerCase() === 't') { e.preventDefault(); createTab(); return; }
+  if (isPrimaryModifier && e.key.toLowerCase() === 'w' && activeTabId) { e.preventDefault(); closeTab(activeTabId); return; }
+  if (isPrimaryModifier && e.key === 'Enter') { e.preventDefault(); handlePrimaryAction(); return; }
+  if (isPrimaryModifier && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    triggerSaveFromShortcut(e.shiftKey);
+    return;
+  }
+  if (isPrimaryModifier && e.key.toLowerCase() === 'f') {
+    if (focusResponseSearchField()) {
+      e.preventDefault();
+    }
+    return;
+  }
+  if (e.altKey && !e.ctrlKey && !e.metaKey && digitMatch) {
+    const index = Number(digitMatch[1]) - 1;
+    if (e.shiftKey) {
+      const responseTabName = ['resBody', 'resCookies', 'resHeaders', 'resTests', 'resPreview'][index];
+      if (responseTabName) {
+        e.preventDefault();
+        switchResponseTabInContent(mainContent, responseTabName);
+      }
+      return;
+    }
+
+    const requestTabName = ['params', 'headers', 'body', 'auth', 'scripts', 'settings'][index];
+    if (requestTabName) {
+      e.preventDefault();
+      switchRequestEditorTabInContent(mainContent, requestTabName);
+    }
+  }
+});
+
+mainContent.addEventListener('mouseover', function(event) {
+  var target = event.target.closest('input[type="text"], input[type="password"], textarea');
+  if (!target || !mainContent.contains(target)) return;
+  showVariablePreviewPopover(target);
+});
+
+mainContent.addEventListener('mouseout', function(event) {
+  var target = event.target.closest('input[type="text"], input[type="password"], textarea');
+  if (!target || !mainContent.contains(target)) return;
+  if (event.relatedTarget && target.contains(event.relatedTarget)) return;
+  hideVariablePreviewPopover();
+});
+
+mainContent.addEventListener('focusin', function(event) {
+  var target = event.target.closest('input[type="text"], input[type="password"], textarea');
+  if (!target || !mainContent.contains(target)) return;
+  showVariablePreviewPopover(target);
+});
+
+mainContent.addEventListener('focusout', function(event) {
+  var target = event.target.closest('input[type="text"], input[type="password"], textarea');
+  if (!target || !mainContent.contains(target)) return;
+  if (event.relatedTarget && target.contains(event.relatedTarget)) return;
+  hideVariablePreviewPopover();
 });
 
 updateStaticLocalizedText();
@@ -3068,6 +3620,70 @@ function switchRequestEditorTabInContent(mc, tabName) {
   if (tabName === 'headers') refreshDefaultHeadersBanner(mc);
 }
 
+function switchResponseTabInContent(mc, tabName) {
+  if (!mc) return;
+  const tab = tabs.find(function(tt) { return tt.id === activeTabId; });
+  if (tab) {
+    tab.responseTab = tabName;
+    debouncePersist();
+  }
+  mc.querySelectorAll('.js-res-tabs .tab').forEach(function(x) { x.classList.toggle('active', x.dataset.tab === tabName); });
+  const isBody = tabName === 'resBody';
+  const isPreview = tabName === 'resPreview';
+
+  mc.querySelectorAll('.js-res-body').forEach(function(el) { el.classList.add('hidden'); });
+  mc.querySelector('.js-res-headers')?.classList.add('hidden');
+  mc.querySelector('.js-res-cookies')?.classList.add('hidden');
+  mc.querySelector('.js-res-tests')?.classList.add('hidden');
+  const preview = mc.querySelector('.js-res-preview');
+  if (preview) preview.classList.add('hidden');
+  const toolbar = mc.querySelector('.js-res-body-toolbar');
+  if (toolbar) toolbar.classList.add('hidden');
+
+  if (isBody) {
+    if (toolbar) toolbar.classList.remove('hidden');
+    const tree = mc.querySelector('.js-res-tree');
+    const raw = mc.querySelector('.js-res-raw');
+    if (tree) {
+      const mode = toolbar?.querySelector('.toggle-btn.active')?.dataset.mode || 'tree';
+      tree.classList.toggle('hidden', mode !== 'tree');
+      if (raw) raw.classList.toggle('hidden', mode !== 'raw');
+    } else if (raw) {
+      raw.classList.remove('hidden');
+    }
+  } else if (tabName === 'resHeaders') {
+    mc.querySelector('.js-res-headers')?.classList.remove('hidden');
+  } else if (tabName === 'resCookies') {
+    mc.querySelector('.js-res-cookies')?.classList.remove('hidden');
+  } else if (tabName === 'resTests') {
+    mc.querySelector('.js-res-tests')?.classList.remove('hidden');
+  } else if (isPreview && preview) {
+    preview.classList.remove('hidden');
+    if (tab?.response?.body) {
+      syncPreviewFrame(preview, tab);
+    }
+  }
+
+  if (tabName === 'resBody') {
+    syncResponseSearch(mc);
+  }
+}
+
+function triggerSaveFromShortcut(forceSaveAs) {
+  saveActiveTabState();
+  const tab = tabs.find(function(t) { return t.id === activeTabId; });
+  if (!tab || !tab.url) return;
+  vscode.postMessage(buildSaveRequestMessage(tab, forceSaveAs ? undefined : (tab.requestId || undefined)));
+}
+
+function focusResponseSearchField() {
+  const input = mainContent.querySelector('.js-response-search');
+  if (!input || input.closest('.hidden')) return false;
+  input.focus();
+  input.select?.();
+  return true;
+}
+
 function toggleBulkEditor(mc, target, open) {
   mc?.querySelectorAll('.js-bulk-editor').forEach(function(panel) {
     var match = panel.dataset.target === target;
@@ -3090,9 +3706,7 @@ function applyBulkEditor(mc, target) {
   input.value = '';
   toggleBulkEditor(mc, target, false);
   markDirty();
-  refreshDefaultHeadersBanner(mc);
-  refreshToplineStatusChips(mc);
-  refreshRequestPreflight(mc);
+  refreshDraftInsights(mc);
 }
 
 function renderTabBar() {
@@ -3252,11 +3866,122 @@ function getRequestStageInfo(tab) {
   return { tone: 'idle', label: tr('webview.stage.newRequest'), detail: tr('webview.stage.newRequest.detail') };
 }
 
-function renderEmptyState(kicker, title, copy, cards) {
+function renderPrimaryActionButton(tab) {
+  if (tab.loading) {
+    return '<button class="btn-stop js-send">' +
+      '<span class="stop-icon"></span>' +
+      '<span class="btn-send-labels">' +
+        '<span class="btn-send-primary">' + escapeHtml(tr('webview.stop')) + '</span>' +
+        '<span class="btn-send-secondary">' + escapeHtml(tr('webview.stage.sending.detail')) + '</span>' +
+      '</span>' +
+    '</button>';
+  }
+
+  var tone = 'ready';
+  var primary = tr('webview.send');
+  var secondary = tr('webview.stage.ready.detail');
+  var icon = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1.5l14 6.5-14 6.5V9l10-1-10-1V1.5z"/></svg>';
+  var keyHint = '<span class="btn-keyhint">Enter</span>';
+
+  if (tab.lastEvent === 'success' && tab.response) {
+    tone = 'success';
+    primary = tr('webview.sendAgain');
+    secondary = tab.response.status + ' ' + (tab.response.statusText || '') + ' · ' + tab.response.time + ' ms';
+    icon = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 010 1.06L7.53 11.53a.75.75 0 01-1.06 0L2.22 7.28a.75.75 0 111.06-1.06L7 9.94l5.72-5.72a.75.75 0 011.06 0z"/></svg>';
+    keyHint = '';
+  } else if (tab.lastEvent === 'error') {
+    tone = 'error';
+    primary = tr('webview.retry');
+    secondary = tab.error || tr('webview.stage.failed');
+    icon = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5A6.5 6.5 0 1014.5 8h-1.5A5 5 0 118 3v2.2L11.4 2 8 .8v.7z"/><path d="M7.25 4.75h1.5v4h-1.5zm0 5h1.5v1.5h-1.5z"/></svg>';
+    keyHint = '';
+  } else if (tab.lastEvent === 'canceled') {
+    tone = 'canceled';
+    primary = tr('webview.sendAgain');
+    secondary = tr('webview.stage.canceled');
+    icon = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5A6.5 6.5 0 1014.5 8h-1.5A5 5 0 118 3v2.2L11.4 2 8 .8v.7z"/></svg>';
+    keyHint = '';
+  }
+
+  return '<button class="btn-send ripple-btn state-' + tone + ' js-send">' +
+    '<span class="send-streak"></span>' +
+    icon +
+    '<span class="btn-send-labels">' +
+      '<span class="btn-send-primary">' + escapeHtml(primary) + '</span>' +
+      '<span class="btn-send-secondary">' + escapeHtml(secondary) + '</span>' +
+    '</span>' +
+    keyHint +
+  '</button>';
+}
+
+function buildResponseStatusLine(response) {
+  if (!response) return '';
+  return response.status + ' ' + (response.statusText || '');
+}
+
+function buildRawResponseHeaders(response) {
+  if (!response?.headers) return '';
+  return Object.entries(response.headers).map(function(entry) {
+    return entry[0] + ': ' + entry[1];
+  }).join('\\n');
+}
+
+function buildSampleRequestData() {
+  return {
+    name: tr('webview.sampleRequestName'),
+    autoName: false,
+    requestId: null,
+    method: 'GET',
+    url: 'https://dummyjson.com/products/search?q=phone',
+    headers: [{ key: 'Accept', value: 'application/json', enabled: true }],
+    params: [],
+    body: '',
+    bodyType: 'none',
+    formData: [],
+    binaryFilePath: '',
+    auth: { type: 'none' },
+    scripts: { preRequest: '', test: '' },
+    timeout: 0,
+    followRedirects: false,
+    saveToHistory: true,
+    tlsValidation: 'default',
+    maxResponseSizeKb: 0,
+    retryCount: 0,
+    retryDelayMs: 0,
+    stopAfterHeaders: false,
+    skipDefaultHeaders: false,
+    disableScripts: false,
+  };
+}
+
+function loadSampleRequestIntoActiveTab() {
+  var sample = buildSampleRequestData();
+  var tab = tabs.find(function(t) { return t.id === activeTabId; });
+  if (!tab) {
+    createTab(sample);
+    return;
+  }
+  Object.assign(tab, sample, {
+    id: tab.id,
+    response: null,
+    error: null,
+    lastEvent: 'ready',
+    dirty: true,
+    _snapshot: null,
+    responseTab: 'resBody',
+    pinned: false,
+  });
+  renderTabBar();
+  renderContent();
+  debouncePersist();
+}
+
+function renderEmptyState(kicker, title, copy, cards, actions, badge) {
   return '<div class="empty-state">' +
     '<div class="empty-state-kicker">' + escapeHtml(kicker) + '</div>' +
     '<div class="empty-state-title">' + escapeHtml(title) + '</div>' +
     '<div class="empty-state-copy">' + escapeHtml(copy) + '</div>' +
+    (badge ? '<div class="empty-state-badge">' + escapeHtml(badge) + '</div>' : '') +
     '<div class="empty-state-grid">' +
       (cards || []).map(function(card) {
         return '<div class="empty-state-card">' +
@@ -3265,6 +3990,11 @@ function renderEmptyState(kicker, title, copy, cards) {
         '</div>';
       }).join('') +
     '</div>' +
+    ((actions && actions.length)
+      ? '<div class="empty-state-actions">' + actions.map(function(action) {
+          return '<button class="empty-state-action ripple-btn js-empty-action" type="button" data-action="' + escapeAttr(action.action || '') + '">' + escapeHtml(action.label || '') + '</button>';
+        }).join('') + '</div>'
+      : '') +
   '</div>';
 }
 
@@ -3364,6 +4094,14 @@ function renderDefaultHeadersBanner(tab) {
 
 function renderToplineStatusChips(tab) {
   var chips = [];
+
+  chips.push(renderStatusChip(
+    renderProfileIndicator(currentWorkspaceProfile),
+    currentWorkspaceProfile === 'default' ? 'muted' : 'info',
+    'change-workspace-profile',
+    null,
+    tr(currentWorkspaceProfile === 'default' ? 'webview.profileDefaultTooltip' : 'webview.profileCustomTooltip')
+  ));
 
   if (currentEnvName) {
     chips.push(renderEnvironmentStatusChip(currentEnvName));
@@ -3561,6 +4299,8 @@ function syncPreviewFrame(preview, tab) {
 function renderContent() {
   closeActiveFormatMenu();
   releaseSplitDrag();
+  hideVariableAutocomplete();
+  hideVariablePreviewPopover();
   if (!activeTabId || tabs.length === 0) {
     mainContent.innerHTML = renderEmptyState(
       tr('webview.empty.hero.kicker'),
@@ -3570,7 +4310,13 @@ function renderContent() {
         { title: tr('webview.empty.hero.card.create.title'), copy: tr('webview.empty.hero.card.create.copy') },
         { title: tr('webview.empty.hero.card.import.title'), copy: tr('webview.empty.hero.card.import.copy') },
         { title: tr('webview.empty.hero.card.compare.title'), copy: tr('webview.empty.hero.card.compare.copy') }
-      ]
+      ],
+      [
+        { label: tr('webview.emptyActionNewRequest'), action: 'new-tab' },
+        { label: tr('webview.emptyActionSample'), action: 'sample-request' },
+        { label: tr('webview.emptyActionGuide'), action: 'open-guide' }
+      ],
+      tr('webview.emptyHeroBadge')
     );
     return;
   }
@@ -3591,6 +4337,8 @@ function renderContent() {
       '</div>' +
     '</div>';
   const preflightHtml = '<div class="js-request-preflight-wrap">' + renderRequestPreflight(tab) + '</div>';
+  const requestDiffHtml = '<div class="js-request-change-summary-wrap">' + renderRequestChangeSummary(tab) + '</div>';
+  const variableUsageHtml = '<div class="js-variable-usage-wrap">' + renderVariableUsage(tab) + '</div>';
 
   let resHtml = '';
   if (tab.loading) {
@@ -3614,7 +4362,9 @@ function renderContent() {
       : getDisplayResponseBody(tab, lang, displayBody);
     const rawBodyHtml = isBinary
       ? escapeHtml(displayBodyText)
-      : renderResponseBody(displayBodyText, lang, searchState.query, searchState.index, searchState);
+      : (lang === 'xml' && !searchState.query
+          ? renderXmlBodyWithPaths(displayBodyText)
+          : renderResponseBody(displayBodyText, lang, searchState.query, searchState.index, searchState));
     // ?묐떟 ?ㅻ뜑瑜??뚯씠釉?HTML濡??앹꽦
     const headerEntries = Object.entries(r.headers);
     const headerCount = headerEntries.length;
@@ -3721,6 +4471,11 @@ function renderContent() {
           '<button class="tb-btn js-response-search-clear" type="button" title="' + escapeAttr(tr('webview.searchClear')) + '">&times;</button>' +
         '</div>'
       : '';
+    const pathHintHtml = lang === 'json'
+      ? '<span class="response-path-hint">' + escapeHtml(tr('webview.jsonPathHint')) + '</span>'
+      : (lang === 'xml' && !searchState.query
+        ? '<span class="response-path-hint">' + escapeHtml(tr('webview.xpathHint')) + '</span>'
+        : '');
     const toolbarHtml = !isBinary
       ? '<div class="res-body-toolbar js-res-body-toolbar' + (showBody ? '' : ' hidden') + '" data-lang="' + lang + '">' +
           (lang === 'json'
@@ -3732,6 +4487,7 @@ function renderContent() {
               '<button class="tb-btn js-collapse-all" title="' + escapeAttr(tr('webview.collapse')) + '">' + escapeHtml(tr('webview.collapse')) + '</button>'
             : '') +
           fmtMenuHtml +
+          pathHintHtml +
           searchToolbarHtml +
         '</div>'
       : '';
@@ -3741,6 +4497,26 @@ function renderContent() {
       : '';
     const responseToneClass = 'response-tone-' + sc + 'xx';
     const compareChipHtml = '<div class="compare-chip-row js-compare-chip-row">' + buildCompareChipMarkup(currentSignature) + '</div>';
+    const testResults = tab.scriptResults?.tests || [];
+    const failedTests = testResults.filter(function(test) { return !test.passed; });
+    const passedCount = testResults.length - failedTests.length;
+    const logCount = (tab.scriptResults?.logs || []).length;
+    const firstFailedTest = failedTests[0] || null;
+    const testsSummaryHtml = testResults.length > 0
+      ? '<div class="test-summary">' +
+          '<span class="test-badge pass">' + escapeHtml(tfCount('webview.testSummaryPass', passedCount)) + '</span>' +
+          '<span class="test-badge fail">' + escapeHtml(tfCount('webview.testSummaryFail', failedTests.length)) + '</span>' +
+          '<span class="test-badge log">' + escapeHtml(tfCount('webview.testSummaryLogs', logCount)) + '</span>' +
+        '</div>'
+      : '';
+    const testsAlertHtml = testResults.length === 0
+      ? ''
+      : (failedTests.length === 0
+        ? '<div class="test-alert pass"><div class="test-alert-title">' + escapeHtml(tr('webview.testSummaryAllPassed')) + '</div></div>'
+        : '<div class="test-alert fail">' +
+            '<div class="test-alert-title">' + escapeHtml(tr('webview.testSummaryFirstFailure')) + '</div>' +
+            '<div>' + escapeHtml(firstFailedTest?.name || '') + (firstFailedTest?.error ? ' - ' + escapeHtml(firstFailedTest.error) : '') + '</div>' +
+          '</div>');
     resHtml =
       '<div class="res-sticky-shell">' +
       '<div class="response-summary">' +
@@ -3750,6 +4526,9 @@ function renderContent() {
         '<span style="flex:1"></span>' +
         (lang !== 'text' ? '<span class="meta-lang">' + lang + '</span>' : '') +
         '<button class="res-action-btn ripple-btn js-copy-response" title="' + escapeAttr(tr('webview.copyResponse')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M10 3H4v10h8V5l-2-2zM9 4l2 2H9V4zM3 0h6l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V1a1 1 0 011-1z"/><path d="M1 3v11a1 1 0 001 1h8v-1H2V3H1z"/></svg> ' + escapeHtml(tr('webview.copy')) + '</button>' +
+        ((tab.resolvedUrl || tab.url) ? '<button class="res-action-btn ripple-btn js-copy-response-url" title="' + escapeAttr(tr('webview.copyUrl')) + '">' + escapeHtml(tr('webview.copyUrl')) + '</button>' : '') +
+        '<button class="res-action-btn ripple-btn js-copy-response-status" title="' + escapeAttr(tr('webview.copyStatus')) + '">' + escapeHtml(tr('webview.copyStatus')) + '</button>' +
+        '<button class="res-action-btn ripple-btn js-copy-response-headers" title="' + escapeAttr(tr('webview.copyHeadersRaw')) + '">' + escapeHtml(tr('webview.copyHeadersRaw')) + '</button>' +
         '<button class="res-action-btn ripple-btn js-save-response" title="' + escapeAttr(tr('webview.saveResponse')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> ' + escapeHtml(tr('webview.save')) + '</button>' +
         '<button class="pin-response-btn ripple-btn js-pin-response" title="' + escapeAttr(tr('webview.pinResponse')) + '">' + pinSvg + ' ' + escapeHtml(tr('webview.pin')) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</button>' +
         ((lang === 'html' && (tab.resolvedUrl || tab.url))
@@ -3788,12 +4567,14 @@ function renderContent() {
         (cookieCount > 0 ? cookiesTableHtml : renderInlineEmptyState(tr('webview.inline.response.noCookies.kicker'), tr('webview.inline.response.noCookies.title'), tr('webview.inline.response.noCookies.copy'))) +
       '</div>' +
       '<div class="res-headers-panel' + (showTests ? '' : ' hidden') + ' js-res-tests">' +
-        ((tab.scriptResults?.tests?.length || 0) > 0
-          ? '<table class="res-header-table"><thead><tr><th class="res-header-key-col">' + escapeHtml(tr('webview.test')) + '</th><th>' + escapeHtml(tr('webview.result')) + '</th></tr></thead><tbody>' +
-            tab.scriptResults.tests.map(function(test) {
+        (testResults.length > 0
+          ? testsSummaryHtml +
+            testsAlertHtml +
+            '<table class="res-header-table"><thead><tr><th class="res-header-key-col">' + escapeHtml(tr('webview.test')) + '</th><th>' + escapeHtml(tr('webview.result')) + '</th></tr></thead><tbody>' +
+            testResults.map(function(test) {
               var status = test.passed ? tr('webview.testResult.pass') : tr('webview.testResult.fail');
-              var detail = test.passed ? tr('webview.testResult.passed') : escapeHtml(test.error || tr('webview.testResult.failed'));
-              return '<tr><td class="res-header-key">' + escapeHtml(test.name) + '</td><td class="res-header-value" title="' + escapeAttr(detail) + '">' + status + ' - ' + detail + '</td></tr>';
+              var detail = test.passed ? tr('webview.testResult.passed') : (test.error || tr('webview.testResult.failed'));
+              return '<tr class="' + (test.passed ? 'test-row-pass' : 'test-row-fail') + '"><td class="res-header-key">' + escapeHtml(test.name) + '</td><td class="res-header-value" title="' + escapeAttr(detail) + '">' + escapeHtml(status + ' - ' + detail) + '</td></tr>';
             }).join('') +
             '</tbody></table>' +
             ((tab.scriptResults.logs || []).length > 0
@@ -3816,6 +4597,10 @@ function renderContent() {
             { title: tr('webview.empty.response.card.send.title'), copy: tr('webview.empty.response.card.send.copy') },
             { title: tr('webview.empty.response.card.settings.title'), copy: tr('webview.empty.response.card.settings.copy') },
             { title: tr('webview.empty.response.card.compare.title'), copy: tr('webview.empty.response.card.compare.copy') }
+          ],
+          [
+            { label: tr('webview.emptyActionFocusUrl'), action: 'focus-url' },
+            { label: tr('webview.emptyActionGuide'), action: 'open-guide' }
           ]
         )
       : renderEmptyState(
@@ -3826,6 +4611,11 @@ function renderContent() {
             { title: tr('webview.empty.request.card.variables.title'), copy: tr('webview.empty.request.card.variables.copy') },
             { title: tr('webview.empty.request.card.bodies.title'), copy: tr('webview.empty.request.card.bodies.copy') },
             { title: tr('webview.empty.request.card.scripts.title'), copy: tr('webview.empty.request.card.scripts.copy') }
+          ],
+          [
+            { label: tr('webview.emptyActionSample'), action: 'sample-request' },
+            { label: tr('webview.openEnvironmentPicker'), action: 'switch-environment' },
+            { label: tr('webview.emptyActionGuide'), action: 'open-guide' }
           ]
         );
   }
@@ -3841,9 +4631,7 @@ function renderContent() {
         '<input class="js-url" type="text" placeholder="' + escapeAttr(tr('webview.urlPlaceholder')) + '" spellcheck="false" value="' + escapeAttr(tab.url) + '"/>' +
         '<div class="var-overlay js-var-overlay hidden"></div>' +
       '</div>' +
-      (tab.loading
-        ? '<button class="btn-stop js-send"><span class="stop-icon"></span> ' + escapeHtml(tr('webview.stop')) + '</button>'
-        : '<button class="btn-send ripple-btn js-send"><span class="send-streak"></span><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1.5l14 6.5-14 6.5V9l10-1-10-1V1.5z"/></svg> ' + escapeHtml(tr('webview.send')) + ' <span class="btn-keyhint">Enter</span></button>') +
+      renderPrimaryActionButton(tab) +
       '<span class="url-bar-spacer"></span>' +
       '<button class="res-action-btn ripple-btn js-save"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.353 1.146l1.5 1.5L15 2.793V14.5a.5.5 0 01-.5.5h-13a.5.5 0 01-.5-.5v-13a.5.5 0 01.5-.5h11.707l.146.146zM2 2v12h12V3.207L12.793 2H2zm4 0v4h4V2H6zm5 0v5H5V2h1v3h3V2h2zm-3 7a2 2 0 110 4 2 2 0 010-4z"/></svg> ' + escapeHtml(tr('webview.save')) + '</button>' +
       (tab.requestId ? '<button class="res-action-btn ripple-btn js-save-as" title="' + escapeAttr(tr('webview.saveAs')) + '">' + escapeHtml(tr('webview.saveAs')) + '</button>' : '') +
@@ -3851,6 +4639,8 @@ function renderContent() {
       '<button class="res-action-btn ripple-btn js-generate-code" title="' + escapeAttr(tr('webview.generateCode')) + '">' + escapeHtml(tr('webview.code')) + '</button>' +
     '</div>' +
     preflightHtml +
+    requestDiffHtml +
+    variableUsageHtml +
     '<div class="split">' +
       '<div class="req-area">' +
         '<div class="tabs js-req-tabs">' +
@@ -3901,6 +4691,7 @@ function renderContent() {
           '</select>' +
           '<textarea class="js-body" placeholder="' + escapeAttr(tr('webview.bodyPlaceholder')) + '"' + (tab.bodyType === 'none' || tab.bodyType === 'formdata' || tab.bodyType === 'binary' ? ' style="display:none"' : '') + '>' + escapeHtml(tab.body) + '</textarea>' +
           '<div class="js-formdata-panel' + (tab.bodyType === 'formdata' ? '' : ' hidden') + '">' +
+            '<div class="formdata-summary js-formdata-summary">' + renderFormDataSummary(tab.formData || []) + '</div>' +
             '<div class="js-formdata-rows">' + formDataRowsHtml(tab.formData || []) + '</div>' +
             '<button class="add-btn js-add-formdata-text">' + escapeHtml(tr('webview.addField')) + '</button>' +
             '<button class="add-btn js-add-formdata-file">' + escapeHtml(tr('webview.addFile')) + '</button>' +
@@ -4009,6 +4800,33 @@ function renderContent() {
 function bindContentEvents() {
   const mc = mainContent;
 
+  mc.addEventListener('keydown', function(e) {
+    handleVariableAutocompleteKeydown(e);
+  }, true);
+  mc.addEventListener('focusin', function(e) {
+    if (!isVariableAutocompleteField(e.target)) return;
+    syncVariableAutocomplete(e.target);
+  });
+  mc.addEventListener('focusout', function(e) {
+    if (!isVariableAutocompleteField(e.target)) return;
+    setTimeout(function() {
+      if (isVariableAutocompleteField(document.activeElement)) {
+        syncVariableAutocomplete(document.activeElement);
+        return;
+      }
+      hideVariableAutocomplete();
+    }, 0);
+  });
+  mc.addEventListener('click', function(e) {
+    if (!isVariableAutocompleteField(e.target)) return;
+    syncVariableAutocomplete(e.target);
+  });
+  mc.addEventListener('input', function(e) {
+    if (!isVariableAutocompleteField(e.target)) return;
+    syncVariablePreviewHints(mainContent);
+    syncVariableAutocomplete(e.target);
+  });
+
   // 硫붿꽌??蹂寃?????諛??낅뜲?댄듃
   mc.querySelector('.js-method')?.addEventListener('change', (e) => {
     const tab = tabs.find(t => t.id === activeTabId);
@@ -4025,6 +4843,7 @@ function bindContentEvents() {
       debouncePersist();
     });
     urlInputEl.addEventListener('keydown', function(e) {
+      if (e.defaultPrevented) return;
       if (e.key !== 'Enter') return;
       if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
       if (e.isComposing || e.keyCode === 229) return;
@@ -4060,7 +4879,7 @@ function bindContentEvents() {
     vscode.postMessage({ type: 'openDefaultHeaders' });
   });
   mc.addEventListener('click', function(e) {
-    var actionEl = e.target.closest('.request-status-chip.clickable, .preflight-pill.clickable, .js-preflight-action');
+    var actionEl = e.target.closest('.request-status-chip.clickable, .preflight-pill.clickable, .js-preflight-action, .request-change-chip.clickable');
     if (!actionEl) return;
     var action = actionEl.dataset.action;
     var meta = actionEl.dataset.meta;
@@ -4072,8 +4891,38 @@ function bindContentEvents() {
       vscode.postMessage({ type: 'switchEnvironment' });
       return;
     }
+    if (action === 'change-workspace-profile') {
+      vscode.postMessage({ type: 'changeWorkspaceProfile' });
+      return;
+    }
     if (action === 'switch-tab' && meta) {
       switchRequestEditorTabInContent(mc, meta);
+    }
+  });
+  mc.addEventListener('click', function(e) {
+    var actionEl = e.target.closest('.js-empty-action');
+    if (!actionEl) return;
+    var action = actionEl.dataset.action;
+    if (action === 'new-tab') {
+      createTab();
+      return;
+    }
+    if (action === 'sample-request') {
+      loadSampleRequestIntoActiveTab();
+      return;
+    }
+    if (action === 'focus-url') {
+      var urlInput = mc.querySelector('.js-url');
+      urlInput?.focus();
+      urlInput?.select?.();
+      return;
+    }
+    if (action === 'switch-environment') {
+      vscode.postMessage({ type: 'switchEnvironment' });
+      return;
+    }
+    if (action === 'open-guide') {
+      vscode.postMessage({ type: 'openGuide' });
     }
   });
 
@@ -4123,6 +4972,34 @@ function bindContentEvents() {
       else if (opts.lang === 'xml') body = formatXml(body, opts.style, opts.indent);
     }
     vscode.postMessage({ type: 'copyResponseBody', body: body });
+    showBtnFeedback(this, tr('webview.copied'), 1200);
+  });
+  mc.querySelector('.js-res-raw')?.addEventListener('click', function(event) {
+    var target = event.target.closest('.js-copy-xml-path') || event.target.closest('.xml-path-line[data-copy-path]');
+    if (!target || !target.dataset.copyPath) return;
+    event.preventDefault();
+    vscode.postMessage({ type: 'copyToClipboard', text: target.dataset.copyPath });
+    if (target.classList.contains('js-copy-xml-path')) {
+      showBtnFeedback(target, tr('webview.copied'), 1000);
+    }
+  });
+  mc.querySelector('.js-copy-response-url')?.addEventListener('click', function() {
+    const tab = tabs.find(t => t.id === activeTabId);
+    const url = tab?.resolvedUrl || tab?.url || '';
+    if (!url) return;
+    vscode.postMessage({ type: 'copyToClipboard', text: url });
+    showBtnFeedback(this, tr('webview.copied'), 1200);
+  });
+  mc.querySelector('.js-copy-response-status')?.addEventListener('click', function() {
+    const tab = tabs.find(t => t.id === activeTabId);
+    if (!tab?.response) return;
+    vscode.postMessage({ type: 'copyToClipboard', text: buildResponseStatusLine(tab.response) });
+    showBtnFeedback(this, tr('webview.copied'), 1200);
+  });
+  mc.querySelector('.js-copy-response-headers')?.addEventListener('click', function() {
+    const tab = tabs.find(t => t.id === activeTabId);
+    if (!tab?.response) return;
+    vscode.postMessage({ type: 'copyToClipboard', text: buildRawResponseHeaders(tab.response) });
     showBtnFeedback(this, tr('webview.copied'), 1200);
   });
 
@@ -4275,57 +5152,7 @@ function bindContentEvents() {
   mc.querySelector('.js-res-tabs')?.addEventListener('click', (e) => {
     const t = e.target.closest('.tab');
     if (!t) return;
-    const tab = tabs.find(tt => tt.id === activeTabId);
-    if (tab) {
-      tab.responseTab = t.dataset.tab;
-      debouncePersist();
-    }
-    mc.querySelectorAll('.js-res-tabs .tab').forEach(x => x.classList.remove('active'));
-    t.classList.add('active');
-    const sel = t.dataset.tab;
-    const isBody = sel === 'resBody';
-    const isPreview = sel === 'resPreview';
-
-    // 紐⑤뱺 ?묐떟 肄섑뀗痢??④?
-      mc.querySelectorAll('.js-res-body').forEach(el => el.classList.add('hidden'));
-      mc.querySelector('.js-res-headers')?.classList.add('hidden');
-      mc.querySelector('.js-res-cookies')?.classList.add('hidden');
-      mc.querySelector('.js-res-tests')?.classList.add('hidden');
-      const preview = mc.querySelector('.js-res-preview');
-      if (preview) preview.classList.add('hidden');
-    const toolbar = mc.querySelector('.js-res-body-toolbar');
-    if (toolbar) toolbar.classList.add('hidden');
-
-    // ?좏깮????肄섑뀗痢좊쭔 ?쒖떆
-    if (isBody) {
-      if (toolbar) toolbar.classList.remove('hidden');
-      const tree = mc.querySelector('.js-res-tree');
-      const raw = mc.querySelector('.js-res-raw');
-      if (tree) {
-        // JSON: Tree/Raw ?좉? 紐⑤뱶 蹂듭썝
-        const mode = toolbar?.querySelector('.toggle-btn.active')?.dataset.mode || 'tree';
-        tree.classList.toggle('hidden', mode !== 'tree');
-        if (raw) raw.classList.toggle('hidden', mode !== 'raw');
-      } else {
-        // XML, text ?? raw留??쒖떆
-        if (raw) raw.classList.remove('hidden');
-      }
-      } else if (sel === 'resHeaders') {
-        mc.querySelector('.js-res-headers')?.classList.remove('hidden');
-      } else if (sel === 'resCookies') {
-        mc.querySelector('.js-res-cookies')?.classList.remove('hidden');
-      } else if (sel === 'resTests') {
-        mc.querySelector('.js-res-tests')?.classList.remove('hidden');
-    } else if (isPreview && preview) {
-      preview.classList.remove('hidden');
-      const tab = tabs.find(tt => tt.id === activeTabId);
-      if (tab?.response?.body) {
-        syncPreviewFrame(preview, tab);
-      }
-    }
-    if (sel === 'resBody') {
-      syncResponseSearch(mc);
-    }
+    switchResponseTabInContent(mc, t.dataset.tab);
   });
 
   // Tree/Raw ?좉?
@@ -4453,7 +5280,7 @@ function bindContentEvents() {
     if (tab?.response?.body) {
       try {
         const parsed = JSON.parse(tab.response.body);
-        treeContainer.innerHTML = buildJsonTree(parsed, '', true);
+        treeContainer.innerHTML = buildJsonTree(parsed, '', true, '$');
         bindTreeToggles(treeContainer);
       } catch {}
     }
@@ -4467,16 +5294,15 @@ function bindContentEvents() {
     var container = mc.querySelector('.js-param-rows');
     addKvRow(container);
     container?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
-    refreshRequestPreflight(mc);
     markDirty();
+    refreshDraftInsights(mc);
   });
   mc.querySelector('.js-add-header')?.addEventListener('click', () => {
     var container = mc.querySelector('.js-header-rows');
     addKvRow(container);
     container?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
     markDirty();
-    refreshDefaultHeadersBanner(mc);
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
   });
 
   mc.querySelectorAll('.js-open-bulk-editor').forEach(function(button) {
@@ -4500,12 +5326,12 @@ function bindContentEvents() {
     const fields = mc.querySelector('.js-auth-fields');
     if (fields) fields.innerHTML = authFieldsHtml(e.target.value);
     markDirty();
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
   });
   // Auth 필드 입력 변경 감지
   mc.querySelector('.js-auth-fields')?.addEventListener('input', function() {
     markDirty();
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
   });
   mc.querySelector('.js-auth-fields')?.addEventListener('click', function(e) {
     if (!e.target.classList.contains('js-auth-reveal')) return;
@@ -4528,20 +5354,20 @@ function bindContentEvents() {
     if (binaryPanel) binaryPanel.classList.toggle('hidden', bodyType !== 'binary');
     syncAutoContentType(mc, bodyType);
     markDirty();
-    refreshDefaultHeadersBanner(mc);
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
   });
   // 珥덇린 ?뚮뜑留???auto Content-Type ?숆린??
   var initBodyType = mc.querySelector('.js-body-type')?.value || 'none';
   if (initBodyType !== 'none') syncAutoContentType(mc, initBodyType);
 
   // Settings ?낅젰 蹂寃?媛먯?
-  mc.querySelector('.js-settings-panel')?.addEventListener('input', markDirty);
+  mc.querySelector('.js-settings-panel')?.addEventListener('input', function() {
+    markDirty();
+    refreshDraftInsights(mc);
+  });
   mc.querySelector('.js-settings-panel')?.addEventListener('change', function() {
     markDirty();
-    refreshDefaultHeadersBanner(mc);
-    refreshToplineStatusChips(mc);
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
     renderContent();
   });
 
@@ -4553,7 +5379,7 @@ function bindContentEvents() {
       var h = Math.max(100, Math.min(400, bodyTa.scrollHeight));
       bodyTa.style.height = h + 'px';
     }
-    bodyTa.addEventListener('input', function() { autoGrow(); markDirty(); refreshRequestPreflight(mc); });
+    bodyTa.addEventListener('input', function() { autoGrow(); markDirty(); refreshDraftInsights(mc); });
     bodyTa.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') { setTimeout(autoGrow, 0); }
     });
@@ -4563,18 +5389,18 @@ function bindContentEvents() {
   mc.querySelector('.js-add-formdata-text')?.addEventListener('click', () => {
     addFormDataRow(mc.querySelector('.js-formdata-rows'), 'text');
     markDirty();
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
   });
   mc.querySelector('.js-add-formdata-file')?.addEventListener('click', () => {
     addFormDataRow(mc.querySelector('.js-formdata-rows'), 'file');
     markDirty();
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
   });
   mc.querySelector('.js-formdata-rows')?.addEventListener('click', (e) => {
     if (e.target.classList.contains('rm')) {
       e.target.closest('.formdata-row')?.remove();
       markDirty();
-      refreshRequestPreflight(mc);
+      refreshDraftInsights(mc);
       return;
     }
     if (e.target.classList.contains('js-formdata-browse')) {
@@ -4587,11 +5413,12 @@ function bindContentEvents() {
       syncFormDataRow(e.target.closest('.formdata-row'));
     }
     markDirty();
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
   });
-  mc.querySelector('.js-formdata-rows')?.addEventListener('input', function() {
+  mc.querySelector('.js-formdata-rows')?.addEventListener('input', function(e) {
+    syncFormDataRow(e.target.closest('.formdata-row'));
     markDirty();
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
   });
   mc.querySelectorAll('.formdata-row').forEach(syncFormDataRow);
 
@@ -4600,15 +5427,15 @@ function bindContentEvents() {
   });
   mc.querySelector('.js-binary-path')?.addEventListener('input', function() {
     markDirty();
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
   });
   mc.querySelector('.js-script-prerequest')?.addEventListener('input', function() {
     markDirty();
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
   });
   mc.querySelector('.js-script-test')?.addEventListener('input', function() {
     markDirty();
-    refreshRequestPreflight(mc);
+    refreshDraftInsights(mc);
   });
 
   // === ?쒕옒洹?援щ텇??===
@@ -4632,8 +5459,7 @@ function bindContentEvents() {
     });
   }
 
-  refreshDefaultHeadersBanner(mc);
-  refreshRequestPreflight(mc);
+  refreshDraftInsights(mc);
   syncResponseSearch(mc);
 }
 
@@ -4820,10 +5646,8 @@ function bindKvRow(container, options) {
       opts.onChange();
       return;
     }
-    refreshDefaultHeadersBanner(mainContent);
-    refreshToplineStatusChips(mainContent);
-    refreshRequestPreflight(mainContent);
     markDirty();
+    refreshDraftInsights(mainContent);
   };
   container.addEventListener('click', function(e) {
     if (e.target.classList.contains('rm')) {
@@ -4903,36 +5727,51 @@ function parseBulkKeyValueText(text, target) {
 function formDataRowsHtml(items) {
   return (items || []).map(function(field) {
     var isFile = field.type === 'file';
-    return '<div class="kv-row formdata-row" data-row-id="' + escapeAttr(field.id || ('fd_' + Math.random().toString(36).slice(2, 8))) + '">' +
+    var value = field.value || '';
+    var fileName = isFile ? getFileName(value) : '';
+    return '<div class="kv-row formdata-row' + (isFile ? ' is-file' : '') + '" data-row-id="' + escapeAttr(field.id || ('fd_' + Math.random().toString(36).slice(2, 8))) + '">' +
       '<input type="checkbox"' + (field.enabled !== false ? ' checked' : '') + '/>' +
       '<input type="text" class="js-formdata-key" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(field.key || '') + '"/>' +
-      '<select class="js-formdata-type body-type-select" style="width:84px;margin-bottom:0">' +
+      '<select class="js-formdata-type body-type-select formdata-kind" style="width:84px;margin-bottom:0">' +
         '<option value="text"' + (isFile ? '' : ' selected') + '>' + escapeHtml(tr('webview.text')) + '</option>' +
         '<option value="file"' + (isFile ? ' selected' : '') + '>' + escapeHtml(tr('webview.file')) + '</option>' +
       '</select>' +
-      '<input type="text" class="js-formdata-value" placeholder="' + escapeAttr(isFile ? tr('webview.filePath') : tr('webview.value')) + '" value="' + escapeAttr(field.value || '') + '"/>' +
+      '<div class="formdata-meta">' +
+        '<input type="text" class="js-formdata-value" placeholder="' + escapeAttr(isFile ? tr('webview.filePath') : tr('webview.value')) + '" value="' + escapeAttr(value) + '"/>' +
+        '<span class="formdata-file-chip js-formdata-file-chip' + (isFile && fileName ? '' : ' hidden') + '">' + escapeHtml(fileName || tf('webview.fileSelected', { name: '' })) + '</span>' +
+      '</div>' +
       '<button class="btn btn-s js-formdata-browse' + (isFile ? '' : ' hidden') + '" type="button" style="padding:3px 8px">' + escapeHtml(tr('webview.browse')) + '</button>' +
       '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>' +
     '</div>';
   }).join('');
 }
 
+function getFileName(filePath) {
+  var normalized = String(filePath || '').replace(/\\\\/g, '/');
+  var parts = normalized.split('/');
+  return parts[parts.length - 1] || normalized;
+}
+
 function addFormDataRow(container, type) {
   if (!container) return;
   var row = document.createElement('div');
-  row.className = 'kv-row formdata-row';
+  row.className = 'kv-row formdata-row' + (type === 'file' ? ' is-file' : '');
   row.dataset.rowId = 'fd_' + Math.random().toString(36).slice(2, 10);
   row.innerHTML =
     '<input type="checkbox" checked/>' +
     '<input type="text" class="js-formdata-key" placeholder="' + escapeAttr(tr('webview.key')) + '"/>' +
-    '<select class="js-formdata-type body-type-select" style="width:84px;margin-bottom:0">' +
+    '<select class="js-formdata-type body-type-select formdata-kind" style="width:84px;margin-bottom:0">' +
       '<option value="text"' + (type === 'file' ? '' : ' selected') + '>' + escapeHtml(tr('webview.text')) + '</option>' +
       '<option value="file"' + (type === 'file' ? ' selected' : '') + '>' + escapeHtml(tr('webview.file')) + '</option>' +
     '</select>' +
-    '<input type="text" class="js-formdata-value" placeholder="' + escapeAttr(type === 'file' ? tr('webview.filePath') : tr('webview.value')) + '"/>' +
+    '<div class="formdata-meta">' +
+      '<input type="text" class="js-formdata-value" placeholder="' + escapeAttr(type === 'file' ? tr('webview.filePath') : tr('webview.value')) + '"/>' +
+      '<span class="formdata-file-chip js-formdata-file-chip hidden"></span>' +
+    '</div>' +
     '<button class="btn btn-s js-formdata-browse' + (type === 'file' ? '' : ' hidden') + '" type="button" style="padding:3px 8px">' + escapeHtml(tr('webview.browse')) + '</button>' +
     '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>';
   container.appendChild(row);
+  syncFormDataRow(row);
 }
 
 function syncFormDataRow(row) {
@@ -4940,8 +5779,27 @@ function syncFormDataRow(row) {
   var type = row.querySelector('.js-formdata-type')?.value || 'text';
   var valueInput = row.querySelector('.js-formdata-value');
   var browseBtn = row.querySelector('.js-formdata-browse');
+  var fileChip = row.querySelector('.js-formdata-file-chip');
+  var value = valueInput?.value || '';
+  var fileName = type === 'file' ? getFileName(value) : '';
   if (valueInput) valueInput.placeholder = type === 'file' ? tr('webview.filePath') : tr('webview.value');
   if (browseBtn) browseBtn.classList.toggle('hidden', type !== 'file');
+  row.classList.toggle('is-file', type === 'file');
+  if (fileChip) {
+    fileChip.classList.toggle('hidden', !(type === 'file' && fileName));
+    fileChip.textContent = fileName ? tf('webview.fileSelected', { name: fileName }) : '';
+  }
+}
+
+function renderFormDataSummary(fields) {
+  var enabled = (fields || []).filter(function(field) {
+    return field && field.enabled !== false;
+  });
+  var fileCount = enabled.filter(function(field) { return field.type === 'file'; }).length;
+  var textCount = enabled.filter(function(field) { return field.type !== 'file'; }).length;
+  return '<span class="meta-stat">' + escapeHtml(tfCount('webview.formDataSummaryFields', enabled.length)) + '</span>' +
+    '<span class="meta-stat">' + escapeHtml(tfCount('webview.formDataSummaryFiles', fileCount)) + '</span>' +
+    '<span class="meta-stat">' + escapeHtml(tfCount('webview.formDataSummaryText', textCount)) + '</span>';
 }
 
 function collectFormData(container) {
@@ -5098,6 +5956,12 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  if (msg.type === 'flushTabState') {
+    persistTabState();
+    vscode.postMessage({ type: 'flushedTabState' });
+    return;
+  }
+
   if (msg.type === 'requestCanceled') {
     const tab = tabs.find(t => t.id === msg.tabId);
     if (!tab) return;
@@ -5224,7 +6088,12 @@ window.addEventListener('message', (event) => {
 
   if (msg.type === 'activeVarKeys') {
     activeVarKeys = msg.varKeys || [];
+    activeVarValues = msg.varValues || {};
     checkUnresolvedVars();
+    syncVariablePreviewHints(mainContent);
+    if (variableAutocompleteState?.target) {
+      syncVariableAutocomplete(variableAutocompleteState.target);
+    }
   }
 
   if (msg.type === 'loadRequest') {
@@ -5268,13 +6137,16 @@ window.addEventListener('message', (event) => {
       if (binaryInput && msg.filePath) {
         binaryInput.value = msg.filePath;
         markDirty();
+        refreshDraftInsights(mainContent);
       }
     } else if (msg.target === 'formdata' && msg.rowId) {
       var row = mainContent.querySelector('.formdata-row[data-row-id="' + msg.rowId + '"]');
       var input = row?.querySelector('.js-formdata-value');
       if (input && msg.filePath) {
         input.value = msg.filePath;
+        syncFormDataRow(row);
         markDirty();
+        refreshDraftInsights(mainContent);
       }
     }
   }
@@ -5301,6 +6173,7 @@ window.addEventListener('message', (event) => {
 
   if (msg.type === 'updateActiveEnv') {
     currentEnvName = msg.envName;
+    currentWorkspaceProfile = msg.profileName || 'default';
     refreshToplineStatusChips(mainContent);
     refreshRequestPreflight(mainContent);
   }
@@ -5373,6 +6246,7 @@ function showRunner(name, total) {
     '<div class="runner-header">' +
       '<h3>' + escapeHtml(tf('webview.runTitle', { name: name })) + '</h3>' +
       '<button class="btn btn-s js-runner-stop" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runStop')) + '</button>' +
+      '<button class="btn btn-s js-runner-rerun hidden" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runRerunFailed')) + '</button>' +
       '<button class="btn btn-s js-runner-close hidden" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runClose')) + '</button>' +
     '</div>' +
     '<div class="runner-progress">' +
@@ -5403,6 +6277,17 @@ function showRunner(name, total) {
   // Close 踰꾪듉
   runnerOverlay.querySelector('.js-runner-close').addEventListener('click', function() {
     if (runnerOverlay) { runnerOverlay.remove(); runnerOverlay = null; }
+  });
+  runnerOverlay.querySelector('.js-runner-rerun').addEventListener('click', function() {
+    var failedIndices = [];
+    runnerResults.forEach(function(result, index) {
+      if (result?.failed) {
+        failedIndices.push(index);
+      }
+    });
+    if (!failedIndices.length) return;
+    this.disabled = true;
+    vscode.postMessage({ type: 'rerunFailedCollection', failedIndices: failedIndices });
   });
   // ???대┃ ?대깽???꾩엫
   runnerOverlay.querySelector('.js-runner-list').addEventListener('click', function(e) {
@@ -5479,7 +6364,7 @@ function updateRunnerRow(msg) {
   list.appendChild(row);
 
   // 寃곌낵 ???
-  runnerResults[msg.index] = { error: msg.error, response: msg.response };
+  runnerResults[msg.index] = { error: msg.error, response: msg.response, failed: !isPassed };
 
   // ?꾨줈洹몃젅???낅뜲?댄듃
   var pct = Math.round(((msg.index + 1) / msg.total) * 100);
@@ -5503,6 +6388,11 @@ function finishRunner(msg) {
   // Stop ??Close ?꾪솚
   var stopBtn = runnerOverlay.querySelector('.js-runner-stop');
   if (stopBtn) stopBtn.classList.add('hidden');
+  var rerunBtn = runnerOverlay.querySelector('.js-runner-rerun');
+  if (rerunBtn) {
+    rerunBtn.classList.toggle('hidden', msg.failed <= 0);
+    rerunBtn.disabled = false;
+  }
   var closeBtn = runnerOverlay.querySelector('.js-runner-close');
   if (closeBtn) closeBtn.classList.remove('hidden');
   var liveTitle = runnerOverlay.querySelector('.js-runner-live-title');
@@ -5518,21 +6408,31 @@ function finishRunner(msg) {
 }
 
 // === JSON ?몃━ 酉?===
-function buildJsonTree(val, key, isLast) {
+function appendJsonPath(basePath, segment, isArray) {
+  if (segment === '' || segment === undefined || segment === null) return basePath || '$';
+  if (isArray) return (basePath || '$') + '[' + segment + ']';
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(segment)
+    ? ((basePath || '$') + '.' + segment)
+    : ((basePath || '$') + '[' + JSON.stringify(segment) + ']');
+}
+
+function buildJsonTree(val, key, isLast, path) {
   const comma = isLast ? '' : '<span class="jt-comma">,</span>';
   const keyHtml = key !== '' ? '<span class="jt-key">' + escapeHtml('"' + key + '"') + '</span>: ' : '';
+  const copyPath = path || '$';
+  const copyBtn = '<button class="jt-copy-path" type="button" data-copy-path="' + escapeAttr(copyPath) + '" title="' + escapeAttr(tf('webview.copyJsonPathValue', { path: copyPath })) + '">' + escapeHtml(tr('webview.copyPathShort')) + '</button>';
 
   if (val === null) {
-    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-null">null</span>' + comma + '</div>';
+    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-null">null</span>' + comma + copyBtn + '</div>';
   }
   if (typeof val === 'boolean') {
-    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-bool">' + val + '</span>' + comma + '</div>';
+    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-bool">' + val + '</span>' + comma + copyBtn + '</div>';
   }
   if (typeof val === 'number') {
-    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-num">' + val + '</span>' + comma + '</div>';
+    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-num">' + val + '</span>' + comma + copyBtn + '</div>';
   }
   if (typeof val === 'string') {
-    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-str">' + escapeHtml('"' + val + '"') + '</span>' + comma + '</div>';
+    return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml + '<span class="jt-str">' + escapeHtml('"' + val + '"') + '</span>' + comma + copyBtn + '</div>';
   }
 
   const isArr = Array.isArray(val);
@@ -5543,13 +6443,14 @@ function buildJsonTree(val, key, isLast) {
 
   if (count === 0) {
     return '<div class="jt-row"><span class="jt-toggle"></span>' + keyHtml +
-      '<span class="jt-brace">' + open + close + '</span>' + comma + '</div>';
+      '<span class="jt-brace">' + open + close + '</span>' + comma + copyBtn + '</div>';
   }
 
   let childrenHtml = '';
   entries.forEach(([k, v], idx) => {
     const childKey = isArr ? '' : String(k);
-    childrenHtml += buildJsonTree(v, childKey, idx === count - 1);
+    const childPath = appendJsonPath(copyPath, String(k), isArr);
+    childrenHtml += buildJsonTree(v, childKey, idx === count - 1, childPath);
   });
 
   const summary = isArr ? count + ' items' : count + ' keys';
@@ -5558,6 +6459,7 @@ function buildJsonTree(val, key, isLast) {
       '<span class="jt-toggle">-</span>' + keyHtml +
       '<span class="jt-brace">' + open + '</span>' +
       '<span class="jt-ellipsis hidden" title="' + summary + '"> ... ' + summary + ' </span>' +
+      copyBtn +
     '</div>' +
     '<div class="jt-children jt-node">' + childrenHtml + '</div>' +
     '<div class="jt-row"><span class="jt-toggle"></span><span class="jt-brace">' + close + '</span>' + comma + '</div>';
@@ -5565,6 +6467,14 @@ function buildJsonTree(val, key, isLast) {
 
 function bindTreeToggles(container) {
   container.addEventListener('click', (e) => {
+    const copyPathBtn = e.target.closest('.jt-copy-path');
+    if (copyPathBtn && copyPathBtn.dataset.copyPath) {
+      e.preventDefault();
+      e.stopPropagation();
+      vscode.postMessage({ type: 'copyToClipboard', text: copyPathBtn.dataset.copyPath });
+      return;
+    }
+
     const toggle = e.target.closest('.jt-toggle');
     const ellipsis = e.target.closest('.jt-ellipsis');
     if (!toggle && !ellipsis) return;
@@ -5583,6 +6493,80 @@ function bindTreeToggles(container) {
     const ell = row.querySelector('.jt-ellipsis');
     if (ell) ell.classList.toggle('hidden', !collapsed);
   });
+}
+
+function buildXPathFromStack(stack) {
+  if (!stack.length) return '';
+  return '/' + stack.map(function(segment) {
+    return segment.name + '[' + segment.index + ']';
+  }).join('/');
+}
+
+function extractXmlLinePaths(body) {
+  var lines = String(body || '').split('\\n');
+  var tagPattern = /(<\\?[\\s\\S]*?\\?>|<!--[\\s\\S]*?-->|<!\\[CDATA\\[[\\s\\S]*?\\]\\]>|<\\/[^>]+>|<[^>]+\\/\\s*>|<[^>]+>)/g;
+  var stack = [];
+  var childCounters = [Object.create(null)];
+
+  return lines.map(function(line) {
+    var trimmed = (line || '').trim();
+    if (!trimmed || trimmed.indexOf('<') < 0) return '';
+
+    var linePath = '';
+    var match;
+    tagPattern.lastIndex = 0;
+    while ((match = tagPattern.exec(trimmed)) !== null) {
+      var tag = match[1];
+      if (tag.startsWith('<?') || tag.startsWith('<!--') || tag.startsWith('<![CDATA[')) {
+        continue;
+      }
+
+      if (tag.startsWith('</')) {
+        if (!linePath && stack.length) {
+          linePath = buildXPathFromStack(stack);
+        }
+        if (stack.length) {
+          stack.pop();
+          childCounters.pop();
+        }
+        continue;
+      }
+
+      var nameMatch = tag.match(/^<\\s*([^\\s/>]+)/);
+      if (!nameMatch) continue;
+
+      var name = nameMatch[1];
+      var currentCounters = childCounters[childCounters.length - 1];
+      var nextIndex = (currentCounters[name] || 0) + 1;
+      currentCounters[name] = nextIndex;
+
+      stack.push({ name: name, index: nextIndex });
+      childCounters.push(Object.create(null));
+      linePath = buildXPathFromStack(stack);
+
+      if (/\\/\\s*>$/.test(tag)) {
+        stack.pop();
+        childCounters.pop();
+      }
+    }
+
+    return linePath;
+  });
+}
+
+function renderXmlBodyWithPaths(body) {
+  var lines = String(body || '').split('\\n');
+  var linePaths = extractXmlLinePaths(body);
+  return '<div class="xml-path-body">' + lines.map(function(line, index) {
+    var xpath = linePaths[index];
+    var copyButton = xpath
+      ? '<button class="xml-path-copy js-copy-xml-path" type="button" data-copy-path="' + escapeAttr(xpath) + '" title="' + escapeAttr(tf('webview.copyXPathValue', { path: xpath })) + '">' + escapeHtml(tr('webview.copyXPathShort')) + '</button>'
+      : '';
+    return '<div class="xml-path-line"' + (xpath ? ' data-copy-path="' + escapeAttr(xpath) + '"' : '') + '>' +
+      '<span class="xml-path-content">' + (line ? highlightBody(line, 'xml') : '&nbsp;') + '</span>' +
+      copyButton +
+    '</div>';
+  }).join('') + '</div>';
 }
 
 // === Content-Type 媛먯? 諛?援щЦ ?섏씠?쇱씠??(highlight.js) ===
@@ -5763,7 +6747,9 @@ function syncResponseSearch(mc) {
     setJsonBodyMode(mc, 'raw');
   }
 
-  rawEl.innerHTML = renderResponseBody(displayBody, lang, query, activeIndex, searchState);
+  rawEl.innerHTML = lang === 'xml' && !query
+    ? renderXmlBodyWithPaths(displayBody)
+    : renderResponseBody(displayBody, lang, query, activeIndex, searchState);
 
   var countEl = mc.querySelector('.js-response-search-count');
   if (countEl) {
@@ -5843,14 +6829,19 @@ function applyFormat(mc) {
   }
   // Raw 酉??낅뜲?댄듃
   var rawEl = mc.querySelector('.js-res-raw');
-  if (rawEl) rawEl.innerHTML = renderResponseBody(formatted, opts.lang, tab.responseSearchQuery || '', tab.responseSearchIndex || 0, getResponseSearchState(tab));
+  if (rawEl) {
+    var searchQuery = tab.responseSearchQuery || '';
+    rawEl.innerHTML = opts.lang === 'xml' && !searchQuery
+      ? renderXmlBodyWithPaths(formatted)
+      : renderResponseBody(formatted, opts.lang, searchQuery, tab.responseSearchIndex || 0, getResponseSearchState(tab));
+  }
   // JSON ?몃━???щ젋?붾쭅 (pretty?먯꽌???섎? ?놁?留??쇨????좎?)
   if (opts.lang === 'json') {
     var treeEl = mc.querySelector('.js-res-tree');
     if (treeEl) {
       try {
         var parsed = JSON.parse(body);
-        treeEl.innerHTML = buildJsonTree(parsed, '', true);
+        treeEl.innerHTML = buildJsonTree(parsed, '', true, '$');
         bindTreeToggles(treeEl);
       } catch {}
     }
@@ -6023,6 +7014,277 @@ function checkUnresolvedVars() {
   }
 }
 
+function collectVariablePreviewItems(text) {
+  var value = String(text || '');
+  var regex = /\{\{([^}]+)\}\}/g;
+  var seen = {};
+  var items = [];
+  var match;
+  while ((match = regex.exec(value)) !== null) {
+    var name = (match[1] || '').trim();
+    if (!name || seen[name]) continue;
+    seen[name] = true;
+    items.push({
+      name: name,
+      value: Object.prototype.hasOwnProperty.call(activeVarValues, name) ? String(activeVarValues[name] ?? '') : '',
+      missing: activeVarKeys.indexOf(name) < 0
+    });
+  }
+  return items;
+}
+
+function ensureVariablePreviewPopover() {
+  if (variablePreviewPopover) return variablePreviewPopover;
+  variablePreviewPopover = document.createElement('div');
+  variablePreviewPopover.className = 'var-preview-popover hidden';
+  document.body.appendChild(variablePreviewPopover);
+  return variablePreviewPopover;
+}
+
+function hideVariablePreviewPopover() {
+  if (!variablePreviewPopover) return;
+  variablePreviewPopover.classList.add('hidden');
+  variablePreviewPopover.innerHTML = '';
+}
+
+function syncVariablePreviewHints(scope) {
+  scope?.querySelectorAll('input[type="text"], input[type="password"], textarea').forEach(function(field) {
+    if (field.classList.contains('js-response-search')) {
+      delete field.dataset.varPreview;
+      delete field.dataset.varPreviewHtml;
+      field.removeAttribute('title');
+      return;
+    }
+    var items = collectVariablePreviewItems(field.value || '');
+    if (!items.length) {
+      delete field.dataset.varPreview;
+      delete field.dataset.varPreviewHtml;
+      field.removeAttribute('title');
+      return;
+    }
+
+    var previewText = items.map(function(item) {
+      return '{{' + item.name + '}} → ' + (item.missing ? tr('webview.variablePreviewMissing') : item.value);
+    }).join('\\n');
+    var previewHtml = '<div class="var-preview-title">' + escapeHtml(tr('webview.variablePreviewTitle')) + '</div>' +
+      items.map(function(item) {
+        return '<div class="var-preview-line">' +
+          '<span class="var-preview-name">{{' + escapeHtml(item.name) + '}}</span>' +
+          '<span class="var-preview-value' + (item.missing ? ' missing' : '') + '">' + escapeHtml(item.missing ? tr('webview.variablePreviewMissing') : item.value) + '</span>' +
+        '</div>';
+      }).join('');
+
+    field.dataset.varPreview = previewText;
+    field.dataset.varPreviewHtml = previewHtml;
+    field.title = previewText;
+  });
+}
+
+function showVariablePreviewPopover(target) {
+  if (!target?.dataset?.varPreviewHtml) {
+    hideVariablePreviewPopover();
+    return;
+  }
+
+  var popover = ensureVariablePreviewPopover();
+  popover.innerHTML = target.dataset.varPreviewHtml;
+  popover.classList.remove('hidden');
+  var rect = target.getBoundingClientRect();
+  var top = Math.min(window.innerHeight - popover.offsetHeight - 12, rect.bottom + 8);
+  var left = Math.min(window.innerWidth - popover.offsetWidth - 12, rect.left);
+  popover.style.top = Math.max(12, top) + 'px';
+  popover.style.left = Math.max(12, left) + 'px';
+}
+
+function isVariableAutocompleteField(target) {
+  if (!target || !(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+    return false;
+  }
+  if (target.disabled || target.readOnly) return false;
+  if (target.classList.contains('js-response-search')) return false;
+  if (target.type && ['checkbox', 'number', 'hidden'].indexOf(target.type) >= 0) return false;
+  return true;
+}
+
+function getVariableAutocompleteContext(target) {
+  if (!isVariableAutocompleteField(target)) return null;
+  if (typeof target.selectionStart !== 'number' || typeof target.selectionEnd !== 'number') return null;
+  if (target.selectionStart !== target.selectionEnd) return null;
+  var value = String(target.value || '');
+  var caret = target.selectionStart;
+  var before = value.slice(0, caret);
+  var openIndex = before.lastIndexOf('{{');
+  if (openIndex < 0) return null;
+  if (before.indexOf('}}', openIndex) >= 0) return null;
+  var partial = before.slice(openIndex + 2);
+  var cr = String.fromCharCode(13);
+  var lf = String.fromCharCode(10);
+  var tab = String.fromCharCode(9);
+  if (partial.indexOf('{') >= 0 || partial.indexOf('}') >= 0) return null;
+  if (partial.indexOf(cr) >= 0 || partial.indexOf(lf) >= 0) return null;
+  if (partial.indexOf(' ') >= 0 || partial.indexOf(tab) >= 0) return null;
+  var replaceEnd = caret;
+  if (value.slice(caret, caret + 2) === '}}') {
+    replaceEnd += 2;
+  }
+  return {
+    start: openIndex,
+    end: replaceEnd,
+    query: partial,
+  };
+}
+
+function getVariableAutocompleteSuggestions(query) {
+  var needle = String(query || '').toLowerCase();
+  var exactPrefix = [];
+  var fuzzy = [];
+  activeVarKeys.forEach(function(name) {
+    var lowered = String(name || '').toLowerCase();
+    if (!needle || lowered.indexOf(needle) === 0) {
+      exactPrefix.push(name);
+      return;
+    }
+    if (lowered.indexOf(needle) >= 0) {
+      fuzzy.push(name);
+    }
+  });
+  return exactPrefix.concat(fuzzy).slice(0, 10).map(function(name) {
+    return {
+      name: name,
+      value: Object.prototype.hasOwnProperty.call(activeVarValues, name) ? String(activeVarValues[name] ?? '') : '',
+    };
+  });
+}
+
+function ensureVariableAutocompletePopover() {
+  if (variableAutocompletePopover) return variableAutocompletePopover;
+  variableAutocompletePopover = document.createElement('div');
+  variableAutocompletePopover.className = 'var-autocomplete hidden';
+  variableAutocompletePopover.addEventListener('mousedown', function(event) {
+    var item = event.target.closest('.js-var-autocomplete-item');
+    if (!item) return;
+    event.preventDefault();
+    applyVariableAutocompleteSelection(Number(item.dataset.index || 0));
+  });
+  document.body.appendChild(variableAutocompletePopover);
+  return variableAutocompletePopover;
+}
+
+function hideVariableAutocomplete() {
+  if (variableAutocompletePopover) {
+    variableAutocompletePopover.classList.add('hidden');
+    variableAutocompletePopover.innerHTML = '';
+  }
+  variableAutocompleteState = null;
+}
+
+function positionVariableAutocomplete(target) {
+  if (!variableAutocompletePopover || !target) return;
+  var rect = target.getBoundingClientRect();
+  var top = Math.min(window.innerHeight - variableAutocompletePopover.offsetHeight - 12, rect.bottom + 8);
+  var left = Math.min(window.innerWidth - variableAutocompletePopover.offsetWidth - 12, rect.left);
+  variableAutocompletePopover.style.top = Math.max(12, top) + 'px';
+  variableAutocompletePopover.style.left = Math.max(12, left) + 'px';
+}
+
+function renderVariableAutocomplete() {
+  if (!variableAutocompleteState) {
+    hideVariableAutocomplete();
+    return;
+  }
+  var popover = ensureVariableAutocompletePopover();
+  var suggestions = variableAutocompleteState.suggestions || [];
+  var listHtml = suggestions.length
+    ? suggestions.map(function(item, index) {
+        return '<button class="var-autocomplete-item js-var-autocomplete-item' + (index === variableAutocompleteState.activeIndex ? ' active' : '') + '" type="button" data-index="' + index + '">' +
+          '<span class="var-autocomplete-key">{{' + escapeHtml(item.name) + '}}</span>' +
+          '<span class="var-autocomplete-value">' + escapeHtml(item.value || '') + '</span>' +
+        '</button>';
+      }).join('')
+    : '<div class="var-autocomplete-empty">' + escapeHtml(tr('webview.variableAutocompleteEmpty')) + '</div>';
+  popover.innerHTML =
+    '<div class="var-autocomplete-title">' + escapeHtml(tr('webview.variableAutocompleteTitle')) + '</div>' +
+    '<div class="var-autocomplete-list">' + listHtml + '</div>';
+  popover.classList.remove('hidden');
+  positionVariableAutocomplete(variableAutocompleteState.target);
+}
+
+function syncVariableAutocomplete(target) {
+  if (!isVariableAutocompleteField(target)) {
+    hideVariableAutocomplete();
+    return;
+  }
+  var context = getVariableAutocompleteContext(target);
+  if (!context) {
+    hideVariableAutocomplete();
+    return;
+  }
+  variableAutocompleteState = {
+    target: target,
+    context: context,
+    suggestions: getVariableAutocompleteSuggestions(context.query),
+    activeIndex: 0,
+  };
+  renderVariableAutocomplete();
+}
+
+function moveVariableAutocomplete(delta) {
+  if (!variableAutocompleteState || !variableAutocompleteState.suggestions.length) return;
+  var total = variableAutocompleteState.suggestions.length;
+  variableAutocompleteState.activeIndex = (variableAutocompleteState.activeIndex + delta + total) % total;
+  renderVariableAutocomplete();
+}
+
+function applyVariableAutocompleteSelection(index) {
+  if (!variableAutocompleteState) return false;
+  var target = variableAutocompleteState.target;
+  var suggestions = variableAutocompleteState.suggestions || [];
+  if (!target || !suggestions.length) return false;
+  var next = suggestions[index];
+  if (!next) return false;
+  var context = getVariableAutocompleteContext(target) || variableAutocompleteState.context;
+  if (!context) return false;
+  var token = '{{' + next.name + '}}';
+  var value = String(target.value || '');
+  target.value = value.slice(0, context.start) + token + value.slice(context.end);
+  var nextCaret = context.start + token.length;
+  target.setSelectionRange(nextCaret, nextCaret);
+  target.dispatchEvent(new Event('input', { bubbles: true }));
+  hideVariableAutocomplete();
+  return true;
+}
+
+function handleVariableAutocompleteKeydown(event) {
+  if (!variableAutocompleteState || variableAutocompleteState.target !== event.target) return false;
+  if (event.key === 'Escape') {
+    hideVariableAutocomplete();
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+  if (!variableAutocompleteState.suggestions.length) return false;
+  if (event.key === 'ArrowDown') {
+    moveVariableAutocomplete(1);
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+  if (event.key === 'ArrowUp') {
+    moveVariableAutocomplete(-1);
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+  if (event.key === 'Enter' || event.key === 'Tab') {
+    if (applyVariableAutocompleteSelection(variableAutocompleteState.activeIndex || 0)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
+  }
+  return false;
+}
+
 // ???곹깭瑜?Extension???꾩넚 (??μ슜)
 function persistTabState() {
     saveActiveTabState();
@@ -6035,6 +7297,9 @@ function persistTabState() {
 
 // ??蹂寃??꾪솚/?リ린 ???먮룞 ???(?붾컮?댁뒪)
 var _persistTimer = null;
+var variablePreviewPopover = null;
+var variableAutocompletePopover = null;
+var variableAutocompleteState = null;
 function debouncePersist() {
   if (_persistTimer) clearTimeout(_persistTimer);
   _persistTimer = setTimeout(persistTabState, 1000);

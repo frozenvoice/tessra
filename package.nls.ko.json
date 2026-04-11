@@ -4,6 +4,7 @@
   "configuration.historyMaxItems.description": "Maximum number of history entries to keep. When the limit is exceeded, the oldest unpinned entries are removed automatically.",
   "configuration.allowInsecureCertificates.description": "Disable HTTPS certificate validation only for HTTPS requests that use self-signed certificates. Use this only when necessary.",
   "configuration.displayLanguage.description": "Display language used by Arc Client panels, prompts, and notifications. The guide uses a localized README only when one exists. VS Code locale is ignored and English remains the default until you change this setting.",
+  "configuration.workspaceProfile.description": "Workspace-local storage profile used for collections, history, environments, default headers, and saved tabs. Switch profiles to isolate Arc Client data per project or workflow.",
   "configuration.displayLanguage.enum.en": "English",
   "configuration.displayLanguage.enum.ko": "Korean",
   "configuration.displayLanguage.enum.ja": "Japanese",
@@ -27,6 +28,7 @@
   "command.defaultHeaders": "Default Headers",
   "command.importCurl": "Arc: Import cURL",
   "command.importCollection": "Arc: Import Collection",
+  "command.importOpenApi": "Arc: Import OpenAPI",
   "command.exportPostmanCollection": "Export as Postman Collection",
   "command.exportPostmanEnvironment": "Export as Postman Environment",
   "command.collapseAll": "Collapse All",
@@ -36,6 +38,7 @@
   "command.copyAsCurl": "Copy as cURL",
   "command.runCollection": "Run All Requests",
   "command.openGuide": "Arc: Open Guide",
+  "command.changeWorkspaceProfile": "Arc: Change Workspace Profile",
   "view.collections": "Collections",
   "view.environments": "Environments",
   "view.history": "History"

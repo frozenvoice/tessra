@@ -123,6 +123,9 @@ describe('LocalizationService source', () => {
   it('keeps preflight, masking, and runner status copy translated for every supported language', () => {
     const keys = [
       'webview.summaryEnvironment',
+      'webview.summaryProfile',
+      'webview.profileDefaultTooltip',
+      'webview.profileCustomTooltip',
       'webview.summaryAuth',
       'webview.summaryHeaders',
       'webview.summaryParams',
@@ -148,10 +151,27 @@ describe('LocalizationService source', () => {
       'webview.hideValue',
       'webview.revealShort',
       'webview.hideShort',
+      'webview.variableAutocompleteTitle',
+      'webview.variableAutocompleteEmpty',
       'webview.runSending',
       'webview.runRetrying',
       'webview.runAttempt',
       'webview.runRetryDelay',
+      'webview.runRerunFailed',
+      'webview.compareFoldUnchanged',
+    ];
+
+    for (const key of keys) {
+      const matches = source.match(new RegExp(`'${key.replace(/\./g, '\\.')}'\\s*:`, 'g')) ?? [];
+      assert.strictEqual(matches.length, 3, `${key} should exist for every supported language`);
+    }
+  });
+
+  it('keeps workspace-profile guidance translated for every supported language', () => {
+    const keys = [
+      'info.workspaceProfileCreated',
+      'info.workspaceProfileFirstCreated',
+      'picker.workspaceProfileDefaultDescription',
     ];
 
     for (const key of keys) {

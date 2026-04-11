@@ -67,6 +67,12 @@
             "%configuration.displayLanguage.enum.ja%"
           ],
           "description": "%configuration.displayLanguage.description%"
+        },
+        "arc-client.workspaceProfile": {
+          "type": "string",
+          "scope": "window",
+          "default": "default",
+          "description": "%configuration.workspaceProfile.description%"
         }
       }
     },
@@ -173,6 +179,11 @@
         "icon": "$(folder-opened)"
       },
       {
+        "command": "arc.importOpenApi",
+        "title": "%command.importOpenApi%",
+        "icon": "$(file-code)"
+      },
+      {
         "command": "arc.exportPostmanCollection",
         "title": "%command.exportPostmanCollection%"
       },
@@ -218,6 +229,10 @@
         "command": "arc.openGuide",
         "title": "%command.openGuide%",
         "icon": "$(book)"
+      },
+      {
+        "command": "arc.changeWorkspaceProfile",
+        "title": "%command.changeWorkspaceProfile%"
       }
     ],
     "viewsContainers": {

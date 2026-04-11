@@ -19,6 +19,11 @@ export class EnvironmentTreeProvider
   private _activeEnvId: string | null;
 
   constructor(private storage: StorageService) {
+    this._activeEnvId = null;
+    this.reloadFromStorage();
+  }
+
+  reloadFromStorage(): void {
     const savedId = this.storage.getActiveEnvironmentId();
     this._activeEnvId = savedId && this.storage.getEnvironment(savedId) ? savedId : null;
     if (savedId !== this._activeEnvId) {
@@ -89,10 +94,17 @@ export class EnvironmentTreeProvider
     item.description = isActive
       ? `✓ ${LocalizationService.t('environment.active')}`
       : LocalizationService.t('environment.vars', { count: env.variables.length });
+    const varsLabel = LocalizationService.t('environment.vars', { count: env.variables.length });
+    item.description = isActive
+      ? `${LocalizationService.t('environment.active')} · ${varsLabel}`
+      : varsLabel;
     item.iconPath = new vscode.ThemeIcon(
       isActive ? 'pass-filled' : 'symbol-variable',
       isActive ? new vscode.ThemeColor('charts.green') : undefined
     );
+    item.description = isActive
+      ? `${LocalizationService.t('environment.active')} · ${LocalizationService.t('environment.vars', { count: env.variables.length })}`
+      : LocalizationService.t('environment.vars', { count: env.variables.length });
     item.contextValue = isActive ? 'environment-active' : 'environment';
 
     // 싱글클릭: 변수 편집, 더블클릭: 활성/비활성 토글

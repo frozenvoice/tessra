@@ -14,7 +14,7 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - No login required
 - No cloud dependency
 - Local JSON storage only
-- cURL and Postman import/export
+- cURL, OpenAPI, and Postman import/export
 - Scripts, collections, environments, response compare, and code generation
 - Built on VS Code Webview + TreeView
 - Uses Node.js built-in `http` / `https`
@@ -31,8 +31,11 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - Topline request summary chips for environment, auth, default headers, scripts, and history behavior
 - Preflight warnings for unresolved `{{variables}}` before you send
 - Clickable status chips that jump to the relevant request area
+- Draft change chips that summarize which request sections changed before you save or send
+- Variable usage cards that show where each `{{variable}}` is used across the request
 - Masked auth and sensitive key/value inputs with reveal controls
 - Bulk paste for headers and query params
+- Empty-state quick actions for a sample request, the guide, environment switching, and URL focus
 
 ### Request settings
 - Timeout per tab
@@ -56,6 +59,7 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - `form-data`
 - `binary`
 - `raw`
+- Form-data summaries, file chips, and clearer text/file row affordances
 
 ### Auth
 - No Auth
@@ -67,7 +71,9 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - Environment CRUD
 - Active environment switching
 - `{{variable}}` resolution
+- Variable autocomplete in URL, headers, body, auth, scripts, and editable text inputs
 - Variable resolution for URL, headers, params, body, auth, and file paths
+- Workspace-local storage profiles for isolating collections, history, environments, default headers, and saved tabs
 
 ### Collections and history
 - Collection / folder / request CRUD
@@ -75,32 +81,40 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - Duplicate / Save As
 - Run All Requests
 - Live collection runner status with active request highlighting and retry countdowns
-- History pinning and filtering
+- Rerun failed requests only from the collection runner summary
+- Collection filtering with `method:`, `host:`, and `type:` tokens
+- History pinning and filtering with `status:`, `method:`, `host:`, and `pinned:` tokens
 - History snapshots store the executed request state
 - History pruning via `arc-client.historyMaxItems`
+- Denser sidebar rows with method/host summaries and collection/folder item counts
 
 ### Response viewer
 - Body / Headers / Cookies / Tests tabs, plus Preview when the response contains meaningful static HTML
 - Dynamic HTML pages stay in Body while `Open URL` remains available for the resolved page
 - Sticky response toolbar for search, compare, and response actions
+- Topline status chips for the active environment, workspace profile, default headers, scripts, and history behavior
 - Search within the response body with next/previous navigation, case-sensitive mode, and regex mode
 - JSON tree viewer
 - XML formatting with `Pretty`, `Compact`, and `Inline Children`
 - Content-Type based syntax highlighting
+- Quick copy actions for resolved URL, status line, raw headers, and response body
 - Save response body to file
 - Response compare with `Raw`, `Normalized`, and `Pretty` modes
 - Compare state chips that surface the active mode, metadata summary usage, and pinned response readiness
 - Compare settings with ignored headers and ignored JSON paths
+- Compare summaries with body line counts and changed / left-only / right-only totals
 
 ### Scripts
 - Pre-request scripts
 - Test scripts
 - `pm.test`, `pm.expect`, `pm.environment`
 - Script logs and test results
+- Pass/fail/log summary badges and first-failure highlighting
 
 ### Import / Export
 - cURL import
 - Copy as cURL
+- OpenAPI import
 - Arc JSON collection import
 - Postman collection import / export
 - Postman environment import / export
@@ -132,6 +146,7 @@ Then in VS Code:
 3. Select a method and enter a URL
 4. Fill in params, headers, body, auth, scripts, or request settings
 5. Click `Send` or press `Enter`
+6. Run `Arc: Import OpenAPI` from the Command Palette to turn an OpenAPI JSON file into a collection
 
 Example variable usage:
 
@@ -167,18 +182,31 @@ Run `Arc: Open Guide` to open the user guide inside VS Code.
 - VS Code locale does not change Arc Client UI anymore
 - You can also run `Arc: Change Display Language` from the Command Palette
 
+### `arc-client.workspaceProfile`
+- Type: `string`
+- Default: `default`
+- Switches the active local storage profile for collections, history, environments, default headers, and saved tabs
+- Use `Arc: Change Workspace Profile` to switch or create profiles quickly from the Command Palette
+- Keep `default` as your everyday workspace, then create a separate profile when another project, imported spec, or experiment should not mix with it
+- A good rule of thumb: use profiles for different projects or workflows, and use environments for `local` / `staging` / `prod` inside the same project
+
 ## Keyboard shortcuts
 
 - `Ctrl+T`: New request tab
 - `Ctrl+W`: Close current tab
 - `Enter`: Send request from the URL field
 - `Ctrl+Enter`: Send request
+- `Ctrl+S` / `Cmd+S`: Save the current request
+- `Ctrl+Shift+S` / `Cmd+Shift+S`: Save As
+- `Ctrl+F` / `Cmd+F`: Focus response search
+- `Alt+1..6`: Switch request tabs
+- `Alt+Shift+1..5`: Switch response tabs
 
 On macOS, use `Cmd` instead of `Ctrl`.
 
 ## Local storage
 
-All extension data is stored under VS Code `globalStorage` as JSON files:
+All extension data is stored under VS Code `globalStorage` as JSON files. The default profile stores files at the root, and custom workspace profiles store the same files under `profiles/<profile-name>/`.
 
 - `collections.json`
 - `history.json`

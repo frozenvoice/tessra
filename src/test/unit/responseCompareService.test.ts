@@ -142,6 +142,39 @@ describe('ResponseCompareService', () => {
     assert.match(comparison.right.content, /"name": "right"/);
   });
 
+  it('folds long unchanged sections when the compare setting is enabled', () => {
+    const stableLines = Array.from({ length: 10 }, (_, index) => `<item>${index}</item>`);
+    const leftBody = ['<root>', ...stableLines, '<item>left</item>', '</root>'].join('\n');
+    const rightBody = ['<root>', ...stableLines, '<item>right</item>', '</root>'].join('\n');
+
+    const comparison = ResponseCompareService.prepareComparison(
+      {
+        label: 'Left',
+        body: leftBody,
+        contentType: 'application/xml',
+        xmlFormatStyle: 'pretty',
+      },
+      {
+        label: 'Right',
+        body: rightBody,
+        contentType: 'application/xml',
+        xmlFormatStyle: 'pretty',
+      },
+      {
+        mode: 'pretty',
+        includeMetadataSummary: false,
+        foldUnchangedSections: true,
+        ignoreHeaders: [],
+        ignoreJsonPaths: [],
+      }
+    );
+
+    assert.match(comparison.left.content, /unchanged lines folded/);
+    assert.match(comparison.right.content, /unchanged lines folded/);
+    assert.match(comparison.left.content, /left/);
+    assert.match(comparison.right.content, /right/);
+  });
+
   it('cleans up stale diff artifacts', async () => {
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'arc-compare-'));
     const diffDir = path.join(tempRoot, '.diff');

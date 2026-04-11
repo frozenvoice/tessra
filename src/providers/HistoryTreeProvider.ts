@@ -5,6 +5,14 @@ import { LocalizationService } from '../services/LocalizationService';
 
 const MIME = 'application/vnd.arc.history-entry';
 
+interface HistoryFilter {
+  terms: string[];
+  methods: string[];
+  hosts: string[];
+  statuses: string[];
+  pinned?: boolean;
+}
+
 // 히스토리 TreeView 프로바이더 (드래그앤드롭 지원)
 export class HistoryTreeProvider
   implements vscode.TreeDataProvider<HistoryEntry>, vscode.TreeDragAndDropController<HistoryEntry>
@@ -35,6 +43,10 @@ export class HistoryTreeProvider
     this.onCountChanged?.(count);
   }
 
+  get visibleCount(): number {
+    return this.getChildren().length;
+  }
+
   getTreeItem(entry: HistoryEntry): vscode.TreeItem {
     const method = entry.request.method;
     const url = this.shortenUrl(entry.request.url);
@@ -43,8 +55,10 @@ export class HistoryTreeProvider
     const label = `${method} ${url}`;
 
     const pinLabel = entry.pinned ? '📌 ' : '';
-    const item = new vscode.TreeItem(pinLabel + label, vscode.TreeItemCollapsibleState.None);
-    item.description = `${status} ${time}`;
+    const localizedPinLabel = entry.pinned ? (LocalizationService.t('history.pinnedTag') || pinLabel) : '';
+    const item = new vscode.TreeItem(localizedPinLabel + label, vscode.TreeItemCollapsibleState.None);
+    item.description = `${status}${time ? ` · ${time}` : ''}`;
+    item.description = `${status}${time ? ` · ${time}` : ''}`;
     item.tooltip = `${entry.pinned ? LocalizationService.t('history.pinnedTag') : ''}${method} ${entry.request.url}\n${status} ${time}\n${LocalizationService.formatDateTime(new Date(entry.timestamp))}`;
     item.iconPath = this.getMethodIcon(method);
     item.contextValue = entry.pinned ? 'history-pinned' : 'history';
@@ -60,14 +74,9 @@ export class HistoryTreeProvider
 
   getChildren(): HistoryEntry[] {
     let entries = this.storage.getHistory();
-    const q = this._filterText.toLowerCase();
-    if (q) {
-      entries = entries.filter((e) => {
-        const method = e.request.method.toLowerCase();
-        const url = e.request.url.toLowerCase();
-        const status = e.response ? String(e.response.status) : 'err';
-        return method.includes(q) || url.includes(q) || status.includes(q);
-      });
+    const filter = this.parseFilter(this._filterText);
+    if (this.hasActiveFilter(filter)) {
+      entries = entries.filter((entry) => this.matchesEntry(entry, filter));
     }
 
     // pinned 항목을 최상단에 고정 (각 그룹 내 순서는 유지)
@@ -125,6 +134,59 @@ export class HistoryTreeProvider
       return host + parsed.pathname;
     } catch {
       return url.length > 40 ? url.substring(0, 37) + '...' : url;
+    }
+  }
+
+  private parseFilter(text: string): HistoryFilter {
+    const filter: HistoryFilter = { terms: [], methods: [], hosts: [], statuses: [] };
+    for (const token of String(text || '').trim().split(/\s+/).filter(Boolean)) {
+      const match = token.match(/^([a-z]+):(.*)$/i);
+      if (!match) {
+        filter.terms.push(token.toLowerCase());
+        continue;
+      }
+      const key = match[1].toLowerCase();
+      const value = match[2].toLowerCase();
+      if (!value) { continue; }
+      if (key === 'method') filter.methods.push(value);
+      else if (key === 'host') filter.hosts.push(value);
+      else if (key === 'status') filter.statuses.push(value);
+      else if (key === 'pinned') filter.pinned = ['yes', 'true', '1', 'y'].includes(value);
+      else filter.terms.push(token.toLowerCase());
+    }
+    return filter;
+  }
+
+  private hasActiveFilter(filter: HistoryFilter): boolean {
+    return filter.terms.length > 0 || filter.methods.length > 0 || filter.hosts.length > 0 || filter.statuses.length > 0 || filter.pinned !== undefined;
+  }
+
+  private matchesEntry(entry: HistoryEntry, filter: HistoryFilter): boolean {
+    const method = entry.request.method.toLowerCase();
+    const url = entry.request.url.toLowerCase();
+    const host = this.extractHost(entry.request.url);
+    const status = entry.response ? String(entry.response.status) : 'error';
+    const textBlob = `${method} ${url} ${host} ${status}`;
+
+    if (filter.terms.length > 0 && !filter.terms.every((term) => textBlob.includes(term))) { return false; }
+    if (filter.methods.length > 0 && !filter.methods.some((candidate) => method.includes(candidate))) { return false; }
+    if (filter.hosts.length > 0 && !filter.hosts.some((candidate) => host.includes(candidate))) { return false; }
+    if (filter.statuses.length > 0 && !filter.statuses.some((candidate) => this.matchesStatusFilter(status, candidate))) { return false; }
+    if (filter.pinned !== undefined && entry.pinned !== filter.pinned) { return false; }
+    return true;
+  }
+
+  private matchesStatusFilter(status: string, candidate: string): boolean {
+    if (candidate === 'error' || candidate === 'err') { return status === 'error'; }
+    if (/^[1-5]xx$/.test(candidate)) { return status.startsWith(candidate[0]); }
+    return status.includes(candidate);
+  }
+
+  private extractHost(url: string): string {
+    try {
+      return new URL(url).host.toLowerCase();
+    } catch {
+      return '';
     }
   }
 

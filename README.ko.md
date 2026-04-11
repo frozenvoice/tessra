@@ -14,7 +14,7 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - 로그인 불필요
 - 클라우드 의존성 없음
 - 로컬 JSON 저장
-- cURL / Postman import / export 지원
+- cURL / OpenAPI / Postman import / export 지원
 - Scripts, collections, environments, response compare, code generation 지원
 - VS Code Webview + TreeView 기반
 - Node.js 내장 `http` / `https` 사용
@@ -31,8 +31,11 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - 환경, 인증, 기본 헤더, 스크립트, 히스토리 동작을 한눈에 보여주는 상단 상태 배지
 - 전송 전 미해결 `{{variable}}`을 알려주는 프리플라이트 경고
 - 관련 탭으로 바로 이동할 수 있는 클릭형 상태 배지
+- 저장하거나 보내기 전에 어느 영역이 바뀌었는지 보여주는 요청 변경 칩
+- `{{variable}}`이 URL / 헤더 / 바디 / 인증 / 스크립트 어디에 쓰였는지 보여주는 변수 사용처 카드
 - 인증값과 민감한 key/value 입력 마스킹 및 reveal 버튼
 - 헤더 / 파라미터 일괄 붙여넣기
+- 샘플 요청 불러오기, 가이드 열기, 환경 전환, URL 포커스 같은 빈 상태 퀵 액션
 
 ### 요청별 Settings 탭
 - 탭별 timeout
@@ -55,6 +58,7 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - `form-data`
 - `binary`
 - `raw`
+- 필드/파일 개수 요약, 파일 칩, 텍스트/파일 구분이 강화된 form-data UX
 
 ### 인증
 - No Auth
@@ -66,7 +70,9 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - Environment CRUD
 - 활성 환경 전환
 - `{{variable}}` 치환
+- URL / Headers / Body / Auth / Scripts / 기타 편집 가능한 텍스트 입력에서 변수 자동완성
 - URL / Headers / Params / Body / Auth / 파일 경로까지 치환
+- collections / history / environments / default headers / saved tabs를 분리하는 워크스페이스 로컬 저장 프로필
 
 ### Collections / History
 - Collection / folder / request CRUD
@@ -74,32 +80,40 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - Duplicate / Save As
 - Run All Requests
 - 현재 요청 강조와 재시도 대기 상태를 보여주는 컬렉션 러너 상태 표시
-- History pin / filter
+- 컬렉션 러너 결과에서 실패한 요청만 다시 실행
+- `method:` / `host:` / `type:` 토큰을 지원하는 Collection 필터
+- `status:` / `method:` / `host:` / `pinned:` 토큰을 지원하는 History 필터
 - 실행 시점 스냅샷 기반 history 저장
 - `arc-client.historyMaxItems` 기준 자동 정리
+- 메서드/호스트 요약, 컬렉션/폴더 개수를 보여주는 더 촘촘한 사이드바 정보 밀도
 
 ### 응답 뷰어
 - Body / Headers / Cookies / Tests 탭과, 의미 있는 정적 HTML이 있을 때만 표시되는 Preview 탭
 - 동적인 HTML 페이지는 Body 탭에 남고, 대신 `URL 열기` 액션을 사용할 수 있음
 - 검색 / 비교 / 저장 액션이 따라오는 sticky 응답 툴바
+- 활성 환경, 현재 프로필, 기본 헤더, 스크립트, 히스토리 동작을 보여주는 상단 상태 배지
 - 이전 / 다음 이동, 대소문자 구분, 정규식 옵션을 갖춘 응답 본문 검색
 - JSON 트리 뷰어
 - XML `Pretty`, `Compact`, `Inline Children` 포맷
 - Content-Type 기반 문법 강조
+- resolved URL, status line, raw headers, body를 바로 복사하는 빠른 액션
 - 응답 본문 저장
 - `Raw`, `Normalized`, `Pretty` 모드 응답 비교
 - 현재 비교 모드, 메타데이터 요약 사용 여부, pin 준비 상태를 보여주는 비교 상태 배지
 - ignore headers / ignore JSON paths 기반 비교 설정
+- 본문 줄 수와 changed / left-only / right-only 개수를 요약하는 비교 요약
 
 ### Scripts
 - Pre-request script
 - Test script
 - `pm.test`, `pm.expect`, `pm.environment`
 - script logs / test 결과 표시
+- pass / fail / log 요약 배지와 첫 실패 강조
 
 ### Import / Export
 - cURL import
 - Copy as cURL
+- OpenAPI import
 - Arc JSON collection import
 - Postman collection import / export
 - Postman environment import / export
@@ -131,6 +145,7 @@ npx vsce package
 3. 메서드와 URL 입력
 4. params, headers, body, auth, scripts, request settings 입력
 5. `Send` 클릭 또는 `Enter`
+6. OpenAPI JSON 파일을 컬렉션으로 가져오려면 Command Palette에서 `Arc: Import OpenAPI` 실행
 
 환경 변수 예시:
 
@@ -166,18 +181,31 @@ VS Code 안에서 사용자 가이드를 보려면 `Arc: Open Guide`를 실행�
 - 이제 VS Code locale은 Arc Client UI를 직접 바꾸지 않음
 - Command Palette에서 `Arc: Change Display Language`로도 바로 변경 가능
 
+### `arc-client.workspaceProfile`
+- 타입: `string`
+- 기본값: `default`
+- collections / history / environments / default headers / saved tabs에 사용할 로컬 저장 프로필을 전환
+- Command Palette에서 `Arc: Change Workspace Profile`로 빠르게 전환하거나 새 프로필 생성 가능
+- `default`는 평소 메인 작업용으로 두고, 다른 프로젝트나 import 실험, 임시 테스트가 기존 데이터와 섞이면 안 될 때 새 프로필을 만드는 것을 추천
+- 기준을 단순하게 잡으면 좋습니다. 서로 다른 프로젝트/작업 흐름은 프로필로, 같은 프로젝트 안의 `local` / `staging` / `prod` 차이는 환경으로 나누면 가장 덜 헷갈립니다
+
 ## 단축키
 
 - `Ctrl+T`: 새 요청 탭
 - `Ctrl+W`: 현재 탭 닫기
 - `Enter`: URL 입력창에서 요청 전송
 - `Ctrl+Enter`: 요청 전송
+- `Ctrl+S` / macOS에서는 `Cmd+S`: 현재 요청 저장
+- `Ctrl+Shift+S` / macOS에서는 `Cmd+Shift+S`: 다른 이름으로 저장
+- `Ctrl+F` / macOS에서는 `Cmd+F`: 응답 검색 포커스
+- `Alt+1..6`: 요청 탭 전환
+- `Alt+Shift+1..5`: 응답 탭 전환
 
 macOS에서는 `Cmd`를 사용합니다.
 
 ## 로컬 저장 위치
 
-모든 데이터는 VS Code `globalStorage` 아래 JSON 파일로 저장됩니다.
+모든 데이터는 VS Code `globalStorage` 아래 JSON 파일로 저장됩니다. 기본 프로필은 루트에 저장되고, 사용자 지정 워크스페이스 프로필은 `profiles/<프로필명>/` 아래 같은 파일 구조로 분리 저장됩니다.
 
 - `collections.json`
 - `history.json`

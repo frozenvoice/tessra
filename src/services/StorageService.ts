@@ -5,34 +5,91 @@ import { Collection, HistoryEntry, Environment, KeyValue, TabState, CompareSetti
 
 // globalStorage 경로에 JSON 파일로 데이터 영속화
 export class StorageService {
-  private storagePath: string;
-  private collectionsPath: string;
-  private historyPath: string;
-  private environmentsPath: string;
-  private activeEnvironmentPath: string;
-  private defaultHeadersPath: string;
-  private tabStatePath: string;
+  private static readonly DEFAULT_PROFILE_NAME = 'default';
+  private static readonly PROFILE_ROOT_DIR = 'profiles';
+  private static readonly PROFILE_META_FILE = 'profile.json';
+  private readonly rootStoragePath: string;
 
   constructor(context: vscode.ExtensionContext) {
-    this.storagePath = context.globalStorageUri.fsPath;
-    this.collectionsPath = path.join(this.storagePath, 'collections.json');
-    this.historyPath = path.join(this.storagePath, 'history.json');
-    this.environmentsPath = path.join(this.storagePath, 'environments.json');
-    this.activeEnvironmentPath = path.join(this.storagePath, 'active-environment.json');
-    this.defaultHeadersPath = path.join(this.storagePath, 'default-headers.json');
-    this.tabStatePath = path.join(this.storagePath, 'tab-state.json');
-    this.ensureStorageDir();
+    this.rootStoragePath = context.globalStorageUri.fsPath;
+    this.ensureDir(this.rootStoragePath);
   }
 
   // globalStorage 경로 반환 (임시 파일 등에 활용)
   getStoragePath(): string {
-    return this.storagePath;
+    return this.getActiveStoragePath();
   }
 
-  private ensureStorageDir(): void {
-    if (!fs.existsSync(this.storagePath)) {
-      fs.mkdirSync(this.storagePath, { recursive: true });
+  getWorkspaceProfileName(): string {
+    const configured = vscode.workspace.getConfiguration('arc-client').get<string>(
+      'workspaceProfile',
+      StorageService.DEFAULT_PROFILE_NAME
+    );
+    const trimmed = String(configured || '').trim();
+    return trimmed || StorageService.DEFAULT_PROFILE_NAME;
+  }
+
+  listProfiles(): string[] {
+    const names = new Set<string>([StorageService.DEFAULT_PROFILE_NAME]);
+    const profilesRoot = path.join(this.rootStoragePath, StorageService.PROFILE_ROOT_DIR);
+
+    if (fs.existsSync(profilesRoot)) {
+      for (const entry of fs.readdirSync(profilesRoot, { withFileTypes: true })) {
+        if (!entry.isDirectory()) { continue; }
+        const dirPath = path.join(profilesRoot, entry.name);
+        const meta = this.readJson<{ name?: string } | null>(path.join(dirPath, StorageService.PROFILE_META_FILE), null);
+        const displayName = typeof meta?.name === 'string' && meta.name.trim() ? meta.name.trim() : entry.name;
+        names.add(displayName);
+      }
     }
+
+    return Array.from(names).sort((left, right) => {
+      if (left === StorageService.DEFAULT_PROFILE_NAME) { return -1; }
+      if (right === StorageService.DEFAULT_PROFILE_NAME) { return 1; }
+      return left.localeCompare(right);
+    });
+  }
+
+  private getActiveStoragePath(): string {
+    const profileName = this.getWorkspaceProfileName();
+    if (profileName === StorageService.DEFAULT_PROFILE_NAME) {
+      this.ensureDir(this.rootStoragePath);
+      return this.rootStoragePath;
+    }
+
+    const profilePath = path.join(
+      this.rootStoragePath,
+      StorageService.PROFILE_ROOT_DIR,
+      this.toProfileDirectoryName(profileName)
+    );
+    this.ensureDir(profilePath);
+    this.ensureProfileMeta(profilePath, profileName);
+    return profilePath;
+  }
+
+  private ensureProfileMeta(profilePath: string, profileName: string): void {
+    const metaPath = path.join(profilePath, StorageService.PROFILE_META_FILE);
+    const current = this.readJson<{ name?: string } | null>(metaPath, null);
+    if (current?.name === profileName) { return; }
+    fs.writeFileSync(metaPath, JSON.stringify({ name: profileName }, null, 2), 'utf-8');
+  }
+
+  private toProfileDirectoryName(profileName: string): string {
+    const sanitized = profileName
+      .replace(/[<>:"/\\|?*\u0000-\u001F]+/g, '-')
+      .replace(/[. ]+$/g, '')
+      .trim();
+    return sanitized || StorageService.DEFAULT_PROFILE_NAME;
+  }
+
+  private ensureDir(targetPath: string): void {
+    if (!fs.existsSync(targetPath)) {
+      fs.mkdirSync(targetPath, { recursive: true });
+    }
+  }
+
+  private resolveFilePath(fileName: string): string {
+    return path.join(this.getActiveStoragePath(), fileName);
   }
 
   private readJson<T>(filePath: string, fallback: T): T {
@@ -48,28 +105,35 @@ export class StorageService {
   }
 
   private writeJson(filePath: string, data: unknown): void {
-    this.ensureStorageDir();
+    const dirPath = path.dirname(filePath);
+    this.ensureDir(dirPath);
+    if (path.basename(filePath) !== StorageService.PROFILE_META_FILE && dirPath !== this.rootStoragePath) {
+      const profileName = this.getWorkspaceProfileName();
+      if (profileName !== StorageService.DEFAULT_PROFILE_NAME) {
+        this.ensureProfileMeta(dirPath, profileName);
+      }
+    }
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
   }
 
   // === 컬렉션 ===
 
   getCollections(): Collection[] {
-    return this.readJson<Collection[]>(this.collectionsPath, []);
+    return this.readJson<Collection[]>(this.resolveFilePath('collections.json'), []);
   }
 
   saveCollections(collections: Collection[]): void {
-    this.writeJson(this.collectionsPath, collections);
+    this.writeJson(this.resolveFilePath('collections.json'), collections);
   }
 
   // === 히스토리 ===
 
   getHistory(): HistoryEntry[] {
-    return this.readJson<HistoryEntry[]>(this.historyPath, []);
+    return this.readJson<HistoryEntry[]>(this.resolveFilePath('history.json'), []);
   }
 
   saveHistory(history: HistoryEntry[]): void {
-    this.writeJson(this.historyPath, history);
+    this.writeJson(this.resolveFilePath('history.json'), history);
   }
 
   addHistoryEntry(entry: HistoryEntry): number {
@@ -109,11 +173,11 @@ export class StorageService {
   // === 환경변수 ===
 
   getEnvironments(): Environment[] {
-    return this.readJson<Environment[]>(this.environmentsPath, []);
+    return this.readJson<Environment[]>(this.resolveFilePath('environments.json'), []);
   }
 
   saveEnvironments(environments: Environment[]): void {
-    this.writeJson(this.environmentsPath, environments);
+    this.writeJson(this.resolveFilePath('environments.json'), environments);
   }
 
   getEnvironment(id: string): Environment | undefined {
@@ -130,11 +194,11 @@ export class StorageService {
   }
 
   getActiveEnvironmentId(): string | null {
-    return this.readJson<string | null>(this.activeEnvironmentPath, null);
+    return this.readJson<string | null>(this.resolveFilePath('active-environment.json'), null);
   }
 
   saveActiveEnvironmentId(id: string | null): void {
-    this.writeJson(this.activeEnvironmentPath, id);
+    this.writeJson(this.resolveFilePath('active-environment.json'), id);
   }
 
   // === 기본 헤더 ===
@@ -145,20 +209,20 @@ export class StorageService {
   ];
 
   getDefaultHeaders(): KeyValue[] {
-    return this.readJson<KeyValue[]>(this.defaultHeadersPath, StorageService.DEFAULT_HEADERS);
+    return this.readJson<KeyValue[]>(this.resolveFilePath('default-headers.json'), StorageService.DEFAULT_HEADERS);
   }
 
   saveDefaultHeaders(headers: KeyValue[]): void {
-    this.writeJson(this.defaultHeadersPath, headers);
+    this.writeJson(this.resolveFilePath('default-headers.json'), headers);
   }
 
   // === 탭 상태 ===
 
   getTabState(): StoredTabState | null {
-    return this.readJson(this.tabStatePath, null);
+    return this.readJson(this.resolveFilePath('tab-state.json'), null);
   }
 
   saveTabState(tabs: TabState[], activeIndex: number, compareSettings?: CompareSettings): void {
-    this.writeJson(this.tabStatePath, { tabs, activeIndex, compareSettings });
+    this.writeJson(this.resolveFilePath('tab-state.json'), { tabs, activeIndex, compareSettings });
   }
 }

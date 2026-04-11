@@ -174,6 +174,7 @@ export type CompareMode = 'raw' | 'normalized' | 'pretty';
 export interface CompareSettings {
   mode: CompareMode;
   includeMetadataSummary: boolean;
+  foldUnchangedSections: boolean;
   ignoreHeaders: string[];
   ignoreJsonPaths: string[];
 }
@@ -199,11 +200,15 @@ export enum MessageType {
   SaveTabState = 'saveTabState',
   CompareResponses = 'compareResponses',
   StopCollectionRun = 'stopCollectionRun',
+  RerunFailedCollection = 'rerunFailedCollection',
   PickFile = 'pickFile',
   GenerateCode = 'generateCode',
   OpenDefaultHeaders = 'openDefaultHeaders',
   SwitchEnvironment = 'switchEnvironment',
+  ChangeWorkspaceProfile = 'changeWorkspaceProfile',
   OpenResponseUrl = 'openResponseUrl',
+  OpenGuide = 'openGuide',
+  FlushedTabState = 'flushedTabState',
 
   // Extension -> Webview
   RestoreTabState = 'restoreTabState',
@@ -218,6 +223,7 @@ export enum MessageType {
   SaveRequestResult = 'saveRequestResult',
   SaveResponseBodyResult = 'saveResponseBodyResult',
   PickFileResult = 'pickFileResult',
+  FlushTabState = 'flushTabState',
 
   // 컬렉션 러너
   RunCollectionStart = 'runCollectionStart',
@@ -350,6 +356,11 @@ export interface StopCollectionRunMessage {
   type: MessageType.StopCollectionRun;
 }
 
+export interface RerunFailedCollectionMessage {
+  type: MessageType.RerunFailedCollection;
+  failedIndices: number[];
+}
+
 export interface PickFileMessage {
   type: MessageType.PickFile;
   target: 'binary' | 'formdata';
@@ -379,8 +390,20 @@ export interface OpenResponseUrlMessage {
   url: string;
 }
 
+export interface ChangeWorkspaceProfileMessage {
+  type: MessageType.ChangeWorkspaceProfile;
+}
+
+export interface OpenGuideMessage {
+  type: MessageType.OpenGuide;
+}
+
 export interface WebviewReadyMessage {
   type: 'webviewReady';
+}
+
+export interface FlushedTabStateMessage {
+  type: MessageType.FlushedTabState;
 }
 
 export interface RestoreTabStateMessage {
@@ -440,6 +463,7 @@ export interface LoadEnvironmentMessage {
 export interface UpdateActiveEnvMessage {
   type: MessageType.UpdateActiveEnv;
   envName: string | null;
+  profileName?: string;
 }
 
 export interface UpdateLocalizationMessage {
@@ -462,6 +486,10 @@ export interface PickFileResultMessage {
   filePath?: string;
 }
 
+export interface FlushTabStateMessage {
+  type: MessageType.FlushTabState;
+}
+
 export type IncomingWebviewMessage =
   | SendRequestMessage
   | SaveRequestMessage
@@ -475,11 +503,15 @@ export type IncomingWebviewMessage =
   | SaveTabStateMessage
   | CompareResponsesMessage
   | StopCollectionRunMessage
+  | RerunFailedCollectionMessage
   | PickFileMessage
   | GenerateCodeMessage
   | OpenDefaultHeadersMessage
   | SwitchEnvironmentMessage
+  | ChangeWorkspaceProfileMessage
   | OpenResponseUrlMessage
+  | OpenGuideMessage
+  | FlushedTabStateMessage
   | WebviewReadyMessage;
 
 export type OutgoingWebviewMessage =
@@ -492,6 +524,7 @@ export type OutgoingWebviewMessage =
   | UpdateActiveEnvMessage
   | UpdateLocalizationMessage
   | LoadDefaultHeadersMessage
-  | PickFileResultMessage;
+  | PickFileResultMessage
+  | FlushTabStateMessage;
 
 export type WebviewMessage = IncomingWebviewMessage | OutgoingWebviewMessage;

@@ -45,6 +45,17 @@ Body: {"env":"{{envName}}"}
 - 実行時スナップショットとして履歴を保存
 - アクティブ環境の切り替えと `{{variables}}` の利用
 
+## ワークスペースプロファイル
+
+- `default` は普段の Arc Client 作業を置くメインのローカル保存領域です
+- 別プロジェクト、取り込んだ OpenAPI / Postman データ、試験用ワークフローを既存作業と混ぜたくないときは新しいプロファイルを作ってください
+- プロファイルは collections、history、environments、default headers、saved tabs を丸ごと分離します
+- 実運用では次の分け方が分かりやすいです
+  - プロファイル: 別プロジェクトや別ワークフロー
+  - 環境: 同一プロジェクト内の `local`, `staging`, `prod`
+- `Arc: Change Workspace Profile` から切り替えや新規作成ができます
+- リクエスト上部のプロファイルチップに現在のプロファイルが表示され、`default` には意味を説明するツールチップが付きます
+
 ## Scripts
 
 - Pre-request script

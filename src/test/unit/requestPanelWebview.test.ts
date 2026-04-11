@@ -19,6 +19,9 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.defaultHeadersSkippedNote': 'Turn off "Skip default headers" in Settings to apply them here.',
   'webview.defaultHeadersEmptyState': 'No workspace default headers saved yet.',
   'webview.summaryEnvironment': 'Environment: {name}',
+  'webview.summaryProfile': 'Profile: {name}',
+  'webview.profileDefaultTooltip': 'Default profile. Use this for your main Arc Client workspace. Create another profile when you want separate collections, history, environments, default headers, and tabs.',
+  'webview.profileCustomTooltip': 'This profile keeps collections, history, environments, default headers, and tabs separate from other profiles. Click to switch or create another profile.',
   'webview.summaryAuth': 'Auth: {value}',
   'webview.summaryHeaders': 'Headers: {count}',
   'webview.summaryParams': 'Params: {count}',
@@ -75,13 +78,58 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.searchClear': 'Clear search',
   'webview.searchCount': '{current}/{total}',
   'webview.searchNoMatches': '0 results',
+  'webview.jsonPathHint': 'Click a row to copy JSONPath',
+  'webview.xpathHint': 'Click a line to copy XPath',
+  'webview.copyPathShort': 'PATH',
   'webview.includeMetadata': 'Include metadata summary',
+  'webview.foldUnchanged': 'Fold unchanged sections',
+  'webview.compareFoldUnchanged': 'Compare: fold unchanged sections',
+  'webview.copyJsonPathValue': 'Copy JSONPath: {path}',
+  'webview.copyXPathValue': 'Copy XPath: {path}',
+  'webview.copyXPathShort': 'XPath',
   'webview.runStatus': 'Status',
   'webview.runSending': 'Sending',
   'webview.runRetrying': 'Retrying',
   'webview.runAttempt': 'Attempt {current}/{total}',
   'webview.runRetryDelay': 'Retry in {count} ms',
+  'webview.runRerunFailed': 'Rerun Failed',
   'webview.preRequestPlaceholder': 'env.set("token", "123");',
+  'webview.sampleRequestName': 'Sample Request',
+  'webview.requestDiffTitle': 'Request changes',
+  'webview.requestDiffCount': '{count} updates',
+  'webview.requestDiffEdited': 'Edited',
+  'webview.requestDiffUpdated': 'Updated',
+  'webview.requestDiffRequest': 'Request',
+  'webview.requestDiffParams': 'Params',
+  'webview.requestDiffHeaders': 'Headers',
+  'webview.requestDiffBody': 'Body',
+  'webview.requestDiffAuth': 'Auth',
+  'webview.requestDiffScripts': 'Scripts',
+  'webview.requestDiffSettings': 'Settings',
+  'webview.variableUsageTitle': 'Variable usage',
+  'webview.variableUsageCount': '{count} variables',
+  'webview.variablePreviewTitle': 'Resolved variables',
+  'webview.variablePreviewMissing': 'Missing in the active environment',
+  'webview.variableAutocompleteTitle': 'Insert variable',
+  'webview.variableAutocompleteEmpty': 'There are no matching variables in the active environment.',
+  'webview.varScopeUrl': 'URL',
+  'webview.varScopeParams': 'Params',
+  'webview.varScopeHeaders': 'Headers',
+  'webview.varScopeDefaultHeaders': 'Default Headers',
+  'webview.varScopeBody': 'Body',
+  'webview.varScopeFormData': 'Form Data',
+  'webview.varScopeBinary': 'Binary',
+  'webview.varScopeAuth': 'Auth',
+  'webview.varScopeScripts': 'Scripts',
+  'webview.formDataSummaryFields': '{count} fields',
+  'webview.formDataSummaryFiles': '{count} files',
+  'webview.formDataSummaryText': '{count} text',
+  'webview.fileSelected': 'File: {name}',
+  'webview.testSummaryPass': '{count} passed',
+  'webview.testSummaryFail': '{count} failed',
+  'webview.testSummaryLogs': '{count} logs',
+  'webview.testSummaryAllPassed': 'All tests passed',
+  'webview.testSummaryFirstFailure': 'First failure',
   'webview.testPlaceholder': 'test("status", function () { pm.response.to.have.status(200); });',
   'webview.comparisonSettings': 'Comparison Settings',
   'webview.discard': 'Discard',
@@ -224,8 +272,53 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /var compareSettings = normalizeCompareSettings\(\);/);
     assert.match(script, /options:\s*cloneCompareSettings\(compareSettings\)/);
     assert.match(script, /compareSettings = normalizeCompareSettings\(msg\.compareSettings\);/);
+    assert.match(script, /foldUnchangedSections:\s*value \? value\.foldUnchangedSections !== false : DEFAULT_COMPARE_FOLD_UNCHANGED/);
     assert.match(script, /type: 'saveTabState'[\s\S]*compareSettings: cloneCompareSettings\(compareSettings\)/);
+    assert.match(script, /var compareContextActive = !!lastResponse \|\| pinnedResponses\.length > 0;/);
+    assert.match(script, /tr\('webview\.compareFoldUnchanged'\)/);
     assert.ok(html.includes('Comparison Settings'), 'compare settings dialog should be rendered in the webview template');
+  });
+
+  it('renders path copy helpers for JSON and XML response bodies', () => {
+    assert.match(script, /function appendJsonPath\(basePath, segment, isArray\)/);
+    assert.match(script, /data-copy-path="' \+ escapeAttr\(copyPath\) \+ '"/);
+    assert.match(script, /function extractXmlLinePaths\(body\)/);
+    assert.match(script, /function renderXmlBodyWithPaths\(body\)/);
+    assert.match(script, /js-copy-xml-path/);
+    assert.match(script, /tr\('webview\.jsonPathHint'\)/);
+    assert.match(script, /tr\('webview\.xpathHint'\)/);
+  });
+
+  it('supports keyboard workflow shortcuts for tabs, save, send, and response search', () => {
+    assert.match(script, /function triggerSaveFromShortcut\(forceSaveAs\)/);
+    assert.match(script, /function focusResponseSearchField\(\)/);
+    assert.match(script, /if \(isPrimaryModifier && e\.key\.toLowerCase\(\) === 's'\)/);
+    assert.match(script, /if \(isPrimaryModifier && e\.key\.toLowerCase\(\) === 'f'\)/);
+    assert.match(script, /if \(e\.altKey && !e\.ctrlKey && !e\.metaKey && digitMatch\)/);
+    assert.match(script, /\['params', 'headers', 'body', 'auth', 'scripts', 'settings'\]/);
+    assert.match(script, /\['resBody', 'resCookies', 'resHeaders', 'resTests', 'resPreview'\]/);
+  });
+
+  it('renders variable hover preview helpers with active environment values', () => {
+    assert.match(script, /let activeVarValues = \{\};/);
+    assert.match(script, /function syncVariablePreviewHints\(scope\)/);
+    assert.match(script, /function showVariablePreviewPopover\(target\)/);
+    assert.match(script, /let currentWorkspaceProfile = 'default';/);
+    assert.match(script, /msg\.varValues \|\| \{\}/);
+    assert.match(script, /tr\('webview\.variablePreviewTitle'\)/);
+    assert.match(script, /tr\('webview\.variablePreviewMissing'\)/);
+  });
+
+  it('renders variable autocomplete, failed-only rerun, and profile switching helpers', () => {
+    assert.match(script, /function syncVariableAutocomplete\(target\)/);
+    assert.match(script, /function applyVariableAutocompleteSelection\(index\)/);
+    assert.match(script, /tr\('webview\.variableAutocompleteTitle'\)/);
+    assert.match(script, /tr\('webview\.variableAutocompleteEmpty'\)/);
+    assert.match(script, /change-workspace-profile/);
+    assert.match(script, /tr\(currentWorkspaceProfile === 'default' \? 'webview\.profileDefaultTooltip' : 'webview\.profileCustomTooltip'\)/);
+    assert.match(script, /type:\s*'changeWorkspaceProfile'/);
+    assert.match(script, /type:\s*'rerunFailedCollection'/);
+    assert.match(script, /tr\('webview\.runRerunFailed'\)/);
   });
 
   it('injects display language resources into the webview', () => {
@@ -235,7 +328,7 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function tr\(key\)/);
     assert.match(script, /function tf\(key, params\)/);
     assert.match(script, /function tfCount\(key, count\)/);
-    assert.match(script, /replace\(\/\{\(\[A-Za-z0-9_\]\+\)\}\/g, function\(_, name\)/);
+    assert.ok(script.includes('replace(/{([A-Za-z0-9_]+)}/g'), 'tf should replace {placeholders} inside localized strings');
   });
 
   it('updates localization without reloading the whole webview state', () => {
@@ -305,7 +398,7 @@ describe('RequestPanel Webview', () => {
     assert.ok(html.includes('script-card'), 'scripts tab should use cards');
     assert.ok(html.includes('btn-keyhint'), 'send button should show the Enter key hint');
     assert.match(script, /function getRequestStageInfo\(tab\)/);
-    assert.match(script, /function renderEmptyState\(kicker, title, copy, cards\)/);
+    assert.match(script, /function renderEmptyState\(kicker, title, copy, cards, actions, badge\)/);
     assert.match(script, /function buildCompareChipMarkup\(currentSignature\)/);
   });
 
@@ -331,7 +424,9 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function hasMeaningfulStaticPreview\(rawHtml\)/);
     assert.match(script, /function hasHtmlPreview\(tab\)/);
     assert.match(script, /tab\.responseTab = \(contentType\.indexOf\('html'\) >= 0 && hasMeaningfulStaticPreview\(msg\.response\.body \|\| ''\)\) \? 'resPreview' : 'resBody';/);
-    assert.match(script, /(var|const) tab = tabs\.find\(tt => tt\.id === activeTabId\);[\s\S]*tab\.responseTab = t\.dataset\.tab;/);
+    assert.match(script, /function switchResponseTabInContent\(mc, tabName\)/);
+    assert.match(script, /const tab = tabs\.find\(function\(tt\) \{ return tt\.id === activeTabId; \}\);[\s\S]*tab\.responseTab = tabName;/);
+    assert.match(script, /switchResponseTabInContent\(mc, t\.dataset\.tab\);/);
     assert.match(script, /function buildPreviewDocument\(rawHtml, resolvedUrl\)/);
     assert.match(script, /function syncPreviewFrame\(preview, tab\)/);
     assert.match(script, /const previewAvailable = lang === 'html' && hasHtmlPreview\(tab\);/);
@@ -358,6 +453,19 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /tfCount\('webview\.defaultHeadersOverridden', overridden\.length\)/);
     assert.match(script, /renderDefaultHeaderKeyGroup\('webview\.defaultHeadersAppliedLabel', applied, ''\)/);
     assert.match(script, /renderDefaultHeaderKeyGroup\('webview\.defaultHeadersOverriddenLabel', overridden, ' override'\)/);
+  });
+
+  it('renders request-diff, variable usage, form-data, and response quick-copy helpers', () => {
+    assert.match(script, /function renderRequestChangeSummary\(tab\)/);
+    assert.match(script, /function refreshRequestChangeSummary\(mc\)/);
+    assert.match(script, /function collectVariableUsage\(tab\)/);
+    assert.match(script, /function renderVariableUsage\(tab\)/);
+    assert.match(script, /function renderFormDataSummary\(fields\)/);
+    assert.match(script, /function refreshFormDataSummary\(mc\)/);
+    assert.match(script, /js-copy-response-url/);
+    assert.match(script, /js-copy-response-status/);
+    assert.match(script, /js-copy-response-headers/);
+    assert.match(script, /js-empty-action/);
   });
 
   it('shows the current environment with a localized label instead of raw template syntax', () => {

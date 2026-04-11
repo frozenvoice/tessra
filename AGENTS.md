@@ -7,7 +7,7 @@ Arc Client는 VS Code 안에서 동작하는 offline-first REST API 클라이언
 
 ## 핵심 원칙
 - 외부 서비스 의존 금지: 텔레메트리, 업데이트 체크, 인증 서버 호출 없음
-- 로컬 우선 저장: VS Code `globalStorage` 아래 JSON 파일 사용
+- 로컬 우선 저장: VS Code `globalStorage` 아래 JSON 파일 사용, 필요 시 워크스페이스 프로필로 분리
 - 의존성 최소화: 런타임은 `esbuild` 번들 결과와 Node.js 내장 모듈 중심
 - 보안 기본값 유지: HTTPS 인증서 검증은 기본적으로 활성화
 - 문서 동기화 필수: 사용자에게 보이는 기능이나 설정을 바꾸면 `README.md`, `README.ko.md`, `AGENTS.md`, `CLAUDE.md`를 함께 검토하고 필요한 내용을 반영한다
@@ -79,13 +79,15 @@ arc-client/
 6. 인증: Basic, Bearer, API Key
 7. Body 타입: JSON, XML, form-urlencoded, form-data, binary, raw
 8. Pre-request / Test scripts
-9. Postman collection/environment import/export
+9. OpenAPI / Postman collection/environment import/export
 10. cURL import / copy as cURL
 11. 코드 생성: `fetch`, `axios`, `Java HttpURLConnection`
 12. 응답 비교: `Raw`, `Normalized`, `Pretty`, ignore headers / ignore JSON paths
-13. 요청별 Settings 탭: timeout, redirects, TLS override, max size, retries, stop after headers, save to history, skip default headers, disable scripts, HTML preview 기본 열기
-14. HTML preview, JSON tree, XML format options, richer empty states와 상태 피드백 UI
+13. 요청별 Settings 탭: timeout, redirects, TLS override, max size, retries, stop after headers, save to history, skip default headers, disable scripts
+14. HTML preview, JSON tree, XML format options, richer empty states, 요청 변경 요약, 변수 사용처, 변수 자동완성, 응답 빠른 복사, 고급 필터 UX
 15. `arc-client.displayLanguage` 설정 기반 UI 언어 선택 (기본 영어, VS Code locale과 분리, 현재 `en`/`ko`/`ja`)
+16. `arc-client.workspaceProfile` 설정 기반 워크스페이스 로컬 저장 프로필 분리와 현재 프로필 표시 (`default`는 메인 작업용, 사용자 지정 프로필은 프로젝트/실험 분리용)
+17. 컬렉션 러너 실패 요청만 재실행
 
 ### 남아 있는 큰 항목
 1. WebSocket 지원
@@ -103,7 +105,7 @@ npx vsce package
 수동 검증은 VS Code에서 `F5`로 Extension Development Host를 띄워 수행한다.
 
 ## 저장 데이터
-모든 데이터는 VS Code `globalStorage` 아래 JSON 파일로 저장된다.
+모든 데이터는 VS Code `globalStorage` 아래 JSON 파일로 저장된다. 기본 프로필은 루트에 저장되고, 사용자 지정 프로필은 `profiles/<profile-name>/` 아래 같은 파일 구조로 분리된다.
 
 - `collections.json`
 - `history.json`
@@ -111,6 +113,7 @@ npx vsce package
 - `active-environment.json`
 - `default-headers.json`
 - `tab-state.json`
+- `profiles/<profile-name>/...`
 
 ## 주의사항
 - 기존 기능을 건드릴 때는 webview 파싱 오류와 상태 복원 흐름을 가장 먼저 확인한다
