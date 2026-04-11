@@ -32,7 +32,9 @@
     "environment",
     "api-testing"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onWebviewPanel:arc.requestPanel"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {

@@ -1843,7 +1843,6 @@ function triggerSendSlam(btn) {
 
 // Stop 踰꾪듉 ?寃⑷컧 (slam + glow + flash + vignette ???⑥씪 keyframe?쇰줈 ?듯빀)
 function triggerStopSlam(btn) {
-  console.log('Stop clicked - animation start');
   // slam ?뚮┝ + 湲濡쒖슦 (?섎굹??animation?쇰줈 ?듯빀)
   btn.classList.remove('stop-slam');
   void btn.offsetWidth;
@@ -2674,7 +2673,6 @@ function bindContentEvents() {
 
   // XML/JSON 珥덇린 ?щ㎎ ?곸슜 (?묐떟 ?섏떊 ??利됱떆 ?щ㎎??
   if (mc.querySelector('.js-res-body-toolbar')) {
-    console.log('[arc-client] 珥덇린 ?щ㎎ ?곸슜 ?몄텧');
     applyFormat(mc);
   }
 
@@ -3654,7 +3652,6 @@ function getFormatOptions(mc) {
 
 function applyFormat(mc) {
   var opts = getFormatOptions(mc);
-  console.log('[arc-client] applyFormat ?몄텧, opts:', opts);
   if (!opts) return;
   var tab = tabs.find(function(t) { return t.id === activeTabId; });
   if (!tab || !tab.response) return;
@@ -3697,7 +3694,6 @@ function formatJson(body, style, indent) {
 
 // === XML ?щ㎎??(?뺢퇋??湲곕컲, ?몃? ?쇱씠釉뚮윭由??놁쓬) ===
 function formatXml(xml, style, indent) {
-  console.log('[arc-client] formatXml ?몄텧, style:', style, 'indent:', JSON.stringify(indent));
   // ?좏뻾 怨듬갚/以꾨컮轅??뺢퇋??
   xml = xml.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
 
