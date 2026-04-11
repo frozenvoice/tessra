@@ -704,13 +704,16 @@ describe('RequestPanel Webview', () => {
     assert.ok(html.includes('btn-keyhint'), 'send button should show the Enter key hint');
     assert.ok(html.includes('url-primary-group'), 'url bar should isolate the primary request controls');
     assert.ok(html.includes('url-hero-actions'), 'url bar should elevate the primary action');
-    assert.ok(html.includes('url-action-group'), 'url bar should group secondary actions for responsive layouts');
     assert.ok(html.includes('url-secondary-group'), 'url bar should tuck secondary actions into a separate cluster');
+    assert.ok(html.includes('url-secondary-btn'), 'url bar secondary actions should use compact button styling');
+    assert.ok(html.includes('action-label'), 'compact action buttons should keep a label span for responsive compression');
     assert.ok(html.includes('res-response-shell'), 'response area should use a dedicated flex shell');
     assert.ok(html.includes('res-empty-shell'), 'response empty states should render inside a scrollable shell');
     assert.ok(html.includes('response-summary-card'), 'response summary should render as a product-style card');
-    assert.ok(html.includes('response-stat-grid'), 'response summary should expose response stat cards');
+    assert.ok(html.includes('response-stat-inline'), 'response summary should expose inline response stats');
     assert.ok(html.includes('response-action-cluster'), 'response actions should render in a dedicated cluster');
+    assert.ok(html.includes('request-info-row'), 'preflight pills and variable usage should share a single row');
+    assert.ok(html.includes('actions-more-menu'), 'less-used response actions should collapse into a more menu');
     assert.ok(html.includes('empty-state-head'), 'empty state should render a dedicated hero head');
     assert.ok(html.includes('empty-state-card-index'), 'empty state cards should show playful indices');
     assert.ok(html.includes('divider-grip'), 'split divider should expose an affordance grip');
@@ -720,6 +723,9 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function buildCompareChipMarkup\(currentSignature\)/);
     assert.match(script, /function scriptTemplateSource\(name\)/);
     assert.match(script, /function insertScriptTemplate\(mc, targetName, templateName\)/);
+    assert.match(script, /var secondary = '';/);
+    assert.doesNotMatch(script, /var secondary = tr\('webview\.stage\.ready\.detail'\);/);
+    assert.match(script, /row\.className = 'runner-row method-' \+ msg\.method \+ ' ' \+ cls;/);
   });
 
   it('keeps response panes scrollable and preserves an adaptive response-first split', () => {
@@ -738,8 +744,9 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /if \(savedHeight\) \{[\s\S]*?\} else \{[\s\S]*?applyAdaptiveRequestAreaHeight\(\s*adaptiveReqArea,\s*mainContent\.querySelector\('\.split'\),/);
     assert.match(source, /\.res-area\{flex:1 1 0;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:0 10px\}/);
     assert.match(source, /\.res-empty-shell\{flex:1;min-height:0;overflow:auto;padding:8px 0 12px\}/);
-    assert.match(source, /\.json-body\{background:var\(--vscode-input-background\);padding:6px;border-radius:3px;font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;white-space:pre-wrap;word-break:break-all;overflow:auto;flex:1;min-height:0;line-height:1\.45\}/);
-    assert.match(source, /\.json-tree\{background:var\(--vscode-input-background\);padding:6px;border-radius:3px;font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;overflow:auto;flex:1;min-height:0;line-height:1\.6;user-select:text\}/);
+    assert.match(source, /\.var-usage\{display:flex;align-items:center;gap:6px;padding:0;flex-wrap:wrap\}/);
+    assert.match(source, /\.json-body\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;border:1px solid rgba\(255,255,255,.08\);font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;white-space:pre-wrap;word-break:break-word;overflow:auto;flex:1;min-height:0;line-height:1\.3;/);
+    assert.match(source, /\.json-tree\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;border:1px solid rgba\(255,255,255,.08\);font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;overflow:auto;flex:1;min-height:0;line-height:1\.3;user-select:text;/);
   });
 
   it('normalizes and persists request settings in tab state and save actions', () => {
@@ -803,6 +810,7 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function renderRequestDirtyTitle\(tab\)/);
     assert.match(script, /function collectVariableUsage\(tab\)/);
     assert.match(script, /function renderVariableUsage\(tab\)/);
+    assert.match(script, /<span class="var-usage-name">\{\{/);
     assert.match(script, /function renderFormDataSummary\(fields\)/);
     assert.match(script, /function refreshFormDataSummary\(mc\)/);
     assert.match(script, /js-copy-response-url/);
@@ -962,14 +970,19 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /js-toggle-script-help/);
     assert.match(script, /const activeTab = tabs\.find\(t => t\.id === activeTabId\);/);
     assert.match(script, /activeTab\.scriptHelpCollapsed = activeTab\.scriptHelpCollapsed !== true/);
-    assert.match(source, /\.req-area\{flex:1 1 0;min-height:0;overflow-y:auto;padding:4px 10px\}/);
-    assert.match(source, /\.url-primary-group\{display:flex;align-items:center;gap:10px;min-width:0\}/);
-    assert.match(source, /\.url-action-group\{display:flex;align-items:center;justify-content:flex-end;min-width:0\}/);
-    assert.match(source, /\.response-summary-card\{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:12px;border-radius:18px;/);
-    assert.match(source, /\.divider-grip\{position:relative;z-index:1;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;/);
+    assert.match(source, /\.req-area\{flex:1 1 0;min-height:0;overflow-y:auto;padding:2px 8px\}/);
+    assert.match(source, /\.url-primary-group\{display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 auto\}/);
+    assert.match(source, /\.url-hero-actions\{display:flex;align-items:stretch;justify-content:flex-end;flex:0 0 auto\}/);
+    assert.match(source, /\.url-secondary-btn\{min-height:28px;padding:0 8px;border-radius:6px;gap:6px;font-size:13px;/);
+    assert.match(source, /\.response-summary-card\{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:2px 0;border:none;background:transparent;box-shadow:none;border-radius:0;flex-wrap:nowrap;min-width:0\}/);
+    assert.match(source, /\.response-stat-inline\{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;font-size:13px;font-weight:700;/);
+    assert.match(source, /\.response-action-cluster\{display:flex;align-items:center;justify-content:flex-end;gap:3px;flex-wrap:nowrap;flex:0 0 auto\}/);
+    assert.match(source, /\.actions-more-menu\{display:none;position:absolute;/);
+    assert.match(source, /\.divider-grip\{position:relative;z-index:1;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;/);
+    assert.match(source, /\.json-body\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;/);
+    assert.match(source, /\.runner-row\.method-GET::before\{background:linear-gradient\(180deg,rgba\(78,201,78,.8\),rgba\(78,201,78,.18\)\)\}/);
     assert.match(source, /\.env-editor\.linked-focus-active\{border-color:rgba\(87,166,255,.26\)\}/);
     assert.match(source, /\.script-helper-shell\.collapsed\{gap:10px\}/);
-    assert.match(source, /@media \(max-width: 1220px\)\{/);
     assert.match(source, /@media \(max-height: 820px\)\{/);
   });
 

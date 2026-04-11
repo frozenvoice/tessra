@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { StorageService } from '../services/StorageService';
 import { Collection, CollectionItem, Request, RequestBodyType, RequestSettings } from '../models/types';
 import { LocalizationService } from '../services/LocalizationService';
+import { buildRequestTreeDescription, buildRequestTreeTooltip, getRequestMethodIcon } from './requestTreeVisuals';
 
 // TreeView에서 사용할 노드 타입
 export type CollectionNode =
@@ -58,8 +59,9 @@ export class CollectionTreeProvider
           node.collection.name,
           vscode.TreeItemCollapsibleState.Expanded
         );
-        item.iconPath = new vscode.ThemeIcon('folder-library');
+        item.iconPath = new vscode.ThemeIcon('folder-library', new vscode.ThemeColor('charts.blue'));
         item.description = this.describeItemStats(this.countItemStats(node.collection.items));
+        item.tooltip = `${node.collection.name}\n${item.description ?? '0 req'}`;
         item.contextValue = 'collection';
         return item;
       }
@@ -68,8 +70,9 @@ export class CollectionTreeProvider
           node.item.name,
           vscode.TreeItemCollapsibleState.Expanded
         );
-        item.iconPath = new vscode.ThemeIcon('folder');
+        item.iconPath = new vscode.ThemeIcon('folder', new vscode.ThemeColor('charts.yellow'));
         item.description = this.describeItemStats(this.countItemStats(node.item.children ?? []));
+        item.tooltip = `${node.item.name}\n${item.description ?? '0 req'}`;
         item.contextValue = 'folder';
         return item;
       }
@@ -79,10 +82,9 @@ export class CollectionTreeProvider
           node.item.name,
           vscode.TreeItemCollapsibleState.None
         );
-        item.description = `${req.method} · ${this.extractHost(req.url)}`;
-        item.description = `${req.method} · ${this.extractHost(req.url)}`;
-        item.iconPath = this.getMethodIcon(req.method);
-        item.description = `${req.method} · ${this.extractHost(req.url)}`;
+        item.description = buildRequestTreeDescription(req);
+        item.tooltip = buildRequestTreeTooltip(req);
+        item.iconPath = getRequestMethodIcon(req.method);
         item.contextValue = 'request';
         item.command = {
           command: 'arc.loadFromCollection',
@@ -714,16 +716,5 @@ export class CollectionTreeProvider
 
   private generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
-  }
-
-  private getMethodIcon(method: string): vscode.ThemeIcon {
-    switch (method) {
-      case 'GET': return new vscode.ThemeIcon('arrow-down', new vscode.ThemeColor('charts.green'));
-      case 'POST': return new vscode.ThemeIcon('arrow-up', new vscode.ThemeColor('charts.yellow'));
-      case 'PUT': return new vscode.ThemeIcon('arrow-swap', new vscode.ThemeColor('charts.blue'));
-      case 'PATCH': return new vscode.ThemeIcon('edit', new vscode.ThemeColor('charts.orange'));
-      case 'DELETE': return new vscode.ThemeIcon('trash', new vscode.ThemeColor('charts.red'));
-      default: return new vscode.ThemeIcon('globe');
-    }
   }
 }

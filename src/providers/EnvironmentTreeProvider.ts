@@ -87,6 +87,7 @@ export class EnvironmentTreeProvider
 
   getTreeItem(env: Environment): vscode.TreeItem {
     const isActive = env.id === this.activeEnvId;
+    const varsLabel = LocalizationService.t('environment.vars', { count: env.variables.length });
     const item = new vscode.TreeItem(
       env.name,
       vscode.TreeItemCollapsibleState.None
@@ -94,17 +95,25 @@ export class EnvironmentTreeProvider
     item.description = isActive
       ? `✓ ${LocalizationService.t('environment.active')}`
       : LocalizationService.t('environment.vars', { count: env.variables.length });
-    const varsLabel = LocalizationService.t('environment.vars', { count: env.variables.length });
     item.description = isActive
       ? `${LocalizationService.t('environment.active')} · ${varsLabel}`
       : varsLabel;
     item.iconPath = new vscode.ThemeIcon(
       isActive ? 'pass-filled' : 'symbol-variable',
-      isActive ? new vscode.ThemeColor('charts.green') : undefined
+      isActive ? new vscode.ThemeColor('charts.green') : new vscode.ThemeColor('charts.blue')
     );
     item.description = isActive
       ? `${LocalizationService.t('environment.active')} · ${LocalizationService.t('environment.vars', { count: env.variables.length })}`
       : LocalizationService.t('environment.vars', { count: env.variables.length });
+    item.tooltip = isActive
+      ? `${env.name}\n${LocalizationService.t('environment.active')} 쨌 ${varsLabel}`
+      : `${env.name}\n${varsLabel}`;
+    item.description = isActive
+      ? `${LocalizationService.t('environment.active')} | ${varsLabel}`
+      : varsLabel;
+    item.tooltip = isActive
+      ? `${env.name}\n${LocalizationService.t('environment.active')} | ${varsLabel}`
+      : `${env.name}\n${varsLabel}`;
     item.contextValue = isActive ? 'environment-active' : 'environment';
 
     // 싱글클릭: 변수 편집, 더블클릭: 활성/비활성 토글

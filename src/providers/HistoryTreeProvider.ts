@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { StorageService } from '../services/StorageService';
 import { HistoryEntry } from '../models/types';
 import { LocalizationService } from '../services/LocalizationService';
+import { buildHistoryDescription, buildHistoryTooltip, getRequestMethodIcon } from './requestTreeVisuals';
 
 const MIME = 'application/vnd.arc.history-entry';
 
@@ -57,10 +58,9 @@ export class HistoryTreeProvider
     const pinLabel = entry.pinned ? '📌 ' : '';
     const localizedPinLabel = entry.pinned ? (LocalizationService.t('history.pinnedTag') || pinLabel) : '';
     const item = new vscode.TreeItem(localizedPinLabel + label, vscode.TreeItemCollapsibleState.None);
-    item.description = `${status}${time ? ` · ${time}` : ''}`;
-    item.description = `${status}${time ? ` · ${time}` : ''}`;
-    item.tooltip = `${entry.pinned ? LocalizationService.t('history.pinnedTag') : ''}${method} ${entry.request.url}\n${status} ${time}\n${LocalizationService.formatDateTime(new Date(entry.timestamp))}`;
-    item.iconPath = this.getMethodIcon(method);
+    item.description = buildHistoryDescription(entry);
+    item.tooltip = buildHistoryTooltip(entry);
+    item.iconPath = getRequestMethodIcon(method);
     item.contextValue = entry.pinned ? 'history-pinned' : 'history';
 
     item.command = {
@@ -187,17 +187,6 @@ export class HistoryTreeProvider
       return new URL(url).host.toLowerCase();
     } catch {
       return '';
-    }
-  }
-
-  private getMethodIcon(method: string): vscode.ThemeIcon {
-    switch (method) {
-      case 'GET': return new vscode.ThemeIcon('arrow-down', new vscode.ThemeColor('charts.green'));
-      case 'POST': return new vscode.ThemeIcon('arrow-up', new vscode.ThemeColor('charts.yellow'));
-      case 'PUT': return new vscode.ThemeIcon('arrow-swap', new vscode.ThemeColor('charts.blue'));
-      case 'PATCH': return new vscode.ThemeIcon('edit', new vscode.ThemeColor('charts.orange'));
-      case 'DELETE': return new vscode.ThemeIcon('trash', new vscode.ThemeColor('charts.red'));
-      default: return new vscode.ThemeIcon('globe');
     }
   }
 }
