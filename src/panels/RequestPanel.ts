@@ -72,6 +72,7 @@ export class RequestPanel {
     MessageType.PickFile,
     MessageType.GenerateCode,
     MessageType.OpenDefaultHeaders,
+    MessageType.SwitchEnvironment,
     MessageType.OpenResponseUrl,
     'webviewReady',
   ]);
@@ -544,10 +545,22 @@ export class RequestPanel {
           auth: { type: 'none' },
         });
 
+        const totalAttempts = Math.max(1, settings.retryCount + 1);
         for (let attempt = 0; attempt <= settings.retryCount; attempt++) {
           if (this.collectionRunAbort) {
             throw new Error('Request was canceled');
           }
+
+          this.postMessage({
+            type: 'runCollectionStatus',
+            phase: 'sending',
+            index: i,
+            total: requests.length,
+            name: reqName,
+            method: req.method,
+            attempt: attempt + 1,
+            totalAttempts,
+          });
 
           const handle = this.httpService.send(
             req.method,
@@ -572,11 +585,33 @@ export class RequestPanel {
             if (this.collectionRunAbort || attempt >= settings.retryCount) {
               throw err;
             }
+            this.postMessage({
+              type: 'runCollectionStatus',
+              phase: 'retry',
+              index: i,
+              total: requests.length,
+              name: reqName,
+              method: req.method,
+              attempt: attempt + 2,
+              totalAttempts,
+              retryDelayMs: settings.retryDelayMs,
+            });
             await this.waitForCollectionRetryDelay(settings.retryDelayMs);
             continue;
           }
 
           if (response && attempt < settings.retryCount && this.shouldRetryResponse(response.status)) {
+            this.postMessage({
+              type: 'runCollectionStatus',
+              phase: 'retry',
+              index: i,
+              total: requests.length,
+              name: reqName,
+              method: req.method,
+              attempt: attempt + 2,
+              totalAttempts,
+              retryDelayMs: settings.retryDelayMs,
+            });
             await this.waitForCollectionRetryDelay(settings.retryDelayMs);
             response = null;
             continue;
@@ -774,6 +809,9 @@ export class RequestPanel {
       }
       case MessageType.OpenDefaultHeaders:
         this.loadDefaultHeaders();
+        break;
+      case MessageType.SwitchEnvironment:
+        await vscode.commands.executeCommand('arc.switchEnvironment');
         break;
       case MessageType.OpenResponseUrl:
         await this.openResponseUrl(message.url);
@@ -1467,12 +1505,29 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .request-stage-hint{font-size:12px;color:var(--vscode-descriptionForeground,#9a9a9a);line-height:1.4}
 .request-topline-right{margin-left:auto;display:flex;align-items:center;gap:8px}
 .request-status-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.request-status-chip{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--vscode-descriptionForeground,#c2c2c2);white-space:nowrap}
+.request-status-chip{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--vscode-descriptionForeground,#c2c2c2);white-space:nowrap;font-family:inherit;appearance:none}
+.request-status-chip.clickable{cursor:pointer;transition:transform .12s ease,background .12s ease,border-color .12s ease}
+.request-status-chip.clickable:hover{transform:translateY(-1px);border-color:rgba(255,255,255,.16);background:rgba(255,255,255,.06)}
 .request-status-chip.info{background:rgba(87,166,255,.08);border-color:rgba(87,166,255,.16);color:#93c8ff}
 .request-status-chip.warning{background:rgba(229,192,123,.08);border-color:rgba(229,192,123,.16);color:#f1cf8a}
 .request-status-chip.muted{opacity:.78}
 .request-status-chip .env-label{opacity:.75;margin-right:4px}
 .request-status-chip .env-name{color:#dcdcaa}
+.request-preflight{display:flex;flex-direction:column;gap:10px;padding:0 10px 8px}
+.request-preflight-pills{display:flex;flex-wrap:wrap;gap:8px}
+.preflight-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--vscode-descriptionForeground,#c8c8c8);font-family:inherit;appearance:none}
+.preflight-pill.clickable{cursor:pointer;transition:transform .12s ease,background .12s ease}
+.preflight-pill.clickable:hover{transform:translateY(-1px);background:rgba(255,255,255,.06)}
+.preflight-pill.info{background:rgba(87,166,255,.08);border-color:rgba(87,166,255,.16);color:#93c8ff}
+.preflight-pill.accent{background:rgba(78,201,176,.08);border-color:rgba(78,201,176,.18);color:#8ce3d1}
+.preflight-pill.warning{background:rgba(229,192,123,.09);border-color:rgba(229,192,123,.18);color:#f1cf8a}
+.preflight-pill.muted{opacity:.78}
+.preflight-warning{padding:12px;border-radius:12px;border:1px solid rgba(229,192,123,.18);background:rgba(229,192,123,.08);display:flex;flex-direction:column;gap:8px}
+.preflight-warning-title{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#f1cf8a}
+.preflight-warning-copy{font-size:12px;line-height:1.55;color:var(--vscode-foreground);word-break:break-word}
+.preflight-warning-actions{display:flex;flex-wrap:wrap;gap:8px}
+.ghost-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--vscode-foreground);font-size:12px;cursor:pointer}
+.ghost-btn:hover{background:rgba(255,255,255,.07)}
 .url-bar{display:flex;gap:8px;padding:8px 10px;flex-shrink:0;align-items:center;position:relative;overflow:visible}
 .url-bar select{width:100px;padding:6px 8px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:6px;font-size:13px;font-weight:700}
 .url-bar input{flex:1;padding:6px 10px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:6px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
@@ -1571,6 +1626,9 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .settings-toggle input{margin:2px 0 0}
 .settings-toggle > span{display:flex;flex-direction:column;gap:3px}
 .settings-row.multi-line{align-items:flex-start;flex-direction:column;gap:4px}
+.settings-row.risk-warning,.settings-toggle.risk-warning{border-color:rgba(229,192,123,.24);background:rgba(229,192,123,.08)}
+.settings-row.risk-muted,.settings-toggle.risk-muted{border-color:rgba(255,255,255,.08);background:rgba(255,255,255,.045)}
+.settings-row.risk-warning .settings-label,.settings-toggle.risk-warning > span{color:#f1cf8a}
 .settings-select{width:140px}
 .settings-inline-note{display:block;font-size:12px;color:var(--vscode-descriptionForeground,#989898);margin-left:22px}
 .settings-field-meta{display:flex;flex-direction:column;gap:2px}
@@ -1587,6 +1645,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 
 /* ?묐떟 */
 .response-summary{display:flex;flex-direction:column;gap:8px}
+.res-sticky-shell{position:sticky;top:0;z-index:4;background:linear-gradient(180deg,var(--vscode-editor-background) 0%,var(--vscode-editor-background) 88%,rgba(0,0,0,0) 100%);padding-top:2px}
 .response-meta{display:flex;gap:10px;align-items:center;padding:6px 0 2px;flex-shrink:0;font-size:13px;flex-wrap:wrap}
 .response-meta.response-tone-2xx .status{box-shadow:0 0 0 1px rgba(78,201,78,.12),0 0 18px rgba(78,201,78,.12)}
 .response-meta.response-tone-3xx .status{box-shadow:0 0 0 1px rgba(229,192,123,.12),0 0 18px rgba(229,192,123,.1)}
@@ -1665,6 +1724,17 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .response-search-input{width:180px;max-width:100%;padding:3px 8px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,#555);border-radius:4px;font-size:13px}
 .response-search-input:focus{outline:1px solid var(--vscode-focusBorder)}
 .response-search-count{min-width:54px;text-align:center;font-size:12px;color:var(--vscode-descriptionForeground,#a6a6a6);font-variant-numeric:tabular-nums}
+.response-search-wrap .tb-btn.active{opacity:1;background:rgba(87,166,255,.14);border-color:rgba(87,166,255,.24)}
+.kv-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.bulk-editor{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.025)}
+.bulk-editor-label{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.82}
+.bulk-editor-input{min-height:90px;padding:8px 10px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:8px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace);resize:vertical}
+.bulk-editor-actions{display:flex;gap:8px;justify-content:flex-end}
+.kv-reveal,.auth-reveal{margin-left:6px;min-width:34px}
+.runner-live-status{padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border,#333);display:flex;flex-direction:column;gap:4px;background:rgba(255,255,255,.02)}
+.runner-live-title{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+.runner-live-copy{font-size:12px;line-height:1.5;color:var(--vscode-descriptionForeground,#a6a6a6)}
+.runner-row.active{background:rgba(87,166,255,.1);border-left:2px solid rgba(87,166,255,.6)}
 .response-search-hit{background:rgba(255,215,0,.22);color:inherit;border-radius:2px;padding:0 1px}
 .response-search-hit.active{background:rgba(255,165,0,.42);box-shadow:0 0 0 1px rgba(255,165,0,.4)}
 
@@ -2006,12 +2076,147 @@ function renderEnvironmentIndicator(envName) {
   return '<span class="env-label">' + escapeHtml(tr('webview.environment')) + '</span><span class="env-name">' + escapeHtml(envName) + '</span>';
 }
 
-function renderStatusChip(label, tone) {
-  return '<div class="request-status-chip' + (tone ? ' ' + tone : '') + '">' + escapeHtml(label) + '</div>';
+function renderStatusChip(label, tone, action, meta) {
+  var attrs = action
+    ? ' type="button" data-action="' + escapeAttr(action) + '"' + (meta ? ' data-meta="' + escapeAttr(meta) + '"' : '')
+    : '';
+  return '<button class="request-status-chip' + (tone ? ' ' + tone : '') + (action ? ' clickable' : '') + '"' + attrs + '>' + escapeHtml(label) + '</button>';
 }
 
 function renderEnvironmentStatusChip(envName) {
-  return '<div class="request-status-chip info">' + renderEnvironmentIndicator(envName) + '</div>';
+  return '<button class="request-status-chip info clickable" type="button" data-action="switch-environment">' + renderEnvironmentIndicator(envName) + '</button>';
+}
+
+function renderPreflightPill(label, tone, action, meta) {
+  return '<button class="preflight-pill' + (tone ? ' ' + tone : '') + (action ? ' clickable' : '') + '"' +
+    (action ? ' type="button" data-action="' + escapeAttr(action) + '"' : '') +
+    (meta ? ' data-meta="' + escapeAttr(meta) + '"' : '') +
+    '>' + escapeHtml(label) + '</button>';
+}
+
+function collectTemplateVariableNames(target, text) {
+  if (!text) return;
+  var re = /\{\{([^}]+)\}\}/g;
+  var match;
+  while ((match = re.exec(String(text))) !== null) {
+    var name = (match[1] || '').trim();
+    if (name) target.add(name);
+  }
+}
+
+function collectTemplateVariablesFromKeyValues(target, items) {
+  (items || []).forEach(function(item) {
+    if (!item || item.enabled === false) return;
+    collectTemplateVariableNames(target, item.key);
+    collectTemplateVariableNames(target, item.value);
+  });
+}
+
+function isSensitiveKeyName(value) {
+  return /(^|[-_])(authorization|token|secret|password|passwd|pwd|api[-_]?key|session|cookie|access[-_]?token|refresh[-_]?token)([-_]|$)/i.test(String(value || '').trim());
+}
+
+function authSummaryLabel(auth) {
+  if (!auth || auth.type === 'none') return tr('webview.authSummaryNone');
+  if (auth.type === 'basic') return tr('webview.authSummaryBasic');
+  if (auth.type === 'bearer') return tr('webview.authSummaryBearer');
+  if (auth.type === 'apikey') {
+    return auth?.apikey?.addTo === 'query'
+      ? tr('webview.authSummaryApiKeyQuery')
+      : tr('webview.authSummaryApiKeyHeader');
+  }
+  return authTypeLabel(auth.type);
+}
+
+function getUnresolvedDraftVariableNames(tab) {
+  var names = new Set();
+  if (!tab) return [];
+  collectTemplateVariableNames(names, tab.url);
+  collectTemplateVariablesFromKeyValues(names, tab.headers);
+  collectTemplateVariablesFromKeyValues(names, tab.params);
+  collectTemplateVariableNames(names, tab.body);
+  collectTemplateVariableNames(names, tab.binaryFilePath);
+  (tab.formData || []).forEach(function(field) {
+    if (!field || field.enabled === false) return;
+    collectTemplateVariableNames(names, field.key);
+    collectTemplateVariableNames(names, field.value);
+  });
+  if (!tab.skipDefaultHeaders) {
+    collectTemplateVariablesFromKeyValues(names, workspaceDefaultHeaders);
+  }
+  if (tab.auth?.basic) {
+    collectTemplateVariableNames(names, tab.auth.basic.username);
+    collectTemplateVariableNames(names, tab.auth.basic.password);
+  }
+  if (tab.auth?.bearer) {
+    collectTemplateVariableNames(names, tab.auth.bearer.token);
+  }
+  if (tab.auth?.apikey) {
+    collectTemplateVariableNames(names, tab.auth.apikey.key);
+    collectTemplateVariableNames(names, tab.auth.apikey.value);
+  }
+  return Array.from(names).filter(function(name) {
+    return activeVarKeys.indexOf(name) < 0;
+  });
+}
+
+function buildDraftTabFromContent(mc) {
+  var tab = tabs.find(function(t) { return t.id === activeTabId; });
+  if (!tab || !mc) return tab;
+  var methodEl = mc.querySelector('.js-method');
+  var saveHistoryInput = mc.querySelector('.js-save-history');
+  var skipDefaultHeadersInput = mc.querySelector('.js-skip-default-headers');
+  var disableScriptsInput = mc.querySelector('.js-disable-scripts');
+  return Object.assign({}, tab, {
+    method: methodEl ? methodEl.value : tab.method,
+    url: mc.querySelector('.js-url')?.value || tab.url || '',
+    headers: collectKv(mc.querySelector('.js-header-rows')),
+    params: collectKv(mc.querySelector('.js-param-rows')),
+    body: mc.querySelector('.js-body')?.value || '',
+    bodyType: normalizeBodyType(mc.querySelector('.js-body-type')?.value || tab.bodyType),
+    formData: collectFormData(mc.querySelector('.js-formdata-rows')),
+    binaryFilePath: mc.querySelector('.js-binary-path')?.value || '',
+    auth: collectAuth(mc),
+    scripts: collectScripts(mc),
+    saveToHistory: saveHistoryInput ? saveHistoryInput.checked !== false : tab.saveToHistory !== false,
+    skipDefaultHeaders: skipDefaultHeadersInput ? skipDefaultHeadersInput.checked === true : !!tab.skipDefaultHeaders,
+    disableScripts: disableScriptsInput ? disableScriptsInput.checked === true : !!tab.disableScripts
+  });
+}
+
+function renderUnresolvedVariableBanner(tab) {
+  var unresolved = getUnresolvedDraftVariableNames(tab);
+  if (unresolved.length === 0) return '';
+  return '<div class="preflight-warning">' +
+    '<div class="preflight-warning-title">' + escapeHtml(tfCount('webview.unresolvedVariablesCount', unresolved.length)) + '</div>' +
+    '<div class="preflight-warning-copy">' + escapeHtml(unresolved.map(function(name) { return '{{' + name + '}}'; }).join(', ')) + '</div>' +
+    '<div class="preflight-warning-actions">' +
+      '<button class="ghost-btn ripple-btn js-preflight-action" type="button" data-action="switch-environment">' + escapeHtml(tr('webview.openEnvironmentPicker')) + '</button>' +
+      '<button class="ghost-btn ripple-btn js-preflight-action" type="button" data-action="switch-tab" data-meta="headers">' + escapeHtml(tr('webview.reviewRequestInputs')) + '</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderRequestPreflight(tab) {
+  if (!tab) return '';
+  var headerCount = (tab.headers || []).filter(function(item) { return item && item.enabled !== false && item.key; }).length;
+  var paramCount = (tab.params || []).filter(function(item) { return item && item.enabled !== false && item.key; }).length;
+  var unresolved = getUnresolvedDraftVariableNames(tab);
+  var pills = [
+    renderPreflightPill(currentEnvName ? tf('webview.summaryEnvironment', { name: currentEnvName }) : tr('webview.noEnvironment'), currentEnvName ? 'info' : 'warning', 'switch-environment'),
+    renderPreflightPill(tf('webview.summaryAuth', { value: authSummaryLabel(tab.auth) }), tab.auth?.type && tab.auth.type !== 'none' ? 'accent' : 'muted', 'switch-tab', 'auth'),
+    renderPreflightPill(tfCount('webview.summaryHeaders', headerCount), headerCount > 0 ? 'accent' : 'muted', 'switch-tab', 'headers'),
+    renderPreflightPill(tfCount('webview.summaryParams', paramCount), paramCount > 0 ? 'accent' : 'muted', 'switch-tab', 'params'),
+    renderPreflightPill(tab.disableScripts ? tr('webview.summaryScriptsOff') : tr('webview.summaryScriptsOn'), tab.disableScripts ? 'warning' : 'info', 'switch-tab', tab.disableScripts ? 'settings' : 'scripts'),
+    renderPreflightPill(tab.saveToHistory === false ? tr('webview.summaryHistoryOff') : tr('webview.summaryHistoryOn'), tab.saveToHistory === false ? 'muted' : 'info', 'switch-tab', 'settings')
+  ];
+  if (unresolved.length > 0) {
+    pills.unshift(renderPreflightPill(tfCount('webview.unresolvedVariablesCount', unresolved.length), 'warning', 'switch-environment'));
+  }
+  return '<div class="request-preflight js-request-preflight">' +
+    '<div class="request-preflight-pills">' + pills.join('') + '</div>' +
+    renderUnresolvedVariableBanner(tab) +
+  '</div>';
 }
 
 function collapseWhitespace(text) {
@@ -2138,7 +2343,10 @@ function createResponseSnapshot(tab, response, label) {
     time: response.time,
     resolvedUrl: tab.resolvedUrl || tab.url || '',
     headers: response.headers || {},
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    jsonFormatStyle: tab.jsonFormatStyle || 'pretty',
+    xmlFormatStyle: tab.xmlFormatStyle || 'inline',
+    formatIndent: tab.formatIndent || '2'
   };
   snapshot.signature = buildResponseSignature(snapshot);
   return snapshot;
@@ -2165,7 +2373,10 @@ function serializeCompareSnapshot(snapshot) {
     time: snapshot.time,
     resolvedUrl: snapshot.resolvedUrl,
     headers: snapshot.headers || {},
-    timestamp: snapshot.timestamp
+    timestamp: snapshot.timestamp,
+    jsonFormatStyle: snapshot.jsonFormatStyle || 'pretty',
+    xmlFormatStyle: snapshot.xmlFormatStyle || 'inline',
+    formatIndent: snapshot.formatIndent || '2'
   };
 }
 
@@ -2187,7 +2398,9 @@ function compareCurrentWithLast() {
 
 function buildCompareChipMarkup(currentSignature) {
   return '<span class="compare-chip mode"><strong>' + escapeHtml(tr('webview.mode')) + '</strong> ' + escapeHtml(compareModeShort(compareSettings.mode)) + '</span>' +
+    (compareSettings.includeMetadataSummary ? '<span class="compare-chip ready">' + escapeHtml(tr('webview.includeMetadata')) + '</span>' : '') +
     (lastResponse ? '<span class="compare-chip ready"><strong>' + escapeHtml(tr('webview.last')) + '</strong> ' + escapeHtml(tr('webview.lastReady')) + '</span>' : '') +
+    (pinnedResponses.length >= 2 ? '<span class="compare-chip ready">' + escapeHtml(tr('webview.comparePinned')) + '</span>' : '') +
     pinnedResponses.map(function(pin, index) {
       var current = pin.signature === currentSignature;
       return '<span class="compare-chip' + (current ? ' current' : '') + '">' +
@@ -2382,6 +2595,8 @@ function applyLocalizationUpdate(msg) {
     }
   });
   updateStaticLocalizedText();
+  envVarRows?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+  defaultHeaderRows?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
   renderTabBar();
   renderContent();
 }
@@ -2553,6 +2768,10 @@ function markDirty() {
       jsonFormatStyle: data?.jsonFormatStyle || 'pretty',
       xmlFormatStyle: data?.xmlFormatStyle || 'inline',
       formatIndent: data?.formatIndent || '2',
+      responseSearchQuery: typeof data?.responseSearchQuery === 'string' ? data.responseSearchQuery : '',
+      responseSearchIndex: typeof data?.responseSearchIndex === 'number' ? data.responseSearchIndex : 0,
+      responseSearchCaseSensitive: data?.responseSearchCaseSensitive === true,
+      responseSearchRegex: data?.responseSearchRegex === true,
       pinned: data?.pinned || false,
       dirty: false,
     _snapshot: null,  // 而щ젆?섏뿉??遺덈윭????쓽 ?먮낯 ?ㅻ깄??
@@ -2838,6 +3057,44 @@ function saveActiveTabState() {
   tab.disableScripts = mc.querySelector('.js-disable-scripts')?.checked === true;
 }
 
+function switchRequestEditorTabInContent(mc, tabName) {
+  if (!mc) return;
+  var tabsEl = mc.querySelectorAll('.js-req-tabs .tab');
+  tabsEl.forEach(function(x) { x.classList.toggle('active', x.dataset.tab === tabName); });
+  var panels = { params: '.js-params-panel', headers: '.js-headers-panel', body: '.js-body-panel', auth: '.js-auth-panel', scripts: '.js-scripts-panel', settings: '.js-settings-panel' };
+  Object.keys(panels).forEach(function(key) {
+    mc.querySelector(panels[key])?.classList.toggle('hidden', key !== tabName);
+  });
+  if (tabName === 'headers') refreshDefaultHeadersBanner(mc);
+}
+
+function toggleBulkEditor(mc, target, open) {
+  mc?.querySelectorAll('.js-bulk-editor').forEach(function(panel) {
+    var match = panel.dataset.target === target;
+    panel.classList.toggle('hidden', !(open && match));
+    if (open && match) {
+      panel.querySelector('.js-bulk-editor-input')?.focus();
+    }
+  });
+}
+
+function applyBulkEditor(mc, target) {
+  var editor = mc?.querySelector('.js-bulk-editor[data-target="' + target + '"]');
+  var rows = mc?.querySelector(target === 'headers' ? '.js-header-rows' : '.js-param-rows');
+  var input = editor?.querySelector('.js-bulk-editor-input');
+  if (!editor || !rows || !input) return;
+  var parsed = parseBulkKeyValueText(input.value, target);
+  if (!parsed.length) return;
+  parsed.forEach(function(item) { addKvRow(rows, item.key, item.value); });
+  rows.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+  input.value = '';
+  toggleBulkEditor(mc, target, false);
+  markDirty();
+  refreshDefaultHeadersBanner(mc);
+  refreshToplineStatusChips(mc);
+  refreshRequestPreflight(mc);
+}
+
 function renderTabBar() {
   // 湲곗〈 ???붿냼 ?쒓굅
   tabBar.querySelectorAll('.req-tab').forEach(el => el.remove());
@@ -2947,7 +3204,7 @@ function showTabContextMenu(x, y, tabId) {
         break;
       case 'duplicate':
         saveActiveTabState();
-        createTab({ name: tab.name, autoName: !!tab.autoName, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent });
+        createTab({ name: tab.name, autoName: !!tab.autoName, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent, responseSearchQuery: tab.responseSearchQuery || '', responseSearchIndex: typeof tab.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0, responseSearchCaseSensitive: tab.responseSearchCaseSensitive === true, responseSearchRegex: tab.responseSearchRegex === true });
         break;
     }
   });
@@ -3111,24 +3368,24 @@ function renderToplineStatusChips(tab) {
   if (currentEnvName) {
     chips.push(renderEnvironmentStatusChip(currentEnvName));
   } else {
-    chips.push(renderStatusChip(tr('webview.noEnvironment'), 'muted'));
+    chips.push(renderStatusChip(tr('webview.noEnvironment'), 'muted', 'switch-environment'));
   }
 
   if (tab?.skipDefaultHeaders) {
-    chips.push(renderStatusChip(tr('webview.skipDefaultHeadersStatus'), 'warning'));
+    chips.push(renderStatusChip(tr('webview.skipDefaultHeadersStatus'), 'warning', 'switch-tab', 'settings'));
   } else {
     var appliedDefaultHeaders = getAppliedDefaultHeaders(tab);
     if (appliedDefaultHeaders.length > 0) {
-      chips.push(renderStatusChip(tfCount('webview.defaultHeadersStatus', appliedDefaultHeaders.length), 'info'));
+      chips.push(renderStatusChip(tfCount('webview.defaultHeadersStatus', appliedDefaultHeaders.length), 'info', 'open-default-headers'));
     }
   }
 
   if (tab?.disableScripts) {
-    chips.push(renderStatusChip(tr('webview.disableScriptsStatus'), 'warning'));
+    chips.push(renderStatusChip(tr('webview.disableScriptsStatus'), 'warning', 'switch-tab', 'settings'));
   }
 
   if (tab?.saveToHistory === false) {
-    chips.push(renderStatusChip(tr('webview.saveToHistoryOffStatus'), 'muted'));
+    chips.push(renderStatusChip(tr('webview.saveToHistoryOffStatus'), 'muted', 'switch-tab', 'settings'));
   }
 
   return chips.join('');
@@ -3138,19 +3395,15 @@ function refreshToplineStatusChips(mc) {
   var wrap = mc?.querySelector('.js-topline-status-chips');
   var tab = tabs.find(function(t) { return t.id === activeTabId; });
   if (!wrap || !tab) return;
-
-  var draftHeaders = collectKv(mc.querySelector('.js-header-rows'));
-  var saveHistoryInput = mc.querySelector('.js-save-history');
-  var skipDefaultHeadersInput = mc.querySelector('.js-skip-default-headers');
-  var disableScriptsInput = mc.querySelector('.js-disable-scripts');
-  var draftTab = Object.assign({}, tab, {
-    headers: draftHeaders,
-    saveToHistory: saveHistoryInput ? saveHistoryInput.checked !== false : tab.saveToHistory !== false,
-    skipDefaultHeaders: skipDefaultHeadersInput ? skipDefaultHeadersInput.checked === true : !!tab.skipDefaultHeaders,
-    disableScripts: disableScriptsInput ? disableScriptsInput.checked === true : !!tab.disableScripts,
-  });
-
+  var draftTab = buildDraftTabFromContent(mc);
   wrap.innerHTML = renderToplineStatusChips(draftTab);
+}
+
+function refreshRequestPreflight(mc) {
+  var wrap = mc?.querySelector('.js-request-preflight-wrap');
+  if (!wrap) return;
+  var draftTab = buildDraftTabFromContent(mc);
+  wrap.innerHTML = renderRequestPreflight(draftTab);
 }
 
 function refreshDefaultHeadersBanner(mc) {
@@ -3337,6 +3590,7 @@ function renderContent() {
         '<div class="request-status-chips js-topline-status-chips">' + renderToplineStatusChips(tab) + '</div>' +
       '</div>' +
     '</div>';
+  const preflightHtml = '<div class="js-request-preflight-wrap">' + renderRequestPreflight(tab) + '</div>';
 
   let resHtml = '';
   if (tab.loading) {
@@ -3360,7 +3614,7 @@ function renderContent() {
       : getDisplayResponseBody(tab, lang, displayBody);
     const rawBodyHtml = isBinary
       ? escapeHtml(displayBodyText)
-      : renderResponseBody(displayBodyText, lang, searchState.query, searchState.index);
+      : renderResponseBody(displayBodyText, lang, searchState.query, searchState.index, searchState);
     // ?묐떟 ?ㅻ뜑瑜??뚯씠釉?HTML濡??앹꽦
     const headerEntries = Object.entries(r.headers);
     const headerCount = headerEntries.length;
@@ -3459,6 +3713,8 @@ function renderContent() {
     const searchToolbarHtml = !isBinary
       ? '<div class="response-search-wrap js-response-search-wrap">' +
           '<input class="response-search-input js-response-search" type="text" value="' + escapeAttr(searchState.query) + '" placeholder="' + escapeAttr(tr('webview.searchPlaceholder')) + '" />' +
+          '<button class="tb-btn js-response-search-case' + (searchState.caseSensitive ? ' active' : '') + '" type="button" title="' + escapeAttr(tr('webview.searchCaseSensitive')) + '">Aa</button>' +
+          '<button class="tb-btn js-response-search-regex' + (searchState.regex ? ' active' : '') + '" type="button" title="' + escapeAttr(tr('webview.searchRegex')) + '">.*</button>' +
           '<span class="response-search-count js-response-search-count"></span>' +
           '<button class="tb-btn js-response-search-prev" type="button" title="' + escapeAttr(tr('webview.searchPrev')) + '">&#8593;</button>' +
           '<button class="tb-btn js-response-search-next" type="button" title="' + escapeAttr(tr('webview.searchNext')) + '">&#8595;</button>' +
@@ -3486,6 +3742,7 @@ function renderContent() {
     const responseToneClass = 'response-tone-' + sc + 'xx';
     const compareChipHtml = '<div class="compare-chip-row js-compare-chip-row">' + buildCompareChipMarkup(currentSignature) + '</div>';
     resHtml =
+      '<div class="res-sticky-shell">' +
       '<div class="response-summary">' +
       '<div class="response-meta ' + responseToneClass + '">' +
         '<span class="status status-' + sc + 'xx">' + r.status + ' ' + escapeHtml(r.statusText) + '</span>' +
@@ -3513,6 +3770,7 @@ function renderContent() {
         (previewAvailable ? '<div class="tab' + (showPreview ? ' active' : '') + '" data-tab="resPreview">' + escapeHtml(tr('webview.preview')) + '</div>' : '') +
       '</div>' +
       toolbarHtml +
+      '</div>' +
       (lang === 'json' ? '<div class="json-tree js-res-tree js-res-body' + (showBody ? '' : ' hidden') + '"></div>' : '') +
       '<div class="json-body js-res-raw js-res-body' + ((lang === 'json' || !showBody) ? ' hidden' : '') + '">' + rawBodyHtml + '</div>' +
       '<div class="res-headers-panel' + (showHeaders ? '' : ' hidden') + ' js-res-headers">' +
@@ -3592,6 +3850,7 @@ function renderContent() {
       '<button class="res-action-btn ripple-btn js-copy-curl" title="' + escapeAttr(tr('webview.copyAsCurl')) + '"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2l4.5 4L1 10l1 1.5L7.5 6 2 0.5 1 2zm7 8h7v1.5H8V10z"/></svg> cURL</button>' +
       '<button class="res-action-btn ripple-btn js-generate-code" title="' + escapeAttr(tr('webview.generateCode')) + '">' + escapeHtml(tr('webview.code')) + '</button>' +
     '</div>' +
+    preflightHtml +
     '<div class="split">' +
       '<div class="req-area">' +
         '<div class="tabs js-req-tabs">' +
@@ -3604,12 +3863,34 @@ function renderContent() {
         '</div>' +
         '<div class="js-params-panel kv-section">' +
           '<div class="js-param-rows">' + kvRowsHtml(tab.params) + '</div>' +
-          '<button class="add-btn js-add-param">' + escapeHtml(tr('webview.addParam')) + '</button>' +
+          '<div class="kv-actions">' +
+            '<button class="add-btn js-add-param">' + escapeHtml(tr('webview.addParam')) + '</button>' +
+            '<button class="ghost-btn ripple-btn js-open-bulk-editor" type="button" data-target="params">' + escapeHtml(tr('webview.bulkPaste')) + '</button>' +
+          '</div>' +
+          '<div class="bulk-editor hidden js-bulk-editor" data-target="params">' +
+            '<div class="bulk-editor-label">' + escapeHtml(tr('webview.bulkPasteParams')) + '</div>' +
+            '<textarea class="bulk-editor-input js-bulk-editor-input" spellcheck="false" placeholder="' + escapeAttr(tr('webview.bulkPasteParamsPlaceholder')) + '"></textarea>' +
+            '<div class="bulk-editor-actions">' +
+              '<button class="ghost-btn ripple-btn js-apply-bulk-editor" type="button" data-target="params">' + escapeHtml(tr('webview.apply')) + '</button>' +
+              '<button class="ghost-btn ripple-btn js-cancel-bulk-editor" type="button" data-target="params">' + escapeHtml(tr('webview.cancel')) + '</button>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         '<div class="js-headers-panel kv-section hidden">' +
           '<div class="js-default-headers-banner-wrap">' + renderDefaultHeadersBanner(tab) + '</div>' +
           '<div class="js-header-rows">' + kvRowsHtml(tab.headers) + '</div>' +
-          '<button class="add-btn js-add-header">' + escapeHtml(tr('webview.addHeader')) + '</button>' +
+          '<div class="kv-actions">' +
+            '<button class="add-btn js-add-header">' + escapeHtml(tr('webview.addHeader')) + '</button>' +
+            '<button class="ghost-btn ripple-btn js-open-bulk-editor" type="button" data-target="headers">' + escapeHtml(tr('webview.bulkPaste')) + '</button>' +
+          '</div>' +
+          '<div class="bulk-editor hidden js-bulk-editor" data-target="headers">' +
+            '<div class="bulk-editor-label">' + escapeHtml(tr('webview.bulkPasteHeaders')) + '</div>' +
+            '<textarea class="bulk-editor-input js-bulk-editor-input" spellcheck="false" placeholder="' + escapeAttr(tr('webview.bulkPasteHeadersPlaceholder')) + '"></textarea>' +
+            '<div class="bulk-editor-actions">' +
+              '<button class="ghost-btn ripple-btn js-apply-bulk-editor" type="button" data-target="headers">' + escapeHtml(tr('webview.apply')) + '</button>' +
+              '<button class="ghost-btn ripple-btn js-cancel-bulk-editor" type="button" data-target="headers">' + escapeHtml(tr('webview.cancel')) + '</button>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         '<div class="js-body-panel body-section hidden">' +
           '<select class="js-body-type body-type-select">' +
@@ -3674,7 +3955,7 @@ function renderContent() {
                   '<input class="js-retry-delay settings-input" type="number" min="0" placeholder="0" value="' + (tab.retryDelayMs || '') + '"/>' +
                   '<div class="settings-field-meta"><span class="settings-hint">' + escapeHtml(tr('webview.retryDelayUnit')) + '</span></div>' +
                 '</div>' +
-                '<div class="settings-row">' +
+                '<div class="settings-row' + (tab.tlsValidation === 'insecure' ? ' risk-warning' : '') + '">' +
                   '<label class="settings-label">' + escapeHtml(tr('webview.tls')) + '</label>' +
                   '<select class="js-tls-validation settings-input settings-select">' +
                     '<option value="default"' + (tab.tlsValidation !== 'strict' && tab.tlsValidation !== 'insecure' ? ' selected' : '') + '>' + escapeHtml(tr('webview.default')) + '</option>' +
@@ -3691,10 +3972,10 @@ function renderContent() {
                 '<div class="settings-group-note">' + escapeHtml(tr('webview.behaviorNote')) + '</div>' +
                 '<div class="settings-toggle-grid">' +
                   '<label class="settings-toggle"><input class="js-follow-redirects" type="checkbox"' + (tab.followRedirects ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.followRedirects')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.followRedirects.note')) + '</span></span></label>' +
-                  '<label class="settings-toggle"><input class="js-stop-after-headers" type="checkbox"' + (tab.stopAfterHeaders ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.stopAfterHeaders')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.stopAfterHeaders.note')) + '</span></span></label>' +
-                  '<label class="settings-toggle"><input class="js-save-history" type="checkbox"' + (tab.saveToHistory !== false ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.saveToHistory')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.saveToHistory.note')) + '</span></span></label>' +
-                  '<label class="settings-toggle"><input class="js-skip-default-headers" type="checkbox"' + (tab.skipDefaultHeaders ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.skipDefaultHeaders')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.skipDefaultHeaders.note')) + '</span></span></label>' +
-                  '<label class="settings-toggle"><input class="js-disable-scripts" type="checkbox"' + (tab.disableScripts ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.disableScripts')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.disableScripts.note')) + '</span></span></label>' +
+                  '<label class="settings-toggle' + (tab.stopAfterHeaders ? ' risk-muted' : '') + '"><input class="js-stop-after-headers" type="checkbox"' + (tab.stopAfterHeaders ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.stopAfterHeaders')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.stopAfterHeaders.note')) + '</span></span></label>' +
+                  '<label class="settings-toggle' + (tab.saveToHistory === false ? ' risk-muted' : '' ) + '"><input class="js-save-history" type="checkbox"' + (tab.saveToHistory !== false ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.saveToHistory')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.saveToHistory.note')) + '</span></span></label>' +
+                  '<label class="settings-toggle' + (tab.skipDefaultHeaders ? ' risk-warning' : '' ) + '"><input class="js-skip-default-headers" type="checkbox"' + (tab.skipDefaultHeaders ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.skipDefaultHeaders')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.skipDefaultHeaders.note')) + '</span></span></label>' +
+                  '<label class="settings-toggle' + (tab.disableScripts ? ' risk-warning' : '' ) + '"><input class="js-disable-scripts" type="checkbox"' + (tab.disableScripts ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.disableScripts')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.disableScripts.note')) + '</span></span></label>' +
                 '</div>' +
               '</div>' +
             '</div>' +
@@ -3731,7 +4012,7 @@ function bindContentEvents() {
   // 硫붿꽌??蹂寃?????諛??낅뜲?댄듃
   mc.querySelector('.js-method')?.addEventListener('change', (e) => {
     const tab = tabs.find(t => t.id === activeTabId);
-    if (tab) { tab.method = e.target.value; markDirty(); renderTabBar(); }
+    if (tab) { tab.method = e.target.value; markDirty(); renderTabBar(); refreshRequestPreflight(mc); }
   });
 
   // URL ?낅젰 ??誘몄튂??蹂??泥댄겕 + ?먮룞 ???
@@ -3740,6 +4021,7 @@ function bindContentEvents() {
     urlInputEl.addEventListener('input', function() {
       checkUnresolvedVars();
       markDirty();
+      refreshRequestPreflight(mc);
       debouncePersist();
     });
     urlInputEl.addEventListener('keydown', function(e) {
@@ -3776,6 +4058,23 @@ function bindContentEvents() {
   mc.addEventListener('click', function(e) {
     if (!e.target.closest('.js-open-default-headers')) return;
     vscode.postMessage({ type: 'openDefaultHeaders' });
+  });
+  mc.addEventListener('click', function(e) {
+    var actionEl = e.target.closest('.request-status-chip.clickable, .preflight-pill.clickable, .js-preflight-action');
+    if (!actionEl) return;
+    var action = actionEl.dataset.action;
+    var meta = actionEl.dataset.meta;
+    if (action === 'open-default-headers') {
+      vscode.postMessage({ type: 'openDefaultHeaders' });
+      return;
+    }
+    if (action === 'switch-environment') {
+      vscode.postMessage({ type: 'switchEnvironment' });
+      return;
+    }
+    if (action === 'switch-tab' && meta) {
+      switchRequestEditorTabInContent(mc, meta);
+    }
   });
 
   // Save (?대? ??λ맂 ??씠硫???뼱?곌린, ????씠硫??꾩튂 ?좏깮 ?ㅼ씠?쇰줈洹?
@@ -3969,13 +4268,7 @@ function bindContentEvents() {
   mc.querySelector('.js-req-tabs')?.addEventListener('click', (e) => {
     const t = e.target.closest('.tab');
     if (!t) return;
-    mc.querySelectorAll('.js-req-tabs .tab').forEach(x => x.classList.remove('active'));
-    t.classList.add('active');
-    const panels = { params: '.js-params-panel', headers: '.js-headers-panel', body: '.js-body-panel', auth: '.js-auth-panel', scripts: '.js-scripts-panel', settings: '.js-settings-panel' };
-    for (const [k, sel] of Object.entries(panels)) {
-      mc.querySelector(sel)?.classList.toggle('hidden', k !== t.dataset.tab);
-    }
-    if (t.dataset.tab === 'headers') refreshDefaultHeadersBanner(mc);
+    switchRequestEditorTabInContent(mc, t.dataset.tab);
   });
 
   // ?묐떟 ???꾪솚 (Body / Headers / Preview)
@@ -4057,6 +4350,7 @@ function bindContentEvents() {
     tab.responseSearchQuery = this.value || '';
     tab.responseSearchIndex = 0;
     syncResponseSearch(mc);
+    debouncePersist();
   });
   mc.querySelector('.js-response-search')?.addEventListener('keydown', function(e) {
     if (e.key !== 'Enter') return;
@@ -4065,9 +4359,11 @@ function bindContentEvents() {
   });
   mc.querySelector('.js-response-search-prev')?.addEventListener('click', function() {
     stepResponseSearch(mc, -1);
+    debouncePersist();
   });
   mc.querySelector('.js-response-search-next')?.addEventListener('click', function() {
     stepResponseSearch(mc, 1);
+    debouncePersist();
   });
   mc.querySelector('.js-response-search-clear')?.addEventListener('click', function() {
     var tab = tabs.find(t => t.id === activeTabId);
@@ -4078,6 +4374,23 @@ function bindContentEvents() {
     if (input) input.value = '';
     syncResponseSearch(mc);
     input?.focus();
+    debouncePersist();
+  });
+  mc.querySelector('.js-response-search-case')?.addEventListener('click', function() {
+    var tab = tabs.find(t => t.id === activeTabId);
+    if (!tab) return;
+    tab.responseSearchCaseSensitive = tab.responseSearchCaseSensitive !== true;
+    tab.responseSearchIndex = 0;
+    syncResponseSearch(mc);
+    debouncePersist();
+  });
+  mc.querySelector('.js-response-search-regex')?.addEventListener('click', function() {
+    var tab = tabs.find(t => t.id === activeTabId);
+    if (!tab) return;
+    tab.responseSearchRegex = tab.responseSearchRegex !== true;
+    tab.responseSearchIndex = 0;
+    syncResponseSearch(mc);
+    debouncePersist();
   });
 
   // Expand All
@@ -4146,32 +4459,39 @@ function bindContentEvents() {
     }
   }
 
-  // KV 異붽?
-  mc.querySelector('.js-add-param')?.addEventListener('click', () => { addKvRow(mc.querySelector('.js-param-rows')); markDirty(); });
+  // KV 추가
+  bindKvRow(mc.querySelector('.js-param-rows'));
+  bindKvRow(mc.querySelector('.js-header-rows'));
+
+  mc.querySelector('.js-add-param')?.addEventListener('click', () => {
+    var container = mc.querySelector('.js-param-rows');
+    addKvRow(container);
+    container?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+    refreshRequestPreflight(mc);
+    markDirty();
+  });
   mc.querySelector('.js-add-header')?.addEventListener('click', () => {
-    addKvRow(mc.querySelector('.js-header-rows'));
+    var container = mc.querySelector('.js-header-rows');
+    addKvRow(container);
+    container?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
     markDirty();
     refreshDefaultHeadersBanner(mc);
-    refreshToplineStatusChips(mc);
+    refreshRequestPreflight(mc);
   });
 
-  // KV ??젣 ?대깽???꾩엫
-  mc.querySelectorAll('.js-param-rows, .js-header-rows').forEach(container => {
-    container.addEventListener('click', (e) => {
-      if (e.target.classList.contains('rm')) {
-        e.target.closest('.kv-row')?.remove();
-        markDirty();
-        refreshDefaultHeadersBanner(mc);
-        refreshToplineStatusChips(mc);
-      }
+  mc.querySelectorAll('.js-open-bulk-editor').forEach(function(button) {
+    button.addEventListener('click', function() {
+      toggleBulkEditor(mc, button.dataset.target, true);
     });
-    // KV ?낅젰 蹂寃?媛먯?
-    container.addEventListener('input', function() {
-      markDirty();
-      if (container.classList.contains('js-header-rows')) {
-        refreshDefaultHeadersBanner(mc);
-        refreshToplineStatusChips(mc);
-      }
+  });
+  mc.querySelectorAll('.js-apply-bulk-editor').forEach(function(button) {
+    button.addEventListener('click', function() {
+      applyBulkEditor(mc, button.dataset.target);
+    });
+  });
+  mc.querySelectorAll('.js-cancel-bulk-editor').forEach(function(button) {
+    button.addEventListener('click', function() {
+      toggleBulkEditor(mc, button.dataset.target, false);
     });
   });
 
@@ -4180,9 +4500,22 @@ function bindContentEvents() {
     const fields = mc.querySelector('.js-auth-fields');
     if (fields) fields.innerHTML = authFieldsHtml(e.target.value);
     markDirty();
+    refreshRequestPreflight(mc);
   });
-  // Auth ?꾨뱶 ?낅젰 蹂寃?媛먯? (?대깽???꾩엫)
-  mc.querySelector('.js-auth-fields')?.addEventListener('input', markDirty);
+  // Auth 필드 입력 변경 감지
+  mc.querySelector('.js-auth-fields')?.addEventListener('input', function() {
+    markDirty();
+    refreshRequestPreflight(mc);
+  });
+  mc.querySelector('.js-auth-fields')?.addEventListener('click', function(e) {
+    if (!e.target.classList.contains('js-auth-reveal')) return;
+    var wrap = e.target.closest('.auth-inline-control');
+    var input = wrap?.querySelector('input');
+    if (!input) return;
+    var revealing = input.type === 'password';
+    input.type = revealing ? 'text' : 'password';
+    e.target.textContent = revealing ? tr('webview.hideShort') : tr('webview.revealShort');
+  });
 
   // Body ???蹂寃???Content-Type ?먮룞 ?ㅼ젙
   mc.querySelector('.js-body-type')?.addEventListener('change', (e) => {
@@ -4195,6 +4528,8 @@ function bindContentEvents() {
     if (binaryPanel) binaryPanel.classList.toggle('hidden', bodyType !== 'binary');
     syncAutoContentType(mc, bodyType);
     markDirty();
+    refreshDefaultHeadersBanner(mc);
+    refreshRequestPreflight(mc);
   });
   // 珥덇린 ?뚮뜑留???auto Content-Type ?숆린??
   var initBodyType = mc.querySelector('.js-body-type')?.value || 'none';
@@ -4206,6 +4541,8 @@ function bindContentEvents() {
     markDirty();
     refreshDefaultHeadersBanner(mc);
     refreshToplineStatusChips(mc);
+    refreshRequestPreflight(mc);
+    renderContent();
   });
 
   // === textarea ?먮룞 ?믪씠 議곗젅 ===
@@ -4216,7 +4553,7 @@ function bindContentEvents() {
       var h = Math.max(100, Math.min(400, bodyTa.scrollHeight));
       bodyTa.style.height = h + 'px';
     }
-    bodyTa.addEventListener('input', function() { autoGrow(); markDirty(); });
+    bodyTa.addEventListener('input', function() { autoGrow(); markDirty(); refreshRequestPreflight(mc); });
     bodyTa.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') { setTimeout(autoGrow, 0); }
     });
@@ -4226,15 +4563,18 @@ function bindContentEvents() {
   mc.querySelector('.js-add-formdata-text')?.addEventListener('click', () => {
     addFormDataRow(mc.querySelector('.js-formdata-rows'), 'text');
     markDirty();
+    refreshRequestPreflight(mc);
   });
   mc.querySelector('.js-add-formdata-file')?.addEventListener('click', () => {
     addFormDataRow(mc.querySelector('.js-formdata-rows'), 'file');
     markDirty();
+    refreshRequestPreflight(mc);
   });
   mc.querySelector('.js-formdata-rows')?.addEventListener('click', (e) => {
     if (e.target.classList.contains('rm')) {
       e.target.closest('.formdata-row')?.remove();
       markDirty();
+      refreshRequestPreflight(mc);
       return;
     }
     if (e.target.classList.contains('js-formdata-browse')) {
@@ -4247,16 +4587,29 @@ function bindContentEvents() {
       syncFormDataRow(e.target.closest('.formdata-row'));
     }
     markDirty();
+    refreshRequestPreflight(mc);
   });
-  mc.querySelector('.js-formdata-rows')?.addEventListener('input', markDirty);
+  mc.querySelector('.js-formdata-rows')?.addEventListener('input', function() {
+    markDirty();
+    refreshRequestPreflight(mc);
+  });
   mc.querySelectorAll('.formdata-row').forEach(syncFormDataRow);
 
   mc.querySelector('.js-browse-binary')?.addEventListener('click', () => {
     vscode.postMessage({ type: 'pickFile', target: 'binary' });
   });
-  mc.querySelector('.js-binary-path')?.addEventListener('input', markDirty);
-  mc.querySelector('.js-script-prerequest')?.addEventListener('input', markDirty);
-  mc.querySelector('.js-script-test')?.addEventListener('input', markDirty);
+  mc.querySelector('.js-binary-path')?.addEventListener('input', function() {
+    markDirty();
+    refreshRequestPreflight(mc);
+  });
+  mc.querySelector('.js-script-prerequest')?.addEventListener('input', function() {
+    markDirty();
+    refreshRequestPreflight(mc);
+  });
+  mc.querySelector('.js-script-test')?.addEventListener('input', function() {
+    markDirty();
+    refreshRequestPreflight(mc);
+  });
 
   // === ?쒕옒洹?援щ텇??===
   var divider = mc.querySelector('.divider');
@@ -4280,6 +4633,7 @@ function bindContentEvents() {
   }
 
   refreshDefaultHeadersBanner(mc);
+  refreshRequestPreflight(mc);
   syncResponseSearch(mc);
 }
 
@@ -4401,12 +4755,18 @@ function sendActiveTab() {
 }
 
 // === KV ??===
+function kvValueControlHtml(key, value) {
+  var sensitive = isSensitiveKeyName(key);
+  return '<input type="' + (sensitive ? 'password' : 'text') + '" class="js-kv-value" placeholder="' + escapeAttr(tr('webview.value')) + '" value="' + escapeAttr(value) + '"/>' +
+    '<button class="kv-reveal' + (sensitive ? '' : ' hidden') + '" type="button" title="' + escapeAttr(tr('webview.revealValue')) + '">' + escapeHtml(tr('webview.revealShort')) + '</button>';
+}
+
 function kvRowsHtml(items) {
   return (items || []).map(kv =>
     '<div class="kv-row">' +
       '<input type="checkbox"' + (kv.enabled !== false ? ' checked' : '') + '/>' +
       '<input type="text" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(kv.key) + '"/>' +
-      '<input type="text" placeholder="' + escapeAttr(tr('webview.value')) + '" value="' + escapeAttr(kv.value) + '"/>' +
+      kvValueControlHtml(kv.key, kv.value) +
       '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>' +
     '</div>'
   ).join('');
@@ -4419,7 +4779,7 @@ function addKvRow(container, key, value) {
   row.innerHTML =
     '<input type="checkbox" checked/>' +
     '<input type="text" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(key || '') + '"/>' +
-    '<input type="text" placeholder="' + escapeAttr(tr('webview.value')) + '" value="' + escapeAttr(value || '') + '"/>' +
+    kvValueControlHtml(key || '', value || '') +
     '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>';
   row.querySelector('.rm').addEventListener('click', () => row.remove());
   container.appendChild(row);
@@ -4435,6 +4795,109 @@ function collectKv(container) {
     if (inputs[0]?.value) arr.push({ key: inputs[0].value, value: inputs[1].value, enabled: cb?.checked !== false });
   });
   return arr;
+}
+
+function syncKvRowSensitivity(row) {
+  if (!row) return;
+  var keyInput = row.querySelector('input[type="text"]');
+  var valueInput = row.querySelector('.js-kv-value');
+  var revealBtn = row.querySelector('.kv-reveal');
+  if (!keyInput || !valueInput || !revealBtn) return;
+  var sensitive = isSensitiveKeyName(keyInput.value);
+  valueInput.type = sensitive ? 'password' : 'text';
+  revealBtn.classList.toggle('hidden', !sensitive);
+  revealBtn.textContent = tr('webview.revealShort');
+  revealBtn.title = tr('webview.revealValue');
+}
+
+function bindKvRow(container, options) {
+  if (!container) return;
+  if (container.dataset.kvBound === 'true') return;
+  container.dataset.kvBound = 'true';
+  var opts = options || {};
+  var handleChange = function() {
+    if (typeof opts.onChange === 'function') {
+      opts.onChange();
+      return;
+    }
+    refreshDefaultHeadersBanner(mainContent);
+    refreshToplineStatusChips(mainContent);
+    refreshRequestPreflight(mainContent);
+    markDirty();
+  };
+  container.addEventListener('click', function(e) {
+    if (e.target.classList.contains('rm')) {
+      e.target.closest('.kv-row')?.remove();
+      handleChange();
+      return;
+    }
+    if (e.target.classList.contains('kv-reveal')) {
+      var row = e.target.closest('.kv-row');
+      var valueInput = row?.querySelector('.js-kv-value');
+      if (!valueInput) return;
+      var revealing = valueInput.type === 'password';
+      valueInput.type = revealing ? 'text' : 'password';
+      e.target.textContent = revealing ? tr('webview.hideShort') : tr('webview.revealShort');
+      e.target.title = revealing ? tr('webview.hideValue') : tr('webview.revealValue');
+    }
+  });
+  container.addEventListener('input', function(e) {
+    var row = e.target.closest('.kv-row');
+    if (!row) return;
+    syncKvRowSensitivity(row);
+    handleChange();
+  });
+  container.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+}
+
+function parseBulkKeyValueText(text, target) {
+  var source = String(text || '').trim();
+  if (!source) return [];
+  if (target === 'params') {
+    var query = source;
+    var question = query.indexOf('?');
+    if (question >= 0) query = query.substring(question + 1);
+    if (query.indexOf('&') >= 0 && query.indexOf('\\n') < 0) {
+      return query.split('&').filter(Boolean).map(function(part) {
+        var eqIndex = part.indexOf('=');
+        if (eqIndex < 0) {
+          return { key: decodeURIComponent(part), value: '', enabled: true };
+        }
+        return {
+          key: decodeURIComponent(part.substring(0, eqIndex).replace(/\\+/g, ' ')),
+          value: decodeURIComponent(part.substring(eqIndex + 1).replace(/\\+/g, ' ')),
+          enabled: true
+        };
+      }).filter(function(item) { return item.key; });
+    }
+  }
+
+  return source
+    .split(/\\r?\\n/)
+    .map(function(line) { return line.trim(); })
+    .filter(Boolean)
+    .map(function(line) {
+      if (target === 'headers' && /^-H\s+/i.test(line)) {
+        line = line.replace(/^-H\s+/i, '').replace(/^['"]|['"]$/g, '');
+      }
+      var sepIndex = line.indexOf(':');
+      if (target === 'params' && (sepIndex < 0 || line.indexOf('=') >= 0 && line.indexOf('=') < sepIndex)) {
+        sepIndex = line.indexOf('=');
+      }
+      if (sepIndex < 0 && /\\t/.test(line)) {
+        var parts = line.split(/\\t+/);
+        return { key: parts.shift() || '', value: parts.join('\t'), enabled: true };
+      }
+      if (sepIndex < 0) {
+        return { key: line, value: '', enabled: true };
+      }
+      return {
+        key: line.substring(0, sepIndex).trim(),
+        value: line.substring(sepIndex + 1).trim(),
+        enabled: true
+      };
+    })
+    .filter(function(item) { return item.key; });
 }
 
 function formDataRowsHtml(items) {
@@ -4519,23 +4982,32 @@ function authHtml(auth) {
     '</select><div class="auth-fields js-auth-fields">' + authFieldsHtml(type, auth) + '</div>';
 }
 
+function maskedAuthInputHtml(label, className, value, sensitive) {
+  return '<div class="auth-row"><label>' + escapeHtml(label) + '</label>' +
+    '<input type="' + (sensitive ? 'password' : 'text') + '" class="' + className + '" value="' + escapeAttr(value) + '"/>' +
+    (sensitive
+      ? '<button class="ghost-btn auth-reveal js-auth-reveal" type="button">' + escapeHtml(tr('webview.revealShort')) + '</button>'
+      : '') +
+  '</div>';
+}
+
 function authFieldsHtml(type, auth) {
   if (type === 'basic') {
     const u = auth?.basic?.username || '';
     const p = auth?.basic?.password || '';
-    return '<div class="auth-row"><label>' + escapeHtml(tr('webview.username')) + '</label><input type="text" class="js-auth-user" value="' + escapeAttr(u) + '"/></div>' +
-           '<div class="auth-row"><label>' + escapeHtml(tr('webview.password')) + '</label><input type="password" class="js-auth-pass" value="' + escapeAttr(p) + '"/></div>';
+    return maskedAuthInputHtml(tr('webview.username'), 'js-auth-user', u, false) +
+           maskedAuthInputHtml(tr('webview.password'), 'js-auth-pass', p, true);
   }
   if (type === 'bearer') {
     const t = auth?.bearer?.token || '';
-    return '<div class="auth-row"><label>' + escapeHtml(tr('webview.token')) + '</label><input type="text" class="js-auth-token" value="' + escapeAttr(t) + '"/></div>';
+    return maskedAuthInputHtml(tr('webview.token'), 'js-auth-token', t, true);
   }
   if (type === 'apikey') {
     const k = auth?.apikey?.key || '';
     const v = auth?.apikey?.value || '';
     const a = auth?.apikey?.addTo || 'header';
-    return '<div class="auth-row"><label>' + escapeHtml(tr('webview.key')) + '</label><input type="text" class="js-auth-apikey" value="' + escapeAttr(k) + '"/></div>' +
-           '<div class="auth-row"><label>' + escapeHtml(tr('webview.value')) + '</label><input type="text" class="js-auth-apival" value="' + escapeAttr(v) + '"/></div>' +
+    return maskedAuthInputHtml(tr('webview.key'), 'js-auth-apikey', k, false) +
+           maskedAuthInputHtml(tr('webview.value'), 'js-auth-apival', v, true) +
            '<div class="auth-row"><label>' + escapeHtml(tr('webview.addTo')) + '</label><select class="js-auth-addto"><option value="header"' + (a==='header'?' selected':'') + '>' + escapeHtml(tr('webview.header')) + '</option><option value="query"' + (a==='query'?' selected':'') + '>' + escapeHtml(tr('webview.query')) + '</option></select></div>';
   }
   return '';
@@ -4555,8 +5027,13 @@ const envEditor = document.getElementById('envEditor');
 const envEditorName = document.getElementById('envEditorName');
 const envVarRows = document.getElementById('envVarRows');
 
-document.getElementById('addEnvVarBtn').addEventListener('click', () => addKvRow(envVarRows));
+document.getElementById('addEnvVarBtn').addEventListener('click', () => {
+  addKvRow(envVarRows);
+  envVarRows?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+  envScheduleSave();
+});
 document.getElementById('envCloseBtn').addEventListener('click', () => envEditor.classList.add('hidden'));
+bindKvRow(envVarRows, { onChange: envScheduleSave });
 
 // ?섍꼍蹂???먮룞???(debounce 500ms)
 const envDirtyDot = document.getElementById('envDirtyDot');
@@ -4587,35 +5064,29 @@ function envScheduleSave() {
 }
 
 // ?낅젰 蹂寃?媛먯? (input, checkbox, blur)
-envVarRows.addEventListener('input', envScheduleSave);
-envVarRows.addEventListener('change', envScheduleSave);
 envVarRows.addEventListener('focusout', () => {
   if (!editingEnvId) return;
   clearTimeout(envSaveTimer);
   envAutoSave();
 });
 
-envVarRows.addEventListener('click', (e) => {
-  if (e.target.classList.contains('rm')) {
-    e.target.closest('.kv-row')?.remove();
-    envScheduleSave();
-  }
-});
-
 // === 湲곕낯 ?ㅻ뜑 ?몄쭛 ===
 const defaultHeadersEditor = document.getElementById('defaultHeadersEditor');
 const defaultHeaderRows = document.getElementById('defaultHeaderRows');
 
-document.getElementById('addDefaultHeaderBtn').addEventListener('click', () => addKvRow(defaultHeaderRows));
+document.getElementById('addDefaultHeaderBtn').addEventListener('click', () => {
+  addKvRow(defaultHeaderRows);
+  defaultHeaderRows?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+});
 document.getElementById('defaultHeadersCloseBtn').addEventListener('click', () => defaultHeadersEditor.classList.add('hidden'));
+bindKvRow(defaultHeaderRows, { onChange: function() {} });
 document.getElementById('defaultHeadersSaveBtn').addEventListener('click', () => {
   const headers = collectKv(defaultHeaderRows);
   workspaceDefaultHeaders = headers;
   refreshDefaultHeadersBanner(mainContent);
+  refreshToplineStatusChips(mainContent);
+  refreshRequestPreflight(mainContent);
   vscode.postMessage({ type: 'saveDefaultHeaders', headers: headers });
-});
-defaultHeaderRows.addEventListener('click', (e) => {
-  if (e.target.classList.contains('rm')) e.target.closest('.kv-row')?.remove();
 });
 
 // === Extension ??Webview 硫붿떆吏 ===
@@ -4812,14 +5283,17 @@ window.addEventListener('message', (event) => {
     editingEnvId = msg.envId;
     envEditorName.textContent = msg.envName;
     envVarRows.innerHTML = kvRowsHtml(msg.variables || []);
+    envVarRows.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
     envEditor.classList.remove('hidden');
   }
 
   if (msg.type === 'loadDefaultHeaders') {
     workspaceDefaultHeaders = msg.headers || [];
     defaultHeaderRows.innerHTML = kvRowsHtml(workspaceDefaultHeaders);
+    defaultHeaderRows.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
     refreshDefaultHeadersBanner(mainContent);
     refreshToplineStatusChips(mainContent);
+    refreshRequestPreflight(mainContent);
     if (msg.reveal !== false) {
       defaultHeadersEditor.classList.remove('hidden');
     }
@@ -4828,6 +5302,7 @@ window.addEventListener('message', (event) => {
   if (msg.type === 'updateActiveEnv') {
     currentEnvName = msg.envName;
     refreshToplineStatusChips(mainContent);
+    refreshRequestPreflight(mainContent);
   }
 
   // === Save 寃곌낵 ?쇰뱶諛?===
@@ -4871,6 +5346,9 @@ window.addEventListener('message', (event) => {
   if (msg.type === 'runCollectionStart') {
     showRunner(msg.name, msg.total);
   }
+  if (msg.type === 'runCollectionStatus') {
+    updateRunnerStatus(msg);
+  }
   if (msg.type === 'runCollectionProgress') {
     updateRunnerRow(msg);
   }
@@ -4882,9 +5360,11 @@ window.addEventListener('message', (event) => {
 // === 而щ젆???щ꼫 UI ===
 var runnerOverlay = null;
 var runnerResults = [];
+var runnerStatusState = null;
 
 function showRunner(name, total) {
   runnerResults = [];
+  runnerStatusState = null;
   // ?ㅻ쾭?덉씠 ?앹꽦
   if (runnerOverlay) runnerOverlay.remove();
   runnerOverlay = document.createElement('div');
@@ -4905,6 +5385,10 @@ function showRunner(name, total) {
       '<span class="pass">' + escapeHtml(tr('webview.runPassed')) + ': <b class="js-runner-pass">0</b></span>' +
       '<span class="fail">' + escapeHtml(tr('webview.runFailed')) + ': <b class="js-runner-fail">0</b></span>' +
       '<span class="js-runner-time"></span>' +
+    '</div>' +
+    '<div class="runner-live-status">' +
+      '<div class="runner-live-title js-runner-live-title">' + escapeHtml(tr('webview.runStatus')) + '</div>' +
+      '<div class="runner-live-copy js-runner-live-copy"></div>' +
     '</div>' +
     '<div class="runner-list js-runner-list"></div>';
 
@@ -4950,6 +5434,31 @@ function showRunner(name, total) {
   });
 }
 
+function updateRunnerStatus(msg) {
+  if (!runnerOverlay) return;
+  runnerStatusState = msg;
+  var titleEl = runnerOverlay.querySelector('.js-runner-live-title');
+  var copyEl = runnerOverlay.querySelector('.js-runner-live-copy');
+  if (titleEl) {
+    titleEl.textContent = msg.phase === 'retry' ? tr('webview.runRetrying') : tr('webview.runSending');
+  }
+  if (copyEl) {
+    var attemptLabel = tf('webview.runAttempt', {
+      current: msg.attempt || 1,
+      total: msg.totalAttempts || 1,
+    });
+    var prefix = (msg.method || '') + ' ' + (msg.name || '');
+    if (msg.phase === 'retry') {
+      copyEl.textContent = prefix + ' · ' + attemptLabel + ' · ' + tf('webview.runRetryDelay', { count: msg.retryDelayMs || 0 });
+    } else {
+      copyEl.textContent = prefix + ' · ' + attemptLabel;
+    }
+  }
+  runnerOverlay.querySelectorAll('.runner-row').forEach(function(row) {
+    row.classList.toggle('active', Number(row.dataset.idx) === Number(msg.index));
+  });
+}
+
 function updateRunnerRow(msg) {
   if (!runnerOverlay) return;
   var list = runnerOverlay.querySelector('.js-runner-list');
@@ -4978,6 +5487,9 @@ function updateRunnerRow(msg) {
   runnerOverlay.querySelector('.js-runner-bar').style.width = pct + '%';
   runnerOverlay.querySelector('.js-runner-pass').textContent = msg.passed;
   runnerOverlay.querySelector('.js-runner-fail').textContent = msg.failed;
+  runnerOverlay.querySelectorAll('.runner-row').forEach(function(existingRow) {
+    existingRow.classList.toggle('active', Number(existingRow.dataset.idx) === Number(msg.index));
+  });
 
   // ?먮룞 ?ㅽ겕濡?
   list.scrollTop = list.scrollHeight;
@@ -4993,6 +5505,10 @@ function finishRunner(msg) {
   if (stopBtn) stopBtn.classList.add('hidden');
   var closeBtn = runnerOverlay.querySelector('.js-runner-close');
   if (closeBtn) closeBtn.classList.remove('hidden');
+  var liveTitle = runnerOverlay.querySelector('.js-runner-live-title');
+  var liveCopy = runnerOverlay.querySelector('.js-runner-live-copy');
+  if (liveTitle) liveTitle.textContent = tr('webview.runStatus');
+  if (liveCopy) liveCopy.textContent = msg.stopped ? tr('webview.runStopping') : '';
   // 理쒖쥌 ?쒓컙 ?쒖떆
   runnerOverlay.querySelector('.js-runner-time').textContent = tr('webview.runTime') + ': ' + msg.time + 'ms';
   // 諛?100% (?먮뒗 以묐떒 ???꾩옱 媛??좎?)
@@ -5125,6 +5641,8 @@ function getResponseSearchState(tab) {
   return {
     query: typeof tab?.responseSearchQuery === 'string' ? tab.responseSearchQuery : '',
     index: typeof tab?.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0,
+    caseSensitive: tab?.responseSearchCaseSensitive === true,
+    regex: tab?.responseSearchRegex === true,
   };
 }
 
@@ -5144,17 +5662,39 @@ function getDisplayResponseBody(tab, lang, fallbackBody) {
   return body;
 }
 
-function findResponseSearchMatches(body, query) {
+function findResponseSearchMatches(body, query, options) {
   if (!body || !query) return [];
-  var haystack = body.toLowerCase();
-  var needle = query.toLowerCase();
+  var source = String(body);
+  var settings = options || {};
+
+  if (settings.regex) {
+    try {
+      var flags = settings.caseSensitive ? 'g' : 'gi';
+      var regex = new RegExp(query, flags);
+      var regexMatches = [];
+      var match;
+      while ((match = regex.exec(source)) !== null) {
+        var value = match[0] || '';
+        regexMatches.push({ start: match.index, end: match.index + value.length });
+        if (value.length === 0) {
+          regex.lastIndex += 1;
+        }
+      }
+      return regexMatches;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  var haystack = settings.caseSensitive ? source : source.toLowerCase();
+  var needle = settings.caseSensitive ? String(query) : String(query).toLowerCase();
   if (!needle) return [];
   var matches = [];
   var start = 0;
   while (start <= haystack.length) {
     var idx = haystack.indexOf(needle, start);
     if (idx < 0) break;
-    matches.push(idx);
+    matches.push({ start: idx, end: idx + needle.length });
     start = idx + Math.max(needle.length, 1);
   }
   return matches;
@@ -5167,12 +5707,12 @@ function normalizeResponseSearchIndex(index, total) {
   return normalized < 0 ? normalized + total : normalized;
 }
 
-function renderResponseBody(body, lang, searchQuery, searchIndex) {
+function renderResponseBody(body, lang, searchQuery, searchIndex, searchState) {
   if (!searchQuery) {
     return highlightBody(body, lang === 'json' ? '_formatted_json' : lang);
   }
 
-  var matches = findResponseSearchMatches(body, searchQuery);
+  var matches = findResponseSearchMatches(body, searchQuery, searchState || {});
   if (matches.length === 0) {
     return escapeHtml(body);
   }
@@ -5181,8 +5721,8 @@ function renderResponseBody(body, lang, searchQuery, searchIndex) {
   var parts = [];
   var cursor = 0;
   for (var i = 0; i < matches.length; i++) {
-    var start = matches[i];
-    var end = start + searchQuery.length;
+    var start = matches[i].start;
+    var end = matches[i].end;
     parts.push(escapeHtml(body.slice(cursor, start)));
     parts.push('<mark class="response-search-hit' + (i === activeIndex ? ' active' : '') + '">' + escapeHtml(body.slice(start, end)) + '</mark>');
     cursor = end;
@@ -5216,14 +5756,14 @@ function syncResponseSearch(mc) {
   var searchState = getResponseSearchState(tab);
   var query = searchState.query || '';
   var displayBody = getDisplayResponseBody(tab, lang, tab.response.body || '');
-  var matches = findResponseSearchMatches(displayBody, query);
+  var matches = findResponseSearchMatches(displayBody, query, searchState);
   var activeIndex = normalizeResponseSearchIndex(searchState.index, matches.length);
 
   if (query && lang === 'json') {
     setJsonBodyMode(mc, 'raw');
   }
 
-  rawEl.innerHTML = renderResponseBody(displayBody, lang, query, activeIndex);
+  rawEl.innerHTML = renderResponseBody(displayBody, lang, query, activeIndex, searchState);
 
   var countEl = mc.querySelector('.js-response-search-count');
   if (countEl) {
@@ -5237,9 +5777,13 @@ function syncResponseSearch(mc) {
   var prevBtn = mc.querySelector('.js-response-search-prev');
   var nextBtn = mc.querySelector('.js-response-search-next');
   var clearBtn = mc.querySelector('.js-response-search-clear');
+  var caseBtn = mc.querySelector('.js-response-search-case');
+  var regexBtn = mc.querySelector('.js-response-search-regex');
   if (prevBtn) prevBtn.disabled = matches.length === 0;
   if (nextBtn) nextBtn.disabled = matches.length === 0;
   if (clearBtn) clearBtn.disabled = !query;
+  if (caseBtn) caseBtn.classList.toggle('active', !!searchState.caseSensitive);
+  if (regexBtn) regexBtn.classList.toggle('active', !!searchState.regex);
 
   tab.responseSearchIndex = activeIndex < 0 ? 0 : activeIndex;
 
@@ -5257,7 +5801,7 @@ function stepResponseSearch(mc, delta) {
   if (!!tab.response.bodyBase64 && isBinaryContentType(ct)) return;
   var lang = detectLang(ct, tab.response.body || '');
   var displayBody = getDisplayResponseBody(tab, lang, tab.response.body || '');
-  var matches = findResponseSearchMatches(displayBody, tab.responseSearchQuery || '');
+  var matches = findResponseSearchMatches(displayBody, tab.responseSearchQuery || '', getResponseSearchState(tab));
   if (matches.length === 0) return;
   tab.responseSearchIndex = normalizeResponseSearchIndex((tab.responseSearchIndex || 0) + delta, matches.length);
   syncResponseSearch(mc);
@@ -5299,7 +5843,7 @@ function applyFormat(mc) {
   }
   // Raw 酉??낅뜲?댄듃
   var rawEl = mc.querySelector('.js-res-raw');
-  if (rawEl) rawEl.innerHTML = renderResponseBody(formatted, opts.lang, tab.responseSearchQuery || '', tab.responseSearchIndex || 0);
+  if (rawEl) rawEl.innerHTML = renderResponseBody(formatted, opts.lang, tab.responseSearchQuery || '', tab.responseSearchIndex || 0, getResponseSearchState(tab));
   // JSON ?몃━???щ젋?붾쭅 (pretty?먯꽌???섎? ?놁?留??쇨????좎?)
   if (opts.lang === 'json') {
     var treeEl = mc.querySelector('.js-res-tree');
@@ -5480,10 +6024,10 @@ function checkUnresolvedVars() {
 }
 
 // ???곹깭瑜?Extension???꾩넚 (??μ슜)
-  function persistTabState() {
+function persistTabState() {
     saveActiveTabState();
     var tabData = tabs.map(function(t) {
-    return Object.assign({ name: t.name, autoName: !!t.autoName, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
+    return Object.assign({ name: t.name, autoName: !!t.autoName, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
     });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
   vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx), compareSettings: cloneCompareSettings(compareSettings) });

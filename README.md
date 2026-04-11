@@ -28,6 +28,11 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - `Ctrl+Enter` / `Cmd+Enter` also sends the request
 - Cancel in-flight requests without discarding the last good response
 - Request stage strip, richer empty states, status-aware response feedback, and polished response actions
+- Topline request summary chips for environment, auth, default headers, scripts, and history behavior
+- Preflight warnings for unresolved `{{variables}}` before you send
+- Clickable status chips that jump to the relevant request area
+- Masked auth and sensitive key/value inputs with reveal controls
+- Bulk paste for headers and query params
 
 ### Request settings
 - Timeout per tab
@@ -40,6 +45,7 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - Stop after headers
 - Skip default headers
 - Disable scripts
+- Visual risk highlighting for request-specific settings that change safety or behavior
 - Automatically opens Preview when the response contains meaningful static HTML
 
 ### Body types
@@ -68,6 +74,7 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - Drag and drop ordering
 - Duplicate / Save As
 - Run All Requests
+- Live collection runner status with active request highlighting and retry countdowns
 - History pinning and filtering
 - History snapshots store the executed request state
 - History pruning via `arc-client.historyMaxItems`
@@ -75,12 +82,14 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 ### Response viewer
 - Body / Headers / Cookies / Tests tabs, plus Preview when the response contains meaningful static HTML
 - Dynamic HTML pages stay in Body while `Open URL` remains available for the resolved page
-- Search within the response body
+- Sticky response toolbar for search, compare, and response actions
+- Search within the response body with next/previous navigation, case-sensitive mode, and regex mode
 - JSON tree viewer
 - XML formatting with `Pretty`, `Compact`, and `Inline Children`
 - Content-Type based syntax highlighting
 - Save response body to file
 - Response compare with `Raw`, `Normalized`, and `Pretty` modes
+- Compare state chips that surface the active mode, metadata summary usage, and pinned response readiness
 - Compare settings with ignored headers and ignored JSON paths
 
 ### Scripts

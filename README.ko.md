@@ -28,6 +28,11 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - `Ctrl+Enter` / macOS에서는 `Cmd+Enter` 전송
 - 마지막 정상 응답을 유지한 채 진행 중 요청 취소
 - 요청 상태 스트립, 빈 상태 화면, 응답 상태 피드백, 정돈된 액션 버튼 UI
+- 환경, 인증, 기본 헤더, 스크립트, 히스토리 동작을 한눈에 보여주는 상단 상태 배지
+- 전송 전 미해결 `{{variable}}`을 알려주는 프리플라이트 경고
+- 관련 탭으로 바로 이동할 수 있는 클릭형 상태 배지
+- 인증값과 민감한 key/value 입력 마스킹 및 reveal 버튼
+- 헤더 / 파라미터 일괄 붙여넣기
 
 ### 요청별 Settings 탭
 - 탭별 timeout
@@ -39,6 +44,7 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - headers까지만 받고 종료
 - default headers 건너뛰기
 - scripts 비활성화
+- 안전성이나 동작이 바뀌는 옵션에 대한 위험도 강조 표시
 - 의미 있는 정적 HTML이 있으면 Preview를 자동으로 열기
 
 ### Body 타입
@@ -67,6 +73,7 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - Drag & Drop 정렬
 - Duplicate / Save As
 - Run All Requests
+- 현재 요청 강조와 재시도 대기 상태를 보여주는 컬렉션 러너 상태 표시
 - History pin / filter
 - 실행 시점 스냅샷 기반 history 저장
 - `arc-client.historyMaxItems` 기준 자동 정리
@@ -74,12 +81,14 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 ### 응답 뷰어
 - Body / Headers / Cookies / Tests 탭과, 의미 있는 정적 HTML이 있을 때만 표시되는 Preview 탭
 - 동적인 HTML 페이지는 Body 탭에 남고, 대신 `URL 열기` 액션을 사용할 수 있음
-- 응답 본문 검색
+- 검색 / 비교 / 저장 액션이 따라오는 sticky 응답 툴바
+- 이전 / 다음 이동, 대소문자 구분, 정규식 옵션을 갖춘 응답 본문 검색
 - JSON 트리 뷰어
 - XML `Pretty`, `Compact`, `Inline Children` 포맷
 - Content-Type 기반 문법 강조
 - 응답 본문 저장
 - `Raw`, `Normalized`, `Pretty` 모드 응답 비교
+- 현재 비교 모드, 메타데이터 요약 사용 여부, pin 준비 상태를 보여주는 비교 상태 배지
 - ignore headers / ignore JSON paths 기반 비교 설정
 
 ### Scripts

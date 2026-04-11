@@ -78,6 +78,70 @@ describe('ResponseCompareService', () => {
     assert.match(comparison.left.content, /Base64 Prefix:/);
   });
 
+  it('uses the snapshot XML formatting style when pretty comparison mode is selected', () => {
+    const xmlBody = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      '  <url>',
+      '    <loc>https://example.com/one</loc>',
+      '  </url>',
+      '</urlset>',
+    ].join('\n');
+
+    const comparison = ResponseCompareService.prepareComparison(
+      {
+        label: 'Left',
+        body: xmlBody,
+        contentType: 'application/xml',
+        xmlFormatStyle: 'inline',
+        formatIndent: '2',
+      },
+      {
+        label: 'Right',
+        body: xmlBody.replace('/one', '/two'),
+        contentType: 'application/xml',
+        xmlFormatStyle: 'inline',
+        formatIndent: '2',
+      },
+      {
+        mode: 'pretty',
+        includeMetadataSummary: true,
+        ignoreHeaders: [],
+        ignoreJsonPaths: [],
+      }
+    );
+
+    assert.match(comparison.left.content, /<url><loc>https:\/\/example\.com\/one<\/loc><\/url>/);
+    assert.doesNotMatch(comparison.left.content, /\n\s*<loc>https:\/\/example\.com\/one<\/loc>\n\s*<\/url>/);
+  });
+
+  it('renders body-only diff documents when metadata summary is disabled', () => {
+    const comparison = ResponseCompareService.prepareComparison(
+      {
+        label: 'Left',
+        body: '{"name":"left"}',
+        contentType: 'application/json',
+      },
+      {
+        label: 'Right',
+        body: '{"name":"right"}',
+        contentType: 'application/json',
+      },
+      {
+        mode: 'pretty',
+        includeMetadataSummary: false,
+        ignoreHeaders: [],
+        ignoreJsonPaths: [],
+      }
+    );
+
+    assert.doesNotMatch(comparison.left.content, /=== Comparison Summary ===/);
+    assert.doesNotMatch(comparison.left.content, /=== Metadata ===/);
+    assert.doesNotMatch(comparison.left.content, /=== Body ===/);
+    assert.match(comparison.left.content, /"name": "left"/);
+    assert.match(comparison.right.content, /"name": "right"/);
+  });
+
   it('cleans up stale diff artifacts', async () => {
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'arc-compare-'));
     const diffDir = path.join(tempRoot, '.diff');

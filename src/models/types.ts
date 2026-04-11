@@ -100,6 +100,10 @@ export interface TabState {
   jsonFormatStyle?: 'pretty' | 'compact';
   xmlFormatStyle?: 'pretty' | 'compact' | 'inline';
   formatIndent?: '2' | '4' | 'tab';
+  responseSearchQuery?: string;
+  responseSearchIndex?: number;
+  responseSearchCaseSensitive?: boolean;
+  responseSearchRegex?: boolean;
   pinned?: boolean;
   requestId?: string;
 }
@@ -198,6 +202,7 @@ export enum MessageType {
   PickFile = 'pickFile',
   GenerateCode = 'generateCode',
   OpenDefaultHeaders = 'openDefaultHeaders',
+  SwitchEnvironment = 'switchEnvironment',
   OpenResponseUrl = 'openResponseUrl',
 
   // Extension -> Webview
@@ -318,6 +323,9 @@ export interface CompareResponsesMessage {
     resolvedUrl?: string;
     headers?: Record<string, string>;
     timestamp?: number;
+    jsonFormatStyle?: 'pretty' | 'compact';
+    xmlFormatStyle?: 'pretty' | 'compact' | 'inline';
+    formatIndent?: '2' | '4' | 'tab';
   };
   right: {
     label: string;
@@ -331,6 +339,9 @@ export interface CompareResponsesMessage {
     resolvedUrl?: string;
     headers?: Record<string, string>;
     timestamp?: number;
+    jsonFormatStyle?: 'pretty' | 'compact';
+    xmlFormatStyle?: 'pretty' | 'compact' | 'inline';
+    formatIndent?: '2' | '4' | 'tab';
   };
   options?: CompareSettings;
 }
@@ -377,6 +388,10 @@ export interface RestoreTabStateMessage {
   tabs: TabState[];
   activeIndex: number;
   compareSettings?: CompareSettings;
+}
+
+export interface SwitchEnvironmentMessage {
+  type: MessageType.SwitchEnvironment;
 }
 
 export interface ReceiveResponseMessage {
@@ -463,6 +478,7 @@ export type IncomingWebviewMessage =
   | PickFileMessage
   | GenerateCodeMessage
   | OpenDefaultHeadersMessage
+  | SwitchEnvironmentMessage
   | OpenResponseUrlMessage
   | WebviewReadyMessage;
 

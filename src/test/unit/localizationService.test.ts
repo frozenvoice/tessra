@@ -102,6 +102,8 @@ describe('LocalizationService source', () => {
 
   it('keeps response search copy translated for every supported language', () => {
     const placeholderMatches = source.match(/'webview\.searchPlaceholder':/g) ?? [];
+    const caseMatches = source.match(/'webview\.searchCaseSensitive':/g) ?? [];
+    const regexMatches = source.match(/'webview\.searchRegex':/g) ?? [];
     const prevMatches = source.match(/'webview\.searchPrev':/g) ?? [];
     const nextMatches = source.match(/'webview\.searchNext':/g) ?? [];
     const clearMatches = source.match(/'webview\.searchClear':/g) ?? [];
@@ -109,10 +111,52 @@ describe('LocalizationService source', () => {
     const emptyMatches = source.match(/'webview\.searchNoMatches':/g) ?? [];
 
     assert.strictEqual(placeholderMatches.length, 3);
+    assert.strictEqual(caseMatches.length, 3);
+    assert.strictEqual(regexMatches.length, 3);
     assert.strictEqual(prevMatches.length, 3);
     assert.strictEqual(nextMatches.length, 3);
     assert.strictEqual(clearMatches.length, 3);
     assert.strictEqual(countMatches.length, 3);
     assert.strictEqual(emptyMatches.length, 3);
+  });
+
+  it('keeps preflight, masking, and runner status copy translated for every supported language', () => {
+    const keys = [
+      'webview.summaryEnvironment',
+      'webview.summaryAuth',
+      'webview.summaryHeaders',
+      'webview.summaryParams',
+      'webview.summaryScriptsOn',
+      'webview.summaryScriptsOff',
+      'webview.summaryHistoryOn',
+      'webview.summaryHistoryOff',
+      'webview.unresolvedVariablesCount',
+      'webview.openEnvironmentPicker',
+      'webview.reviewRequestInputs',
+      'webview.authSummaryNone',
+      'webview.authSummaryBasic',
+      'webview.authSummaryBearer',
+      'webview.authSummaryApiKeyHeader',
+      'webview.authSummaryApiKeyQuery',
+      'webview.bulkPaste',
+      'webview.bulkPasteParams',
+      'webview.bulkPasteParamsPlaceholder',
+      'webview.bulkPasteHeaders',
+      'webview.bulkPasteHeadersPlaceholder',
+      'webview.apply',
+      'webview.revealValue',
+      'webview.hideValue',
+      'webview.revealShort',
+      'webview.hideShort',
+      'webview.runSending',
+      'webview.runRetrying',
+      'webview.runAttempt',
+      'webview.runRetryDelay',
+    ];
+
+    for (const key of keys) {
+      const matches = source.match(new RegExp(`'${key.replace(/\./g, '\\.')}'\\s*:`, 'g')) ?? [];
+      assert.strictEqual(matches.length, 3, `${key} should exist for every supported language`);
+    }
   });
 });

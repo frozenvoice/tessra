@@ -18,9 +18,35 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.defaultHeadersSkippedState': 'This tab is skipping workspace default headers.',
   'webview.defaultHeadersSkippedNote': 'Turn off "Skip default headers" in Settings to apply them here.',
   'webview.defaultHeadersEmptyState': 'No workspace default headers saved yet.',
+  'webview.summaryEnvironment': 'Environment: {name}',
+  'webview.summaryAuth': 'Auth: {value}',
+  'webview.summaryHeaders': 'Headers: {count}',
+  'webview.summaryParams': 'Params: {count}',
+  'webview.summaryScriptsOn': 'Scripts enabled',
+  'webview.summaryScriptsOff': 'Scripts disabled',
+  'webview.summaryHistoryOn': 'History on',
+  'webview.summaryHistoryOff': 'History off',
+  'webview.unresolvedVariablesCount': 'Unresolved variables: {count}',
+  'webview.openEnvironmentPicker': 'Choose Environment',
+  'webview.reviewRequestInputs': 'Review Request',
+  'webview.authSummaryNone': 'None',
+  'webview.authSummaryBasic': 'Basic',
+  'webview.authSummaryBearer': 'Bearer',
+  'webview.authSummaryApiKeyHeader': 'API Key (Header)',
+  'webview.authSummaryApiKeyQuery': 'API Key (Query)',
   'webview.manage': 'Manage',
   'webview.save': 'Save',
   'webview.addHeader': '+ Add Header',
+  'webview.bulkPaste': 'Bulk Paste',
+  'webview.bulkPasteParams': 'Paste query string or one key/value per line',
+  'webview.bulkPasteParamsPlaceholder': 'page=1&size=20\\nfoo=bar',
+  'webview.bulkPasteHeaders': 'Paste raw headers or one key/value per line',
+  'webview.bulkPasteHeadersPlaceholder': 'Authorization: Bearer token\\nX-Tenant: demo',
+  'webview.apply': 'Apply',
+  'webview.revealValue': 'Reveal value',
+  'webview.hideValue': 'Hide value',
+  'webview.revealShort': 'Show',
+  'webview.hideShort': 'Hide',
   'webview.emptyPlaceholder': 'Press + or Ctrl+T to create a new request',
   'webview.loading': 'Sending request...',
   'webview.loading.hint': 'You can keep editing headers, body, or settings while the response comes back.',
@@ -41,6 +67,20 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.retryCount': 'Retry Count',
   'webview.retryDelay': 'Retry Delay',
   'webview.tls': 'TLS',
+  'webview.searchPlaceholder': 'Find in response',
+  'webview.searchCaseSensitive': 'Case sensitive',
+  'webview.searchRegex': 'Use regular expression',
+  'webview.searchPrev': 'Previous match',
+  'webview.searchNext': 'Next match',
+  'webview.searchClear': 'Clear search',
+  'webview.searchCount': '{current}/{total}',
+  'webview.searchNoMatches': '0 results',
+  'webview.includeMetadata': 'Include metadata summary',
+  'webview.runStatus': 'Status',
+  'webview.runSending': 'Sending',
+  'webview.runRetrying': 'Retrying',
+  'webview.runAttempt': 'Attempt {current}/{total}',
+  'webview.runRetryDelay': 'Retry in {count} ms',
   'webview.preRequestPlaceholder': 'env.set("token", "123");',
   'webview.testPlaceholder': 'test("status", function () { pm.response.to.have.status(200); });',
   'webview.comparisonSettings': 'Comparison Settings',
@@ -169,11 +209,11 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function authFieldsHtml\(type, auth\)/);
     assert.match(script, /function collectAuth\(mc\)/);
     assert.match(script, /\['none','basic','bearer','apikey'\]\.map\(t/);
-    assert.match(script, /class="js-auth-user"/);
-    assert.match(script, /class="js-auth-pass"/);
-    assert.match(script, /class="js-auth-token"/);
-    assert.match(script, /class="js-auth-apikey"/);
-    assert.match(script, /class="js-auth-apival"/);
+    assert.match(script, /maskedAuthInputHtml\(tr\('webview\.username'\), 'js-auth-user'/);
+    assert.match(script, /maskedAuthInputHtml\(tr\('webview\.password'\), 'js-auth-pass'/);
+    assert.match(script, /maskedAuthInputHtml\(tr\('webview\.token'\), 'js-auth-token'/);
+    assert.match(script, /maskedAuthInputHtml\(tr\('webview\.key'\), 'js-auth-apikey'/);
+    assert.match(script, /maskedAuthInputHtml\(tr\('webview\.value'\), 'js-auth-apival'/);
     assert.match(script, /class="js-auth-addto"/);
     assert.match(script, /if \(type === 'basic'\) auth\.basic =/);
     assert.match(script, /if \(type === 'bearer'\) auth\.bearer =/);
@@ -335,13 +375,46 @@ describe('RequestPanel Webview', () => {
 
   it('renders response search controls and search syncing helpers', () => {
     assert.match(script, /function getResponseSearchState\(tab\)/);
-    assert.match(script, /function findResponseSearchMatches\(body, query\)/);
-    assert.match(script, /function renderResponseBody\(body, lang, searchQuery, searchIndex\)/);
+    assert.match(script, /function findResponseSearchMatches\(body, query, options\)/);
+    assert.match(script, /function renderResponseBody\(body, lang, searchQuery, searchIndex, searchState\)/);
     assert.match(script, /function syncResponseSearch\(mc\)/);
     assert.match(script, /placeholder="' \+ escapeAttr\(tr\('webview\.searchPlaceholder'\)\) \+ '"/);
     assert.match(script, /class="response-search-input js-response-search"/);
     assert.match(script, /js-response-search-prev/);
     assert.match(script, /js-response-search-next/);
     assert.match(script, /js-response-search-clear/);
+    assert.match(script, /js-response-search-case/);
+    assert.match(script, /js-response-search-regex/);
+  });
+
+  it('renders preflight, masking, and bulk paste request helpers', () => {
+    assert.match(script, /function renderRequestPreflight\(tab\)/);
+    assert.match(script, /class="js-request-preflight-wrap"/);
+    assert.match(script, /tfCount\('webview\.unresolvedVariablesCount', unresolved\.length\)/);
+    assert.match(script, /function isSensitiveKeyName\(value\)/);
+    assert.match(script, /class="kv-reveal/);
+    assert.match(script, /class="ghost-btn auth-reveal js-auth-reveal"/);
+    assert.match(script, /function parseBulkKeyValueText\(text, target\)/);
+    assert.match(script, /function applyBulkEditor\(mc, target\)/);
+    assert.match(script, /js-open-bulk-editor/);
+  });
+
+  it('persists enriched response search state and supports environment-switch actions', () => {
+    assert.match(script, /responseSearchQuery: typeof data\?\.responseSearchQuery === 'string'/);
+    assert.match(script, /responseSearchCaseSensitive: data\?\.responseSearchCaseSensitive === true/);
+    assert.match(script, /responseSearchRegex: data\?\.responseSearchRegex === true/);
+    assert.match(script, /responseSearchQuery: t\.responseSearchQuery \|\| ''/);
+    assert.match(script, /responseSearchCaseSensitive: t\.responseSearchCaseSensitive === true/);
+    assert.match(script, /responseSearchRegex: t\.responseSearchRegex === true/);
+    assert.match(script, /data-action="switch-environment"/);
+    assert.match(script, /type: 'switchEnvironment'/);
+  });
+
+  it('shows richer collection runner status updates', () => {
+    assert.match(source, /type: 'runCollectionStatus'/);
+    assert.match(script, /function updateRunnerStatus\(msg\)/);
+    assert.match(script, /class="runner-live-status"/);
+    assert.match(script, /tr\('webview\.runSending'\)/);
+    assert.match(script, /tr\('webview\.runRetrying'\)/);
   });
 });

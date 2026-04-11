@@ -27,22 +27,29 @@ Body: {"env":"{{envName}}"}
 - Auth: No Auth, Basic, Bearer Token, API Key
 - Multi-tab editing with pinned tabs
 - `Enter` in the URL field sends the active request
+- The top summary chips show the current environment, auth mode, default-header usage, scripts, and history behavior
+- Sensitive auth values stay masked until you reveal them
+- You can bulk-paste headers or query params instead of adding them one row at a time
+- Arc Client warns about unresolved `{{variables}}` before you send
 
 ## Response workspace
 
 - Tabs: `Body`, `Headers`, `Cookies`, `Tests`, plus `Preview` when the response contains meaningful static HTML
 - Dynamic HTML pages stay in `Body`, and you can use `Open URL` to jump to the resolved page
-- Search within the response body
+- A sticky response toolbar keeps search, compare, copy, and save actions visible
+- Search within the response body with next/previous navigation, case-sensitive mode, and regex mode
 - JSON tree viewer
 - XML formatting: `Pretty`, `Compact`, `Inline Children`
 - Save or copy the response body
 - Compare responses with `Raw`, `Normalized`, and `Pretty` modes
+- Compare state chips show the active mode, metadata-summary usage, and pinned-response readiness
 
 ## Collections, history, and environments
 
 - Create collections, folders, and saved requests
 - Drag and drop to organize requests
 - Run an entire collection
+- Collection runs show the active request, current attempt, and retry countdowns
 - Store request history as executed snapshots
 - Switch active environments and use `{{variables}}` across the request
 
@@ -65,6 +72,7 @@ Body: {"env":"{{envName}}"}
 - Stop after headers
 - Skip default headers
 - Disable scripts
+- Settings that change safety or behavior are visually highlighted
 - Automatically opens Preview when the response contains meaningful static HTML
 
 ## Display language

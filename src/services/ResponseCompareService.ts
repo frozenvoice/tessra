@@ -23,6 +23,9 @@ export interface ResponseCompareSnapshot {
   resolvedUrl?: string;
   headers?: Record<string, string> | Array<{ key: string; value: string }>;
   timestamp?: number;
+  jsonFormatStyle?: 'pretty' | 'compact';
+  xmlFormatStyle?: 'pretty' | 'compact' | 'inline';
+  formatIndent?: '2' | '4' | 'tab';
 }
 
 export interface PreparedComparisonSide {
@@ -162,7 +165,7 @@ export class ResponseCompareService {
     }
 
     if (kind === 'json') {
-      const normalized = this.normalizeJson(snapshot.body, options);
+      const normalized = this.normalizeJson(snapshot.body, snapshot, options);
       return {
         kind,
         extension,
@@ -179,7 +182,7 @@ export class ResponseCompareService {
         extension,
         bodyHash,
         metadataContent,
-        bodyContent: this.normalizeXml(snapshot.body, options.mode),
+        bodyContent: this.normalizeXml(snapshot.body, snapshot, options.mode),
       };
     }
 
@@ -200,14 +203,15 @@ export class ResponseCompareService {
     side: NormalizedCompareSide,
     options: CompareSettings
   ): string {
+    if (!options.includeMetadataSummary) {
+      return side.bodyContent || '[Empty body]';
+    }
+
     const sections: string[] = [
       `=== ${label} ===`,
       sharedSummary,
     ];
-
-    if (options.includeMetadataSummary) {
-      sections.push(side.metadataContent);
-    }
+    sections.push(side.metadataContent);
 
     sections.push('=== Body ===');
     sections.push(side.bodyContent || '[Empty body]');
@@ -279,15 +283,23 @@ export class ResponseCompareService {
     ].join('\n');
   }
 
-  private static normalizeJson(body: string, options: CompareSettings): { rendered: string; parsed?: unknown } {
+  private static normalizeJson(
+    body: string,
+    snapshot: ResponseCompareSnapshot,
+    options: CompareSettings
+  ): { rendered: string; parsed?: unknown } {
     try {
       const parsed = JSON.parse(body);
       const ignorePatterns = options.ignoreJsonPaths.map((pattern) => this.parseJsonIgnorePattern(pattern));
       const normalizedValue = this.normalizeJsonValue(parsed, [], ignorePatterns);
+      const jsonStyle = snapshot.jsonFormatStyle === 'compact' ? 'compact' : 'pretty';
+      const indent = this.indentFromKey(snapshot.formatIndent);
       return {
         parsed: normalizedValue,
         rendered: options.mode === 'pretty'
-          ? JSON.stringify(normalizedValue, null, 2)
+          ? (jsonStyle === 'compact'
+            ? JSON.stringify(normalizedValue)
+            : JSON.stringify(normalizedValue, null, indent))
           : options.mode === 'normalized'
             ? JSON.stringify(normalizedValue)
             : body,
@@ -350,7 +362,7 @@ export class ResponseCompareService {
     return { segments: normalized };
   }
 
-  private static normalizeXml(xml: string, mode: CompareMode): string {
+  private static normalizeXml(xml: string, snapshot: ResponseCompareSnapshot, mode: CompareMode): string {
     if (mode === 'raw') { return xml; }
 
     const normalized = xml.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -371,7 +383,18 @@ export class ResponseCompareService {
       return canonicalTokens.map((token) => token.value).join('');
     }
 
-    return this.xmlBuildPretty(canonicalTokens, '  ');
+    const style = snapshot.xmlFormatStyle || 'pretty';
+    const indent = this.indentFromKey(snapshot.formatIndent);
+
+    if (style === 'compact') {
+      return canonicalTokens.map((token) => token.value).join('');
+    }
+
+    if (style === 'inline') {
+      return this.xmlBuildInline(canonicalTokens, indent);
+    }
+
+    return this.xmlBuildPretty(canonicalTokens, indent);
   }
 
   private static xmlTokenize(xml: string): Array<{ type: string; value: string }> {
@@ -430,6 +453,65 @@ export class ResponseCompareService {
     return lines.join('\n');
   }
 
+  private static xmlBuildInline(tokens: Array<{ type: string; value: string }>, indent: string): string {
+    const lines: string[] = [];
+    let depth = 0;
+    let index = 0;
+
+    while (index < tokens.length) {
+      const token = tokens[index];
+      if (token.type === 'open') {
+        if (index + 2 < tokens.length && tokens[index + 1].type === 'text' && tokens[index + 2].type === 'close') {
+          lines.push(this.repeatIndent(depth, indent) + token.value + tokens[index + 1].value + tokens[index + 2].value);
+          index += 3;
+          continue;
+        }
+
+        if (index + 3 < tokens.length && tokens[index + 1].type === 'self' && tokens[index + 2].type === 'close') {
+          lines.push(this.repeatIndent(depth, indent) + token.value + tokens[index + 1].value + tokens[index + 2].value);
+          index += 3;
+          continue;
+        }
+
+        if (
+          index + 4 < tokens.length &&
+          tokens[index + 1].type === 'open' &&
+          tokens[index + 2].type === 'text' &&
+          tokens[index + 3].type === 'close' &&
+          tokens[index + 4].type === 'close'
+        ) {
+          lines.push(
+            this.repeatIndent(depth, indent) +
+            token.value +
+            tokens[index + 1].value +
+            tokens[index + 2].value +
+            tokens[index + 3].value +
+            tokens[index + 4].value
+          );
+          index += 5;
+          continue;
+        }
+
+        lines.push(this.repeatIndent(depth, indent) + token.value);
+        depth++;
+        index++;
+        continue;
+      }
+
+      if (token.type === 'close') {
+        depth = Math.max(0, depth - 1);
+        lines.push(this.repeatIndent(depth, indent) + token.value);
+        index++;
+        continue;
+      }
+
+      lines.push(this.repeatIndent(depth, indent) + token.value);
+      index++;
+    }
+
+    return lines.join('\n');
+  }
+
   private static sortTagAttributes(tag: string): string {
     const match = tag.match(/^<([^\s/>]+)([\s\S]*?)(\/?)>$/);
     if (!match) { return tag; }
@@ -455,6 +537,16 @@ export class ResponseCompareService {
 
   private static normalizeText(value: string): string {
     return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  }
+
+  private static indentFromKey(indentKey?: '2' | '4' | 'tab'): string {
+    if (indentKey === 'tab') { return '\t'; }
+    const spaces = Number.parseInt(indentKey || '2', 10) || 2;
+    return ' '.repeat(spaces);
+  }
+
+  private static repeatIndent(depth: number, indent: string): string {
+    return indent.repeat(Math.max(0, depth));
   }
 
   private static detectKind(snapshot: ResponseCompareSnapshot): CompareBodyKind {
