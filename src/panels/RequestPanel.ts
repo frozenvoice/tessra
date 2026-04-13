@@ -1735,7 +1735,8 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 
 /* ?⑤꼸 ?덉씠?꾩썐 */
 .split{flex:1;overflow:hidden;display:flex;flex-direction:column}
-.req-area{flex:1 1 0;min-height:0;overflow-y:auto;padding:2px 8px}
+.req-area{flex:1 1 0;min-height:0;overflow:hidden;padding:2px 8px;display:flex;flex-direction:column}
+.request-editor-panel:not(.hidden){flex:1;min-height:0;display:flex;flex-direction:column;overflow-y:auto}
 .divider{height:10px;background:transparent;flex-shrink:0;cursor:row-resize;position:relative;z-index:10;border:none;display:flex;align-items:center;justify-content:center}
 .divider::before{content:"";position:absolute;left:10px;right:10px;top:50%;height:1px;transform:translateY(-50%);background:linear-gradient(90deg,rgba(255,255,255,.05),rgba(125,200,255,.2),rgba(255,255,255,.05))}
 .divider-grip{position:relative;z-index:1;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.02));box-shadow:0 10px 20px rgba(0,0,0,.12);transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease,background .14s ease}
@@ -1776,7 +1777,8 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 
 /* Body */
 .body-type-select{padding:3px 5px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:2px;font-size:13px;margin-bottom:4px}
-.body-section textarea{width:100%;min-height:70px;max-height:50vh;padding:5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;resize:vertical;overflow-y:auto;field-sizing:content}
+.body-section textarea{width:100%;min-height:70px;flex:1;padding:5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-family:var(--vscode-editor-font-family,monospace);font-size:13px;resize:none;overflow-y:auto}
+.body-type-select{flex-shrink:0}
 
 /* Auth */
 .auth-section{padding:3px 0}
