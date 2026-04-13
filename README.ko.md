@@ -186,9 +186,10 @@ VS Code 안에서 사용자 가이드를 보려면 `Arc: Open Guide`를 실행�
 - 타입: `string`
 - 기본값: `en`
 - 지원 값: `en`, `ko`, `ja`
-- Arc Client 패널, 프롬프트, 알림 언어를 제어
+- Arc Client 패널, 프롬프트, 알림, 인앱 가이드 언어를 제어
 - 인앱 가이드는 해당 언어 가이드 파일이 있을 때 현지화되고, 없으면 영어 가이드로 폴백
-- 이제 VS Code locale은 Arc Client UI를 직접 바꾸지 않음
+- VS Code locale은 Arc Client 설정 레이블과 Command Palette 명령 이름에는 계속 반영됨
+- 이 설정은 VS Code locale과 별개로 Arc Client UI 자체만 바꿈
 - Command Palette에서 `Arc: Change Display Language`로도 바로 변경 가능
 
 ### `arc-client.requestPanelTheme`

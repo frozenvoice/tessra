@@ -99,10 +99,11 @@ Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언�
 - disable scripts
 
 ### UI 언어
-- `arc-client.displayLanguage` 설정으로 Arc Client UI 언어 선택
+- `arc-client.displayLanguage` 설정으로 Arc Client 패널/프롬프트/알림/인앱 가이드 언어 선택
 - 기본값은 영어
 - 현재 유지 중인 표시 언어는 `en`, `ko`, `ja`
-- VS Code locale과 분리되어 동작
+- Arc Client UI 자체는 VS Code locale과 분리되어 동작
+- 설정 레이블과 Command Palette 명령 이름은 VS Code locale을 계속 따름
 
 ### 요청 패널 테마
 - `arc-client.requestPanelTheme` 설정으로 요청 패널 webview 테마 프리셋 전환

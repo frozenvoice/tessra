@@ -79,7 +79,8 @@ Body: {"env":"{{envName}}"}
 ## 표시 언어
 
 - `Arc: Change Display Language`로 `English`, `Korean`, `Japanese`를 전환할 수 있습니다.
-- Arc Client는 VS Code locale을 자동으로 따르지 않고, 자체 표시 언어 설정을 사용합니다.
+- Arc Client는 패널, 프롬프트, 알림, 인앱 가이드에 자체 표시 언어 설정을 사용합니다.
+- VS Code 설정 레이블과 Command Palette 명령 이름은 계속 VS Code locale을 따릅니다.
 
 ## 단축키
 

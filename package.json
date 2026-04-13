@@ -61,10 +61,15 @@
             "ko",
             "ja"
           ],
+          "enumItemLabels": [
+            "%configuration.displayLanguage.enumLabel.en%",
+            "%configuration.displayLanguage.enumLabel.ko%",
+            "%configuration.displayLanguage.enumLabel.ja%"
+          ],
           "enumDescriptions": [
-            "%configuration.displayLanguage.enum.en%",
-            "%configuration.displayLanguage.enum.ko%",
-            "%configuration.displayLanguage.enum.ja%"
+            "%configuration.displayLanguage.enumDescription.en%",
+            "%configuration.displayLanguage.enumDescription.ko%",
+            "%configuration.displayLanguage.enumDescription.ja%"
           ],
           "description": "%configuration.displayLanguage.description%"
         },
@@ -78,11 +83,17 @@
             "product",
             "bold-color"
           ],
+          "enumItemLabels": [
+            "%configuration.requestPanelTheme.enumLabel.default%",
+            "%configuration.requestPanelTheme.enumLabel.minimalCool%",
+            "%configuration.requestPanelTheme.enumLabel.product%",
+            "%configuration.requestPanelTheme.enumLabel.boldColor%"
+          ],
           "enumDescriptions": [
-            "%configuration.requestPanelTheme.enum.default%",
-            "%configuration.requestPanelTheme.enum.minimalCool%",
-            "%configuration.requestPanelTheme.enum.product%",
-            "%configuration.requestPanelTheme.enum.boldColor%"
+            "%configuration.requestPanelTheme.enumDescription.default%",
+            "%configuration.requestPanelTheme.enumDescription.minimalCool%",
+            "%configuration.requestPanelTheme.enumDescription.product%",
+            "%configuration.requestPanelTheme.enumDescription.boldColor%"
           ],
           "description": "%configuration.requestPanelTheme.description%"
         },

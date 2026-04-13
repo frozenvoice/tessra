@@ -89,7 +89,8 @@ Body: {"env":"{{envName}}"}
 ## Display language
 
 - Use `Arc: Change Display Language` to switch between `English`, `Korean`, and `Japanese`.
-- Arc Client uses its own display-language setting and does not follow the VS Code locale automatically.
+- Arc Client uses its own display-language setting for panels, prompts, notifications, and the in-app guide.
+- VS Code Settings labels and Command Palette titles still follow the VS Code locale.
 
 ## Keyboard shortcuts
 

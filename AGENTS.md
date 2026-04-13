@@ -85,7 +85,7 @@ arc-client/
 12. 응답 비교: `Raw`, `Normalized`, `Pretty`, ignore headers / ignore JSON paths
 13. 요청별 Settings 탭: timeout, redirects, TLS override, max size, retries, stop after headers, save to history, skip default headers, disable scripts
 14. HTML preview, JSON tree, XML format options, richer empty states, 요청 변경 요약, 변수 사용처, 변수 자동완성, 응답 빠른 복사, 고급 필터 UX, 상단 상태 배지 linked focus/highlight
-15. `arc-client.displayLanguage` 설정 기반 UI 언어 선택 (기본 영어, VS Code locale과 분리, 현재 `en`/`ko`/`ja`)
+15. `arc-client.displayLanguage` 설정 기반 UI 언어 선택 (Arc Client 패널/알림/인앱 가이드 대상, 기본 영어, 현재 `en`/`ko`/`ja`, 설정/명령 레이블은 VS Code locale 유지)
 16. `arc-client.requestPanelTheme` 설정과 Command Palette 기반 요청 패널 테마 프리셋 선택 (`default`, `minimal-cool`, `product`, `bold-color`)
 17. `arc-client.workspaceProfile` 설정 기반 워크스페이스 로컬 저장 프로필 분리와 현재 프로필 표시 (`default`는 메인 작업용, 사용자 지정 프로필은 프로젝트/실험 분리용)
 18. 컬렉션 러너 실패 요청만 재실행
