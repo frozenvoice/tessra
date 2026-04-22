@@ -1,7 +1,7 @@
-﻿# Arc Client — 프로젝트 규칙
+﻿# Tessra — 프로젝트 규칙
 
 ## 프로젝트 개요
-Arc Client는 VS Code 안에서 동작하는 offline-first REST API 클라이언트 확장이다.
+Tessra는 VS Code 안에서 동작하는 offline-first REST API 클라이언트 확장이다.
 
 핵심 목표는 Thunder Client 스타일의 빠른 요청 워크플로를 로그인, 클라우드 의존성, 유료 제한 없이 로컬 환경에서 제공하는 것이다. 모든 데이터는 로컬에 저장되고, 네트워크 호출은 사용자가 명시적으로 보낸 API 요청에서만 발생한다.
 
@@ -34,7 +34,7 @@ Arc Client는 VS Code 안에서 동작하는 offline-first REST API 클라이언
 
 ## 현재 프로젝트 구조
 ```text
-arc-client/
+tessra/
 ├── src/
 │   ├── extension.ts
 │   ├── models/
@@ -85,9 +85,9 @@ arc-client/
 12. 응답 비교: `Raw`, `Normalized`, `Pretty`, ignore headers / ignore JSON paths
 13. 요청별 Settings 탭: timeout, redirects, TLS override, max size, retries, stop after headers, save to history, skip default headers, disable scripts
 14. HTML preview, JSON tree, XML format options, richer empty states, 요청 변경 요약, 변수 사용처, 변수 자동완성, 응답 빠른 복사, 고급 필터 UX, 상단 상태 배지 linked focus/highlight
-15. `arc-client.displayLanguage` 설정 기반 UI 언어 선택 (Arc Client 패널/알림/인앱 가이드 대상, 기본 영어, 현재 `en`/`ko`/`ja`, 설정/명령 레이블은 VS Code locale 유지)
-16. `arc-client.requestPanelTheme` 설정과 Command Palette 기반 요청 패널 테마 프리셋 선택 (`default`, `minimal-cool`, `product`, `bold-color`)
-17. `arc-client.workspaceProfile` 설정 기반 워크스페이스 로컬 저장 프로필 분리와 현재 프로필 표시 (`default`는 메인 작업용, 사용자 지정 프로필은 프로젝트/실험 분리용)
+15. `tessra.displayLanguage` 설정 기반 UI 언어 선택 (Tessra 패널/알림/인앱 가이드 대상, 기본 영어, 현재 `en`/`ko`/`ja`, 설정/명령 레이블은 VS Code locale 유지)
+16. `tessra.requestPanelTheme` 설정과 Command Palette 기반 요청 패널 테마 프리셋 선택 (`default`, `minimal-cool`, `product`, `bold-color`)
+17. `tessra.workspaceProfile` 설정 기반 워크스페이스 로컬 저장 프로필 분리와 현재 프로필 표시 (`default`는 메인 작업용, 사용자 지정 프로필은 프로젝트/실험 분리용)
 18. 컬렉션 러너 실패 요청만 재실행
 
 ### 남아 있는 큰 항목
@@ -113,8 +113,11 @@ npx vsce package
 - `environments.json`
 - `active-environment.json`
 - `default-headers.json`
+- `variables.json`
 - `tab-state.json`
 - `profiles/<profile-name>/...`
+
+Tessra 저장소가 비어 있는 첫 활성화 시에는 이전 Arc Client 저장소(`arc.arc-client`, `arc-client`)의 기존 데이터 파일과 프로필을 새 `tessra.tessra` 저장소로 복사한다. 새 저장소에 데이터가 이미 있으면 덮어쓰기 방지를 위해 마이그레이션하지 않는다.
 
 ## 주의사항
 - 기존 기능을 건드릴 때는 webview 파싱 오류와 상태 복원 흐름을 가장 먼저 확인한다

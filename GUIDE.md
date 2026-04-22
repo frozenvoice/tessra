@@ -1,13 +1,13 @@
-# Arc Client Guide
+# Tessra Guide
 
-Arc Client is a local-first REST API client for VS Code.
+Tessra is a local-first REST API client for VS Code.
 
 No login. No cloud sync. No paywalled core workflows.
 
 ## Quick start
 
-1. Open Arc Client from the Activity Bar.
-2. Run `Arc: New Request` or click `+`.
+1. Open Tessra from the Activity Bar.
+2. Run `Tessra: New Request` or click `+`.
 3. Choose an HTTP method and enter a URL.
 4. Fill in params, headers, body, auth, scripts, or request settings.
 5. Click `Send` or press `Enter` in the URL field.
@@ -30,7 +30,7 @@ Body: {"env":"{{envName}}"}
 - The top summary chips show the current environment, auth mode, default-header usage, scripts, and history behavior
 - Sensitive auth values stay masked until you reveal them
 - You can bulk-paste headers or query params instead of adding them one row at a time
-- Arc Client warns about unresolved `{{variables}}` before you send
+- Tessra warns about unresolved `{{variables}}` before you send
 
 ## Response workspace
 
@@ -55,13 +55,13 @@ Body: {"env":"{{envName}}"}
 
 ## Workspace profiles
 
-- `default` is the main local storage space for your everyday Arc Client work
+- `default` is the main local storage space for your everyday Tessra work
 - Create another profile when a different project, imported spec, or experiment should not mix with your current collections and history
 - Profiles split collections, history, environments, default headers, and saved tabs
 - A practical rule:
   - Use profiles for different projects or workflows
   - Use environments for `local`, `staging`, and `prod` inside one project
-- Use `Arc: Change Workspace Profile` to switch or create profiles
+- Use `Tessra: Change Workspace Profile` to switch or create profiles
 - The request header shows the current profile, and the `default` profile chip explains what it means when you hover it
 
 ## Scripts
@@ -88,8 +88,8 @@ Body: {"env":"{{envName}}"}
 
 ## Display language
 
-- Use `Arc: Change Display Language` to switch between `English`, `Korean`, and `Japanese`.
-- Arc Client uses its own display-language setting for panels, prompts, notifications, and the in-app guide.
+- Use `Tessra: Change Display Language` to switch between `English`, `Korean`, and `Japanese`.
+- Tessra uses its own display-language setting for panels, prompts, notifications, and the in-app guide.
 - VS Code Settings labels and Command Palette titles still follow the VS Code locale.
 
 ## Keyboard shortcuts
@@ -103,7 +103,7 @@ On macOS, use `Cmd` instead of `Ctrl`.
 
 ## Local storage
 
-All Arc Client data is stored locally in VS Code `globalStorage` JSON files.
+All Tessra data is stored locally in VS Code `globalStorage` JSON files.
 
 - `collections.json`
 - `history.json`
@@ -112,4 +112,4 @@ All Arc Client data is stored locally in VS Code `globalStorage` JSON files.
 - `default-headers.json`
 - `tab-state.json`
 
-Arc Client only makes network calls when you explicitly send an API request.
+Tessra only makes network calls when you explicitly send an API request.

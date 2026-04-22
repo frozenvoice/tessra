@@ -1,4 +1,4 @@
-﻿# Arc Client
+﻿# Tessra
 
 The local-first REST API client for VS Code.
 
@@ -6,9 +6,9 @@ No login. No cloud sync. No paywalled core workflows.
 
 [Korean README](./README.ko.md)
 
-Arc Client is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
+Tessra is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
 
-## Why Arc Client
+## Why Tessra
 
 - Offline-first workflow
 - No login required
@@ -85,7 +85,7 @@ Arc Client is built for developers who want a fast Thunder Client-style workflow
 - Collection filtering with `method:`, `host:`, and `type:` tokens
 - History pinning and filtering with `status:`, `method:`, `host:`, and `pinned:` tokens
 - History snapshots store the executed request state
-- History pruning via `arc-client.historyMaxItems`
+- History pruning via `tessra.historyMaxItems`
 - Denser sidebar rows with method/host summaries and collection/folder item counts
 
 ### Response viewer
@@ -125,7 +125,7 @@ Then use `{{sessionKey}}` in request 2.
 - cURL import
 - Copy as cURL
 - OpenAPI import
-- Arc JSON collection import
+- Tessra JSON collection import
 - Postman collection import / export
 - Postman environment import / export
 
@@ -151,12 +151,12 @@ Then in VS Code:
 
 ## Quick start
 
-1. Open Arc Client from the Activity Bar
-2. Run `Arc: New Request` or click `+`
+1. Open Tessra from the Activity Bar
+2. Run `Tessra: New Request` or click `+`
 3. Select a method and enter a URL
 4. Fill in params, headers, body, auth, scripts, or request settings
 5. Click `Send` or press `Enter`
-6. Run `Arc: Import OpenAPI` from the Command Palette to turn an OpenAPI JSON file into a collection
+6. Run `Tessra: Import OpenAPI` from the Command Palette to turn an OpenAPI JSON file into a collection
 
 Example variable usage:
 
@@ -168,44 +168,44 @@ Body: {"env":"{{envName}}"}
 
 ## In-app guide
 
-Run `Arc: Open Guide` to open the user guide inside VS Code.
+Run `Tessra: Open Guide` to open the user guide inside VS Code.
 
 ## Extension settings
 
-### `arc-client.historyMaxItems`
+### `tessra.historyMaxItems`
 - Type: `number`
 - Default: `100`
 - Maximum number of history entries to keep
 
-### `arc-client.allowInsecureCertificates`
+### `tessra.allowInsecureCertificates`
 - Type: `boolean`
 - Default: `false`
 - Disables HTTPS certificate validation only when explicitly enabled
 - Intended for self-signed local development environments
 
-### `arc-client.displayLanguage`
+### `tessra.displayLanguage`
 - Type: `string`
 - Default: `en`
 - Supported values: `en`, `ko`, `ja`
-- Controls Arc Client panels, prompts, notifications, and the in-app guide
+- Controls Tessra panels, prompts, notifications, and the in-app guide
 - The in-app guide uses localized guide files when available and falls back to English
-- VS Code locale still controls Arc Client setting labels and Command Palette titles
-- This setting changes the Arc Client UI itself, separate from the VS Code locale
-- You can also run `Arc: Change Display Language` from the Command Palette
+- VS Code locale still controls Tessra setting labels and Command Palette titles
+- This setting changes the Tessra UI itself, separate from the VS Code locale
+- You can also run `Tessra: Change Display Language` from the Command Palette
 
-### `arc-client.requestPanelTheme`
+### `tessra.requestPanelTheme`
 - Type: `string`
 - Default: `default`
 - Supported values: `default`, `minimal-cool`, `product`, `bold-color`
-- Controls the visual preset used by the Arc Client request panel webview
+- Controls the visual preset used by the Tessra request panel webview
 - Available presets: balanced default polish, minimal cool, stronger product feel, and bolder color accents
-- You can also run `Arc: Change Request Panel Theme` from the Command Palette
+- You can also run `Tessra: Change Request Panel Theme` from the Command Palette
 
-### `arc-client.workspaceProfile`
+### `tessra.workspaceProfile`
 - Type: `string`
 - Default: `default`
 - Switches the active local storage profile for collections, history, environments, default headers, and saved tabs
-- Use `Arc: Change Workspace Profile` to switch or create profiles quickly from the Command Palette
+- Use `Tessra: Change Workspace Profile` to switch or create profiles quickly from the Command Palette
 - Keep `default` as your everyday workspace, then create a separate profile when another project, imported spec, or experiment should not mix with it
 - A good rule of thumb: use profiles for different projects or workflows, and use environments for `local` / `staging` / `prod` inside the same project
 
@@ -232,13 +232,16 @@ All extension data is stored under VS Code `globalStorage` as JSON files. The de
 - `environments.json`
 - `active-environment.json`
 - `default-headers.json`
+- `variables.json`
 - `tab-state.json`
+
+On first activation after the Tessra rename, if the Tessra storage folder has no existing data, Tessra checks the legacy Arc Client storage folders (`arc.arc-client`, `arc-client`) and copies existing data files into the new `tessra.tessra` folder. If Tessra data already exists, migration is skipped to avoid overwriting local data.
 
 Typical locations:
 
-- Windows: `%APPDATA%\Code\User\globalStorage\arc.arc-client\`
-- macOS: `~/Library/Application Support/Code/User/globalStorage/arc.arc-client/`
-- Linux: `~/.config/Code/User/globalStorage/arc.arc-client/`
+- Windows: `%APPDATA%\Code\User\globalStorage\tessra.tessra\`
+- macOS: `~/Library/Application Support/Code/User/globalStorage/tessra.tessra/`
+- Linux: `~/.config/Code/User/globalStorage/tessra.tessra/`
 
 ## Development
 

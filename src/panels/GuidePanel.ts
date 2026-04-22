@@ -5,7 +5,7 @@ import { LocalizationService } from '../services/LocalizationService';
 
 export class GuidePanel {
   private static currentPanel: GuidePanel | undefined;
-  private static readonly viewType = 'arc.guidePanel';
+  private static readonly viewType = 'tessra.guidePanel';
 
   private readonly panel: vscode.WebviewPanel;
   private readonly extensionUri: vscode.Uri;

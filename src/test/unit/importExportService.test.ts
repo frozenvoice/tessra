@@ -17,7 +17,7 @@ describe('ImportExportService', () => {
             body: {
               mode: 'formdata',
               formdata: [
-                { key: 'name', value: 'arc', type: 'text' },
+                { key: 'name', value: 'tessra', type: 'text' },
                 { key: 'file', src: '/tmp/file.txt', type: 'file' },
               ],
             },

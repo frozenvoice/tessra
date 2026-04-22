@@ -1,13 +1,13 @@
-# Arc Client ガイド
+# Tessra ガイド
 
-Arc Client は VS Code 内で動作するローカルファーストの REST API クライアントです。
+Tessra は VS Code 内で動作するローカルファーストの REST API クライアントです。
 
 ログイン不要、クラウド同期なし、主要機能に課金の壁もありません。
 
 ## クイックスタート
 
-1. Activity Bar から Arc Client を開きます。
-2. `Arc: New Request` を実行するか `+` をクリックします。
+1. Activity Bar から Tessra を開きます。
+2. `Tessra: New Request` を実行するか `+` をクリックします。
 3. HTTP メソッドを選び、URL を入力します。
 4. params、headers、body、auth、scripts、request settings を入力します。
 5. `Send` を押すか、URL 入力欄で `Enter` を押します。
@@ -47,13 +47,13 @@ Body: {"env":"{{envName}}"}
 
 ## ワークスペースプロファイル
 
-- `default` は普段の Arc Client 作業を置くメインのローカル保存領域です
+- `default` は普段の Tessra 作業を置くメインのローカル保存領域です
 - 別プロジェクト、取り込んだ OpenAPI / Postman データ、試験用ワークフローを既存作業と混ぜたくないときは新しいプロファイルを作ってください
 - プロファイルは collections、history、environments、default headers、saved tabs を丸ごと分離します
 - 実運用では次の分け方が分かりやすいです
   - プロファイル: 別プロジェクトや別ワークフロー
   - 環境: 同一プロジェクト内の `local`, `staging`, `prod`
-- `Arc: Change Workspace Profile` から切り替えや新規作成ができます
+- `Tessra: Change Workspace Profile` から切り替えや新規作成ができます
 - リクエスト上部のプロファイルチップに現在のプロファイルが表示され、`default` には意味を説明するツールチップが付きます
 
 ## Scripts
@@ -78,8 +78,8 @@ Body: {"env":"{{envName}}"}
 
 ## 表示言語
 
-- `Arc: Change Display Language` で `English`, `Korean`, `Japanese` を切り替えられます。
-- Arc Client はパネル、プロンプト、通知、アプリ内ガイドに独自の表示言語設定を使います。
+- `Tessra: Change Display Language` で `English`, `Korean`, `Japanese` を切り替えられます。
+- Tessra はパネル、プロンプト、通知、アプリ内ガイドに独自の表示言語設定を使います。
 - VS Code の設定ラベルと Command Palette のコマンド名は引き続き VS Code locale に従います。
 
 ## キーボードショートカット
@@ -93,7 +93,7 @@ macOS では `Cmd` を使います。
 
 ## ローカル保存
 
-Arc Client のデータはすべて VS Code `globalStorage` 配下の JSON ファイルとしてローカル保存されます。
+Tessra のデータはすべて VS Code `globalStorage` 配下の JSON ファイルとしてローカル保存されます。
 
 - `collections.json`
 - `history.json`
@@ -102,4 +102,4 @@ Arc Client のデータはすべて VS Code `globalStorage` 配下の JSON フ�
 - `default-headers.json`
 - `tab-state.json`
 
-Arc Client がネットワークを使うのは、ユーザーが明示的に API リクエストを送るときだけです。
+Tessra がネットワークを使うのは、ユーザーが明示的に API リクエストを送るときだけです。

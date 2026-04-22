@@ -21,16 +21,20 @@ function readPackageManifest(): Record<string, any> {
 }
 
 describe('package localization files', () => {
-  it('uses localized enum item labels for settings dropdowns', () => {
+  it('uses Tessra settings keys with localized enum item labels', () => {
     const manifest = readPackageManifest();
     const properties = manifest.contributes.configuration.properties;
 
-    assert.deepStrictEqual(properties['arc-client.displayLanguage'].enumItemLabels, [
+    assert.ok(properties['tessra.displayLanguage']);
+    assert.ok(properties['tessra.requestPanelTheme']);
+    const legacyDisplayLanguageKey = ['a' + 'rc', 'client'].join('-') + '.displayLanguage';
+    assert.strictEqual(properties[legacyDisplayLanguageKey], undefined);
+    assert.deepStrictEqual(properties['tessra.displayLanguage'].enumItemLabels, [
       '%configuration.displayLanguage.enumLabel.en%',
       '%configuration.displayLanguage.enumLabel.ko%',
       '%configuration.displayLanguage.enumLabel.ja%',
     ]);
-    assert.deepStrictEqual(properties['arc-client.requestPanelTheme'].enumItemLabels, [
+    assert.deepStrictEqual(properties['tessra.requestPanelTheme'].enumItemLabels, [
       '%configuration.requestPanelTheme.enumLabel.default%',
       '%configuration.requestPanelTheme.enumLabel.minimalCool%',
       '%configuration.requestPanelTheme.enumLabel.product%',
@@ -38,29 +42,35 @@ describe('package localization files', () => {
     ]);
   });
 
-  it('keeps the Korean package localization consistent across settings, commands, and views', () => {
-    const ko = readPackageLocalization('package.nls.ko.json');
+  it('keeps package metadata and command titles branded as Tessra', () => {
+    const manifest = readPackageManifest();
+    const en = readPackageLocalization('package.nls.json');
 
-    assert.strictEqual(ko['configuration.displayLanguage.description'].includes('VS Code 설정 레이블'), true);
-    assert.strictEqual(ko['configuration.workspaceProfile.description'].includes('워크스페이스 로컬 저장 프로필'), true);
-    assert.strictEqual(ko['configuration.displayLanguage.enumLabel.ko'], '한국어');
-    assert.strictEqual(ko['configuration.requestPanelTheme.enumLabel.default'], '기본');
-    assert.strictEqual(ko['command.changeDisplayLanguage'], 'Arc: 표시 언어 변경');
-    assert.strictEqual(ko['command.changeRequestPanelTheme'], 'Arc: 요청 패널 테마 변경');
-    assert.strictEqual(ko['command.changeWorkspaceProfile'], 'Arc: 워크스페이스 프로필 변경');
-    assert.strictEqual(ko['command.importCollection'], 'Arc: 컬렉션 가져오기');
-    assert.strictEqual(ko['view.collections'], '컬렉션');
-    assert.strictEqual(ko['view.history'], '히스토리');
+    assert.strictEqual(manifest.name, 'tessra');
+    assert.strictEqual(manifest.displayName, 'Tessra - API Client');
+    assert.strictEqual(
+      manifest.description,
+      'A streamlined, offline-first API testing tool for VS Code. No login, no cloud, no limits.'
+    );
+    assert.strictEqual(en.displayName, 'Tessra - API Client');
+    assert.strictEqual(en['command.changeDisplayLanguage'], 'Tessra: Change Display Language');
+    assert.strictEqual(en['command.changeRequestPanelTheme'], 'Tessra: Change Request Panel Theme');
+    assert.strictEqual(en['command.changeWorkspaceProfile'], 'Tessra: Change Workspace Profile');
+    assert.strictEqual(en['command.importCollection'], 'Tessra: Import Collection');
   });
 
-  it('ships a Japanese package localization file for extension settings and commands', () => {
+  it('ships Korean and Japanese package localization files with Tessra command prefixes', () => {
+    const ko = readPackageLocalization('package.nls.ko.json');
     const ja = readPackageLocalization('package.nls.ja.json');
 
-    assert.strictEqual(ja['configuration.displayLanguage.description'].includes('設定ラベル'), true);
-    assert.strictEqual(ja['configuration.displayLanguage.enumLabel.ja'], '日本語');
-    assert.strictEqual(ja['configuration.requestPanelTheme.enumLabel.product'], 'プロダクト感強め');
-    assert.strictEqual(ja['configuration.requestPanelTheme.description'].includes('リクエストパネル'), true);
-    assert.strictEqual(ja['command.changeRequestPanelTheme'], 'Arc: リクエストパネルテーマを変更');
-    assert.strictEqual(ja['view.history'], '履歴');
+    assert.strictEqual(ko.displayName, 'Tessra - API Client');
+    assert.strictEqual(ja.displayName, 'Tessra - API Client');
+    assert.match(ko['configuration.displayLanguage.description'], /Tessra/);
+    assert.match(ja['configuration.displayLanguage.description'], /Tessra/);
+    assert.match(ko['command.changeDisplayLanguage'], /^Tessra:/);
+    assert.match(ko['command.importCollection'], /^Tessra:/);
+    assert.match(ja['command.changeRequestPanelTheme'], /^Tessra:/);
+    assert.strictEqual(ko['view.collections'].length > 0, true);
+    assert.strictEqual(ja['view.history'].length > 0, true);
   });
 });

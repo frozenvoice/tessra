@@ -1,4 +1,4 @@
-﻿# Arc Client
+﻿# Tessra
 
 VS Code 안에서 동작하는 로컬 우선 REST API 클라이언트입니다.
 
@@ -6,9 +6,9 @@ VS Code 안에서 동작하는 로컬 우선 REST API 클라이언트입니다.
 
 [English README](./README.md)
 
-Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게 요청을 만들고 실행하려는 개발자를 위한 확장입니다. 모든 데이터는 로컬에 남고, 네트워크 호출은 사용자가 직접 보내는 API 요청에서만 발생합니다.
+Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게 요청을 만들고 실행하려는 개발자를 위한 확장입니다. 모든 데이터는 로컬에 남고, 네트워크 호출은 사용자가 직접 보내는 API 요청에서만 발생합니다.
 
-## 왜 Arc Client인가요?
+## 왜 Tessra인가요?
 
 - 오프라인 우선 워크플로
 - 로그인 불필요
@@ -84,7 +84,7 @@ Arc Client는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠�
 - `method:` / `host:` / `type:` 토큰을 지원하는 Collection 필터
 - `status:` / `method:` / `host:` / `pinned:` 토큰을 지원하는 History 필터
 - 실행 시점 스냅샷 기반 history 저장
-- `arc-client.historyMaxItems` 기준 자동 정리
+- `tessra.historyMaxItems` 기준 자동 정리
 - 메서드/호스트 요약, 컬렉션/폴더 개수를 보여주는 더 촘촘한 사이드바 정보 밀도
 
 ### 응답 뷰어
@@ -124,7 +124,7 @@ pm.environment.set("sessionKey", String(body.key));
 - cURL import
 - Copy as cURL
 - OpenAPI import
-- Arc JSON collection import
+- Tessra JSON collection import
 - Postman collection import / export
 - Postman environment import / export
 
@@ -150,12 +150,12 @@ npx vsce package
 
 ## 빠른 시작
 
-1. Activity Bar에서 Arc Client 열기
-2. `Arc: New Request` 실행 또는 `+` 클릭
+1. Activity Bar에서 Tessra 열기
+2. `Tessra: New Request` 실행 또는 `+` 클릭
 3. 메서드와 URL 입력
 4. params, headers, body, auth, scripts, request settings 입력
 5. `Send` 클릭 또는 `Enter`
-6. OpenAPI JSON 파일을 컬렉션으로 가져오려면 Command Palette에서 `Arc: Import OpenAPI` 실행
+6. OpenAPI JSON 파일을 컬렉션으로 가져오려면 Command Palette에서 `Tessra: Import OpenAPI` 실행
 
 환경 변수 예시:
 
@@ -167,44 +167,44 @@ Body: {"env":"{{envName}}"}
 
 ## 인앱 가이드
 
-VS Code 안에서 사용자 가이드를 보려면 `Arc: Open Guide`를 실행하세요.
+VS Code 안에서 사용자 가이드를 보려면 `Tessra: Open Guide`를 실행하세요.
 
 ## 확장 설정
 
-### `arc-client.historyMaxItems`
+### `tessra.historyMaxItems`
 - 타입: `number`
 - 기본값: `100`
 - history에 유지할 최대 항목 수
 
-### `arc-client.allowInsecureCertificates`
+### `tessra.allowInsecureCertificates`
 - 타입: `boolean`
 - 기본값: `false`
 - 명시적으로 켠 경우에만 HTTPS 인증서 검증 비활성화
 - 자체 서명 인증서를 쓰는 로컬 개발 환경용
 
-### `arc-client.displayLanguage`
+### `tessra.displayLanguage`
 - 타입: `string`
 - 기본값: `en`
 - 지원 값: `en`, `ko`, `ja`
-- Arc Client 패널, 프롬프트, 알림, 인앱 가이드 언어를 제어
+- Tessra 패널, 프롬프트, 알림, 인앱 가이드 언어를 제어
 - 인앱 가이드는 해당 언어 가이드 파일이 있을 때 현지화되고, 없으면 영어 가이드로 폴백
-- VS Code locale은 Arc Client 설정 레이블과 Command Palette 명령 이름에는 계속 반영됨
-- 이 설정은 VS Code locale과 별개로 Arc Client UI 자체만 바꿈
-- Command Palette에서 `Arc: Change Display Language`로도 바로 변경 가능
+- VS Code locale은 Tessra 설정 레이블과 Command Palette 명령 이름에는 계속 반영됨
+- 이 설정은 VS Code locale과 별개로 Tessra UI 자체만 바꿈
+- Command Palette에서 `Tessra: Change Display Language`로도 바로 변경 가능
 
-### `arc-client.requestPanelTheme`
+### `tessra.requestPanelTheme`
 - 타입: `string`
 - 기본값: `default`
 - 지원 값: `default`, `minimal-cool`, `product`, `bold-color`
-- Arc Client 요청 패널 webview에 적용할 시각 테마 프리셋을 제어
+- Tessra 요청 패널 webview에 적용할 시각 테마 프리셋을 제어
 - 프리셋: 기본, 미니멀 쿨, 더 프로덕트 감성, 조금 더 대담한 컬러
-- Command Palette에서 `Arc: Change Request Panel Theme`로도 바로 변경 가능
+- Command Palette에서 `Tessra: Change Request Panel Theme`로도 바로 변경 가능
 
-### `arc-client.workspaceProfile`
+### `tessra.workspaceProfile`
 - 타입: `string`
 - 기본값: `default`
 - collections / history / environments / default headers / saved tabs에 사용할 로컬 저장 프로필을 전환
-- Command Palette에서 `Arc: Change Workspace Profile`로 빠르게 전환하거나 새 프로필 생성 가능
+- Command Palette에서 `Tessra: Change Workspace Profile`로 빠르게 전환하거나 새 프로필 생성 가능
 - `default`는 평소 메인 작업용으로 두고, 다른 프로젝트나 import 실험, 임시 테스트가 기존 데이터와 섞이면 안 될 때 새 프로필을 만드는 것을 추천
 - 기준을 단순하게 잡으면 좋습니다. 서로 다른 프로젝트/작업 흐름은 프로필로, 같은 프로젝트 안의 `local` / `staging` / `prod` 차이는 환경으로 나누면 가장 덜 헷갈립니다
 
@@ -231,13 +231,16 @@ macOS에서는 `Cmd`를 사용합니다.
 - `environments.json`
 - `active-environment.json`
 - `default-headers.json`
+- `variables.json`
 - `tab-state.json`
+
+Tessra 이름 변경 후 첫 활성화 시 Tessra 저장 폴더에 기존 데이터가 없으면, 이전 Arc Client 저장 폴더(`arc.arc-client`, `arc-client`)를 확인해 기존 데이터 파일을 새 `tessra.tessra` 폴더로 복사합니다. 이미 Tessra 데이터가 있으면 로컬 데이터 덮어쓰기를 막기 위해 마이그레이션을 건너뜁니다.
 
 일반적인 경로:
 
-- Windows: `%APPDATA%\Code\User\globalStorage\arc.arc-client\`
-- macOS: `~/Library/Application Support/Code/User/globalStorage/arc.arc-client/`
-- Linux: `~/.config/Code/User/globalStorage/arc.arc-client/`
+- Windows: `%APPDATA%\Code\User\globalStorage\tessra.tessra\`
+- macOS: `~/Library/Application Support/Code/User/globalStorage/tessra.tessra/`
+- Linux: `~/.config/Code/User/globalStorage/tessra.tessra/`
 
 ## 개발
 

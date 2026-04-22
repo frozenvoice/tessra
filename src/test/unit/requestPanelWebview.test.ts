@@ -20,7 +20,7 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.defaultHeadersEmptyState': 'No workspace default headers saved yet.',
   'webview.summaryEnvironment': 'Environment: {name}',
   'webview.summaryProfile': 'Profile: {name}',
-  'webview.profileDefaultTooltip': 'Default profile. Use this for your main Arc Client workspace. Create another profile when you want separate collections, history, environments, default headers, and tabs.',
+  'webview.profileDefaultTooltip': 'Default profile. Use this for your main Tessra workspace. Create another profile when you want separate collections, history, environments, default headers, and tabs.',
   'webview.profileCustomTooltip': 'This profile keeps collections, history, environments, default headers, and tabs separate from other profiles. Click to switch or create another profile.',
   'webview.summaryAuth': 'Auth: {value}',
   'webview.summaryHeaders': 'Headers: {count}',
@@ -115,7 +115,7 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.scriptHelpRulePreRequest': 'If something must be prepared right before sending, use the pre-request script.',
   'webview.scriptHelpSequenceTitle': 'Execution order',
   'webview.scriptHelpSequencePre': 'Pre-request script runs first and can prepare variables before the request is sent.',
-  'webview.scriptHelpSequenceSend': 'Arc Client sends the request with the latest resolved URL, headers, body, and auth.',
+  'webview.scriptHelpSequenceSend': 'Tessra sends the request with the latest resolved URL, headers, body, and auth.',
   'webview.scriptHelpSequenceTest': 'After the response arrives, the test script can inspect pm.response and assert values.',
   'webview.scriptHelpSequencePersist': 'Values saved with pm.environment.set(...) are available to the next request right away.',
   'webview.scriptHelpFlowTitle': 'Chain request 1 -> request 2',
@@ -970,7 +970,7 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /js-toggle-script-help/);
     assert.match(script, /const activeTab = tabs\.find\(t => t\.id === activeTabId\);/);
     assert.match(script, /activeTab\.scriptHelpCollapsed = activeTab\.scriptHelpCollapsed !== true/);
-    assert.match(source, /\.req-area\{flex:1 1 0;min-height:0;overflow-y:auto;padding:2px 8px\}/);
+    assert.match(source, /\.req-area\{flex:1 1 0;min-height:0;overflow:hidden;padding:2px 8px;display:flex;flex-direction:column\}/);
     assert.match(source, /\.url-primary-group\{display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 auto\}/);
     assert.match(source, /\.url-hero-actions\{display:flex;align-items:stretch;justify-content:flex-end;flex:0 0 auto\}/);
     assert.match(source, /\.url-secondary-btn\{min-height:28px;padding:0 8px;border-radius:6px;gap:6px;font-size:13px;/);

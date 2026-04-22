@@ -10,7 +10,7 @@ export type CollectionNode =
   | { kind: 'folder'; item: CollectionItem; collectionId: string }
   | { kind: 'request'; item: CollectionItem; collectionId: string };
 
-const MIME = 'application/vnd.arc.collection-node';
+const MIME = 'application/vnd.tessra.collection-node';
 
 interface CollectionFilter {
   terms: string[];
@@ -87,7 +87,7 @@ export class CollectionTreeProvider
         item.iconPath = getRequestMethodIcon(req.method);
         item.contextValue = 'request';
         item.command = {
-          command: 'arc.loadFromCollection',
+          command: 'tessra.loadFromCollection',
           title: LocalizationService.t('tree.loadRequest'),
           arguments: [node],
         };

@@ -32,4 +32,20 @@ describe('storage service source', () => {
     assert.match(source, /this\.resolveFilePath\('environments\.json'\)/);
     assert.match(source, /this\.resolveFilePath\('tab-state\.json'\)/);
   });
+
+  it('migrates legacy Arc Client storage only when Tessra storage is empty', () => {
+    assert.match(source, /LEGACY_STORAGE_DIR_CANDIDATES = \['arc\.arc-client', 'arc-client'\]/);
+    assert.match(source, /STORAGE_DATA_INDICATOR_FILES = \[\s*'collections\.json',\s*'environments\.json',\s*'history\.json',\s*\]/);
+    assert.match(source, /MIGRATABLE_STORAGE_ENTRIES = \[/);
+    assert.match(source, /'collections\.json'/);
+    assert.match(source, /'environments\.json'/);
+    assert.match(source, /'history\.json'/);
+    assert.match(source, /'default-headers\.json'/);
+    assert.match(source, /'variables\.json'/);
+    assert.match(source, /'tab-state\.json'/);
+    assert.match(source, /private migrateLegacyStorageIfNeeded\(\): boolean/);
+    assert.match(source, /if \(this\.hasStorageData\(this\.rootStoragePath\)\) \{ return false; \}/);
+    assert.match(source, /StorageService\.STORAGE_DATA_INDICATOR_FILES\.some/);
+    assert.match(source, /fs\.copyFileSync\(sourcePath, targetPath, fs\.constants\.COPYFILE_EXCL\)/);
+  });
 });

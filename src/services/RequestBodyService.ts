@@ -75,7 +75,7 @@ export class RequestBodyService {
     headers: KeyValue[],
     formData: FormDataField[]
   ): Promise<PreparedRequestBody> {
-    const boundary = `----ArcClient${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+    const boundary = `----TessraClient${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
     const parts: Buffer[] = [];
 
     for (const field of formData) {

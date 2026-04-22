@@ -4,7 +4,7 @@ import { HistoryEntry } from '../models/types';
 import { LocalizationService } from '../services/LocalizationService';
 import { buildHistoryDescription, buildHistoryTooltip, getRequestMethodIcon } from './requestTreeVisuals';
 
-const MIME = 'application/vnd.arc.history-entry';
+const MIME = 'application/vnd.tessra.history-entry';
 
 interface HistoryFilter {
   terms: string[];
@@ -64,7 +64,7 @@ export class HistoryTreeProvider
     item.contextValue = entry.pinned ? 'history-pinned' : 'history';
 
     item.command = {
-      command: 'arc.loadFromHistory',
+      command: 'tessra.loadFromHistory',
       title: LocalizationService.t('tree.loadRequest'),
       arguments: [entry],
     };

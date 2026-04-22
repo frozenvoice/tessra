@@ -1,13 +1,13 @@
 {
-  "name": "arc-client",
-  "displayName": "%displayName%",
-  "description": "%description%",
+  "name": "tessra",
+  "displayName": "Tessra - API Client",
+  "description": "A streamlined, offline-first API testing tool for VS Code. No login, no cloud, no limits.",
   "version": "1.0.0",
-  "publisher": "arc",
+  "publisher": "tessra",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/arc/arc-client"
+    "url": "https://github.com/tessra/tessra"
   },
   "engines": {
     "vscode": "^1.74.0"
@@ -33,26 +33,26 @@
     "api-testing"
   ],
   "activationEvents": [
-    "onWebviewPanel:arc.requestPanel"
+    "onWebviewPanel:tessra.requestPanel"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
       "title": "%displayName%",
       "properties": {
-        "arc-client.historyMaxItems": {
+        "tessra.historyMaxItems": {
           "type": "number",
           "default": 100,
           "minimum": 10,
           "maximum": 1000,
           "description": "%configuration.historyMaxItems.description%"
         },
-        "arc-client.allowInsecureCertificates": {
+        "tessra.allowInsecureCertificates": {
           "type": "boolean",
           "default": false,
           "description": "%configuration.allowInsecureCertificates.description%"
         },
-        "arc-client.displayLanguage": {
+        "tessra.displayLanguage": {
           "type": "string",
           "scope": "window",
           "default": "en",
@@ -73,7 +73,7 @@
           ],
           "description": "%configuration.displayLanguage.description%"
         },
-        "arc-client.requestPanelTheme": {
+        "tessra.requestPanelTheme": {
           "type": "string",
           "scope": "window",
           "default": "default",
@@ -97,7 +97,7 @@
           ],
           "description": "%configuration.requestPanelTheme.description%"
         },
-        "arc-client.workspaceProfile": {
+        "tessra.workspaceProfile": {
           "type": "string",
           "scope": "window",
           "default": "default",
@@ -107,188 +107,188 @@
     },
     "commands": [
       {
-        "command": "arc.newRequest",
+        "command": "tessra.newRequest",
         "title": "%command.newRequest%",
         "icon": "$(add)"
       },
       {
-        "command": "arc.createCollection",
+        "command": "tessra.createCollection",
         "title": "%command.createCollection%",
         "icon": "$(new-folder)"
       },
       {
-        "command": "arc.createFolder",
+        "command": "tessra.createFolder",
         "title": "%command.createFolder%",
         "icon": "$(new-folder)"
       },
       {
-        "command": "arc.rename",
+        "command": "tessra.rename",
         "title": "%command.rename%"
       },
       {
-        "command": "arc.delete",
+        "command": "tessra.delete",
         "title": "%command.delete%"
       },
       {
-        "command": "arc.duplicateRequest",
+        "command": "tessra.duplicateRequest",
         "title": "%command.duplicate%"
       },
       {
-        "command": "arc.saveRequestAs",
+        "command": "tessra.saveRequestAs",
         "title": "%command.saveAs%"
       },
       {
-        "command": "arc.clearHistory",
+        "command": "tessra.clearHistory",
         "title": "%command.clearHistory%",
         "icon": "$(clear-all)"
       },
       {
-        "command": "arc.pinHistory",
+        "command": "tessra.pinHistory",
         "title": "%command.pin%",
         "icon": "$(pin)"
       },
       {
-        "command": "arc.unpinHistory",
+        "command": "tessra.unpinHistory",
         "title": "%command.unpin%",
         "icon": "$(pinned)"
       },
       {
-        "command": "arc.deletePinnedHistory",
+        "command": "tessra.deletePinnedHistory",
         "title": "%command.deletePinned%",
         "icon": "$(trash)"
       },
       {
-        "command": "arc.createEnvironment",
+        "command": "tessra.createEnvironment",
         "title": "%command.createEnvironment%",
         "icon": "$(add)"
       },
       {
-        "command": "arc.renameEnvironment",
+        "command": "tessra.renameEnvironment",
         "title": "%command.rename%"
       },
       {
-        "command": "arc.deleteEnvironment",
+        "command": "tessra.deleteEnvironment",
         "title": "%command.delete%"
       },
       {
-        "command": "arc.editEnvironment",
+        "command": "tessra.editEnvironment",
         "title": "%command.editVariables%"
       },
       {
-        "command": "arc.setActiveEnvironment",
+        "command": "tessra.setActiveEnvironment",
         "title": "%command.setActive%",
         "icon": "$(pass-filled)"
       },
       {
-        "command": "arc.deactivateEnvironment",
+        "command": "tessra.deactivateEnvironment",
         "title": "%command.deactivate%",
         "icon": "$(circle-slash)"
       },
       {
-        "command": "arc.switchEnvironment",
+        "command": "tessra.switchEnvironment",
         "title": "%command.switchEnvironment%"
       },
       {
-        "command": "arc.changeDisplayLanguage",
+        "command": "tessra.changeDisplayLanguage",
         "title": "%command.changeDisplayLanguage%"
       },
       {
-        "command": "arc.changeRequestPanelTheme",
+        "command": "tessra.changeRequestPanelTheme",
         "title": "%command.changeRequestPanelTheme%"
       },
       {
-        "command": "arc.editDefaultHeaders",
+        "command": "tessra.editDefaultHeaders",
         "title": "%command.defaultHeaders%",
         "icon": "$(settings-gear)"
       },
       {
-        "command": "arc.importCurl",
+        "command": "tessra.importCurl",
         "title": "%command.importCurl%",
         "icon": "$(cloud-download)"
       },
       {
-        "command": "arc.importCollection",
+        "command": "tessra.importCollection",
         "title": "%command.importCollection%",
         "icon": "$(folder-opened)"
       },
       {
-        "command": "arc.importOpenApi",
+        "command": "tessra.importOpenApi",
         "title": "%command.importOpenApi%",
         "icon": "$(file-code)"
       },
       {
-        "command": "arc.exportPostmanCollection",
+        "command": "tessra.exportPostmanCollection",
         "title": "%command.exportPostmanCollection%"
       },
       {
-        "command": "arc.exportPostmanEnvironment",
+        "command": "tessra.exportPostmanEnvironment",
         "title": "%command.exportPostmanEnvironment%"
       },
       {
-        "command": "arc.collapseAll",
+        "command": "tessra.collapseAll",
         "title": "%command.collapseAll%",
         "icon": "$(collapse-all)"
       },
       {
-        "command": "arc.filterCollections",
+        "command": "tessra.filterCollections",
         "title": "%command.filterCollections%",
         "icon": "$(search)"
       },
       {
-        "command": "arc.clearCollectionFilter",
+        "command": "tessra.clearCollectionFilter",
         "title": "%command.clearFilter%",
         "icon": "$(close)"
       },
       {
-        "command": "arc.filterHistory",
+        "command": "tessra.filterHistory",
         "title": "%command.filterHistory%",
         "icon": "$(search)"
       },
       {
-        "command": "arc.clearHistoryFilter",
+        "command": "tessra.clearHistoryFilter",
         "title": "%command.clearFilter%",
         "icon": "$(close)"
       },
       {
-        "command": "arc.copyAsCurl",
+        "command": "tessra.copyAsCurl",
         "title": "%command.copyAsCurl%"
       },
       {
-        "command": "arc.runCollection",
+        "command": "tessra.runCollection",
         "title": "%command.runCollection%",
         "icon": "$(run-all)"
       },
       {
-        "command": "arc.openGuide",
+        "command": "tessra.openGuide",
         "title": "%command.openGuide%",
         "icon": "$(book)"
       },
       {
-        "command": "arc.changeWorkspaceProfile",
+        "command": "tessra.changeWorkspaceProfile",
         "title": "%command.changeWorkspaceProfile%"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "arc-sidebar",
+          "id": "tessra-sidebar",
           "title": "%displayName%",
           "icon": "$(pulse)"
         }
       ]
     },
     "views": {
-      "arc-sidebar": [
+      "tessra-sidebar": [
         {
-          "id": "arc.collections",
+          "id": "tessra-collections",
           "name": "%view.collections%"
         },
         {
-          "id": "arc.environments",
+          "id": "tessra-environments",
           "name": "%view.environments%"
         },
         {
-          "id": "arc.history",
+          "id": "tessra-history",
           "name": "%view.history%"
         }
       ]
@@ -296,159 +296,159 @@
     "menus": {
       "view/title": [
         {
-          "command": "arc.newRequest",
-          "when": "view == arc.collections",
+          "command": "tessra.newRequest",
+          "when": "view == tessra-collections",
           "group": "navigation"
         },
         {
-          "command": "arc.clearCollectionFilter",
-          "when": "view == arc.collections && arc.collectionFilterActive",
+          "command": "tessra.clearCollectionFilter",
+          "when": "view == tessra-collections && tessra.collectionFilterActive",
           "group": "navigation"
         },
         {
-          "command": "arc.filterCollections",
-          "when": "view == arc.collections",
+          "command": "tessra.filterCollections",
+          "when": "view == tessra-collections",
           "group": "navigation"
         },
         {
-          "command": "arc.createCollection",
-          "when": "view == arc.collections",
+          "command": "tessra.createCollection",
+          "when": "view == tessra-collections",
           "group": "navigation"
         },
         {
-          "command": "arc.createEnvironment",
-          "when": "view == arc.environments",
+          "command": "tessra.createEnvironment",
+          "when": "view == tessra-environments",
           "group": "navigation"
         },
         {
-          "command": "arc.editDefaultHeaders",
-          "when": "view == arc.environments",
+          "command": "tessra.editDefaultHeaders",
+          "when": "view == tessra-environments",
           "group": "navigation"
         },
         {
-          "command": "arc.importCurl",
-          "when": "view == arc.collections",
+          "command": "tessra.importCurl",
+          "when": "view == tessra-collections",
           "group": "navigation"
         },
         {
-          "command": "arc.createCollection",
-          "when": "view == arc.collections",
+          "command": "tessra.createCollection",
+          "when": "view == tessra-collections",
           "group": "1_create@1"
         },
         {
-          "command": "arc.importCollection",
-          "when": "view == arc.collections",
+          "command": "tessra.importCollection",
+          "when": "view == tessra-collections",
           "group": "2_import@1"
         },
         {
-          "command": "arc.importCurl",
-          "when": "view == arc.collections",
+          "command": "tessra.importCurl",
+          "when": "view == tessra-collections",
           "group": "2_import@2"
         },
         {
-          "command": "arc.collapseAll",
-          "when": "view == arc.collections",
+          "command": "tessra.collapseAll",
+          "when": "view == tessra-collections",
           "group": "3_collapse@1"
         },
         {
-          "command": "arc.openGuide",
-          "when": "view == arc.collections",
+          "command": "tessra.openGuide",
+          "when": "view == tessra-collections",
           "group": "4_help@1"
         },
         {
-          "command": "arc.clearHistoryFilter",
-          "when": "view == arc.history && arc.historyFilterActive",
+          "command": "tessra.clearHistoryFilter",
+          "when": "view == tessra-history && tessra.historyFilterActive",
           "group": "navigation"
         },
         {
-          "command": "arc.filterHistory",
-          "when": "view == arc.history",
+          "command": "tessra.filterHistory",
+          "when": "view == tessra-history",
           "group": "navigation"
         },
         {
-          "command": "arc.clearHistory",
-          "when": "view == arc.history",
+          "command": "tessra.clearHistory",
+          "when": "view == tessra-history",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
-          "command": "arc.createFolder",
+          "command": "tessra.createFolder",
           "when": "viewItem == collection || viewItem == folder",
           "group": "1_actions@1"
         },
         {
-          "command": "arc.duplicateRequest",
+          "command": "tessra.duplicateRequest",
           "when": "viewItem == request || viewItem == folder",
           "group": "1_actions@2"
         },
         {
-          "command": "arc.saveRequestAs",
+          "command": "tessra.saveRequestAs",
           "when": "viewItem == request || viewItem == folder",
           "group": "1_actions@3"
         },
         {
-          "command": "arc.copyAsCurl",
+          "command": "tessra.copyAsCurl",
           "when": "viewItem == request",
           "group": "1_actions@4"
         },
         {
-          "command": "arc.exportPostmanCollection",
+          "command": "tessra.exportPostmanCollection",
           "when": "viewItem == collection",
           "group": "1_actions@5"
         },
         {
-          "command": "arc.runCollection",
+          "command": "tessra.runCollection",
           "when": "viewItem == collection || viewItem == folder",
           "group": "0_run@1"
         },
         {
-          "command": "arc.rename",
+          "command": "tessra.rename",
           "when": "viewItem == collection || viewItem == folder || viewItem == request",
           "group": "2_edit@1"
         },
         {
-          "command": "arc.delete",
+          "command": "tessra.delete",
           "when": "viewItem == collection || viewItem == folder || viewItem == request",
           "group": "2_edit@2"
         },
         {
-          "command": "arc.setActiveEnvironment",
+          "command": "tessra.setActiveEnvironment",
           "when": "viewItem == environment",
           "group": "0_active@1"
         },
         {
-          "command": "arc.deactivateEnvironment",
+          "command": "tessra.deactivateEnvironment",
           "when": "viewItem == environment-active",
           "group": "0_active@1"
         },
         {
-          "command": "arc.renameEnvironment",
+          "command": "tessra.renameEnvironment",
           "when": "viewItem == environment || viewItem == environment-active",
           "group": "1_edit@1"
         },
         {
-          "command": "arc.deleteEnvironment",
+          "command": "tessra.deleteEnvironment",
           "when": "viewItem == environment || viewItem == environment-active",
           "group": "1_edit@2"
         },
         {
-          "command": "arc.exportPostmanEnvironment",
+          "command": "tessra.exportPostmanEnvironment",
           "when": "viewItem == environment || viewItem == environment-active",
           "group": "1_edit@3"
         },
         {
-          "command": "arc.pinHistory",
+          "command": "tessra.pinHistory",
           "when": "viewItem == history",
           "group": "inline"
         },
         {
-          "command": "arc.unpinHistory",
+          "command": "tessra.unpinHistory",
           "when": "viewItem == history-pinned",
           "group": "inline"
         },
         {
-          "command": "arc.deletePinnedHistory",
+          "command": "tessra.deletePinnedHistory",
           "when": "viewItem == history-pinned",
           "group": "2_delete@1"
         }

@@ -55,7 +55,7 @@ export class RequestPanel {
   public static historyProvider: HistoryTreeProvider;
   public static collectionProvider: CollectionTreeProvider;
   public static environmentProvider: EnvironmentTreeProvider;
-  private static readonly viewType = 'arc.requestPanel';
+  private static readonly viewType = 'tessra.requestPanel';
   private static readonly INCOMING_MESSAGE_TYPES = new Set<string>([
     MessageType.SendRequest,
     MessageType.SaveRequest,
@@ -233,7 +233,7 @@ export class RequestPanel {
   }
 
   private getAllowInsecureCertificates(): boolean {
-    return vscode.workspace.getConfiguration('arc-client').get<boolean>('allowInsecureCertificates', false);
+    return vscode.workspace.getConfiguration('tessra').get<boolean>('allowInsecureCertificates', false);
   }
 
   private cancelActiveRequest(tabId: string): void {
@@ -330,7 +330,7 @@ export class RequestPanel {
 
     const panel = vscode.window.createWebviewPanel(
       RequestPanel.viewType,
-      'Arc Client',
+      'Tessra',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -903,16 +903,16 @@ export class RequestPanel {
         this.loadDefaultHeaders();
         break;
       case MessageType.SwitchEnvironment:
-        await vscode.commands.executeCommand('arc.switchEnvironment');
+        await vscode.commands.executeCommand('tessra.switchEnvironment');
         break;
       case MessageType.ChangeWorkspaceProfile:
-        await vscode.commands.executeCommand('arc.changeWorkspaceProfile');
+        await vscode.commands.executeCommand('tessra.changeWorkspaceProfile');
         break;
       case MessageType.OpenResponseUrl:
         await this.openResponseUrl(message.url);
         break;
       case MessageType.OpenGuide:
-        await vscode.commands.executeCommand('arc.openGuide');
+        await vscode.commands.executeCommand('tessra.openGuide');
         break;
     }
   }
@@ -1308,7 +1308,7 @@ export class RequestPanel {
     request: Request,
     response: { status: number; statusText: string; time: number } | null
   ) {
-    const maxItems = vscode.workspace.getConfiguration('arc-client').get<number>('historyMaxItems', 100);
+    const maxItems = vscode.workspace.getConfiguration('tessra').get<number>('historyMaxItems', 100);
     const removed = RequestPanel.storage.addHistoryEntry({
       id: Date.now().toString(36) + Math.random().toString(36).substring(2, 8),
       request,
@@ -1530,7 +1530,7 @@ export class RequestPanel {
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <meta http-equiv="Content-Security-Policy" content="${csp}"/>
-<title>Arc Client</title>
+<title>Tessra</title>
 <style nonce="${nonce}">
 /* highlight.js vs2015 ?뚮쭏 (?몃씪?? */
 pre code.hljs{display:block;overflow-x:auto;padding:0}code.hljs{padding:0}.hljs{background:transparent;color:#dcdcdc}.hljs-keyword,.hljs-literal,.hljs-name,.hljs-symbol{color:#569cd6}.hljs-link{color:#569cd6;text-decoration:underline}.hljs-built_in,.hljs-type{color:#4ec9b0}.hljs-class,.hljs-number{color:#b8d7a3}.hljs-meta .hljs-string,.hljs-string{color:#d69d85}.hljs-regexp,.hljs-template-tag{color:#9a5334}.hljs-formula,.hljs-function,.hljs-params,.hljs-subst,.hljs-title{color:#dcdcdc}.hljs-comment,.hljs-quote{color:#57a64a;font-style:italic}.hljs-doctag{color:#608b4e}.hljs-meta,.hljs-meta .hljs-keyword,.hljs-tag{color:#9b9b9b}.hljs-template-variable,.hljs-variable{color:#bd63c5}.hljs-attr,.hljs-attribute{color:#9cdcfe}.hljs-section{color:gold}.hljs-emphasis{font-style:italic}.hljs-strong{font-weight:700}.hljs-bullet,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id,.hljs-selector-pseudo,.hljs-selector-tag{color:#d7ba7d}.hljs-addition{background-color:#144212;display:inline-block;width:100%}.hljs-deletion{background-color:#600;display:inline-block;width:100%}
@@ -2258,25 +2258,25 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .env-indicator{font-size:13px;opacity:.6;padding:0 10px 2px;flex-shrink:0}
 .env-indicator .var-name{color:#dcdcaa}
 :root{
-  --arc-surface-1:rgba(255,255,255,.035);
-  --arc-surface-2:rgba(255,255,255,.055);
-  --arc-surface-3:rgba(255,255,255,.08);
-  --arc-border-soft:rgba(255,255,255,.08);
-  --arc-border-strong:rgba(255,255,255,.14);
-  --arc-shadow-sm:0 12px 28px rgba(0,0,0,.18);
-  --arc-shadow-lg:0 24px 52px rgba(0,0,0,.24);
-  --arc-glow-blue:rgba(87,166,255,.18);
-  --arc-glow-mint:rgba(78,201,176,.12);
-  --arc-tone-info:#93c8ff;
-  --arc-tone-info-bg:rgba(87,166,255,.1);
-  --arc-tone-warning:#f1cf8a;
-  --arc-tone-warning-bg:rgba(229,192,123,.1);
-  --arc-tone-success:#93e493;
-  --arc-tone-success-bg:rgba(78,201,78,.1);
-  --arc-tone-danger:#ffb3b3;
-  --arc-tone-danger-bg:rgba(255,122,122,.1);
-  --arc-tone-neutral:#bfc9d8;
-  --arc-tone-neutral-bg:rgba(255,255,255,.05);
+  --tessra-surface-1:rgba(255,255,255,.035);
+  --tessra-surface-2:rgba(255,255,255,.055);
+  --tessra-surface-3:rgba(255,255,255,.08);
+  --tessra-border-soft:rgba(255,255,255,.08);
+  --tessra-border-strong:rgba(255,255,255,.14);
+  --tessra-shadow-sm:0 12px 28px rgba(0,0,0,.18);
+  --tessra-shadow-lg:0 24px 52px rgba(0,0,0,.24);
+  --tessra-glow-blue:rgba(87,166,255,.18);
+  --tessra-glow-mint:rgba(78,201,176,.12);
+  --tessra-tone-info:#93c8ff;
+  --tessra-tone-info-bg:rgba(87,166,255,.1);
+  --tessra-tone-warning:#f1cf8a;
+  --tessra-tone-warning-bg:rgba(229,192,123,.1);
+  --tessra-tone-success:#93e493;
+  --tessra-tone-success-bg:rgba(78,201,78,.1);
+  --tessra-tone-danger:#ffb3b3;
+  --tessra-tone-danger-bg:rgba(255,122,122,.1);
+  --tessra-tone-neutral:#bfc9d8;
+  --tessra-tone-neutral-bg:rgba(255,255,255,.05);
 }
 body{
   background:
@@ -2296,8 +2296,8 @@ body{
   height:28px;
   justify-content:center;
   border-radius:999px;
-  border:1px solid var(--arc-border-soft);
-  background:linear-gradient(180deg,var(--arc-surface-2),rgba(255,255,255,.015));
+  border:1px solid var(--tessra-border-soft);
+  background:linear-gradient(180deg,var(--tessra-surface-2),rgba(255,255,255,.015));
 }
 .add-tab:hover{
   background:linear-gradient(180deg,rgba(87,166,255,.18),rgba(87,166,255,.08));
@@ -2350,9 +2350,9 @@ body{
   gap:6px;
 }
 .request-stage{
-  border-color:var(--arc-border-strong);
+  border-color:var(--tessra-border-strong);
   background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.025));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--arc-shadow-sm);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--tessra-shadow-sm);
 }
 .request-status-chip,
 .preflight-pill,
@@ -2381,7 +2381,7 @@ body{
 .dirty-btn-discard,
 .dirty-btn-cancel{
   border-radius:12px;
-  border-color:var(--arc-border-soft);
+  border-color:var(--tessra-border-soft);
   background:linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.018));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 10px 24px rgba(0,0,0,.12);
   backdrop-filter:blur(10px);
@@ -2394,7 +2394,7 @@ body{
 .dirty-btn-discard:hover,
 .dirty-btn-cancel:hover{
   transform:translateY(-1px);
-  border-color:var(--arc-border-strong);
+  border-color:var(--tessra-border-strong);
   background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.03));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 14px 30px rgba(0,0,0,.16);
 }
@@ -2436,7 +2436,7 @@ body{
     radial-gradient(circle at top right, rgba(87,166,255,.1), transparent 26%),
     radial-gradient(circle at left center, rgba(78,201,176,.05), transparent 18%),
     linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.018));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--arc-shadow-lg);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--tessra-shadow-lg);
 }
 .url-primary-group{
   padding:2px;
@@ -2515,9 +2515,9 @@ body{
 .var-usage-card,
 .formdata-row,
 .test-alert{
-  border-color:var(--arc-border-soft);
+  border-color:var(--tessra-border-soft);
   background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.018));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--arc-shadow-sm);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--tessra-shadow-sm);
 }
 .script-helper-shell{
   background:
@@ -2551,7 +2551,7 @@ body{
   border-radius:8px;
   border:1px solid rgba(255,255,255,.07);
   background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.015));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--arc-shadow-sm);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),var(--tessra-shadow-sm);
 }
 .response-meta{
   gap:8px 10px;
@@ -2677,13 +2677,13 @@ body{
   box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 0 0 1px rgba(229,192,123,.08),0 0 28px rgba(229,192,123,.05);
 }
 body[data-panel-theme="minimal-cool"]{
-  --arc-surface-1:rgba(197,216,255,.02);
-  --arc-surface-2:rgba(197,216,255,.035);
-  --arc-surface-3:rgba(197,216,255,.055);
-  --arc-border-soft:rgba(190,214,255,.08);
-  --arc-border-strong:rgba(190,214,255,.13);
-  --arc-shadow-sm:0 4px 12px rgba(0,0,0,.08);
-  --arc-shadow-lg:0 10px 24px rgba(0,0,0,.12);
+  --tessra-surface-1:rgba(197,216,255,.02);
+  --tessra-surface-2:rgba(197,216,255,.035);
+  --tessra-surface-3:rgba(197,216,255,.055);
+  --tessra-border-soft:rgba(190,214,255,.08);
+  --tessra-border-strong:rgba(190,214,255,.13);
+  --tessra-shadow-sm:0 4px 12px rgba(0,0,0,.08);
+  --tessra-shadow-lg:0 10px 24px rgba(0,0,0,.12);
   background:
     radial-gradient(circle at 16% 0%, rgba(87,166,255,.03), transparent 24%),
     linear-gradient(180deg, rgba(197,216,255,.012), rgba(255,255,255,0) 18%),
@@ -2786,13 +2786,13 @@ body[data-panel-theme="minimal-cool"] .xml-path-body{
   box-shadow:none;
 }
 body[data-panel-theme="product"]{
-  --arc-surface-1:rgba(117,188,255,.02);
-  --arc-surface-2:rgba(117,188,255,.034);
-  --arc-surface-3:rgba(117,188,255,.055);
-  --arc-border-soft:rgba(117,188,255,.08);
-  --arc-border-strong:rgba(117,188,255,.14);
-  --arc-shadow-sm:0 8px 16px rgba(0,0,0,.12);
-  --arc-shadow-lg:0 14px 28px rgba(0,0,0,.16);
+  --tessra-surface-1:rgba(117,188,255,.02);
+  --tessra-surface-2:rgba(117,188,255,.034);
+  --tessra-surface-3:rgba(117,188,255,.055);
+  --tessra-border-soft:rgba(117,188,255,.08);
+  --tessra-border-strong:rgba(117,188,255,.14);
+  --tessra-shadow-sm:0 8px 16px rgba(0,0,0,.12);
+  --tessra-shadow-lg:0 14px 28px rgba(0,0,0,.16);
   background:
     linear-gradient(180deg,rgba(117,188,255,.022),rgba(255,255,255,0) 16%),
     linear-gradient(90deg,rgba(255,255,255,.015),transparent 24%,transparent 76%,rgba(255,255,255,.015)),
@@ -2896,13 +2896,13 @@ body[data-panel-theme="product"] .xml-path-body{
   box-shadow:none;
 }
 body[data-panel-theme="bold-color"]{
-  --arc-surface-1:rgba(255,255,255,.045);
-  --arc-surface-2:rgba(255,255,255,.07);
-  --arc-surface-3:rgba(255,255,255,.11);
-  --arc-border-soft:rgba(136,190,255,.12);
-  --arc-border-strong:rgba(136,190,255,.2);
-  --arc-shadow-sm:0 18px 40px rgba(0,0,0,.22);
-  --arc-shadow-lg:0 32px 70px rgba(0,0,0,.28);
+  --tessra-surface-1:rgba(255,255,255,.045);
+  --tessra-surface-2:rgba(255,255,255,.07);
+  --tessra-surface-3:rgba(255,255,255,.11);
+  --tessra-border-soft:rgba(136,190,255,.12);
+  --tessra-border-strong:rgba(136,190,255,.2);
+  --tessra-shadow-sm:0 18px 40px rgba(0,0,0,.22);
+  --tessra-shadow-lg:0 32px 70px rgba(0,0,0,.28);
   background:
     radial-gradient(circle at 8% 0%, rgba(87,166,255,.16), transparent 28%),
     radial-gradient(circle at 92% 0%, rgba(78,201,176,.12), transparent 24%),

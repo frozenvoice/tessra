@@ -1,7 +1,7 @@
-﻿# Arc Client 프로젝트 메모
+﻿# Tessra 프로젝트 메모
 
 ## 제품 정체성
-Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언트다.
+Tessra는 VS Code 안에서 동작하는 local-first REST API 클라이언트다.
 
 - 로그인 없음
 - 클라우드 동기화 없음
@@ -78,7 +78,7 @@ Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언�
 - cURL import
 - Copy as cURL
 - OpenAPI import
-- Arc JSON collection import
+- Tessra JSON collection import
 - Postman collection import / export
 - Postman environment import / export
 
@@ -99,27 +99,27 @@ Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언�
 - disable scripts
 
 ### UI 언어
-- `arc-client.displayLanguage` 설정으로 Arc Client 패널/프롬프트/알림/인앱 가이드 언어 선택
+- `tessra.displayLanguage` 설정으로 Tessra 패널/프롬프트/알림/인앱 가이드 언어 선택
 - 기본값은 영어
 - 현재 유지 중인 표시 언어는 `en`, `ko`, `ja`
-- Arc Client UI 자체는 VS Code locale과 분리되어 동작
+- Tessra UI 자체는 VS Code locale과 분리되어 동작
 - 설정 레이블과 Command Palette 명령 이름은 VS Code locale을 계속 따름
 
 ### 요청 패널 테마
-- `arc-client.requestPanelTheme` 설정으로 요청 패널 webview 테마 프리셋 전환
+- `tessra.requestPanelTheme` 설정으로 요청 패널 webview 테마 프리셋 전환
 - 지원 프리셋: `default`, `minimal-cool`, `product`, `bold-color`
-- Command Palette에서 `Arc: Change Request Panel Theme` 제공
+- Command Palette에서 `Tessra: Change Request Panel Theme` 제공
 - 열린 요청 패널에서도 즉시 테마가 반영되도록 유지
 
 ### 워크스페이스 프로필
-- `arc-client.workspaceProfile` 설정으로 로컬 저장 프로필 전환
+- `tessra.workspaceProfile` 설정으로 로컬 저장 프로필 전환
 - collections / history / environments / default headers / saved tabs를 프로필별로 분리
-- Command Palette에서 `Arc: Change Workspace Profile` 제공
+- Command Palette에서 `Tessra: Change Workspace Profile` 제공
 - 요청 패널 상단 상태 배지에 현재 프로필 표시
 - `default`는 메인 작업용으로 두고, 다른 프로젝트나 import 실험이 기존 작업과 섞이면 안 될 때 새 프로필을 만드는 방향을 권장
 
 ### OpenAPI import 사용
-- Command Palette에서 `Arc: Import OpenAPI` 실행
+- Command Palette에서 `Tessra: Import OpenAPI` 실행
 - OpenAPI JSON 파일을 선택하면 paths, methods, base URL 예시를 컬렉션과 환경으로 변환
 
 ## 현재 구조 메모
@@ -130,7 +130,7 @@ Arc Client는 VS Code 안에서 동작하는 local-first REST API 클라이언�
 - scripts는 `src/services/ScriptRunner.ts`
 - import/export는 `src/services/ImportExportService.ts`
 - compare는 `src/services/ResponseCompareService.ts`
-- 로컬 저장 분리는 `src/services/StorageService.ts`
+- 로컬 저장 분리와 Arc Client → Tessra 데이터 마이그레이션은 `src/services/StorageService.ts`
 
 ## 남은 큰 작업
 - WebSocket 지원

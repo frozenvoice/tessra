@@ -152,7 +152,7 @@ export class CodegenService {
       prepared.bodyType === 'binary' || prepared.bodyType === 'formdata' ? `import java.nio.file.Path;` : ``,
       `import java.nio.charset.StandardCharsets;`,
       ``,
-      `public class ArcClientExample {`,
+      `public class TessraClientExample {`,
       `    public static void main(String[] args) throws Exception {`,
       `        URL url = new URL(${JSON.stringify(prepared.url)});`,
       `        HttpURLConnection connection = (HttpURLConnection) url.openConnection();`,
@@ -193,7 +193,7 @@ export class CodegenService {
     }
 
     if (request.bodyType === 'formdata') {
-      const boundary = '----ArcClientBoundary';
+      const boundary = '----TessraClientBoundary';
       const lines: string[] = [
         `        String boundary = ${JSON.stringify(boundary)};`,
         `        connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);`,

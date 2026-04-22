@@ -39,16 +39,23 @@ interface ImportStats {
 export function activate(context: vscode.ExtensionContext) {
   const t = (key: string, params?: Record<string, string | number>) => LocalizationService.t(key, params);
   const storage = new StorageService(context);
+  if (storage.didMigrateLegacyStorage()) {
+    vscode.window.showInformationMessage('기존 Arc Client 데이터를 마이그레이션했습니다');
+  }
+  const legacyMigrationError = storage.getLegacyMigrationError();
+  if (legacyMigrationError) {
+    vscode.window.showErrorMessage(`기존 Arc Client 데이터 마이그레이션에 실패했습니다: ${legacyMigrationError}`);
+  }
   const collectionProvider = new CollectionTreeProvider(storage);
   const historyProvider = new HistoryTreeProvider(storage);
   const environmentProvider = new EnvironmentTreeProvider(storage);
 
-  const collectionTreeView = vscode.window.createTreeView('arc.collections', {
+  const collectionTreeView = vscode.window.createTreeView('tessra-collections', {
     treeDataProvider: collectionProvider,
     showCollapseAll: true,
     dragAndDropController: collectionProvider,
   });
-  const historyTreeView = vscode.window.createTreeView('arc.history', {
+  const historyTreeView = vscode.window.createTreeView('tessra-history', {
     treeDataProvider: historyProvider,
     dragAndDropController: historyProvider,
   });
@@ -80,7 +87,7 @@ export function activate(context: vscode.ExtensionContext) {
   historyProvider.onDidChangeTreeData(() => updateHistoryDescription());
   updateCollectionDescription();
   updateHistoryDescription();
-  const environmentTreeView = vscode.window.createTreeView('arc.environments', {
+  const environmentTreeView = vscode.window.createTreeView('tessra-environments', {
     treeDataProvider: environmentProvider,
     dragAndDropController: environmentProvider,
   });
@@ -93,7 +100,7 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   async function migrateLegacyRequestPanelTheme(): Promise<void> {
-    const config = vscode.workspace.getConfiguration('arc-client');
+    const config = vscode.workspace.getConfiguration('tessra');
     const inspected = config.inspect<string>('requestPanelTheme');
     if (!inspected) { return; }
 
@@ -122,7 +129,7 @@ export function activate(context: vscode.ExtensionContext) {
   RequestPanel.environmentProvider = environmentProvider;
 
   const envStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  envStatusBar.command = 'arc.switchEnvironment';
+  envStatusBar.command = 'tessra.switchEnvironment';
   envStatusBar.tooltip = t('statusBar.switchEnvironment');
   updateStatusBar(envStatusBar, environmentProvider);
   envStatusBar.show();
@@ -225,49 +232,49 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.newRequest', () => {
+    vscode.commands.registerCommand('tessra.newRequest', () => {
       RequestPanel.show(context.extensionUri, !!RequestPanel.currentPanel);
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.createCollection', () => {
+    vscode.commands.registerCommand('tessra.createCollection', () => {
       collectionProvider.createCollection();
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.createFolder', (node: CollectionNode) => {
+    vscode.commands.registerCommand('tessra.createFolder', (node: CollectionNode) => {
       collectionProvider.createFolder(node);
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.rename', (node: CollectionNode) => {
+    vscode.commands.registerCommand('tessra.rename', (node: CollectionNode) => {
       collectionProvider.rename(node);
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.delete', (node: CollectionNode) => {
+    vscode.commands.registerCommand('tessra.delete', (node: CollectionNode) => {
       collectionProvider.delete(node);
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.duplicateRequest', (node: CollectionNode) => {
+    vscode.commands.registerCommand('tessra.duplicateRequest', (node: CollectionNode) => {
       collectionProvider.duplicate(node);
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.saveRequestAs', (node: CollectionNode) => {
+    vscode.commands.registerCommand('tessra.saveRequestAs', (node: CollectionNode) => {
       collectionProvider.saveAs(node);
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.importCurl', async () => {
+    vscode.commands.registerCommand('tessra.importCurl', async () => {
       const input = await vscode.window.showInputBox({
         prompt: t('input.importCurl.prompt'),
         placeHolder: t('input.importCurl.placeholder'),
@@ -286,7 +293,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.copyAsCurl', (node: CollectionNode) => {
+    vscode.commands.registerCommand('tessra.copyAsCurl', (node: CollectionNode) => {
       if (node.kind === 'request' && node.item.request) {
         const curl = CurlService.generate(
           RequestExportService.resolve(node.item.request, environmentProvider.getActiveVariables(), {
@@ -301,7 +308,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.importCollection', async () => {
+    vscode.commands.registerCommand('tessra.importCollection', async () => {
       const uris = await vscode.window.showOpenDialog({
         canSelectMany: true,
         filters: { 'JSON Files': ['json'] },
@@ -313,7 +320,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.importOpenApi', async () => {
+    vscode.commands.registerCommand('tessra.importOpenApi', async () => {
       const uris = await vscode.window.showOpenDialog({
         canSelectMany: true,
         filters: { 'OpenAPI JSON': ['json'] },
@@ -325,7 +332,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.exportPostmanCollection', async (node: CollectionNode) => {
+    vscode.commands.registerCommand('tessra.exportPostmanCollection', async (node: CollectionNode) => {
       if (node.kind !== 'collection') { return; }
       const defaultName = `${sanitizeFilename(node.collection.name)}.postman_collection.json`;
       const uri = await vscode.window.showSaveDialog({
@@ -341,7 +348,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.exportPostmanEnvironment', async (env: Environment) => {
+    vscode.commands.registerCommand('tessra.exportPostmanEnvironment', async (env: Environment) => {
       const defaultName = `${sanitizeFilename(env.name)}.postman_environment.json`;
       const uri = await vscode.window.showSaveDialog({
         defaultUri: vscode.Uri.file(defaultName),
@@ -356,13 +363,13 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.collapseAll', () => {
-      vscode.commands.executeCommand('workbench.actions.treeView.arc.collections.collapseAll');
+    vscode.commands.registerCommand('tessra.collapseAll', () => {
+      vscode.commands.executeCommand('workbench.actions.treeView.tessra-collections.collapseAll');
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.filterCollections', () => {
+    vscode.commands.registerCommand('tessra.filterCollections', () => {
       const inputBox = vscode.window.createInputBox();
       inputBox.placeholder = t('filter.collections.placeholder');
       inputBox.value = collectionProvider.filterText;
@@ -370,7 +377,7 @@ export function activate(context: vscode.ExtensionContext) {
       inputBox.onDidChangeValue((value) => {
         collectionProvider.filterText = value;
         updateCollectionDescription();
-        vscode.commands.executeCommand('setContext', 'arc.collectionFilterActive', !!value);
+        vscode.commands.executeCommand('setContext', 'tessra.collectionFilterActive', !!value);
       });
       inputBox.onDidAccept(() => inputBox.hide());
       inputBox.onDidHide(() => inputBox.dispose());
@@ -379,15 +386,15 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.clearCollectionFilter', () => {
+    vscode.commands.registerCommand('tessra.clearCollectionFilter', () => {
       collectionProvider.filterText = '';
       updateCollectionDescription();
-      vscode.commands.executeCommand('setContext', 'arc.collectionFilterActive', false);
+      vscode.commands.executeCommand('setContext', 'tessra.collectionFilterActive', false);
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.filterHistory', () => {
+    vscode.commands.registerCommand('tessra.filterHistory', () => {
       const inputBox = vscode.window.createInputBox();
       inputBox.placeholder = t('filter.history.placeholder');
       inputBox.value = historyProvider.filterText;
@@ -395,7 +402,7 @@ export function activate(context: vscode.ExtensionContext) {
       inputBox.onDidChangeValue((value) => {
         historyProvider.filterText = value;
         updateHistoryDescription();
-        vscode.commands.executeCommand('setContext', 'arc.historyFilterActive', !!value);
+        vscode.commands.executeCommand('setContext', 'tessra.historyFilterActive', !!value);
       });
       inputBox.onDidAccept(() => inputBox.hide());
       inputBox.onDidHide(() => inputBox.dispose());
@@ -404,22 +411,22 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.clearHistoryFilter', () => {
+    vscode.commands.registerCommand('tessra.clearHistoryFilter', () => {
       historyProvider.filterText = '';
       updateHistoryDescription();
-      vscode.commands.executeCommand('setContext', 'arc.historyFilterActive', false);
+      vscode.commands.executeCommand('setContext', 'tessra.historyFilterActive', false);
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.loadFromHistory', (entry: HistoryEntry) => {
+    vscode.commands.registerCommand('tessra.loadFromHistory', (entry: HistoryEntry) => {
       RequestPanel.show(context.extensionUri);
       RequestPanel.currentPanel?.loadRequest(entry.request);
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.loadFromCollection', (node: CollectionNode) => {
+    vscode.commands.registerCommand('tessra.loadFromCollection', (node: CollectionNode) => {
       if (node.kind === 'request' && node.item.request) {
         RequestPanel.show(context.extensionUri);
         RequestPanel.currentPanel?.loadRequest(node.item.request);
@@ -428,7 +435,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.runCollection', (node: CollectionNode) => {
+    vscode.commands.registerCommand('tessra.runCollection', (node: CollectionNode) => {
       let items: CollectionItem[] = [];
       if (node.kind === 'collection') {
         items = node.collection.items;
@@ -447,21 +454,21 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.pinHistory', (entry: HistoryEntry) => {
+    vscode.commands.registerCommand('tessra.pinHistory', (entry: HistoryEntry) => {
       storage.setHistoryPin(entry.id, true);
       historyProvider.refresh();
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.unpinHistory', (entry: HistoryEntry) => {
+    vscode.commands.registerCommand('tessra.unpinHistory', (entry: HistoryEntry) => {
       storage.setHistoryPin(entry.id, false);
       historyProvider.refresh();
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.deletePinnedHistory', async (entry: HistoryEntry) => {
+    vscode.commands.registerCommand('tessra.deletePinnedHistory', async (entry: HistoryEntry) => {
       const confirm = await vscode.window.showWarningMessage(
         `${t('warn.deletePinned.confirm', { count: 1, suffix: 'y' })}\n${entry.request.method} ${entry.request.url}`,
         { modal: true },
@@ -476,7 +483,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.clearHistory', async () => {
+    vscode.commands.registerCommand('tessra.clearHistory', async () => {
       const history = storage.getHistory();
       const pinned = history.filter((e) => e.pinned);
       const unpinnedCount = history.length - pinned.length;
@@ -504,19 +511,19 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.createEnvironment', () => {
+    vscode.commands.registerCommand('tessra.createEnvironment', () => {
       environmentProvider.createEnvironment();
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.renameEnvironment', (env: Environment) => {
+    vscode.commands.registerCommand('tessra.renameEnvironment', (env: Environment) => {
       environmentProvider.renameEnvironment(env);
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.deleteEnvironment', (env: Environment) => {
+    vscode.commands.registerCommand('tessra.deleteEnvironment', (env: Environment) => {
       environmentProvider.deleteEnvironment(env).then(() => {
         updateStatusBar(envStatusBar, environmentProvider);
         RequestPanel.currentPanel?.updateActiveEnv(environmentProvider.getActiveEnvironmentName());
@@ -525,21 +532,21 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.editEnvironment', (env: Environment) => {
+    vscode.commands.registerCommand('tessra.editEnvironment', (env: Environment) => {
       RequestPanel.show(context.extensionUri);
       RequestPanel.currentPanel?.loadEnvironment(env);
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.editDefaultHeaders', () => {
+    vscode.commands.registerCommand('tessra.editDefaultHeaders', () => {
       RequestPanel.show(context.extensionUri);
       RequestPanel.currentPanel?.loadDefaultHeaders();
     })
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.setActiveEnvironment', (env: Environment) => {
+    vscode.commands.registerCommand('tessra.setActiveEnvironment', (env: Environment) => {
       environmentProvider.activeEnvId = env.id;
       environmentProvider.refresh();
       updateStatusBar(envStatusBar, environmentProvider);
@@ -548,7 +555,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.deactivateEnvironment', () => {
+    vscode.commands.registerCommand('tessra.deactivateEnvironment', () => {
       environmentProvider.activeEnvId = null;
       environmentProvider.refresh();
       updateStatusBar(envStatusBar, environmentProvider);
@@ -560,7 +567,7 @@ export function activate(context: vscode.ExtensionContext) {
   let envClickTimer: ReturnType<typeof setTimeout> | null = null;
   let envLastClickId: string | null = null;
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.onEnvironmentClick', (env: Environment) => {
+    vscode.commands.registerCommand('tessra.onEnvironmentClick', (env: Environment) => {
       if (envLastClickId === env.id && envClickTimer) {
         // 더블클릭: 활성/비활성 토글 + 변수 편집 화면 표시
         clearTimeout(envClickTimer);
@@ -594,7 +601,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.switchEnvironment', async () => {
+    vscode.commands.registerCommand('tessra.switchEnvironment', async () => {
       const envs = storage.getEnvironments();
       const picks: (vscode.QuickPickItem & { envId: string | null })[] = [
         { label: `$(circle-slash) ${t('picker.deactivateEnvironment')}`, envId: null },
@@ -616,7 +623,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.changeDisplayLanguage', async () => {
+    vscode.commands.registerCommand('tessra.changeDisplayLanguage', async () => {
       const current = LocalizationService.getDisplayLanguage();
       const picks = SUPPORTED_DISPLAY_LANGUAGES.map((language) => ({
         label: LocalizationService.getDisplayLanguageLabel(language),
@@ -629,7 +636,7 @@ export function activate(context: vscode.ExtensionContext) {
       });
       if (!selected || selected.language === current) { return; }
 
-      await vscode.workspace.getConfiguration('arc-client').update(
+      await vscode.workspace.getConfiguration('tessra').update(
         'displayLanguage',
         selected.language,
         vscode.ConfigurationTarget.Global
@@ -641,7 +648,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.changeRequestPanelTheme', async () => {
+    vscode.commands.registerCommand('tessra.changeRequestPanelTheme', async () => {
       const current = LocalizationService.getRequestPanelTheme();
       const language = LocalizationService.getDisplayLanguage();
       const picks = SUPPORTED_REQUEST_PANEL_THEMES.map((theme) => ({
@@ -655,7 +662,7 @@ export function activate(context: vscode.ExtensionContext) {
       });
       if (!selected || selected.theme === current) { return; }
 
-      await vscode.workspace.getConfiguration('arc-client').update(
+      await vscode.workspace.getConfiguration('tessra').update(
         'requestPanelTheme',
         selected.theme,
         vscode.ConfigurationTarget.Global
@@ -667,7 +674,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.changeWorkspaceProfile', async () => {
+    vscode.commands.registerCommand('tessra.changeWorkspaceProfile', async () => {
       const current = storage.getWorkspaceProfileName();
       const existingProfiles = storage.listProfiles();
       const existingCustomProfiles = existingProfiles.filter((profileName) => profileName !== 'default');
@@ -708,7 +715,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (nextProfile === current) { return; }
 
       await RequestPanel.flushCurrentPanelState();
-      await vscode.workspace.getConfiguration('arc-client').update(
+      await vscode.workspace.getConfiguration('tessra').update(
         'workspaceProfile',
         nextProfile,
         vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
@@ -728,12 +735,12 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('arc.openGuide', () => {
+    vscode.commands.registerCommand('tessra.openGuide', () => {
       GuidePanel.show(context.extensionUri);
     })
   );
 
-  const requestPanelSerializer = vscode.window.registerWebviewPanelSerializer('arc.requestPanel', {
+  const requestPanelSerializer = vscode.window.registerWebviewPanelSerializer('tessra.requestPanel', {
     async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
       panel.webview.options = {
         enableScripts: true,
@@ -745,9 +752,9 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(requestPanelSerializer);
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
-    const displayLanguageChanged = event.affectsConfiguration('arc-client.displayLanguage');
-    const requestPanelThemeChanged = event.affectsConfiguration('arc-client.requestPanelTheme');
-    const workspaceProfileChanged = event.affectsConfiguration('arc-client.workspaceProfile');
+    const displayLanguageChanged = event.affectsConfiguration('tessra.displayLanguage');
+    const requestPanelThemeChanged = event.affectsConfiguration('tessra.requestPanelTheme');
+    const workspaceProfileChanged = event.affectsConfiguration('tessra.workspaceProfile');
     if (!displayLanguageChanged && !requestPanelThemeChanged && !workspaceProfileChanged) { return; }
 
     if (displayLanguageChanged) {

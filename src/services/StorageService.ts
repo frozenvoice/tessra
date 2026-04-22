@@ -8,11 +8,34 @@ export class StorageService {
   private static readonly DEFAULT_PROFILE_NAME = 'default';
   private static readonly PROFILE_ROOT_DIR = 'profiles';
   private static readonly PROFILE_META_FILE = 'profile.json';
+  private static readonly LEGACY_STORAGE_DIR_CANDIDATES = ['arc.arc-client', 'arc-client'];
+  private static readonly STORAGE_DATA_INDICATOR_FILES = [
+    'collections.json',
+    'environments.json',
+    'history.json',
+  ];
+  private static readonly MIGRATABLE_STORAGE_ENTRIES = [
+    'collections.json',
+    'history.json',
+    'environments.json',
+    'active-environment.json',
+    'default-headers.json',
+    'variables.json',
+    'tab-state.json',
+    StorageService.PROFILE_ROOT_DIR,
+  ];
   private readonly rootStoragePath: string;
+  private migratedLegacyStorage = false;
+  private legacyMigrationError: string | null = null;
 
   constructor(context: vscode.ExtensionContext) {
     this.rootStoragePath = context.globalStorageUri.fsPath;
     this.ensureDir(this.rootStoragePath);
+    try {
+      this.migratedLegacyStorage = this.migrateLegacyStorageIfNeeded();
+    } catch (err: unknown) {
+      this.legacyMigrationError = err instanceof Error ? err.message : String(err);
+    }
   }
 
   // globalStorage 경로 반환 (임시 파일 등에 활용)
@@ -20,8 +43,68 @@ export class StorageService {
     return this.getActiveStoragePath();
   }
 
+  didMigrateLegacyStorage(): boolean {
+    return this.migratedLegacyStorage;
+  }
+
+  getLegacyMigrationError(): string | null {
+    return this.legacyMigrationError;
+  }
+
+  private migrateLegacyStorageIfNeeded(): boolean {
+    if (this.hasStorageData(this.rootStoragePath)) { return false; }
+
+    const legacyStoragePath = this.findLegacyStoragePath();
+    if (!legacyStoragePath) { return false; }
+
+    let copied = false;
+    for (const entry of StorageService.MIGRATABLE_STORAGE_ENTRIES) {
+      const sourcePath = path.join(legacyStoragePath, entry);
+      if (!fs.existsSync(sourcePath)) { continue; }
+      const targetPath = path.join(this.rootStoragePath, entry);
+      copied = this.copyStorageEntry(sourcePath, targetPath) || copied;
+    }
+    return copied;
+  }
+
+  private hasStorageData(storagePath: string): boolean {
+    return StorageService.STORAGE_DATA_INDICATOR_FILES.some((entry) => fs.existsSync(path.join(storagePath, entry)));
+  }
+
+  private findLegacyStoragePath(): string | null {
+    const storageParent = path.dirname(this.rootStoragePath);
+    for (const dirName of StorageService.LEGACY_STORAGE_DIR_CANDIDATES) {
+      const candidate = path.join(storageParent, dirName);
+      if (fs.existsSync(candidate) && this.hasStorageData(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  private copyStorageEntry(sourcePath: string, targetPath: string): boolean {
+    if (fs.existsSync(targetPath)) { return false; }
+
+    const stat = fs.lstatSync(sourcePath);
+    if (stat.isSymbolicLink()) { return false; }
+
+    if (stat.isDirectory()) {
+      let copied = false;
+      this.ensureDir(targetPath);
+      for (const entry of fs.readdirSync(sourcePath)) {
+        copied = this.copyStorageEntry(path.join(sourcePath, entry), path.join(targetPath, entry)) || copied;
+      }
+      return copied;
+    }
+
+    if (!stat.isFile()) { return false; }
+    this.ensureDir(path.dirname(targetPath));
+    fs.copyFileSync(sourcePath, targetPath, fs.constants.COPYFILE_EXCL);
+    return true;
+  }
+
   getWorkspaceProfileName(): string {
-    const configured = vscode.workspace.getConfiguration('arc-client').get<string>(
+    const configured = vscode.workspace.getConfiguration('tessra').get<string>(
       'workspaceProfile',
       StorageService.DEFAULT_PROFILE_NAME
     );
@@ -147,7 +230,7 @@ export class StorageService {
   // 히스토리 자동 정리: maxItems 초과 시 pinned 아닌 오래된 항목부터 삭제
   // 삭제된 개수를 반환
   pruneHistory(history: HistoryEntry[]): number {
-    const maxItems = vscode.workspace.getConfiguration('arc-client').get<number>('historyMaxItems', 100);
+    const maxItems = vscode.workspace.getConfiguration('tessra').get<number>('historyMaxItems', 100);
     if (history.length <= maxItems) { return 0; }
 
     let removed = 0;
@@ -204,7 +287,7 @@ export class StorageService {
   // === 기본 헤더 ===
 
   private static readonly DEFAULT_HEADERS: KeyValue[] = [
-    { key: 'User-Agent', value: 'Arc Client/1.0', enabled: true },
+    { key: 'User-Agent', value: 'Tessra/1.0', enabled: true },
     { key: 'Accept', value: '*/*', enabled: true },
   ];
 

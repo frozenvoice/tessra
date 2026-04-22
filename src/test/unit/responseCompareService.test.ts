@@ -176,7 +176,7 @@ describe('ResponseCompareService', () => {
   });
 
   it('cleans up stale diff artifacts', async () => {
-    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'arc-compare-'));
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'tessra-compare-'));
     const diffDir = path.join(tempRoot, '.diff');
     await fs.mkdir(diffDir, { recursive: true });
 

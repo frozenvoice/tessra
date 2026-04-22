@@ -32,7 +32,7 @@ describe('StorageService (파일 기반)', () => {
   }
 
   before(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'arc-test-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tessra-test-'));
     collectionsPath = path.join(tmpDir, 'collections.json');
     historyPath = path.join(tmpDir, 'history.json');
     environmentsPath = path.join(tmpDir, 'environments.json');

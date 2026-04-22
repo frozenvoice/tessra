@@ -3,7 +3,7 @@ import { StorageService } from '../services/StorageService';
 import { Environment } from '../models/types';
 import { LocalizationService } from '../services/LocalizationService';
 
-const ENV_MIME = 'application/vnd.arc.environment';
+const ENV_MIME = 'application/vnd.tessra.environment';
 
 // 환경변수 TreeView 프로바이더 (드래그앤드롭 지원)
 export class EnvironmentTreeProvider
@@ -118,7 +118,7 @@ export class EnvironmentTreeProvider
 
     // 싱글클릭: 변수 편집, 더블클릭: 활성/비활성 토글
     item.command = {
-      command: 'arc.onEnvironmentClick',
+      command: 'tessra.onEnvironmentClick',
       title: LocalizationService.t('environment.clickTitle'),
       arguments: [env],
     };

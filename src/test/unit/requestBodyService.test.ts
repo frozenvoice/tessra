@@ -7,7 +7,7 @@ import { KeyValue } from '../../models/types';
 
 describe('RequestBodyService', () => {
   it('form-data 텍스트와 파일을 multipart 바디로 준비한다', async () => {
-    const tempFile = path.join(os.tmpdir(), `arc-client-formdata-${Date.now()}.txt`);
+    const tempFile = path.join(os.tmpdir(), `tessra-formdata-${Date.now()}.txt`);
     fs.writeFileSync(tempFile, 'file-content', 'utf-8');
 
     try {
@@ -20,13 +20,13 @@ describe('RequestBodyService', () => {
         ],
         binaryFilePath: '',
         headers: [] as KeyValue[],
-        vars: [{ key: 'user', value: 'arc', enabled: true }],
+        vars: [{ key: 'user', value: 'tessra', enabled: true }],
       });
 
       assert.ok(Buffer.isBuffer(result.data));
       const body = result.data.toString('utf-8');
       assert.ok(body.includes('name="name"'));
-      assert.ok(body.includes('arc'));
+      assert.ok(body.includes('tessra'));
       assert.ok(body.includes('name="file"; filename='));
       assert.ok(body.includes('file-content'));
       assert.ok(result.headers.some((header) => header.key === 'Content-Type' && header.value.includes('multipart/form-data')));
@@ -36,7 +36,7 @@ describe('RequestBodyService', () => {
   });
 
   it('binary 바디는 파일을 읽고 기본 content-type을 채운다', async () => {
-    const tempFile = path.join(os.tmpdir(), `arc-client-binary-${Date.now()}.bin`);
+    const tempFile = path.join(os.tmpdir(), `tessra-binary-${Date.now()}.bin`);
     fs.writeFileSync(tempFile, Buffer.from([1, 2, 3, 4]));
 
     try {

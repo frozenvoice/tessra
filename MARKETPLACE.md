@@ -23,11 +23,11 @@ Offline-first REST API client for VS Code. No login required, no cloud dependenc
 
 Use this near the top of the Marketplace README:
 
-> Arc Client is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
+> Tessra is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
 
 ## Screenshot Plan
 
-Store final files in [images/marketplace](/E:/Dev/GitHub/arc-client/images/marketplace).
+Store final files in [images/marketplace](/E:/Dev/GitHub/tessra/images/marketplace).
 
 ### Screenshot 1
 Title: Multi-tab request workflow
