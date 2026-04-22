@@ -91,9 +91,9 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 ### Response viewer
 - Body / Headers / Cookies / Tests tabs, plus Preview when the response contains meaningful static HTML
 - Dynamic HTML pages stay in Body while `Open URL` remains available for the resolved page
-- Sticky response toolbar for search, compare, and response actions
+- Sticky response toolbar for finding text, compare, and response actions
 - Topline status chips for the active environment, workspace profile, default headers, scripts, and history behavior
-- Search within the response body with next/previous navigation, case-sensitive mode, and regex mode
+- Find text within the response body with next/previous navigation, case-sensitive mode, and regex mode
 - JSON tree viewer
 - XML formatting with `Pretty`, `Compact`, and `Inline Children`
 - Content-Type based syntax highlighting
@@ -217,7 +217,7 @@ Run `Tessra: Open Guide` to open the user guide inside VS Code.
 - `Ctrl+Enter`: Send request
 - `Ctrl+S` / `Cmd+S`: Save the current request
 - `Ctrl+Shift+S` / `Cmd+Shift+S`: Save As
-- `Ctrl+F` / `Cmd+F`: Focus response search
+- `Ctrl+F` / `Cmd+F`: Focus response find field
 - `Alt+1..6`: Switch request tabs
 - `Alt+Shift+1..5`: Switch response tabs
 
@@ -235,7 +235,7 @@ All extension data is stored under VS Code `globalStorage` as JSON files. The de
 - `variables.json`
 - `tab-state.json`
 
-On first activation after the Tessra rename, if the Tessra storage folder has no existing data, Tessra checks the legacy Arc Client storage folders (`arc.arc-client`, `arc-client`) and copies existing data files into the new `tessra.tessra` folder. If Tessra data already exists, migration is skipped to avoid overwriting local data.
+On first activation after the Tessra rename, if the Tessra storage folder has no existing data, Tessra checks the legacy pre-rename storage folders and copies existing data files into the new `tessra.tessra` folder. If Tessra data already exists, migration is skipped to avoid overwriting local data.
 
 Typical locations:
 
