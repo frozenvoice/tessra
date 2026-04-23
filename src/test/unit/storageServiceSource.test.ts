@@ -22,7 +22,17 @@ describe('storage service source', () => {
     assert.match(source, /getWorkspaceProfileName\(\): string/);
     assert.match(source, /listProfiles\(\): string\[\]/);
     assert.match(source, /private getActiveStoragePath\(\): string/);
-    assert.match(source, /path\.join\(\s*this\.rootStoragePath,\s*StorageService\.PROFILE_ROOT_DIR,/);
+    assert.match(source, /private resolveProfilePath\(profileName: string\): string/);
+    assert.match(source, /path\.join\(this\.rootStoragePath, StorageService\.PROFILE_ROOT_DIR\)/);
+  });
+
+  it('uses collision-resistant directories for new workspace profiles', () => {
+    assert.match(source, /private toProfileDirectoryName\(profileName: string\): string/);
+    assert.match(source, /Buffer\.from\(profileName, 'utf-8'\)/);
+    assert.match(source, /return `profile-\$\{encoded \|\| StorageService\.DEFAULT_PROFILE_NAME\}`;/);
+    assert.match(source, /private toLegacyProfileDirectoryName\(profileName: string\): string/);
+    assert.match(source, /findLegacyProfilePath\(profilesRoot, profileName, profilePath\)/);
+    assert.match(source, /Workspace profile "\$\{profileName\}" collides with existing profile/);
   });
 
   it('resolves persisted files through the active profile path', () => {

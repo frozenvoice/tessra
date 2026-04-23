@@ -35,7 +35,7 @@ Body: {"env":"{{envName}}"}
 ## Response workspace
 
 - Tabs: `Body`, `Headers`, `Cookies`, `Tests`, plus `Preview` when the response contains meaningful static HTML
-- Dynamic HTML pages stay in `Body`, and you can use `Open URL` to jump to the resolved page
+- Dynamic HTML pages stay in `Body`, and you can use `Open URL` to jump to HTTP/HTTPS resolved pages
 - A sticky response toolbar keeps search, compare, copy, and save actions visible
 - Search within the response body with next/previous navigation, case-sensitive mode, and regex mode
 - JSON tree viewer

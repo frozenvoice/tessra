@@ -1,5 +1,6 @@
 ﻿import * as assert from 'assert';
 import * as http from 'http';
+import * as net from 'net';
 import { EventEmitter } from 'events';
 import type { RequestOptions as HttpsRequestOptions } from 'https';
 import { HttpService, HttpSendOptions } from '../../services/HttpService';
@@ -8,6 +9,7 @@ import { HttpService, HttpSendOptions } from '../../services/HttpService';
 describe('HttpService', () => {
   let server: http.Server;
   let baseUrl: string;
+  let externalRedirectUrl = '';
   const httpService = new HttpService();
   const send = (
     method: Parameters<HttpService['send']>[0],
@@ -49,6 +51,11 @@ describe('HttpService', () => {
           case '/redirect':
             res.writeHead(302, { Location: '/json' });
             res.end('redirect');
+            break;
+
+          case '/redirect-external':
+            res.writeHead(302, { Location: externalRedirectUrl || '/json' });
+            res.end('external redirect');
             break;
 
           case '/redirect-303':
@@ -145,6 +152,41 @@ describe('HttpService', () => {
       assert.strictEqual(JSON.parse(res.body).message, 'ok');
     });
 
+    it('strips sensitive headers when redirects cross origins', async () => {
+      let capturedHeaders: http.IncomingHttpHeaders = {};
+      const targetServer = http.createServer((req, res) => {
+        capturedHeaders = req.headers;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      await new Promise<void>((resolve) => {
+        targetServer.listen(0, '127.0.0.1', () => resolve());
+      });
+
+      try {
+        const addr = targetServer.address() as { port: number };
+        externalRedirectUrl = `http://127.0.0.1:${addr.port}/target`;
+        const res = await send('GET', `${baseUrl}/redirect-external`, [
+          { key: 'Authorization', value: 'Bearer secret', enabled: true },
+          { key: 'Cookie', value: 'session=secret', enabled: true },
+          { key: 'X-API-Key', value: 'api-secret', enabled: true },
+          { key: 'X-Trace-Id', value: 'trace-1', enabled: true },
+        ], '', { followRedirects: true });
+
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(capturedHeaders.authorization, undefined);
+        assert.strictEqual(capturedHeaders.cookie, undefined);
+        assert.strictEqual(capturedHeaders['x-api-key'], undefined);
+        assert.strictEqual(capturedHeaders['x-trace-id'], 'trace-1');
+      } finally {
+        externalRedirectUrl = '';
+        await new Promise<void>((resolve, reject) => {
+          targetServer.close((err) => err ? reject(err) : resolve());
+        });
+      }
+    });
+
     it('stops after headers when requested', async () => {
       const res = await send('GET', `${baseUrl}/json`, [], '', { stopAfterHeaders: true });
       assert.strictEqual(res.status, 200);
@@ -219,6 +261,29 @@ describe('HttpService', () => {
         () => send('GET', `${baseUrl}/slow`, [], '', { timeoutSec: 1 }),
         /timed out|ECONNRESET/
       );
+    });
+
+    it('rejects when the response stream aborts before completion', async () => {
+      const rawServer = net.createServer((socket) => {
+        socket.write('HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 20\r\n\r\npartial');
+        socket.destroy();
+      });
+
+      await new Promise<void>((resolve) => {
+        rawServer.listen(0, '127.0.0.1', () => resolve());
+      });
+
+      try {
+        const addr = rawServer.address() as { port: number };
+        await assert.rejects(
+          () => send('GET', `http://127.0.0.1:${addr.port}/aborted`, [], ''),
+          /aborted|socket hang up|ECONNRESET|terminated/
+        );
+      } finally {
+        await new Promise<void>((resolve, reject) => {
+          rawServer.close((err) => err ? reject(err) : resolve());
+        });
+      }
     });
   });
 

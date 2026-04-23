@@ -98,6 +98,26 @@ export class HttpService {
         }
       };
 
+      const isSensitiveRedirectHeader = (headerName: string): boolean => {
+        const normalized = headerName.toLowerCase();
+        return normalized === 'authorization'
+          || normalized === 'proxy-authorization'
+          || normalized === 'cookie'
+          || normalized === 'x-api-key'
+          || normalized === 'api-key'
+          || normalized === 'apikey'
+          || normalized.endsWith('-api-key')
+          || normalized.includes('token');
+      };
+
+      const deleteSensitiveRedirectHeaders = (map: Record<string, string>): void => {
+        for (const key of Object.keys(map)) {
+          if (isSensitiveRedirectHeader(key)) {
+            delete map[key];
+          }
+        }
+      };
+
       const getRedirectTarget = (
         statusCode: number,
         currentMethod: HttpMethod,
@@ -112,6 +132,20 @@ export class HttpService {
         let nextMethod = currentMethod;
         let nextBody = currentBody;
         const nextHeaders = { ...currentHeaders };
+        let nextUrl: string;
+
+        try {
+          nextUrl = new URL(location, currentUrl).toString();
+        } catch {
+          return null;
+        }
+
+        const currentOrigin = new URL(currentUrl).origin;
+        const nextOrigin = new URL(nextUrl).origin;
+        if (currentOrigin !== nextOrigin) {
+          // 교차 origin 리다이렉트에서는 인증성 헤더를 보수적으로 제거한다.
+          deleteSensitiveRedirectHeaders(nextHeaders);
+        }
 
         if (statusCode === 303 || ((statusCode === 301 || statusCode === 302) && currentMethod === 'POST')) {
           nextMethod = 'GET';
@@ -122,7 +156,7 @@ export class HttpService {
 
         return {
           nextMethod,
-          nextUrl: new URL(location, currentUrl).toString(),
+          nextUrl,
           nextBody,
           nextHeaders,
         };
@@ -159,6 +193,13 @@ export class HttpService {
           const statusCode = res.statusCode ?? 0;
           const headerInfo = extractResponseHeaders(res.headers);
           const responseHeaders = headerInfo.headers;
+          const rejectResponseStream = (error: Error) => {
+            safeReject(error);
+          };
+          res.on('error', rejectResponseStream);
+          res.on('aborted', () => {
+            rejectResponseStream(new Error('Response aborted before completion'));
+          });
 
           if (followRedirects && HttpService.REDIRECT_STATUS_CODES.has(statusCode)) {
             if (redirectCount >= HttpService.MAX_REDIRECTS) {
@@ -211,9 +252,9 @@ export class HttpService {
             totalSize += chunk.length;
             if (maxResponseSizeBytes > 0 && totalSize > maxResponseSizeBytes) {
               const error = new Error(`Response exceeded max size (${Math.ceil(maxResponseSizeBytes / 1024)} KB)`);
+              safeReject(error);
               res.destroy();
               reqRef?.destroy();
-              safeReject(error);
               return;
             }
             chunks.push(chunk);

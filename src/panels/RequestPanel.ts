@@ -922,7 +922,12 @@ export class RequestPanel {
       if (!url) {
         return;
       }
-      await vscode.env.openExternal(vscode.Uri.parse(url));
+      const uri = vscode.Uri.parse(url, true);
+      if (uri.scheme !== 'http' && uri.scheme !== 'https') {
+        vscode.window.showErrorMessage(LocalizationService.t('panel.openUrlUnsupportedScheme'));
+        return;
+      }
+      await vscode.env.openExternal(uri);
     } catch (error) {
       vscode.window.showErrorMessage(
         LocalizationService.t('panel.failedOpenUrl', {

@@ -648,6 +648,13 @@ describe('RequestPanel Webview', () => {
     assert.match(source, /openLabel:\s*LocalizationService\.t\('panel\.selectFile'\)/);
   });
 
+  it('only opens HTTP and HTTPS response URLs externally', () => {
+    assert.match(source, /const uri = vscode\.Uri\.parse\(url, true\);/);
+    assert.match(source, /uri\.scheme !== 'http' && uri\.scheme !== 'https'/);
+    assert.match(source, /panel\.openUrlUnsupportedScheme/);
+    assert.match(source, /vscode\.env\.openExternal\(uri\)/);
+  });
+
   it('keeps singleton global listeners for format menus and split dragging', () => {
     assert.match(script, /var activeFormatMenuState = null;/);
     assert.match(script, /function closeActiveFormatMenu\(\)/);

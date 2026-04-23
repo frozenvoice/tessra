@@ -31,7 +31,7 @@ Body: {"env":"{{envName}}"}
 ## 응답 워크스페이스
 
 - `Body`, `Headers`, `Cookies`, `Tests` 탭과, 의미 있는 정적 HTML이 있을 때만 보이는 `Preview` 탭
-- 동적 HTML 페이지는 `Body` 탭에 남고 `URL 열기` 액션으로 원본 페이지를 열 수 있습니다.
+- 동적 HTML 페이지는 `Body` 탭에 남고 HTTP/HTTPS 원본 페이지는 `URL 열기` 액션으로 열 수 있습니다.
 - JSON 트리 뷰어
 - XML 포맷: `Pretty`, `Compact`, `Inline Children`
 - 응답 본문 저장/복사

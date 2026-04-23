@@ -140,24 +140,55 @@ export class StorageService {
       return this.rootStoragePath;
     }
 
-    const profilePath = path.join(
-      this.rootStoragePath,
-      StorageService.PROFILE_ROOT_DIR,
-      this.toProfileDirectoryName(profileName)
-    );
+    const profilePath = this.resolveProfilePath(profileName);
     this.ensureDir(profilePath);
     this.ensureProfileMeta(profilePath, profileName);
     return profilePath;
   }
 
+  private resolveProfilePath(profileName: string): string {
+    const profilesRoot = path.join(this.rootStoragePath, StorageService.PROFILE_ROOT_DIR);
+    const profilePath = path.join(profilesRoot, this.toProfileDirectoryName(profileName));
+    const legacyProfilePath = this.findLegacyProfilePath(profilesRoot, profileName, profilePath);
+    return legacyProfilePath ?? profilePath;
+  }
+
+  private findLegacyProfilePath(profilesRoot: string, profileName: string, profilePath: string): string | null {
+    const legacyPath = path.join(profilesRoot, this.toLegacyProfileDirectoryName(profileName));
+    if (legacyPath === profilePath || !fs.existsSync(legacyPath) || fs.existsSync(profilePath)) {
+      return null;
+    }
+
+    const meta = this.readJson<{ name?: string } | null>(
+      path.join(legacyPath, StorageService.PROFILE_META_FILE),
+      null
+    );
+    if (meta?.name === profileName || (!meta?.name && path.basename(legacyPath) === profileName)) {
+      return legacyPath;
+    }
+    return null;
+  }
+
   private ensureProfileMeta(profilePath: string, profileName: string): void {
     const metaPath = path.join(profilePath, StorageService.PROFILE_META_FILE);
     const current = this.readJson<{ name?: string } | null>(metaPath, null);
+    if (current?.name && current.name !== profileName) {
+      throw new Error(`Workspace profile "${profileName}" collides with existing profile "${current.name}".`);
+    }
     if (current?.name === profileName) { return; }
     fs.writeFileSync(metaPath, JSON.stringify({ name: profileName }, null, 2), 'utf-8');
   }
 
   private toProfileDirectoryName(profileName: string): string {
+    const encoded = Buffer.from(profileName, 'utf-8')
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '');
+    return `profile-${encoded || StorageService.DEFAULT_PROFILE_NAME}`;
+  }
+
+  private toLegacyProfileDirectoryName(profileName: string): string {
     const sanitized = profileName
       .replace(/[<>:"/\\|?*\u0000-\u001F]+/g, '-')
       .replace(/[. ]+$/g, '')

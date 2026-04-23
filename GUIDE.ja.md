@@ -31,7 +31,7 @@ Body: {"env":"{{envName}}"}
 ## レスポンスワークスペース
 
 - `Body`、`Headers`、`Cookies`、`Tests` タブに加えて、意味のある静的 HTML がある場合のみ `Preview` タブが表示されます
-- 動的 HTML ページは `Body` タブに残り、`URL を開く` アクションで元のページを開けます
+- 動的 HTML ページは `Body` タブに残り、HTTP/HTTPS の元ページは `URL を開く` アクションで開けます
 - JSON ツリービューアー
 - XML フォーマット: `Pretty`, `Compact`, `Inline Children`
 - レスポンス本文の保存とコピー

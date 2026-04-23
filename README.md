@@ -90,7 +90,7 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 
 ### Response viewer
 - Body / Headers / Cookies / Tests tabs, plus Preview when the response contains meaningful static HTML
-- Dynamic HTML pages stay in Body while `Open URL` remains available for the resolved page
+- Dynamic HTML pages stay in Body while `Open URL` remains available for HTTP/HTTPS resolved pages
 - Sticky response toolbar for finding text, compare, and response actions
 - Topline status chips for the active environment, workspace profile, default headers, scripts, and history behavior
 - Find text within the response body with next/previous navigation, case-sensitive mode, and regex mode
