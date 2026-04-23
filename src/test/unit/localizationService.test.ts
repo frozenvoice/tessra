@@ -124,6 +124,19 @@ describe('LocalizationService source', () => {
     assert.strictEqual(emptyMatches.length, 3);
   });
 
+  it('keeps response timing labels translated for every supported language', () => {
+    const keys = [
+      'webview.requestedAt',
+      'webview.receivedAt',
+      'webview.endedAt',
+    ];
+
+    for (const key of keys) {
+      const matches = source.match(new RegExp(`'${key.replace(/\./g, '\\.')}'\\s*:`, 'g')) ?? [];
+      assert.strictEqual(matches.length, 3, `${key} should exist for every supported language`);
+    }
+  });
+
   it('keeps preflight, masking, and runner status copy translated for every supported language', () => {
     const keys = [
       'webview.summaryEnvironment',

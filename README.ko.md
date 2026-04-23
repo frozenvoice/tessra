@@ -83,13 +83,14 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 컬렉션 러너 결과에서 실패한 요청만 다시 실행
 - `method:` / `host:` / `type:` 토큰을 지원하는 Collection 필터
 - `status:` / `method:` / `host:` / `pinned:` 토큰을 지원하는 History 필터
-- 실행 시점 스냅샷 기반 history 저장
+- 실행 시점 스냅샷과 timing metadata 기반 history 저장
 - `tessra.historyMaxItems` 기준 자동 정리
 - 메서드/호스트 요약, 컬렉션/폴더 개수를 보여주는 더 촘촘한 사이드바 정보 밀도
 
 ### 응답 뷰어
 - Body / Headers / Cookies / Tests 탭과, 의미 있는 정적 HTML이 있을 때만 표시되는 Preview 탭
 - 동적인 HTML 페이지는 Body 탭에 남고, HTTP/HTTPS 원본 페이지는 `URL 열기` 액션으로 열 수 있음
+- 읽기 좋은 응답 시간과 요청/수신 시각을 응답 메타데이터에 표시
 - 검색 / 비교 / 저장 액션이 따라오는 sticky 응답 툴바
 - 활성 환경, 현재 프로필, 기본 헤더, 스크립트, 히스토리 동작을 보여주는 상단 상태 배지
 - 이전 / 다음 이동, 대소문자 구분, 정규식 옵션을 갖춘 응답 본문 검색

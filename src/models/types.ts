@@ -106,6 +106,9 @@ export interface TabState {
   responseSearchCaseSensitive?: boolean;
   responseSearchRegex?: boolean;
   scriptHelpCollapsed?: boolean;
+  requestStartedAt?: number;
+  requestEndedAt?: number;
+  durationMs?: number;
   pinned?: boolean;
   requestId?: string;
 }
@@ -144,6 +147,9 @@ export interface HistoryEntry {
   request: Request;
   response: { status: number; statusText: string; time: number } | null;
   timestamp: number;
+  startedAt?: number;
+  endedAt?: number;
+  durationMs?: number;
   pinned?: boolean;
 }
 
@@ -236,6 +242,7 @@ export enum MessageType {
 export interface SendRequestMessage extends RequestSettings {
   type: MessageType.SendRequest;
   tabId: string;
+  requestStartedAt?: number;
   method: HttpMethod;
   url: string;
   headers: KeyValue[];
@@ -426,17 +433,26 @@ export interface ReceiveResponseMessage {
   resolvedUrl?: string;
   resolvedHeaders?: Array<{ key: string; value: string }>;
   scriptResults?: ScriptExecutionResult;
+  requestStartedAt?: number;
+  requestEndedAt?: number;
+  durationMs?: number;
 }
 
 export interface ResponseErrorMessage {
   type: MessageType.ResponseError;
   tabId: string;
   error: string;
+  requestStartedAt?: number;
+  requestEndedAt?: number;
+  durationMs?: number;
 }
 
 export interface RequestCanceledMessage {
   type: MessageType.RequestCanceled;
   tabId: string;
+  requestStartedAt?: number;
+  requestEndedAt?: number;
+  durationMs?: number;
 }
 
 export interface LoadRequestMessage extends RequestSettings {

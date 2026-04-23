@@ -53,6 +53,9 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.emptyPlaceholder': 'Press + or Ctrl+T to create a new request',
   'webview.loading': 'Sending request...',
   'webview.loading.hint': 'You can keep editing headers, body, or settings while the response comes back.',
+  'webview.requestedAt': 'Requested',
+  'webview.receivedAt': 'Received',
+  'webview.endedAt': 'Ended',
   'webview.empty.hero.title': 'Ready to ship requests',
   'webview.followRedirects': 'Follow redirects',
   'webview.followRedirectsStatus': 'Redirects on',
@@ -733,6 +736,29 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /var secondary = '';/);
     assert.doesNotMatch(script, /var secondary = tr\('webview\.stage\.ready\.detail'\);/);
     assert.match(script, /row\.className = 'runner-row method-' \+ msg\.method \+ ' ' \+ cls;/);
+  });
+
+  it('records and renders response timing metadata with readable durations', () => {
+    assert.match(script, /function formatLocalTimestamp\(epochMs\)/);
+    assert.match(script, /function formatLocalTime\(epochMs\)/);
+    assert.match(script, /function formatResponseTimingValue\(epochMs, pairedEpochMs\)/);
+    assert.match(script, /function formatDurationMs\(durationMs\)/);
+    assert.match(script, /if \(ms < 1000\) return ms \+ ' ms';/);
+    assert.match(script, /if \(ms < 60000\) return \(ms \/ 1000\)\.toFixed\(3\) \+ ' s';/);
+    assert.match(script, /return minutes \+ 'm ' \+ pad2\(seconds\) \+ '\.' \+ pad3\(milliseconds\) \+ 's';/);
+    assert.match(script, /function buildResponseTimingMetaHtml\(tab\)/);
+    assert.match(script, /class="response-timing-row"/);
+    assert.match(script, /class="timing-flow"/);
+    assert.match(script, /class="timing-arrow" aria-hidden="true">→<\/span>/);
+    assert.match(script, /tr\('webview\.requestedAt'\)/);
+    assert.match(script, /var endedKey = tab\?\.response && tab\?\.lastEvent === 'success' \? 'webview\.receivedAt' : 'webview\.endedAt';/);
+    assert.match(script, /titleParts\.push\(tr\('webview\.requestedAt'\) \+ ' ' \+ formatLocalTimestamp\(startedAt\)\);/);
+    assert.match(script, /titleParts\.join\(' \/ '\)/);
+    assert.match(script, /requestStartedAt: requestStartedAt/);
+    assert.match(script, /applyResponseTiming\(tab, msg\);/);
+    assert.match(script, /'<span class="stat-time" title="' \+ escapeAttr\(durationTitle\)/);
+    assert.match(source, /startedAt:\s*timing\?\.requestStartedAt/);
+    assert.match(source, /durationMs:\s*timing\?\.durationMs/);
   });
 
   it('keeps response panes scrollable and preserves an adaptive response-first split', () => {

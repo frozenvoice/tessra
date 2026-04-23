@@ -48,6 +48,12 @@ type ResolvedRequestSettings = {
   disableScripts: boolean;
 };
 
+type RequestTiming = {
+  requestStartedAt?: number;
+  requestEndedAt: number;
+  durationMs?: number;
+};
+
 // Webview ?붿껌 ?⑤꼸 愿由?(?ㅼ쨷 ??吏??
 export class RequestPanel {
   public static currentPanel: RequestPanel | undefined;
@@ -149,6 +155,31 @@ export class RequestPanel {
 
   private static normalizeCount(value: number | undefined): number {
     return Number.isFinite(value) && (value ?? 0) > 0 ? Math.floor(value as number) : 0;
+  }
+
+  private static normalizeEpochMs(value: number | undefined): number | undefined {
+    if (!Number.isFinite(value)) { return undefined; }
+    const normalized = Math.floor(value as number);
+    return normalized > 0 ? normalized : undefined;
+  }
+
+  private static createRequestTiming(startedAt?: number): RequestTiming {
+    const requestStartedAt = RequestPanel.normalizeEpochMs(startedAt);
+    const requestEndedAt = Date.now();
+    return {
+      requestStartedAt,
+      requestEndedAt,
+      durationMs: requestStartedAt === undefined ? undefined : Math.max(0, requestEndedAt - requestStartedAt),
+    };
+  }
+
+  private postTimedResponseError(tabId: string, error: string, startedAt?: number): void {
+    this.postMessage({
+      type: MessageType.ResponseError,
+      tabId,
+      error,
+      ...RequestPanel.createRequestTiming(startedAt),
+    });
   }
 
   private normalizeRequestSettings(settings?: RequestSettings): ResolvedRequestSettings {
@@ -1005,6 +1036,7 @@ export class RequestPanel {
 
   private async executeRequest(message: SendRequestMessage) {
     const tabId = message.tabId;
+    const requestStartedAt = RequestPanel.normalizeEpochMs(message.requestStartedAt) ?? Date.now();
     const method = message.method;
     const bodyType = RequestPanel.normalizeBodyType(message.bodyType);
     const settings = this.normalizeRequestSettings(message);
@@ -1029,11 +1061,7 @@ export class RequestPanel {
         vars = preRequestResult.envVariables;
         this.saveActiveEnvironmentVariables(vars);
       } catch (err: unknown) {
-        this.postMessage({
-          type: MessageType.ResponseError,
-          tabId,
-          error: err instanceof Error ? err.message : String(err),
-        });
+        this.postTimedResponseError(tabId, err instanceof Error ? err.message : String(err), requestStartedAt);
         return;
       }
     }
@@ -1070,11 +1098,7 @@ export class RequestPanel {
     );
     unresolvedVariables.push(...this.findPayloadUnresolvedVariables(resolvedFormData, resolvedBinaryFilePath));
     if (unresolvedVariables.length > 0) {
-      this.postMessage({
-        type: MessageType.ResponseError,
-        tabId,
-        error: this.createUnresolvedVariableError(unresolvedVariables),
-      });
+      this.postTimedResponseError(tabId, this.createUnresolvedVariableError(unresolvedVariables), requestStartedAt);
       return;
     }
 
@@ -1084,11 +1108,7 @@ export class RequestPanel {
     try {
       url = this.buildUrl(resolvedUrl, finalParams);
     } catch {
-      this.postMessage({
-        type: MessageType.ResponseError,
-        tabId,
-        error: `Invalid URL: ${resolvedUrl}`,
-      });
+      this.postTimedResponseError(tabId, `Invalid URL: ${resolvedUrl}`, requestStartedAt);
       return;
     }
 
@@ -1103,11 +1123,7 @@ export class RequestPanel {
         vars,
       });
     } catch (err: unknown) {
-      this.postMessage({
-        type: MessageType.ResponseError,
-        tabId,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      this.postTimedResponseError(tabId, err instanceof Error ? err.message : String(err), requestStartedAt);
       return;
     }
 
@@ -1178,11 +1194,19 @@ export class RequestPanel {
         }
       }
 
-      if (this.canceledRequestTabs.delete(tabId)) { return; }
+      if (this.canceledRequestTabs.delete(tabId)) {
+        this.postMessage({
+          type: MessageType.RequestCanceled,
+          tabId,
+          ...RequestPanel.createRequestTiming(requestStartedAt),
+        });
+        return;
+      }
       if (!response) {
         throw new Error('Request did not produce a response.');
       }
 
+      const responseTiming = RequestPanel.createRequestTiming(requestStartedAt);
       let scriptResults: ScriptExecutionResult | undefined;
       if (!settings.disableScripts) {
         try {
@@ -1214,7 +1238,8 @@ export class RequestPanel {
             preparedBody.resolvedBinaryFilePath,
             settings
           ),
-          { status: response.status, statusText: response.statusText, time: response.time }
+          { status: response.status, statusText: response.statusText, time: response.time },
+          responseTiming
         );
         RequestPanel.historyProvider.refresh();
       }
@@ -1230,15 +1255,18 @@ export class RequestPanel {
         resolvedUrl: url,
         resolvedHeaders: resolvedHeaderPairs,
         scriptResults,
+        ...responseTiming,
       });
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const wasCanceled = this.canceledRequestTabs.delete(tabId);
+      const errorTiming = RequestPanel.createRequestTiming(requestStartedAt);
 
       if (wasCanceled) {
         this.postMessage({
           type: MessageType.RequestCanceled,
           tabId,
+          ...errorTiming,
         });
         return;
       }
@@ -1255,7 +1283,8 @@ export class RequestPanel {
             preparedBody.resolvedBinaryFilePath,
             settings
           ),
-          null
+          null,
+          errorTiming
         );
         RequestPanel.historyProvider.refresh();
       }
@@ -1264,6 +1293,7 @@ export class RequestPanel {
         type: MessageType.ResponseError,
         tabId,
         error: errorMsg,
+        ...errorTiming,
       });
     } finally {
       cancelDelay = null;
@@ -1311,7 +1341,8 @@ export class RequestPanel {
 
   private saveToHistory(
     request: Request,
-    response: { status: number; statusText: string; time: number } | null
+    response: { status: number; statusText: string; time: number } | null,
+    timing?: RequestTiming
   ) {
     const maxItems = vscode.workspace.getConfiguration('tessra').get<number>('historyMaxItems', 100);
     const removed = RequestPanel.storage.addHistoryEntry({
@@ -1319,6 +1350,9 @@ export class RequestPanel {
       request,
       response,
       timestamp: Date.now(),
+      startedAt: timing?.requestStartedAt,
+      endedAt: timing?.requestEndedAt,
+      durationMs: timing?.durationMs,
     });
     if (removed > 0) {
       vscode.window.setStatusBarMessage(`History: ${removed} old items removed (max ${maxItems})`, 3000);
@@ -1863,6 +1897,11 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .actions-more-menu .pin-response-btn .action-label,
 .actions-more-menu .compare-btn .action-label{display:inline}
 .response-context-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.response-timing-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%;margin-top:-2px;padding:0 2px 2px;color:var(--vscode-descriptionForeground,#8f99a6);font-size:12px;line-height:1.45;font-family:var(--vscode-editor-font-family,monospace);font-variant-numeric:tabular-nums;letter-spacing:.01em;user-select:text}
+.response-timing-row .timing-flow{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.response-timing-row .timing-value{white-space:nowrap}
+.response-timing-row .timing-prefix{font-family:var(--vscode-font-family,sans-serif);font-size:11px;font-weight:600;letter-spacing:.02em;color:inherit;opacity:.88}
+.response-timing-row .timing-arrow{font-family:var(--vscode-font-family,sans-serif);opacity:.62}
 .compare-chip-row{display:flex;flex-wrap:wrap;gap:8px}
 .meta-stat{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);font-variant-numeric:tabular-nums}
 .meta-lang{font-size:11px;opacity:.72;text-transform:uppercase;letter-spacing:.08em}
@@ -4502,6 +4541,9 @@ function markDirty() {
     lastEvent: data?.lastEvent || 'idle',
     responseTab: data?.responseTab || 'resBody',
     sendTime: 0,
+    requestStartedAt: normalizeEpochMs(data?.requestStartedAt),
+    requestEndedAt: normalizeEpochMs(data?.requestEndedAt),
+    durationMs: normalizeDurationMs(data?.durationMs),
   }, data);
   // 而щ젆???덉뒪?좊━?먯꽌 遺덈윭????씠硫??ㅻ깄?????
   if (data?.requestId) {
@@ -5182,16 +5224,17 @@ function getRequestStageInfo(tab) {
   }
   if (tab.response) {
     var status = tab.response.status || 0;
+    var durationLabel = formatDurationMs(getResponseDurationMs(tab, tab.response.time)) || (tab.response.time + ' ms');
     if (status >= 500) {
-      return { tone: 'error', label: tr('webview.stage.serverError'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + tab.response.time + ' ms' };
+      return { tone: 'error', label: tr('webview.stage.serverError'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + durationLabel };
     }
     if (status >= 400) {
-      return { tone: 'error', label: tr('webview.stage.clientError'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + tab.response.time + ' ms' };
+      return { tone: 'error', label: tr('webview.stage.clientError'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + durationLabel };
     }
     if (status >= 300) {
-      return { tone: 'redirect', label: tr('webview.stage.redirected'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + tab.response.time + ' ms' };
+      return { tone: 'redirect', label: tr('webview.stage.redirected'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + durationLabel };
     }
-    return { tone: 'success', label: tr('webview.stage.liveResponse'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + tab.response.time + ' ms' };
+    return { tone: 'success', label: tr('webview.stage.liveResponse'), detail: status + ' ' + (tab.response.statusText || '') + ' in ' + durationLabel };
   }
   if (tab.url) {
     return { tone: 'ready', label: tr('webview.stage.ready'), detail: tr('webview.stage.ready.detail') };
@@ -5219,7 +5262,7 @@ function renderPrimaryActionButton(tab) {
   if (tab.lastEvent === 'success' && tab.response) {
     tone = 'success';
     primary = tr('webview.sendAgain');
-    secondary = tab.response.status + ' ' + (tab.response.statusText || '') + ' · ' + tab.response.time + ' ms';
+    secondary = tab.response.status + ' ' + (tab.response.statusText || '') + ' · ' + (formatDurationMs(getResponseDurationMs(tab, tab.response.time)) || (tab.response.time + ' ms'));
     icon = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 010 1.06L7.53 11.53a.75.75 0 01-1.06 0L2.22 7.28a.75.75 0 111.06-1.06L7 9.94l5.72-5.72a.75.75 0 011.06 0z"/></svg>';
     keyHint = '';
   } else if (tab.lastEvent === 'error') {
@@ -5303,6 +5346,9 @@ function loadSampleRequestIntoActiveTab() {
     _snapshot: null,
     responseTab: 'resBody',
     pinned: false,
+    requestStartedAt: null,
+    requestEndedAt: null,
+    durationMs: null,
   });
   renderTabBar();
   renderContent();
@@ -5708,7 +5754,7 @@ function renderContent() {
       '<div class="skeleton-loader"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div>' +
     '</div>';
   } else if (tab.error) {
-    resHtml = '<div class="res-empty-shell"><div class="error-msg">' + escapeHtml(tab.error) + '</div></div>';
+    resHtml = '<div class="res-empty-shell">' + buildResponseTimingMetaHtml(tab) + '<div class="error-msg">' + escapeHtml(tab.error) + '</div></div>';
   } else if (tab.response) {
     const r = tab.response;
     const sc = Math.floor(r.status / 100);
@@ -5862,11 +5908,15 @@ function renderContent() {
     const responseFormatValue = (lang === 'text' ? 'TEXT' : lang.toUpperCase());
     const statusText = r.statusText ? ' ' + r.statusText : '';
     const sepHtml = '<span class="stat-sep">\u00B7</span>';
+    const durationMs = getResponseDurationMs(tab, r.time);
+    const durationText = formatDurationMs(durationMs) || (String(r.time) + ' ms');
+    const durationTitle = durationMs === null ? durationText : String(durationMs) + ' ms';
+    const responseTimingMetaHtml = buildResponseTimingMetaHtml(tab);
     const responseStatsHtml =
-      '<div class="response-stat-inline" title="' + escapeAttr(String(r.status) + statusText + ' - ' + String(r.time) + 'ms - ' + formatSize(r.size) + ' - ' + responseFormatValue) + '">' +
+      '<div class="response-stat-inline" title="' + escapeAttr(String(r.status) + statusText + ' - ' + durationTitle + ' - ' + formatSize(r.size) + ' - ' + responseFormatValue) + '">' +
         '<span class="stat-status status-' + sc + 'xx">' + escapeHtml(String(r.status) + statusText) + '</span>' +
         sepHtml +
-        '<span class="stat-time">' + escapeHtml(String(r.time) + ' ms') + '</span>' +
+        '<span class="stat-time" title="' + escapeAttr(durationTitle) + '">' + escapeHtml(durationText) + '</span>' +
         sepHtml +
         '<span class="stat-size">' + escapeHtml(formatSize(r.size)) + '</span>' +
         sepHtml +
@@ -5922,6 +5972,7 @@ function renderContent() {
         resolvedUrlDisplay +
         compareChipHtml +
       '</div>' +
+      responseTimingMetaHtml +
       '</div>' +
       '<div class="tabs js-res-tabs">' +
         '<div class="tab' + (showBody ? ' active' : '') + '" data-tab="resBody">' + escapeHtml(tr('webview.body')) + '</div>' +
@@ -5971,7 +6022,7 @@ function renderContent() {
       (previewAvailable ? '<div class="res-preview' + (showPreview ? '' : ' hidden') + ' js-res-preview"></div>' : '') +
       '</div>';
   } else {
-    resHtml = '<div class="res-empty-shell">' + (tab.url
+    resHtml = '<div class="res-empty-shell">' + buildResponseTimingMetaHtml(tab) + (tab.url
       ? renderEmptyState(
           tr('webview.empty.response.kicker'),
           tr('webview.empty.response.title'),
@@ -6990,7 +7041,11 @@ function sendActiveTab() {
   tab.error = null;
   tab.progressVisible = false;
   tab.slideIn = false;
-  tab.sendTime = Date.now();
+  const requestStartedAt = Date.now();
+  tab.sendTime = requestStartedAt;
+  tab.requestStartedAt = requestStartedAt;
+  tab.requestEndedAt = null;
+  tab.durationMs = null;
   renderContent();
 
   // 3) ?꾩넚 以??ㅼ삩 ?꾩뒪 (renderContent ???ㅼ떆 荑쇰━)
@@ -7028,6 +7083,7 @@ function sendActiveTab() {
 
   vscode.postMessage({
     type: 'sendRequest', tabId: tab.id,
+    requestStartedAt: requestStartedAt,
     method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: !!tab.followRedirects, saveToHistory: tab.saveToHistory !== false, tlsValidation: normalizeTlsValidation(tab.tlsValidation), maxResponseSizeKb: normalizeNumberSetting(tab.maxResponseSizeKb), retryCount: normalizeNumberSetting(tab.retryCount), retryDelayMs: normalizeNumberSetting(tab.retryDelayMs), stopAfterHeaders: !!tab.stopAfterHeaders, skipDefaultHeaders: !!tab.skipDefaultHeaders, disableScripts: !!tab.disableScripts,
   });
 }
@@ -7421,6 +7477,7 @@ window.addEventListener('message', (event) => {
     const tab = tabs.find(t => t.id === msg.tabId);
     if (!tab) return;
     clearTabRequestState(tab);
+    applyResponseTiming(tab, msg);
     tab.lastEvent = 'canceled';
     tab.error = null;
     if (activeTabId === msg.tabId) {
@@ -7436,6 +7493,7 @@ window.addEventListener('message', (event) => {
     const tab = tabs.find(t => t.id === msg.tabId);
     if (!tab) return;
     clearTabRequestState(tab);
+    applyResponseTiming(tab, msg);
     tab.slideIn = true;
 
     // ?ㅼ삩 ?꾩뒪 ?쒓굅
@@ -8517,6 +8575,133 @@ function formatSize(b) {
   if (b < 1024) return b + ' B';
   if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
   return (b/1048576).toFixed(1) + ' MB';
+}
+
+function normalizeEpochMs(value) {
+  var num = Number(value);
+  return Number.isFinite(num) && num > 0 ? Math.floor(num) : null;
+}
+
+function normalizeDurationMs(value) {
+  var num = Number(value);
+  return Number.isFinite(num) && num >= 0 ? Math.round(num) : null;
+}
+
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
+
+function pad3(value) {
+  return String(value).padStart(3, '0');
+}
+
+function formatLocalTimestamp(epochMs) {
+  var ms = normalizeEpochMs(epochMs);
+  if (ms === null) return '';
+  var date = new Date(ms);
+  if (!Number.isFinite(date.getTime())) return '';
+  return date.getFullYear() + '-' +
+    pad2(date.getMonth() + 1) + '-' +
+    pad2(date.getDate()) + ' ' +
+    pad2(date.getHours()) + ':' +
+    pad2(date.getMinutes()) + ':' +
+    pad2(date.getSeconds()) + '.' +
+    pad3(date.getMilliseconds());
+}
+
+function formatLocalTime(epochMs) {
+  var ms = normalizeEpochMs(epochMs);
+  if (ms === null) return '';
+  var date = new Date(ms);
+  if (!Number.isFinite(date.getTime())) return '';
+  return pad2(date.getHours()) + ':' +
+    pad2(date.getMinutes()) + ':' +
+    pad2(date.getSeconds()) + '.' +
+    pad3(date.getMilliseconds());
+}
+
+function isSameLocalDate(leftEpochMs, rightEpochMs) {
+  var left = normalizeEpochMs(leftEpochMs);
+  var right = normalizeEpochMs(rightEpochMs);
+  if (left === null || right === null) return false;
+  var leftDate = new Date(left);
+  var rightDate = new Date(right);
+  return leftDate.getFullYear() === rightDate.getFullYear() &&
+    leftDate.getMonth() === rightDate.getMonth() &&
+    leftDate.getDate() === rightDate.getDate();
+}
+
+function formatResponseTimingValue(epochMs, pairedEpochMs) {
+  var ms = normalizeEpochMs(epochMs);
+  if (ms === null) return '';
+  if (pairedEpochMs !== undefined && isSameLocalDate(ms, pairedEpochMs)) {
+    return formatLocalTime(ms);
+  }
+  var date = new Date(ms);
+  if (!Number.isFinite(date.getTime())) return '';
+  return pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()) + ' ' + formatLocalTime(ms);
+}
+
+function formatDurationMs(durationMs) {
+  var ms = normalizeDurationMs(durationMs);
+  if (ms === null) return '';
+  if (ms < 1000) return ms + ' ms';
+  if (ms < 60000) return (ms / 1000).toFixed(3) + ' s';
+  var minutes = Math.floor(ms / 60000);
+  var remainder = ms % 60000;
+  var seconds = Math.floor(remainder / 1000);
+  var milliseconds = remainder % 1000;
+  return minutes + 'm ' + pad2(seconds) + '.' + pad3(milliseconds) + 's';
+}
+
+function getResponseDurationMs(tab, fallbackTime) {
+  var explicit = normalizeDurationMs(tab?.durationMs);
+  if (explicit !== null) return explicit;
+  var startedAt = normalizeEpochMs(tab?.requestStartedAt);
+  var endedAt = normalizeEpochMs(tab?.requestEndedAt);
+  if (startedAt !== null && endedAt !== null) {
+    return Math.max(0, endedAt - startedAt);
+  }
+  return normalizeDurationMs(fallbackTime);
+}
+
+function applyResponseTiming(tab, msg) {
+  if (!tab) return;
+  var startedAt = normalizeEpochMs(msg?.requestStartedAt) ?? normalizeEpochMs(tab.requestStartedAt) ?? normalizeEpochMs(tab.sendTime);
+  var endedAt = normalizeEpochMs(msg?.requestEndedAt) ?? Date.now();
+  var durationMs = normalizeDurationMs(msg?.durationMs);
+  if (durationMs === null && startedAt !== null && endedAt !== null) {
+    durationMs = Math.max(0, endedAt - startedAt);
+  }
+  tab.requestStartedAt = startedAt;
+  tab.requestEndedAt = endedAt;
+  tab.durationMs = durationMs;
+}
+
+function buildResponseTimingMetaHtml(tab) {
+  var startedAt = normalizeEpochMs(tab?.requestStartedAt);
+  var endedAt = normalizeEpochMs(tab?.requestEndedAt);
+  if (startedAt === null && endedAt === null) return '';
+  var endedKey = tab?.response && tab?.lastEvent === 'success' ? 'webview.receivedAt' : 'webview.endedAt';
+  var titleParts = [];
+  if (startedAt !== null) {
+    titleParts.push(tr('webview.requestedAt') + ' ' + formatLocalTimestamp(startedAt));
+  }
+  if (endedAt !== null) {
+    titleParts.push(tr(endedKey) + ' ' + formatLocalTimestamp(endedAt));
+  }
+  var durationMs = getResponseDurationMs(tab, tab?.response?.time);
+  if (durationMs !== null) {
+    titleParts.push(String(durationMs) + ' ms');
+  }
+  var title = titleParts.length > 0 ? ' title="' + escapeAttr(titleParts.join(' / ')) + '"' : '';
+  if (startedAt !== null && endedAt !== null) {
+    return '<div class="response-timing-row"' + title + '><span class="timing-flow"><span class="timing-value">' + escapeHtml(formatResponseTimingValue(startedAt, endedAt)) + '</span><span class="timing-arrow" aria-hidden="true">\u2192</span><span class="timing-value">' + escapeHtml(formatResponseTimingValue(endedAt, startedAt)) + '</span></span></div>';
+  }
+  if (startedAt !== null) {
+    return '<div class="response-timing-row"' + title + '><span class="timing-flow"><span class="timing-prefix">' + escapeHtml(tr('webview.requestedAt')) + '</span><span class="timing-value">' + escapeHtml(formatResponseTimingValue(startedAt)) + '</span></span></div>';
+  }
+  return '<div class="response-timing-row"' + title + '><span class="timing-flow"><span class="timing-prefix">' + escapeHtml(tr(endedKey)) + '</span><span class="timing-value">' + escapeHtml(formatResponseTimingValue(endedAt)) + '</span></span></div>';
 }
 function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escapeAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }

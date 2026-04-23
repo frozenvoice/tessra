@@ -172,6 +172,9 @@ describe('StorageService (파일 기반)', () => {
         },
         response: { status: 200, statusText: 'OK', time: 150 },
         timestamp: Date.now(),
+        startedAt: 1776903261123,
+        endedAt: 1776903261273,
+        durationMs: 150,
       };
       const history: HistoryEntry[] = [];
       history.unshift(entry);
@@ -180,6 +183,9 @@ describe('StorageService (파일 기반)', () => {
       assert.strictEqual(loaded.length, 1);
       assert.strictEqual(loaded[0].request.method, 'GET');
       assert.strictEqual(loaded[0].response?.status, 200);
+      assert.strictEqual(loaded[0].startedAt, 1776903261123);
+      assert.strictEqual(loaded[0].endedAt, 1776903261273);
+      assert.strictEqual(loaded[0].durationMs, 150);
     });
 
     it('히스토리 최대 200개 제한', () => {

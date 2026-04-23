@@ -48,7 +48,7 @@ Tessra는 VS Code 안에서 동작하는 local-first REST API 클라이언트다
 - Run All Requests
 - 컬렉션 러너에서 실패한 요청만 재실행
 - History pin / filter / prune
-- 실행 시점 스냅샷 기반 history 저장
+- 실행 시점 스냅샷과 timing metadata 기반 history 저장
 - 더 촘촘한 사이드바 설명 정보와 컬렉션 / 폴더 개수 표시
 
 ### Response Viewer
@@ -60,6 +60,7 @@ Tessra는 VS Code 안에서 동작하는 local-first REST API 클라이언트다
 - 응답 비교: `Raw`, `Normalized`, `Pretty`
 - ignore headers / ignore JSON paths 비교 설정
 - resolved URL / status / raw headers 빠른 복사
+- 읽기 좋은 응답 시간과 요청/수신 시각 메타데이터 표시
 - 활성 환경 / 현재 프로필 / 기본 헤더 / 스크립트 / 히스토리 동작 상태 배지와 linked focus 이동
 - 응답 검색, 요청 변경 요약, 변수 사용처, richer empty states
 - 테스트 pass / fail / log 요약과 첫 실패 강조

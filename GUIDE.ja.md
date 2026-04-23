@@ -32,6 +32,7 @@ Body: {"env":"{{envName}}"}
 
 - `Body`、`Headers`、`Cookies`、`Tests` タブに加えて、意味のある静的 HTML がある場合のみ `Preview` タブが表示されます
 - 動的 HTML ページは `Body` タブに残り、HTTP/HTTPS の元ページは `URL を開く` アクションで開けます
+- レスポンスメタデータに読みやすい所要時間と送信/受信時刻を表示します
 - JSON ツリービューアー
 - XML フォーマット: `Pretty`, `Compact`, `Inline Children`
 - レスポンス本文の保存とコピー
@@ -42,7 +43,7 @@ Body: {"env":"{{envName}}"}
 - コレクション、フォルダー、保存済みリクエストの作成
 - Drag & Drop で整理
 - コレクション全体を実行
-- 実行時スナップショットとして履歴を保存
+- 実行時スナップショットと timing metadata として履歴を保存
 - アクティブ環境の切り替えと `{{variables}}` の利用
 
 ## ワークスペースプロファイル

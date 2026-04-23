@@ -84,13 +84,14 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 - Rerun failed requests only from the collection runner summary
 - Collection filtering with `method:`, `host:`, and `type:` tokens
 - History pinning and filtering with `status:`, `method:`, `host:`, and `pinned:` tokens
-- History snapshots store the executed request state
+- History snapshots store the executed request state plus timing metadata
 - History pruning via `tessra.historyMaxItems`
 - Denser sidebar rows with method/host summaries and collection/folder item counts
 
 ### Response viewer
 - Body / Headers / Cookies / Tests tabs, plus Preview when the response contains meaningful static HTML
 - Dynamic HTML pages stay in Body while `Open URL` remains available for HTTP/HTTPS resolved pages
+- Readable response durations with requested/received timestamps in the response metadata
 - Sticky response toolbar for finding text, compare, and response actions
 - Topline status chips for the active environment, workspace profile, default headers, scripts, and history behavior
 - Find text within the response body with next/previous navigation, case-sensitive mode, and regex mode
