@@ -357,6 +357,7 @@ export class CollectionTreeProvider
       stopAfterHeaders?: RequestSettings['stopAfterHeaders'];
       skipDefaultHeaders?: RequestSettings['skipDefaultHeaders'];
       disableScripts?: RequestSettings['disableScripts'];
+      scriptsTrusted?: RequestSettings['scriptsTrusted'];
     }
   ): Promise<{ requestId: string; name: string } | null> {
     const collections = this.storage.getCollections();
@@ -386,6 +387,7 @@ export class CollectionTreeProvider
           existing.request.stopAfterHeaders = requestData.stopAfterHeaders === true;
           existing.request.skipDefaultHeaders = requestData.skipDefaultHeaders === true;
           existing.request.disableScripts = requestData.disableScripts === true;
+          existing.request.scriptsTrusted = requestData.scriptsTrusted !== false;
           this.storage.saveCollections(collections);
           this.refresh();
         return { requestId: existing.request.id, name: existing.name };
@@ -437,6 +439,7 @@ export class CollectionTreeProvider
         stopAfterHeaders: requestData.stopAfterHeaders === true,
         skipDefaultHeaders: requestData.skipDefaultHeaders === true,
         disableScripts: requestData.disableScripts === true,
+        scriptsTrusted: requestData.scriptsTrusted !== false,
       },
     };
 

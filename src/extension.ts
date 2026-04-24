@@ -876,6 +876,10 @@ function normalizeImportedScripts(value: unknown): RequestScripts {
   };
 }
 
+function hasImportedScripts(scripts: RequestScripts): boolean {
+  return !!(scripts.preRequest.trim() || scripts.test.trim());
+}
+
 function normalizeImportedAuthConfig(value: unknown): AuthConfig {
   if (!isRecord(value) || typeof value.type !== 'string') {
     return { type: 'none' };
@@ -919,6 +923,8 @@ function normalizeImportedAuthConfig(value: unknown): AuthConfig {
 
 function normalizeImportedRequest(value: unknown, fallbackName: string): Request | null {
   if (!isRecord(value)) { return null; }
+  const scripts = normalizeImportedScripts(value.scripts);
+  const hasScripts = hasImportedScripts(scripts);
 
   return {
     id: typeof value.id === 'string' && value.id.trim() ? value.id : createImportId(),
@@ -932,7 +938,9 @@ function normalizeImportedRequest(value: unknown, fallbackName: string): Request
     formData: normalizeImportedFormData(value.formData),
     binaryFilePath: typeof value.binaryFilePath === 'string' ? value.binaryFilePath : '',
     auth: normalizeImportedAuthConfig(value.auth),
-    scripts: normalizeImportedScripts(value.scripts),
+    scripts,
+    disableScripts: hasScripts,
+    scriptsTrusted: hasScripts ? false : true,
   };
 }
 

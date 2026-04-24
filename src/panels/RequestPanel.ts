@@ -46,6 +46,7 @@ type ResolvedRequestSettings = {
   stopAfterHeaders: boolean;
   skipDefaultHeaders: boolean;
   disableScripts: boolean;
+  scriptsTrusted: boolean;
 };
 
 type RequestTiming = {
@@ -153,6 +154,10 @@ export class RequestPanel {
     return { preRequest: '', test: '' };
   }
 
+  private static hasExecutableScripts(scripts: RequestScripts | undefined): boolean {
+    return !!(scripts?.preRequest?.trim() || scripts?.test?.trim());
+  }
+
   private static normalizeCount(value: number | undefined): number {
     return Number.isFinite(value) && (value ?? 0) > 0 ? Math.floor(value as number) : 0;
   }
@@ -198,7 +203,15 @@ export class RequestPanel {
       stopAfterHeaders: settings?.stopAfterHeaders === true,
       skipDefaultHeaders: settings?.skipDefaultHeaders === true,
       disableScripts: settings?.disableScripts === true,
+      scriptsTrusted: settings?.scriptsTrusted !== false,
     };
+  }
+
+  private isScriptExecutionBlocked(
+    scripts: RequestScripts | undefined,
+    settings: ResolvedRequestSettings
+  ): boolean {
+    return !settings.disableScripts && !settings.scriptsTrusted && RequestPanel.hasExecutableScripts(scripts);
   }
 
   private resolveAllowInsecureHttps(tlsValidation: TlsValidationMode): boolean {
@@ -223,6 +236,7 @@ export class RequestPanel {
       stopAfterHeaders: settings.stopAfterHeaders,
       skipDefaultHeaders: settings.skipDefaultHeaders,
       disableScripts: settings.disableScripts,
+      scriptsTrusted: settings.scriptsTrusted,
     };
   }
 
@@ -463,6 +477,7 @@ export class RequestPanel {
       stopAfterHeaders: req.stopAfterHeaders === true,
       skipDefaultHeaders: req.skipDefaultHeaders === true,
       disableScripts: req.disableScripts === true,
+      scriptsTrusted: req.scriptsTrusted !== false,
       name: req.name || `${req.method} ${req.url}`,
     });
   }
@@ -597,6 +612,9 @@ export class RequestPanel {
       let time = 0;
 
       try {
+        if (this.isScriptExecutionBlocked(scripts, settings)) {
+          throw new Error(LocalizationService.t('panel.importedScriptsBlocked'));
+        }
         if (!settings.disableScripts) {
           const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars);
           requestState = preRequestResult.request;
@@ -845,6 +863,7 @@ export class RequestPanel {
           stopAfterHeaders: message.stopAfterHeaders === true,
           skipDefaultHeaders: message.skipDefaultHeaders === true,
           disableScripts: message.disableScripts === true,
+          scriptsTrusted: message.scriptsTrusted !== false,
         });
         this.postMessage({
           type: MessageType.SaveRequestResult,
@@ -1053,6 +1072,11 @@ export class RequestPanel {
       binaryFilePath: message.binaryFilePath ?? '',
       auth: message.auth ?? { type: 'none' },
     });
+
+    if (this.isScriptExecutionBlocked(scripts, settings)) {
+      this.postTimedResponseError(tabId, LocalizationService.t('panel.importedScriptsBlocked'), requestStartedAt);
+      return;
+    }
 
     if (!settings.disableScripts) {
       try {
@@ -4393,6 +4417,7 @@ function getRequestSettings(data) {
     stopAfterHeaders: data?.stopAfterHeaders === true,
     skipDefaultHeaders: data?.skipDefaultHeaders === true,
     disableScripts: data?.disableScripts === true,
+    scriptsTrusted: data?.scriptsTrusted !== false,
   };
 }
 
@@ -4408,6 +4433,7 @@ function applyRequestSettings(target, data) {
   target.stopAfterHeaders = settings.stopAfterHeaders;
   target.skipDefaultHeaders = settings.skipDefaultHeaders;
   target.disableScripts = settings.disableScripts;
+  target.scriptsTrusted = settings.scriptsTrusted;
   return target;
 }
 
@@ -4423,6 +4449,7 @@ function requestSettingsSnapshot(tab) {
     stopAfterHeaders: !!tab.stopAfterHeaders,
     skipDefaultHeaders: !!tab.skipDefaultHeaders,
     disableScripts: !!tab.disableScripts,
+    scriptsTrusted: tab.scriptsTrusted !== false,
   };
 }
 
@@ -5193,7 +5220,7 @@ function showTabContextMenu(x, y, tabId) {
         break;
       case 'duplicate':
         saveActiveTabState();
-        createTab({ name: tab.name, autoName: !!tab.autoName, requestEditorTab: tab.requestEditorTab, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent, responseSearchQuery: tab.responseSearchQuery || '', responseSearchIndex: typeof tab.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0, responseSearchCaseSensitive: tab.responseSearchCaseSensitive === true, responseSearchRegex: tab.responseSearchRegex === true, scriptHelpCollapsed: tab.scriptHelpCollapsed === true });
+        createTab({ name: tab.name, autoName: !!tab.autoName, requestEditorTab: tab.requestEditorTab, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, scriptsTrusted: tab.scriptsTrusted !== false, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent, responseSearchQuery: tab.responseSearchQuery || '', responseSearchIndex: typeof tab.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0, responseSearchCaseSensitive: tab.responseSearchCaseSensitive === true, responseSearchRegex: tab.responseSearchRegex === true, scriptHelpCollapsed: tab.scriptHelpCollapsed === true });
         break;
     }
   });
@@ -7016,11 +7043,28 @@ function collectAllKv(container) {
   return arr;
 }
 
+function hasExecutableScripts(scripts) {
+  return !!(scripts && ((scripts.preRequest || '').trim() || (scripts.test || '').trim()));
+}
+
+function ensureTrustedScriptsBeforeSend(tab) {
+  if (!tab || tab.disableScripts || tab.scriptsTrusted !== false || !hasExecutableScripts(tab.scripts)) {
+    return true;
+  }
+  if (!window.confirm(tr('webview.importedScriptsTrustPrompt'))) {
+    return false;
+  }
+  tab.scriptsTrusted = true;
+  debouncePersist();
+  return true;
+}
+
 function sendActiveTab() {
   saveActiveTabState();
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab || !tab.url) return;
   if (tab.loading) return;
+  if (!ensureTrustedScriptsBeforeSend(tab)) return;
   const mc = mainContent;
 
   // 1) Send 踰꾪듉 ?뚮┝ ?④낵 ??renderContent?먯꽌 Stop?쇰줈 ?꾪솚??
@@ -7084,7 +7128,7 @@ function sendActiveTab() {
   vscode.postMessage({
     type: 'sendRequest', tabId: tab.id,
     requestStartedAt: requestStartedAt,
-    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: !!tab.followRedirects, saveToHistory: tab.saveToHistory !== false, tlsValidation: normalizeTlsValidation(tab.tlsValidation), maxResponseSizeKb: normalizeNumberSetting(tab.maxResponseSizeKb), retryCount: normalizeNumberSetting(tab.retryCount), retryDelayMs: normalizeNumberSetting(tab.retryDelayMs), stopAfterHeaders: !!tab.stopAfterHeaders, skipDefaultHeaders: !!tab.skipDefaultHeaders, disableScripts: !!tab.disableScripts,
+    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: !!tab.followRedirects, saveToHistory: tab.saveToHistory !== false, tlsValidation: normalizeTlsValidation(tab.tlsValidation), maxResponseSizeKb: normalizeNumberSetting(tab.maxResponseSizeKb), retryCount: normalizeNumberSetting(tab.retryCount), retryDelayMs: normalizeNumberSetting(tab.retryDelayMs), stopAfterHeaders: !!tab.stopAfterHeaders, skipDefaultHeaders: !!tab.skipDefaultHeaders, disableScripts: !!tab.disableScripts, scriptsTrusted: tab.scriptsTrusted !== false,
   });
 }
 
@@ -7641,6 +7685,7 @@ window.addEventListener('message', (event) => {
       stopAfterHeaders: msg.stopAfterHeaders === true,
       skipDefaultHeaders: msg.skipDefaultHeaders === true,
       disableScripts: msg.disableScripts === true,
+      scriptsTrusted: msg.scriptsTrusted !== false,
     });
   }
 

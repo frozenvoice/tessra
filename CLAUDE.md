@@ -72,6 +72,7 @@ Tessra는 VS Code 안에서 동작하는 local-first REST API 클라이언트다
 - Pre-request script
 - Test script
 - `pm.test`, `pm.expect`, `pm.environment`
+- import로 들어온 스크립트는 요청 탭에서 신뢰 처리하기 전까지 기본 비활성화
 - 로그와 테스트 결과 표시
 - 응답값을 환경 변수로 저장해 다음 요청에 넘기는 접이식 stepper 도움말과 삽입 버튼
 

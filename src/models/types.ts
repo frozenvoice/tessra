@@ -48,6 +48,7 @@ export interface RequestSettings {
   stopAfterHeaders?: boolean;
   skipDefaultHeaders?: boolean;
   disableScripts?: boolean;
+  scriptsTrusted?: boolean;
 }
 
 export interface ScriptLogEntry {
@@ -98,6 +99,7 @@ export interface TabState {
   stopAfterHeaders?: boolean;
   skipDefaultHeaders?: boolean;
   disableScripts?: boolean;
+  scriptsTrusted?: boolean;
   jsonFormatStyle?: 'pretty' | 'compact';
   xmlFormatStyle?: 'pretty' | 'compact' | 'inline';
   formatIndent?: '2' | '4' | 'tab';

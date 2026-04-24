@@ -22,6 +22,7 @@ export class RequestBodyService {
     vars: KeyValue[];
   }): Promise<PreparedRequestBody> {
     const headers = options.headers.map((header) => ({ ...header }));
+    this.removeHeader(headers, 'content-length');
     const body = VariableService.resolve(options.body ?? '', options.vars);
     const formData = (options.formData ?? [])
       .filter((field) => field.enabled !== false && field.key)

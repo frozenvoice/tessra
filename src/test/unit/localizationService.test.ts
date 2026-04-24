@@ -137,6 +137,18 @@ describe('LocalizationService source', () => {
     }
   });
 
+  it('keeps imported-script trust warnings translated for every supported language', () => {
+    const keys = [
+      'panel.importedScriptsBlocked',
+      'webview.importedScriptsTrustPrompt',
+    ];
+
+    for (const key of keys) {
+      const matches = source.match(new RegExp(`'${key.replace(/\./g, '\\.')}'\\s*:`, 'g')) ?? [];
+      assert.strictEqual(matches.length, 3, `${key} should exist for every supported language`);
+    }
+  });
+
   it('keeps preflight, masking, and runner status copy translated for every supported language', () => {
     const keys = [
       'webview.summaryEnvironment',

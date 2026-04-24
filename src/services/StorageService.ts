@@ -154,7 +154,8 @@ export class StorageService {
   }
 
   private findLegacyProfilePath(profilesRoot: string, profileName: string, profilePath: string): string | null {
-    const legacyPath = path.join(profilesRoot, this.toLegacyProfileDirectoryName(profileName));
+    const legacyDirName = this.toLegacyProfileDirectoryName(profileName);
+    const legacyPath = path.join(profilesRoot, legacyDirName);
     if (legacyPath === profilePath || !fs.existsSync(legacyPath) || fs.existsSync(profilePath)) {
       return null;
     }
@@ -163,7 +164,7 @@ export class StorageService {
       path.join(legacyPath, StorageService.PROFILE_META_FILE),
       null
     );
-    if (meta?.name === profileName || (!meta?.name && path.basename(legacyPath) === profileName)) {
+    if (meta?.name === profileName || (!meta?.name && path.basename(legacyPath) === legacyDirName)) {
       return legacyPath;
     }
     return null;

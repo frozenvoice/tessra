@@ -44,5 +44,7 @@ describe('ImportExportService', () => {
     assert.strictEqual(request.formData?.[1].type, 'file');
     assert.ok(request.scripts?.preRequest.includes('env.set'));
     assert.ok(request.scripts?.test.includes('pm.test'));
+    assert.strictEqual(request.disableScripts, true);
+    assert.strictEqual(request.scriptsTrusted, false);
   });
 });

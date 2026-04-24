@@ -48,6 +48,14 @@ describe('extension source', () => {
     assert.match(source, /update\(\s*'workspaceProfile'/);
   });
 
+  it('marks imported scripts as untrusted until the user reviews them', () => {
+    assert.match(source, /function hasImportedScripts\(scripts: RequestScripts\): boolean \{/);
+    assert.match(source, /const scripts = normalizeImportedScripts\(value\.scripts\);/);
+    assert.match(source, /const hasScripts = hasImportedScripts\(scripts\);/);
+    assert.match(source, /disableScripts: hasScripts,/);
+    assert.match(source, /scriptsTrusted: hasScripts \? false : true,/);
+  });
+
   it('refreshes the current panel when the request panel theme changes and reloads storage when the workspace profile changes', () => {
     assert.match(source, /const inspected = config\.inspect<string>\('requestPanelTheme'\);/);
     assert.match(source, /if \(inspected\.globalValue === 'glossy'\) \{/);

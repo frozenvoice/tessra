@@ -32,6 +32,8 @@ describe('storage service source', () => {
     assert.match(source, /return `profile-\$\{encoded \|\| StorageService\.DEFAULT_PROFILE_NAME\}`;/);
     assert.match(source, /private toLegacyProfileDirectoryName\(profileName: string\): string/);
     assert.match(source, /findLegacyProfilePath\(profilesRoot, profileName, profilePath\)/);
+    assert.match(source, /const legacyDirName = this\.toLegacyProfileDirectoryName\(profileName\);/);
+    assert.match(source, /path\.basename\(legacyPath\) === legacyDirName/);
     assert.match(source, /Workspace profile "\$\{profileName\}" collides with existing profile/);
   });
 

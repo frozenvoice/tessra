@@ -64,6 +64,7 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.saveToHistory': 'Save to history',
   'webview.skipDefaultHeaders': 'Skip default headers',
   'webview.disableScripts': 'Disable scripts',
+  'webview.importedScriptsTrustPrompt': 'Imported scripts are disabled by default for safety.',
   'webview.previewOfflineTitle': 'Offline HTML Preview',
   'webview.previewOfflineCopy': 'This preview stays local. External scripts, styles, images, and other linked assets are blocked, so dynamic pages may only show static HTML.',
   'webview.previewOfflineSource': 'Source URL',
@@ -794,9 +795,21 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /stopAfterHeaders:\s*data\?\.stopAfterHeaders === true/);
     assert.match(script, /skipDefaultHeaders:\s*data\?\.skipDefaultHeaders === true/);
     assert.match(script, /disableScripts:\s*data\?\.disableScripts === true/);
+    assert.match(script, /scriptsTrusted:\s*data\?\.scriptsTrusted !== false/);
     assert.match(script, /buildSaveRequestMessage\(tab/);
     assert.match(script, /followRedirects:\s*!!tab\.followRedirects/);
     assert.match(script, /saveToHistory:\s*tab\.saveToHistory !== false/);
+    assert.match(script, /scriptsTrusted:\s*tab\.scriptsTrusted !== false/);
+  });
+
+  it('requires explicit trust before running imported scripts from the webview', () => {
+    assert.match(script, /function hasExecutableScripts\(scripts\)/);
+    assert.match(script, /function ensureTrustedScriptsBeforeSend\(tab\)/);
+    assert.match(script, /tab\.scriptsTrusted !== false/);
+    assert.match(script, /window\.confirm\(tr\('webview\.importedScriptsTrustPrompt'\)\)/);
+    assert.match(script, /tab\.scriptsTrusted = true;/);
+    assert.match(script, /if \(!ensureTrustedScriptsBeforeSend\(tab\)\) return;/);
+    assert.match(script, /scriptsTrusted: tab\.scriptsTrusted !== false/);
   });
 
   it('opens HTML preview automatically when meaningful static HTML exists', () => {

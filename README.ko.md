@@ -108,6 +108,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - Pre-request script
 - Test script
 - `pm.test`, `pm.expect`, `pm.environment`
+- import로 들어온 스크립트는 요청 탭에서 명시적으로 신뢰 처리하기 전까지 비활성화 유지
 - script logs / test 결과 표시
 - pass / fail / log 요약 배지와 첫 실패 강조
 - 1번 요청 응답값을 2번 요청으로 넘길 수 있는 접이식 stepper 도움말과 예제 삽입 버튼

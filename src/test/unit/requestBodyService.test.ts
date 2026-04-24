@@ -56,4 +56,21 @@ describe('RequestBodyService', () => {
       fs.unlinkSync(tempFile);
     }
   });
+  it('raw/json/form 바디에서도 오래된 content-length를 제거한다', async () => {
+    const result = await RequestBodyService.prepare({
+      bodyType: 'json',
+      body: '{"name":"{{user}}"}',
+      formData: [],
+      binaryFilePath: '',
+      headers: [
+        { key: 'Content-Length', value: '999', enabled: true },
+        { key: 'Content-Type', value: 'application/json', enabled: true },
+      ],
+      vars: [{ key: 'user', value: 'tessra', enabled: true }],
+    });
+
+    assert.strictEqual(result.resolvedBody, '{"name":"tessra"}');
+    assert.ok(result.headers.every((header) => header.key.toLowerCase() !== 'content-length'));
+    assert.ok(result.headers.some((header) => header.key === 'Content-Type' && header.value === 'application/json'));
+  });
 });

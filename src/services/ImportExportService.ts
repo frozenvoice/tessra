@@ -746,6 +746,7 @@ export class ImportExportService {
     const { url, params } = this.importUrl(request.url);
     const body = this.importBody(this.asObject(request.body));
     const scripts = this.importScripts(request);
+    const hasScripts = this.hasExecutableScripts(scripts);
 
     return {
       id: this.generateId(),
@@ -762,6 +763,8 @@ export class ImportExportService {
       binaryFilePath: body.binaryFilePath,
       auth: this.importAuth(this.asObject(request.auth)),
       scripts,
+      disableScripts: hasScripts,
+      scriptsTrusted: hasScripts ? false : true,
     };
   }
 
@@ -931,6 +934,10 @@ export class ImportExportService {
     }
 
     return scripts;
+  }
+
+  private static hasExecutableScripts(scripts: RequestScripts): boolean {
+    return !!(scripts.preRequest.trim() || scripts.test.trim());
   }
 
   private static importFormDataField(value: unknown): FormDataField | null {
