@@ -81,6 +81,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - Run All Requests
 - 현재 요청 강조와 재시도 대기 상태를 보여주는 컬렉션 러너 상태 표시
 - 컬렉션 러너 결과에서 실패한 요청만 다시 실행
+- 각 요청의 history 저장 설정이 켜져 있으면 컬렉션 러너 실행도 history에 저장
 - `method:` / `host:` / `type:` 토큰을 지원하는 Collection 필터
 - `status:` / `method:` / `host:` / `pinned:` 토큰을 지원하는 History 필터
 - 실행 시점 스냅샷과 timing metadata 기반 history 저장
@@ -237,6 +238,8 @@ macOS에서는 `Cmd`를 사용합니다.
 - `tab-state.json`
 
 Tessra 이름 변경 후 첫 활성화 시 Tessra 저장 폴더에 기존 데이터가 없으면, 이전 Arc Client 저장 폴더(`arc.arc-client`, `arc-client`)를 확인해 기존 데이터 파일을 새 `tessra.tessra` 폴더로 복사합니다. 이미 Tessra 데이터가 있으면 로컬 데이터 덮어쓰기를 막기 위해 마이그레이션을 건너뜁니다.
+
+저장된 JSON 파일을 파싱할 수 없으면 Tessra는 원본 옆에 `.corrupt-*` 백업을 남기고 경고를 표시한 뒤, 해당 파일이 다시 저장될 때까지 기본값을 사용합니다.
 
 일반적인 경로:
 

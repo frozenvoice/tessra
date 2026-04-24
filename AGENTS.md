@@ -88,7 +88,7 @@ tessra/
 15. `tessra.displayLanguage` 설정 기반 UI 언어 선택 (Tessra 패널/알림/인앱 가이드 대상, 기본 영어, 현재 `en`/`ko`/`ja`, 설정/명령 레이블은 VS Code locale 유지)
 16. `tessra.requestPanelTheme` 설정과 Command Palette 기반 요청 패널 테마 프리셋 선택 (`default`, `minimal-cool`, `product`, `bold-color`)
 17. `tessra.workspaceProfile` 설정 기반 워크스페이스 로컬 저장 프로필 분리와 현재 프로필 표시 (`default`는 메인 작업용, 사용자 지정 프로필은 프로젝트/실험 분리용)
-18. 컬렉션 러너 실패 요청만 재실행
+18. 컬렉션 러너 실패 요청만 재실행, 요청별 history 저장 설정을 따른 실행 결과 저장
 
 ### 남아 있는 큰 항목
 1. WebSocket 지원
@@ -118,6 +118,8 @@ npx vsce package
 - `profiles/<profile-name>/...`
 
 Tessra 저장소가 비어 있는 첫 활성화 시에는 이전 Arc Client 저장소(`arc.arc-client`, `arc-client`)의 기존 데이터 파일과 프로필을 새 `tessra.tessra` 저장소로 복사한다. 새 저장소에 데이터가 이미 있으면 덮어쓰기 방지를 위해 마이그레이션하지 않는다.
+
+저장된 JSON 파일을 파싱할 수 없으면 원본 옆에 `.corrupt-*` 백업을 남기고 경고를 표시한 뒤, 해당 파일이 다시 저장될 때까지 기본값을 사용한다.
 
 ## 주의사항
 - 기존 기능을 건드릴 때는 webview 파싱 오류와 상태 복원 흐름을 가장 먼저 확인한다

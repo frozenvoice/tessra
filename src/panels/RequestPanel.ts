@@ -103,6 +103,7 @@ export class RequestPanel {
   private canceledRequestTabs = new Set<string>();
   private activeRequests = new Map<string, { abort: () => void }>();
   private webviewReady = false;
+  private pendingWebviewMessages: unknown[] = [];
   private pendingFlushResolvers: Array<() => void> = [];
 
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
@@ -147,6 +148,21 @@ export class RequestPanel {
         return 'raw';
       default:
         return 'none';
+    }
+  }
+
+  private static normalizeMethod(method: string | undefined, fallback: Request['method'] = 'GET'): Request['method'] {
+    switch (String(method || '').toUpperCase()) {
+      case 'GET':
+      case 'POST':
+      case 'PUT':
+      case 'PATCH':
+      case 'DELETE':
+      case 'HEAD':
+      case 'OPTIONS':
+        return String(method).toUpperCase() as Request['method'];
+      default:
+        return fallback;
     }
   }
 
@@ -274,7 +290,26 @@ export class RequestPanel {
 
   private postMessage(message: unknown): void {
     if (this.isDisposed) { return; }
-    this.panel.webview.postMessage(message);
+    if (!this.webviewReady && this.shouldQueueWebviewMessage(message)) {
+      this.pendingWebviewMessages.push(message);
+      return;
+    }
+
+    void this.panel.webview.postMessage(message);
+  }
+
+  private shouldQueueWebviewMessage(message: unknown): boolean {
+    if (!message || typeof message !== 'object') { return false; }
+    return typeof (message as { type?: unknown }).type === 'string';
+  }
+
+  private flushPendingWebviewMessages(): void {
+    if (this.isDisposed || !this.webviewReady || this.pendingWebviewMessages.length === 0) { return; }
+
+    const messages = this.pendingWebviewMessages.splice(0);
+    for (const message of messages) {
+      void this.panel.webview.postMessage(message);
+    }
   }
 
   private getAllowInsecureCertificates(): boolean {
@@ -593,13 +628,19 @@ export class RequestPanel {
       const { name: reqName, request: req } = requests[i];
       const settings = this.normalizeRequestSettings(req);
       const scripts = this.normalizeScripts(req.scripts);
+      const initialMethod = RequestPanel.normalizeMethod(req.method);
+      const initialBodyType = RequestPanel.normalizeBodyType(req.bodyType);
+      const requestStartedAt = Date.now();
+      let progressMethod = initialMethod;
+      let progressUrl = req.url;
+      let historyRequest: Request | null = null;
       let requestState = this.createScriptableRequest({
-        method: req.method,
+        method: initialMethod,
         url: req.url,
         headers: req.headers ?? [],
         params: req.params ?? [],
         body: req.body ?? '',
-        bodyType: RequestPanel.normalizeBodyType(req.bodyType),
+        bodyType: initialBodyType,
         formData: req.formData ?? [],
         binaryFilePath: req.binaryFilePath ?? '',
         auth: req.auth ?? { type: 'none' },
@@ -621,6 +662,11 @@ export class RequestPanel {
           vars = preRequestResult.envVariables;
           this.saveActiveEnvironmentVariables(vars);
         }
+
+        const method = RequestPanel.normalizeMethod(requestState.method, initialMethod);
+        const bodyType = RequestPanel.normalizeBodyType(requestState.bodyType);
+        requestState.method = method;
+        requestState.bodyType = bodyType;
 
         const resolvedUrl = VariableService.resolve(requestState.url, vars);
         const resolvedHeaders = VariableService.resolveKeyValues(requestState.headers, vars);
@@ -658,8 +704,10 @@ export class RequestPanel {
 
         AuthService.applyAuth(requestState.auth, finalHeaders, finalParams, vars);
         const url = this.buildUrl(resolvedUrl, finalParams);
+        progressMethod = method;
+        progressUrl = url;
         const preparedBody = await RequestBodyService.prepare({
-          bodyType: requestState.bodyType,
+          bodyType,
           body: requestState.body ?? '',
           formData: requestState.formData ?? [],
           binaryFilePath: requestState.binaryFilePath ?? '',
@@ -667,16 +715,26 @@ export class RequestPanel {
           vars,
         });
         const executedRequest = this.createScriptableRequest({
-          method: req.method,
+          method,
           url,
           headers: preparedBody.headers,
           params: finalParams,
           body: preparedBody.resolvedBody,
-          bodyType: requestState.bodyType,
+          bodyType,
           formData: preparedBody.resolvedFormData,
           binaryFilePath: preparedBody.resolvedBinaryFilePath,
           auth: { type: 'none' },
         });
+        historyRequest = this.createHistoryRequestSnapshot(
+          method,
+          url,
+          preparedBody.headers,
+          preparedBody.resolvedBody,
+          bodyType,
+          preparedBody.resolvedFormData,
+          preparedBody.resolvedBinaryFilePath,
+          settings
+        );
 
         const totalAttempts = Math.max(1, settings.retryCount + 1);
         for (let attempt = 0; attempt <= settings.retryCount; attempt++) {
@@ -690,13 +748,13 @@ export class RequestPanel {
             index: i,
             total: requests.length,
             name: reqName,
-            method: req.method,
+            method,
             attempt: attempt + 1,
             totalAttempts,
           });
 
           const handle = this.httpService.send(
-            req.method,
+            method,
             url,
             preparedBody.headers,
             preparedBody.data,
@@ -724,7 +782,7 @@ export class RequestPanel {
               index: i,
               total: requests.length,
               name: reqName,
-              method: req.method,
+              method,
               attempt: attempt + 2,
               totalAttempts,
               retryDelayMs: settings.retryDelayMs,
@@ -740,7 +798,7 @@ export class RequestPanel {
               index: i,
               total: requests.length,
               name: reqName,
-              method: req.method,
+              method,
               attempt: attempt + 2,
               totalAttempts,
               retryDelayMs: settings.retryDelayMs,
@@ -777,6 +835,14 @@ export class RequestPanel {
         failed++;
       } finally {
         this.currentCollectionRequest = null;
+        if (!this.collectionRunAbort && settings.saveToHistory && historyRequest) {
+          this.saveToHistory(
+            historyRequest,
+            response ? { status: response.status, statusText: response.statusText, time: response.time } : null,
+            RequestPanel.createRequestTiming(requestStartedAt)
+          );
+          RequestPanel.historyProvider.refresh();
+        }
       }
 
       this.postMessage({
@@ -784,8 +850,8 @@ export class RequestPanel {
         index: i,
         total: requests.length,
         name: reqName,
-        method: req.method,
-        url: req.url,
+        method: progressMethod,
+        url: progressUrl,
         status,
         statusText,
         time,
@@ -825,6 +891,7 @@ export class RequestPanel {
       this.pendingRestore = null;
       this.updateActiveEnv(RequestPanel.environmentProvider.getActiveEnvironmentName());
       this.sendDefaultHeadersToWebview(false);
+      this.flushPendingWebviewMessages();
       return;
     }
     switch (message.type) {
@@ -1056,18 +1123,18 @@ export class RequestPanel {
   private async executeRequest(message: SendRequestMessage) {
     const tabId = message.tabId;
     const requestStartedAt = RequestPanel.normalizeEpochMs(message.requestStartedAt) ?? Date.now();
-    const method = message.method;
-    const bodyType = RequestPanel.normalizeBodyType(message.bodyType);
+    const initialMethod = RequestPanel.normalizeMethod(message.method);
+    const initialBodyType = RequestPanel.normalizeBodyType(message.bodyType);
     const settings = this.normalizeRequestSettings(message);
     const scripts = this.normalizeScripts(message.scripts);
     let vars = RequestPanel.environmentProvider.getActiveVariables();
     let requestState = this.createScriptableRequest({
-      method,
+      method: initialMethod,
       url: message.url,
       headers: message.headers ?? [],
       params: message.params ?? [],
       body: message.body ?? '',
-      bodyType,
+      bodyType: initialBodyType,
       formData: message.formData ?? [],
       binaryFilePath: message.binaryFilePath ?? '',
       auth: message.auth ?? { type: 'none' },
@@ -1089,6 +1156,11 @@ export class RequestPanel {
         return;
       }
     }
+
+    const method = RequestPanel.normalizeMethod(requestState.method, initialMethod);
+    const bodyType = RequestPanel.normalizeBodyType(requestState.bodyType);
+    requestState.method = method;
+    requestState.bodyType = bodyType;
 
     const resolvedUrl = VariableService.resolve(requestState.url, vars);
     const resolvedHeaders = VariableService.resolveKeyValues(requestState.headers, vars);

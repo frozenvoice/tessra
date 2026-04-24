@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Collection, HistoryEntry, Environment, KeyValue, TabState, CompareSettings, StoredTabState } from '../models/types';
+import { LocalizationService } from './LocalizationService';
 
 // globalStorage 경로에 JSON 파일로 데이터 영속화
 export class StorageService {
@@ -27,6 +28,7 @@ export class StorageService {
   private readonly rootStoragePath: string;
   private migratedLegacyStorage = false;
   private legacyMigrationError: string | null = null;
+  private readonly corruptJsonWarnings = new Set<string>();
 
   constructor(context: vscode.ExtensionContext) {
     this.rootStoragePath = context.globalStorageUri.fsPath;
@@ -213,10 +215,45 @@ export class StorageService {
         const raw = fs.readFileSync(filePath, 'utf-8');
         return JSON.parse(raw);
       }
-    } catch {
-      // 파싱 실패 시 기본값 반환
+    } catch (err: unknown) {
+      this.handleCorruptJson(filePath, err);
     }
     return fallback;
+  }
+
+  private handleCorruptJson(filePath: string, err: unknown): void {
+    if (this.corruptJsonWarnings.has(filePath)) { return; }
+    this.corruptJsonWarnings.add(filePath);
+
+    const backupPath = this.backupCorruptJson(filePath);
+    const message = err instanceof Error ? err.message : String(err);
+    vscode.window.showWarningMessage(LocalizationService.t('warn.storageJsonCorrupt', {
+      file: path.basename(filePath),
+      message,
+      backup: backupPath ?? 'backup unavailable',
+    }));
+  }
+
+  private backupCorruptJson(filePath: string): string | null {
+    try {
+      const backupPath = this.createCorruptBackupPath(filePath);
+      fs.copyFileSync(filePath, backupPath, fs.constants.COPYFILE_EXCL);
+      return backupPath;
+    } catch {
+      return null;
+    }
+  }
+
+  private createCorruptBackupPath(filePath: string): string {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const basePath = `${filePath}.corrupt-${timestamp}`;
+    let candidate = basePath;
+    let index = 1;
+    while (fs.existsSync(candidate)) {
+      candidate = `${basePath}-${index}`;
+      index++;
+    }
+    return candidate;
   }
 
   private writeJson(filePath: string, data: unknown): void {
@@ -228,7 +265,24 @@ export class StorageService {
         this.ensureProfileMeta(dirPath, profileName);
       }
     }
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+
+    const tempPath = path.join(
+      dirPath,
+      `.${path.basename(filePath)}.${process.pid}.${Date.now().toString(36)}.tmp`
+    );
+    try {
+      fs.writeFileSync(tempPath, JSON.stringify(data, null, 2) ?? 'null', 'utf-8');
+      fs.renameSync(tempPath, filePath);
+    } catch (err: unknown) {
+      try {
+        if (fs.existsSync(tempPath)) {
+          fs.unlinkSync(tempPath);
+        }
+      } catch {
+        // 임시 파일 정리 실패는 원래 쓰기 실패를 가리지 않는다.
+      }
+      throw err;
+    }
   }
 
   // === 컬렉션 ===

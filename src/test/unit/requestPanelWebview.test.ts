@@ -687,6 +687,23 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /skipDefaultHeaders:\s*!!tab\.skipDefaultHeaders/);
   });
 
+  it('queues outbound webview messages until the webview is ready', () => {
+    assert.match(source, /private pendingWebviewMessages: unknown\[\] = \[\];/);
+    assert.match(source, /if \(!this\.webviewReady && this\.shouldQueueWebviewMessage\(message\)\) \{/);
+    assert.match(source, /this\.pendingWebviewMessages\.push\(message\);/);
+    assert.match(source, /private flushPendingWebviewMessages\(\): void \{/);
+    assert.match(source, /this\.flushPendingWebviewMessages\(\);/);
+  });
+
+  it('uses pre-request method and body type changes for the actual send path', () => {
+    assert.match(source, /private static normalizeMethod\(method: string \| undefined, fallback: Request\['method'\] = 'GET'\): Request\['method'\]/);
+    assert.match(source, /const initialMethod = RequestPanel\.normalizeMethod\(message\.method\);/);
+    assert.match(source, /const method = RequestPanel\.normalizeMethod\(requestState\.method, initialMethod\);/);
+    assert.match(source, /requestState\.method = method;/);
+    assert.match(source, /requestState\.bodyType = bodyType;/);
+    assert.match(source, /this\.httpService\.send\(\s*method,\s*url,/);
+  });
+
   it('renders the expanded request settings controls', () => {
     assert.ok(html.includes('Follow redirects'), 'settings tab should include redirect toggle');
     assert.ok(html.includes('Stop after headers'), 'settings tab should include headers-only toggle');
@@ -1038,5 +1055,12 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /class="runner-live-status"/);
     assert.match(script, /tr\('webview\.runSending'\)/);
     assert.match(script, /tr\('webview\.runRetrying'\)/);
+  });
+
+  it('persists collection runner results to history when enabled', () => {
+    assert.match(source, /let historyRequest: Request \| null = null;/);
+    assert.match(source, /historyRequest = this\.createHistoryRequestSnapshot\(/);
+    assert.match(source, /if \(!this\.collectionRunAbort && settings\.saveToHistory && historyRequest\) \{/);
+    assert.match(source, /response \? \{ status: response\.status, statusText: response\.statusText, time: response\.time \} : null/);
   });
 });

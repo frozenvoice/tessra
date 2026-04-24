@@ -60,4 +60,15 @@ describe('storage service source', () => {
     assert.match(source, /StorageService\.STORAGE_DATA_INDICATOR_FILES\.some/);
     assert.match(source, /fs\.copyFileSync\(sourcePath, targetPath, fs\.constants\.COPYFILE_EXCL\)/);
   });
+
+  it('backs up corrupt JSON files and writes data atomically', () => {
+    assert.match(source, /private readonly corruptJsonWarnings = new Set<string>\(\);/);
+    assert.match(source, /this\.handleCorruptJson\(filePath, err\);/);
+    assert.match(source, /private backupCorruptJson\(filePath: string\): string \| null/);
+    assert.match(source, /fs\.copyFileSync\(filePath, backupPath, fs\.constants\.COPYFILE_EXCL\)/);
+    assert.match(source, /warn\.storageJsonCorrupt/);
+    assert.match(source, /const tempPath = path\.join\(/);
+    assert.match(source, /fs\.writeFileSync\(tempPath,/);
+    assert.match(source, /fs\.renameSync\(tempPath, filePath\)/);
+  });
 });

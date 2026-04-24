@@ -82,6 +82,7 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 - Run All Requests
 - Live collection runner status with active request highlighting and retry countdowns
 - Rerun failed requests only from the collection runner summary
+- Collection runner executions are saved to history when each request's Save to history setting is enabled
 - Collection filtering with `method:`, `host:`, and `type:` tokens
 - History pinning and filtering with `status:`, `method:`, `host:`, and `pinned:` tokens
 - History snapshots store the executed request state plus timing metadata
@@ -238,6 +239,8 @@ All extension data is stored under VS Code `globalStorage` as JSON files. The de
 - `tab-state.json`
 
 On first activation after the Tessra rename, if the Tessra storage folder has no existing data, Tessra checks the legacy pre-rename storage folders and copies existing data files into the new `tessra.tessra` folder. If Tessra data already exists, migration is skipped to avoid overwriting local data.
+
+If a stored JSON file cannot be parsed, Tessra keeps a `.corrupt-*` backup beside the original file, warns you, and uses defaults for that file until it is saved again.
 
 Typical locations:
 

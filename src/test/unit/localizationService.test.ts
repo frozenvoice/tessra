@@ -255,4 +255,9 @@ describe('LocalizationService source', () => {
     assert.match(source, /public static getRequestPanelTheme\(\): RequestPanelTheme \{/);
     assert.match(source, /public static getRequestPanelThemeLabel\(/);
   });
+
+  it('keeps storage corruption warnings translated for every supported language', () => {
+    const matches = source.match(/'warn\.storageJsonCorrupt':/g) ?? [];
+    assert.strictEqual(matches.length, 3);
+  });
 });
