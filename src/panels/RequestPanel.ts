@@ -1,5 +1,6 @@
 ﻿import * as vscode from 'vscode';
 import { HttpService } from '../services/HttpService';
+import { WebSocketService } from '../services/WebSocketService';
 import { StorageService } from '../services/StorageService';
 import { CollectionTreeProvider } from '../providers/CollectionTreeProvider';
 import { HistoryTreeProvider } from '../providers/HistoryTreeProvider';
@@ -23,6 +24,7 @@ import { LocalizationService } from '../services/LocalizationService';
 import { RequestExportService } from '../services/RequestExportService';
 import { RequestExecutor } from './requestPanel/RequestExecutor';
 import { CollectionRunner } from './requestPanel/CollectionRunner';
+import { WebSocketManager } from './requestPanel/WebSocketManager';
 import {
   createEmptyScripts,
   normalizeBodyType,
@@ -48,6 +50,7 @@ export class RequestPanel {
   private readonly httpService: HttpService;
   private readonly requestExecutor: RequestExecutor;
   private readonly collectionRunner: CollectionRunner;
+  private readonly webSocketManager: WebSocketManager;
   private disposables: vscode.Disposable[] = [];
   private isDisposed = false;
   private webviewReady = false;
@@ -58,6 +61,12 @@ export class RequestPanel {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.httpService = new HttpService();
+    this.webSocketManager = new WebSocketManager(new WebSocketService(), {
+      postMessage: (message: unknown) => this.postMessage(message),
+      getActiveVariables: () => RequestPanel.environmentProvider.getActiveVariables(),
+      getDefaultHeaders: () => RequestPanel.storage.getDefaultHeaders(),
+      getAllowInsecureCertificates: () => this.getAllowInsecureCertificates(),
+    });
     const executionHost = {
       postMessage: (message: unknown) => this.postMessage(message),
       getActiveVariables: () => RequestPanel.environmentProvider.getActiveVariables(),
@@ -226,6 +235,7 @@ export class RequestPanel {
     this.postMessage({
       type: MessageType.LoadRequest,
       requestId: req.id,
+      requestType: req.requestType,
       method: req.method,
       url: req.url,
       headers: req.headers ?? [],
@@ -325,6 +335,7 @@ export class RequestPanel {
       case MessageType.SaveRequest: {
         const result = await RequestPanel.collectionProvider.saveRequest({
           requestId: message.requestId,
+          requestType: message.requestType,
           method: message.method,
           url: message.url,
           headers: message.headers ?? [],
@@ -410,6 +421,15 @@ export class RequestPanel {
         break;
       case MessageType.RerunFailedCollection:
         await this.collectionRunner.rerunFailed(message.failedIndices ?? []);
+        break;
+      case MessageType.WebSocketConnect:
+        this.webSocketManager.connect(message);
+        break;
+      case MessageType.WebSocketDisconnect:
+        this.webSocketManager.disconnect(message.tabId);
+        break;
+      case MessageType.WebSocketSend:
+        this.webSocketManager.send(message);
         break;
       case MessageType.PickFile: {
         const selected = await vscode.window.showOpenDialog({
@@ -666,6 +686,7 @@ export class RequestPanel {
     this.isDisposed = true;
     RequestPanel.currentPanel = undefined;
     this.collectionRunner.stop();
+    this.webSocketManager.disconnectAll();
     // ?⑤꼸 ?ロ옄 ??留덉?留됱쑝濡???λ맂 ???곹깭 ?좎? (webview?먯꽌 二쇨린?곸쑝濡??꾩넚)
     for (const d of this.disposables) { d.dispose(); }
     this.disposables = [];

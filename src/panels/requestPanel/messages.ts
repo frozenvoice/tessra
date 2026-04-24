@@ -22,6 +22,9 @@ export const INCOMING_WEBVIEW_MESSAGE_TYPES = new Set<string>([
   MessageType.OpenResponseUrl,
   MessageType.OpenGuide,
   MessageType.FlushedTabState,
+  MessageType.WebSocketConnect,
+  MessageType.WebSocketDisconnect,
+  MessageType.WebSocketSend,
   'webviewReady',
 ]);
 

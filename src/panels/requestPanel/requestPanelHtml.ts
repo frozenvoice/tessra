@@ -55,6 +55,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .method-PATCH{color:#f0c995;background:rgba(209,154,102,.14);border-color:rgba(209,154,102,.24)}
 .method-DELETE{color:#ff9fae;background:rgba(224,108,117,.14);border-color:rgba(224,108,117,.24)}
 .method-HEAD,.method-OPTIONS{color:#cfd6e4;background:rgba(171,178,191,.14);border-color:rgba(171,178,191,.22)}
+.method-WS{color:#90f0d6;background:rgba(78,201,176,.14);border-color:rgba(78,201,176,.26)}
 .req-tab.active.tab-GET{border-bottom-color:#4ec94e;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(78,201,78,.12)}
 .req-tab.active.tab-POST{border-bottom-color:#e5c07b;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(229,192,123,.12)}
 .req-tab.active.tab-PUT{border-bottom-color:#61afef;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(97,175,239,.12)}
@@ -62,6 +63,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .req-tab.active.tab-DELETE{border-bottom-color:#e06c75;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(224,108,117,.14)}
 .req-tab.active.tab-HEAD{border-bottom-color:#abb2bf}
 .req-tab.active.tab-OPTIONS{border-bottom-color:#abb2bf}
+.req-tab.active.tab-WS{border-bottom-color:#4ec9b0;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(78,201,176,.13)}
 .req-tab .close-tab{opacity:.5;cursor:pointer;font-size:13px;padding:0 2px;line-height:1}
 .req-tab .close-tab:hover{opacity:1;color:var(--vscode-errorForeground)}
 .req-tab.pinned{opacity:.85;border-left:2px solid var(--vscode-focusBorder)}
@@ -244,6 +246,23 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .res-area{flex:1 1 0;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:0 10px}
 .res-response-shell{display:flex;flex-direction:column;flex:1;min-height:0}
 .res-empty-shell{flex:1;min-height:0;overflow:auto;padding:8px 0 12px}
+.ws-console{display:flex;flex-direction:column;gap:10px;min-height:100%;padding:8px 0 12px}
+.ws-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(255,255,255,.03)}
+.ws-summary-main{display:flex;align-items:center;gap:8px;min-width:0}
+.ws-status-dot{width:9px;height:9px;border-radius:50%;background:var(--vscode-descriptionForeground,#888);box-shadow:0 0 12px currentColor}
+.ws-status-open{color:#4ec94e}.ws-status-connecting{color:#7dc8ff}.ws-status-error{color:#ff7a7a}.ws-status-closed{color:var(--vscode-descriptionForeground,#9a9a9a)}
+.ws-status-label{font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.ws-summary-note{font-size:12px;color:var(--vscode-descriptionForeground,#aaa);line-height:1.4;text-align:right}
+.ws-log{display:flex;flex-direction:column;gap:8px;min-height:0}
+.ws-message{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 10px;padding:10px 12px;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(255,255,255,.025)}
+.ws-message.out{border-color:rgba(87,166,255,.22);background:rgba(87,166,255,.055)}
+.ws-message.in{border-color:rgba(78,201,176,.2);background:rgba(78,201,176,.045)}
+.ws-message.system{border-style:dashed;color:var(--vscode-descriptionForeground,#aaa)}
+.ws-message-meta{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:78px}
+.ws-direction{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.ws-time{font-size:11px;color:var(--vscode-descriptionForeground,#999)}
+.ws-payload{min-width:0;white-space:pre-wrap;word-break:break-word;font-family:var(--vscode-editor-font-family,monospace);font-size:12px;line-height:1.5}
+.ws-empty{padding:22px 12px;border:1px dashed rgba(255,255,255,.12);border-radius:8px;color:var(--vscode-descriptionForeground,#aaa);text-align:center;line-height:1.5}
 .res-preview{width:100%;flex:1;min-height:0;overflow:auto;background:#fff;color:#111}
 .preview-shell{max-width:1080px;margin:0 auto;padding:24px}
 .preview-kicker{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6a6f77;margin-bottom:8px}
@@ -1634,7 +1653,7 @@ function applyManualRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, r
 }
 
 function shouldPreferResponseLayout(tab) {
-  return !!(tab && (tab.response || tab.loading || tab.error));
+  return !!(tab && (tab.response || tab.loading || tab.error || (tab.websocketMessages && tab.websocketMessages.length > 0)));
 }
 
 function clearAdaptiveRequestAreaHeight(reqArea) {
@@ -1827,6 +1846,7 @@ function buildDraftTabFromContent(mc) {
     requestEditorTab: normalizeRequestEditorTab(mc.querySelector('.js-req-tabs .tab.active')?.dataset.tab || tab.requestEditorTab),
     method: methodEl ? methodEl.value : tab.method,
     url: mc.querySelector('.js-url')?.value || tab.url || '',
+    requestType: normalizeRequestType(tab.requestType, mc.querySelector('.js-url')?.value || tab.url || ''),
     headers: collectKv(mc.querySelector('.js-header-rows')),
     params: collectKv(mc.querySelector('.js-param-rows')),
     body: mc.querySelector('.js-body')?.value || '',
@@ -1862,6 +1882,7 @@ function countEnabledFormData(items) {
 
 function createRequestChangeBaseline(tab) {
   var baseline = {
+    requestType: 'http',
     method: 'GET',
     url: '',
     headers: [],
@@ -1889,6 +1910,7 @@ function createRequestChangeBaseline(tab) {
   try {
     var raw = JSON.parse(tab._snapshot);
     var settings = raw.settings || {};
+    baseline.requestType = normalizeRequestType(raw.requestType, raw.url);
     baseline.method = raw.method || baseline.method;
     baseline.url = raw.url || '';
     baseline.headers = raw.headers || [];
@@ -2380,6 +2402,22 @@ function authTypeLabel(type) {
     apikey: tr('webview.apiKey'),
   };
   return map[type] || type;
+}
+
+function isWebSocketUrl(url) {
+  return /^wss?:\\/\\//i.test(String(url || '').trim());
+}
+
+function normalizeRequestType(value, url) {
+  var text = String(url || '').trim();
+  if (isWebSocketUrl(text)) return 'websocket';
+  if (/^https?:\\/\\//i.test(text)) return 'http';
+  if (text && text.indexOf('{{') < 0) return 'http';
+  return value === 'websocket' ? 'websocket' : 'http';
+}
+
+function isWebSocketTab(tab) {
+  return !!(tab && normalizeRequestType(tab.requestType, tab.url) === 'websocket');
 }
 
 function normalizeCompareList(value, fallback) {
@@ -2892,6 +2930,7 @@ function requestSettingsSnapshot(tab) {
 function buildSaveRequestMessage(tab, requestId) {
   var payload = {
     type: 'saveRequest',
+    requestType: normalizeRequestType(tab.requestType, tab.url),
     method: tab.method,
     url: tab.url,
     headers: tab.headers,
@@ -2911,6 +2950,7 @@ function buildSaveRequestMessage(tab, requestId) {
 
 function snapshotTab(tab) {
   return JSON.stringify({
+    requestType: normalizeRequestType(tab.requestType, tab.url),
     method: tab.method, url: tab.url,
     headers: tab.headers, params: tab.params,
     body: tab.body, bodyType: tab.bodyType,
@@ -2972,6 +3012,7 @@ function markDirty() {
     requestId: data?.requestId || null,  // 而щ젆???덉뒪?좊━ ?붿껌 ID (以묐났 ??諛⑹?)
     name: autoName ? tr('webview.stage.newRequest') : (incomingName || tr('webview.stage.newRequest')),
     autoName: autoName,
+    requestType: normalizeRequestType(data?.requestType, data?.url),
     method: data?.method || 'GET',
     url: data?.url || '',
     headers: data?.headers || [],
@@ -2994,6 +3035,8 @@ function markDirty() {
       dirty: false,
     _snapshot: null,  // 而щ젆?섏뿉??遺덈윭????쓽 ?먮낯 ?ㅻ깄??
     response: null,
+    websocketStatus: 'closed',
+    websocketMessages: [],
     resolvedUrl: '',
     resolvedHeaders: [],
     scriptResults: null,
@@ -3033,6 +3076,9 @@ function doCloseTab(id) {
   if (tab?.loading) {
     clearTabRequestState(tab);
     vscode.postMessage({ type: 'cancelRequest', tabId: id });
+  }
+  if (isWebSocketTab(tab) && tab.websocketStatus && tab.websocketStatus !== 'closed') {
+    vscode.postMessage({ type: 'websocketDisconnect', tabId: id });
   }
   tabs.splice(idx, 1);
   if (activeTabId === id) {
@@ -3248,9 +3294,91 @@ document.addEventListener('click', function(e) {
   });
 });
 
+function appendWebSocketMessage(tab, item) {
+  if (!tab) return;
+  tab.websocketMessages = tab.websocketMessages || [];
+  tab.websocketMessages.push(Object.assign({ timestamp: Date.now() }, item));
+  if (tab.websocketMessages.length > 200) {
+    tab.websocketMessages = tab.websocketMessages.slice(tab.websocketMessages.length - 200);
+  }
+}
+
+function websocketStatusLabel(status) {
+  if (status === 'open') return tr('webview.connected');
+  if (status === 'connecting') return tr('webview.connecting');
+  if (status === 'error') return tr('webview.stage.failed');
+  return tr('webview.disconnected');
+}
+
+function websocketConnect(tab) {
+  if (!tab) return;
+  saveActiveTabState();
+  tab = tabs.find(t => t.id === activeTabId);
+  if (!tab || !tab.url) return;
+  const mc = mainContent;
+  const allHeaders = collectAllKv(mc.querySelector('.js-header-rows'));
+  tab.requestType = 'websocket';
+  tab.websocketStatus = 'connecting';
+  tab.websocketMessages = [];
+  tab.error = null;
+  tab.response = null;
+  tab.responseTab = 'resBody';
+  tab.lastEvent = 'websocket';
+  renderTabBar();
+  renderContent();
+  vscode.postMessage({
+    type: 'websocketConnect',
+    tabId: tab.id,
+    url: tab.url,
+    headers: allHeaders,
+    params: tab.params,
+    auth: tab.auth,
+    timeout: tab.timeout,
+    followRedirects: !!tab.followRedirects,
+    saveToHistory: tab.saveToHistory !== false,
+    tlsValidation: normalizeTlsValidation(tab.tlsValidation),
+    maxResponseSizeKb: normalizeNumberSetting(tab.maxResponseSizeKb),
+    retryCount: normalizeNumberSetting(tab.retryCount),
+    retryDelayMs: normalizeNumberSetting(tab.retryDelayMs),
+    stopAfterHeaders: !!tab.stopAfterHeaders,
+    skipDefaultHeaders: !!tab.skipDefaultHeaders,
+    disableScripts: !!tab.disableScripts,
+    scriptsTrusted: tab.scriptsTrusted !== false,
+  });
+}
+
+function websocketDisconnect(tab) {
+  if (!tab) return;
+  vscode.postMessage({ type: 'websocketDisconnect', tabId: tab.id });
+}
+
+function websocketSend(tab) {
+  if (!tab) return;
+  saveActiveTabState();
+  tab = tabs.find(t => t.id === activeTabId);
+  if (!tab || tab.websocketStatus !== 'open') return;
+  vscode.postMessage({
+    type: 'websocketSend',
+    tabId: tab.id,
+    message: tab.body || ''
+  });
+}
+
 function handlePrimaryAction() {
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab) return;
+  if (isWebSocketTab(tab)) {
+    if (tab.websocketStatus === 'connecting') {
+      websocketDisconnect(tab);
+      return;
+    }
+    if (tab.websocketStatus === 'open') {
+      websocketSend(tab);
+      return;
+    }
+    websocketConnect(tab);
+    return;
+  }
   if (tab.loading) {
     vscode.postMessage({ type: 'cancelRequest', tabId: tab.id });
     return;
@@ -3277,6 +3405,7 @@ function saveActiveTabState() {
   if (!methodEl) return;
   tab.method = methodEl.value;
   tab.url = urlEl.value;
+  tab.requestType = normalizeRequestType(tab.requestType, tab.url);
   tab.headers = collectKv(mc.querySelector('.js-header-rows'));
   tab.params = collectKv(mc.querySelector('.js-param-rows'));
   tab.body = mc.querySelector('.js-body')?.value || '';
@@ -3555,11 +3684,12 @@ function renderTabBar() {
   const sorted = tabs.filter(t => t.pinned).concat(tabs.filter(t => !t.pinned));
 
   for (const tab of sorted) {
+    const tabMethod = isWebSocketTab(tab) ? 'WS' : tab.method;
     const el = document.createElement('div');
-    el.className = 'req-tab' + (tab.id === activeTabId ? ' active' : '') + (tab.pinned ? ' pinned' : '') + ' tab-' + tab.method;
+    el.className = 'req-tab' + (tab.id === activeTabId ? ' active' : '') + (tab.pinned ? ' pinned' : '') + ' tab-' + tabMethod;
     el.innerHTML =
       '<span class="pin-icon">\u{1F4CC}</span>' +
-      '<span class="method-badge method-' + tab.method + '">' + tab.method + '</span>' +
+      '<span class="method-badge method-' + tabMethod + '">' + tabMethod + '</span>' +
       '<span class="tab-name">' + escapeHtml(truncate(tab.name, 25)) + '</span>' +
       (tab.dirty ? '<span class="dirty-dot" title="' + escapeAttr(renderRequestDirtyTitle(tab)) + '">\u25CF</span>' : '') +
       '<span class="close-tab" data-id="' + tab.id + '">&times;</span>';
@@ -3656,7 +3786,7 @@ function showTabContextMenu(x, y, tabId) {
         break;
       case 'duplicate':
         saveActiveTabState();
-        createTab({ name: tab.name, autoName: !!tab.autoName, requestEditorTab: tab.requestEditorTab, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, scriptsTrusted: tab.scriptsTrusted !== false, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent, responseSearchQuery: tab.responseSearchQuery || '', responseSearchIndex: typeof tab.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0, responseSearchCaseSensitive: tab.responseSearchCaseSensitive === true, responseSearchRegex: tab.responseSearchRegex === true, scriptHelpCollapsed: tab.scriptHelpCollapsed === true });
+        createTab({ name: tab.name, autoName: !!tab.autoName, requestType: tab.requestType, requestEditorTab: tab.requestEditorTab, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, scriptsTrusted: tab.scriptsTrusted !== false, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent, responseSearchQuery: tab.responseSearchQuery || '', responseSearchIndex: typeof tab.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0, responseSearchCaseSensitive: tab.responseSearchCaseSensitive === true, responseSearchRegex: tab.responseSearchRegex === true, scriptHelpCollapsed: tab.scriptHelpCollapsed === true });
         break;
     }
   });
@@ -3671,6 +3801,20 @@ function closeTabContextMenu() {
 function getRequestStageInfo(tab) {
   if (!tab) {
     return { tone: 'idle', label: tr('webview.stage.newRequest'), detail: tr('webview.stage.newRequest.detail') };
+  }
+  if (isWebSocketTab(tab)) {
+    if (tab.websocketStatus === 'open') {
+      return { tone: 'success', label: tr('webview.connected'), detail: tr('webview.websocket') };
+    }
+    if (tab.websocketStatus === 'connecting') {
+      return { tone: 'loading', label: tr('webview.connecting'), detail: tr('webview.websocket') };
+    }
+    if (tab.websocketStatus === 'error' && tab.error) {
+      return { tone: 'error', label: tr('webview.stage.failed'), detail: truncate(tab.error, 96) };
+    }
+    if (tab.url) {
+      return { tone: 'ready', label: tr('webview.websocket'), detail: tr('webview.websocketComposer') };
+    }
   }
   if (tab.loading) {
     return { tone: 'loading', label: tr('webview.stage.sending'), detail: tr('webview.stage.sending.detail') };
@@ -3706,6 +3850,33 @@ function getRequestStageInfo(tab) {
 }
 
 function renderPrimaryActionButton(tab) {
+  if (isWebSocketTab(tab)) {
+    if (tab.websocketStatus === 'connecting') {
+      return '<button class="btn-stop js-send">' +
+        '<span class="stop-icon"></span>' +
+        '<span class="btn-send-labels">' +
+          '<span class="btn-send-primary">' + escapeHtml(tr('webview.disconnect')) + '</span>' +
+          '<span class="btn-send-secondary">' + escapeHtml(tr('webview.connecting')) + '</span>' +
+        '</span>' +
+      '</button>';
+    }
+    var wsTone = tab.websocketStatus === 'open' ? 'success' : (tab.websocketStatus === 'error' ? 'error' : 'ready');
+    var wsPrimary = tab.websocketStatus === 'open' ? tr('webview.sendMessage') : tr('webview.connect');
+    var wsSecondary = tab.websocketStatus === 'open'
+      ? tr('webview.connected')
+      : (tab.websocketStatus === 'error' && tab.error ? tab.error : tr('webview.websocket'));
+    var wsIcon = tab.websocketStatus === 'open'
+      ? '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1.5l14 6.5-14 6.5V9l10-1-10-1V1.5z"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2h10a1 1 0 011 1v6a1 1 0 01-1 1H8.5L5 13.5V10H3a1 1 0 01-1-1V3a1 1 0 011-1zm1 2v4h3v2.1L9.1 8H12V4H4z"/></svg>';
+    return '<button class="btn-send ripple-btn state-' + wsTone + ' js-send">' +
+      '<span class="send-streak"></span>' +
+      wsIcon +
+      '<span class="btn-send-labels">' +
+        '<span class="btn-send-primary">' + escapeHtml(wsPrimary) + '</span>' +
+        '<span class="btn-send-secondary">' + escapeHtml(wsSecondary) + '</span>' +
+      '</span>' +
+    '</button>';
+  }
   if (tab.loading) {
     return '<button class="btn-stop js-send">' +
       '<span class="stop-icon"></span>' +
@@ -4159,6 +4330,46 @@ function syncPreviewFrame(preview, tab) {
   preview.dataset.previewKey = key;
 }
 
+function renderWebSocketResponse(tab) {
+  var status = tab.websocketStatus || 'closed';
+  var messages = tab.websocketMessages || [];
+  var statusLabel = websocketStatusLabel(status);
+  var actionHtml = (status === 'open' || status === 'connecting')
+    ? '<button class="res-action-btn ripple-btn js-ws-disconnect" type="button">' + escapeHtml(tr('webview.disconnect')) + '</button>'
+    : '';
+  var messagesHtml = messages.length === 0
+    ? '<div class="ws-empty">' + escapeHtml(tr('webview.websocketNoMessages')) + '</div>'
+    : messages.map(function(item) {
+        var messageType = item.messageType || 'text';
+        var direction = messageType === 'system' ? 'SYS' : (item.direction === 'out' ? 'OUT' : 'IN');
+        var directionClass = messageType === 'system' ? 'system' : (item.direction === 'out' ? 'out' : 'in');
+        var payload = messageType === 'binary'
+          ? tf('webview.websocketBinaryMessage', { size: String(item.size || 0) }) + '\\n' + (item.data || '')
+          : (item.data || '');
+        var sizeLabel = typeof item.size === 'number' ? ' · ' + formatSize(item.size) : '';
+        return '<div class="ws-message ' + directionClass + '">' +
+          '<div class="ws-message-meta">' +
+            '<span class="ws-direction">' + escapeHtml(direction) + '</span>' +
+            '<span class="ws-time">' + escapeHtml(formatLocalTime(item.timestamp || Date.now()) + sizeLabel) + '</span>' +
+          '</div>' +
+          '<div class="ws-payload">' + escapeHtml(payload) + '</div>' +
+        '</div>';
+      }).join('');
+  return '<div class="ws-console">' +
+    '<div class="ws-summary ws-status-' + escapeAttr(status) + '">' +
+      '<div class="ws-summary-main">' +
+        '<span class="ws-status-dot"></span>' +
+        '<span class="method-badge method-WS">WS</span>' +
+        '<span class="ws-status-label">' + escapeHtml(statusLabel) + '</span>' +
+      '</div>' +
+      '<div class="ws-summary-note">' + escapeHtml(tr('webview.websocketComposer')) + '</div>' +
+      actionHtml +
+    '</div>' +
+    (tab.error && status === 'error' ? '<div class="error-msg">' + escapeHtml(tab.error) + '</div>' : '') +
+    '<div class="ws-log">' + messagesHtml + '</div>' +
+  '</div>';
+}
+
 function renderContent() {
   closeActiveFormatMenu();
   releaseSplitDrag();
@@ -4188,6 +4399,7 @@ function renderContent() {
   var savedHeight = prevReqArea && prevReqArea.dataset.manualHeight ? prevReqArea.style.height : null;
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab) return;
+  const isWs = isWebSocketTab(tab);
 
   const stage = getRequestStageInfo(tab);
   const activeRequestEditorTab = normalizeRequestEditorTab(tab.requestEditorTab);
@@ -4210,7 +4422,9 @@ function renderContent() {
   const requestInfoRowHtml = '<div class="request-info-row">' + preflightHtml + variableUsageHtml + '</div>';
 
   let resHtml = '';
-  if (tab.loading) {
+  if (isWs) {
+    resHtml = renderWebSocketResponse(tab);
+  } else if (tab.loading) {
     resHtml = '<div class="res-empty-shell">' +
       '<div class="js-loading-summary" style="padding:6px"><span class="spinner"></span>' + escapeHtml(tr('webview.loading')) + '</div>' +
       '<div class="request-stage-hint" style="padding:0 6px 6px">' + escapeHtml(tr('webview.loading.hint')) + '</div>' +
@@ -4587,7 +4801,7 @@ function renderContent() {
               return '<option value="' + t + '"' + (t === tab.bodyType ? ' selected' : '') + '>' + label + '</option>';
             }).join('') +
           '</select>' +
-          '<textarea class="js-body" placeholder="' + escapeAttr(tr('webview.bodyPlaceholder')) + '"' + (tab.bodyType === 'none' || tab.bodyType === 'formdata' || tab.bodyType === 'binary' ? ' style="display:none"' : '') + '>' + escapeHtml(tab.body) + '</textarea>' +
+          '<textarea class="js-body" placeholder="' + escapeAttr(isWs ? tr('webview.websocketMessagePlaceholder') : tr('webview.bodyPlaceholder')) + '"' + (!isWs && (tab.bodyType === 'none' || tab.bodyType === 'formdata' || tab.bodyType === 'binary') ? ' style="display:none"' : '') + '>' + escapeHtml(tab.body) + '</textarea>' +
           '<div class="js-formdata-panel' + (tab.bodyType === 'formdata' ? '' : ' hidden') + '">' +
             '<div class="formdata-summary js-formdata-summary">' + renderFormDataSummary(tab.formData || []) + '</div>' +
             '<div class="js-formdata-rows">' + formDataRowsHtml(tab.formData || []) + '</div>' +
@@ -4680,7 +4894,7 @@ function renderContent() {
         '</div>' +
       '</div>' +
       '<div class="divider"><div class="divider-grip"><span></span><span></span><span></span></div></div>' +
-      '<div class="bullet-progress js-bullet-progress' + (tab.loading ? ' active' : '') + '"><div class="bullet-glow"></div></div>' +
+      '<div class="bullet-progress js-bullet-progress' + (tab.loading || (isWs && tab.websocketStatus === 'connecting') ? ' active' : '') + '"><div class="bullet-glow"></div></div>' +
       '<div class="res-area' + (tab.response && tab.slideIn ? ' slide-in' : '') + '">' + resHtml + '</div>' +
     '</div>';
 
@@ -4758,8 +4972,16 @@ function bindContentEvents() {
   var urlInputEl = mc.querySelector('.js-url');
   if (urlInputEl) {
     urlInputEl.addEventListener('input', function() {
+      var activeTab = tabs.find(t => t.id === activeTabId);
+      var wasWs = isWebSocketTab(activeTab);
       checkUnresolvedVars();
       markDirty();
+      activeTab = tabs.find(t => t.id === activeTabId);
+      if (wasWs !== isWebSocketTab(activeTab)) {
+        renderTabBar();
+        renderContent();
+        return;
+      }
       refreshRequestPreflight(mc);
       debouncePersist();
     });
@@ -4791,6 +5013,12 @@ function bindContentEvents() {
       handlePrimaryAction();
     });
   }
+
+  mc.querySelector('.js-ws-disconnect')?.addEventListener('click', function() {
+    const tab = tabs.find(t => t.id === activeTabId);
+    if (!tab) return;
+    websocketDisconnect(tab);
+  });
 
   mc.querySelector('.js-open-default-headers-top')?.addEventListener('click', function() {
     vscode.postMessage({ type: 'openDefaultHeaders' });
@@ -5291,19 +5519,21 @@ function bindContentEvents() {
   // Body ???蹂寃???Content-Type ?먮룞 ?ㅼ젙
   mc.querySelector('.js-body-type')?.addEventListener('change', (e) => {
     const bodyType = e.target.value;
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    const wsBody = isWebSocketTab(activeTab);
     const textarea = mc.querySelector('.js-body');
     const formDataPanel = mc.querySelector('.js-formdata-panel');
     const binaryPanel = mc.querySelector('.js-binary-panel');
-    if (textarea) textarea.style.display = (bodyType === 'none' || bodyType === 'formdata' || bodyType === 'binary') ? 'none' : '';
+    if (textarea) textarea.style.display = (!wsBody && (bodyType === 'none' || bodyType === 'formdata' || bodyType === 'binary')) ? 'none' : '';
     if (formDataPanel) formDataPanel.classList.toggle('hidden', bodyType !== 'formdata');
     if (binaryPanel) binaryPanel.classList.toggle('hidden', bodyType !== 'binary');
-    syncAutoContentType(mc, bodyType);
+    if (!wsBody) syncAutoContentType(mc, bodyType);
     markDirty();
     refreshDraftInsights(mc);
   });
   // 珥덇린 ?뚮뜑留???auto Content-Type ?숆린??
   var initBodyType = mc.querySelector('.js-body-type')?.value || 'none';
-  if (initBodyType !== 'none') syncAutoContentType(mc, initBodyType);
+  if (initBodyType !== 'none' && !isWebSocketTab(tabs.find(t => t.id === activeTabId))) syncAutoContentType(mc, initBodyType);
 
   // Settings ?낅젰 蹂寃?媛먯?
   var settingsPanel = mc.querySelector('.js-settings-panel');
@@ -5953,6 +6183,63 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  if (msg.type === 'websocketStatus') {
+    const tab = tabs.find(t => t.id === msg.tabId);
+    if (!tab) return;
+    var previousStatus = tab.websocketStatus || 'closed';
+    tab.requestType = 'websocket';
+    tab.websocketStatus = msg.status;
+    tab.lastEvent = msg.status === 'error' ? 'error' : 'websocket';
+    if (msg.status === 'error') {
+      tab.error = msg.error || tr('webview.stage.failed');
+    } else if (msg.status === 'open') {
+      tab.error = null;
+    } else if (msg.status === 'closed' && previousStatus !== 'error') {
+      tab.error = null;
+    }
+    if (msg.status === 'open') {
+      appendWebSocketMessage(tab, { direction: 'in', messageType: 'system', data: tr('webview.connected') });
+    } else if (msg.status === 'closed') {
+      var closeDetail = msg.code ? ' (' + msg.code + (msg.reason ? ' ' + msg.reason : '') + ')' : '';
+      appendWebSocketMessage(tab, { direction: 'in', messageType: 'system', data: tr('webview.disconnected') + closeDetail });
+    } else if (msg.status === 'error') {
+      appendWebSocketMessage(tab, { direction: 'in', messageType: 'system', data: msg.error || tr('webview.stage.failed') });
+    }
+    if (activeTabId === msg.tabId) {
+      renderTabBar();
+      renderContent();
+    } else {
+      renderTabBar();
+    }
+    debouncePersist();
+    return;
+  }
+
+  if (msg.type === 'websocketMessage') {
+    const tab = tabs.find(t => t.id === msg.tabId);
+    if (!tab) return;
+    tab.requestType = 'websocket';
+    tab.lastEvent = 'websocket';
+    if (tab.websocketStatus !== 'error') {
+      tab.websocketStatus = 'open';
+      tab.error = null;
+    }
+    appendWebSocketMessage(tab, {
+      direction: msg.direction,
+      messageType: msg.messageType,
+      data: msg.data || '',
+      size: msg.size,
+      timestamp: msg.timestamp || Date.now()
+    });
+    if (activeTabId === msg.tabId) {
+      renderContent();
+    } else {
+      renderTabBar();
+    }
+    debouncePersist();
+    return;
+  }
+
   if (msg.type === 'requestCanceled') {
     const tab = tabs.find(t => t.id === msg.tabId);
     if (!tab) return;
@@ -6101,6 +6388,7 @@ window.addEventListener('message', (event) => {
     createTab({
       requestId: msg.requestId || null,
       name: msg.name || msg.method + ' ' + msg.url,
+      requestType: msg.requestType,
       method: msg.method,
       url: msg.url,
       headers: msg.headers || [],
@@ -7495,7 +7783,7 @@ function handleVariableAutocompleteKeydown(event) {
 function persistTabState() {
     saveActiveTabState();
     var tabData = tabs.map(function(t) {
-    return Object.assign({ name: t.name, autoName: !!t.autoName, requestEditorTab: normalizeRequestEditorTab(t.requestEditorTab), method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, scriptHelpCollapsed: t.scriptHelpCollapsed === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
+    return Object.assign({ name: t.name, autoName: !!t.autoName, requestType: normalizeRequestType(t.requestType, t.url), requestEditorTab: normalizeRequestEditorTab(t.requestEditorTab), method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, scriptHelpCollapsed: t.scriptHelpCollapsed === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
     });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
   vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx), compareSettings: cloneCompareSettings(compareSettings) });

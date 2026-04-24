@@ -84,7 +84,7 @@ export class CollectionTreeProvider
         );
         item.description = buildRequestTreeDescription(req);
         item.tooltip = buildRequestTreeTooltip(req);
-        item.iconPath = getRequestMethodIcon(req.method);
+        item.iconPath = getRequestMethodIcon(req.method, req);
         item.contextValue = 'request';
         item.command = {
           command: 'tessra.loadFromCollection',
@@ -159,10 +159,11 @@ export class CollectionTreeProvider
   private requestMatches(item: CollectionItem, filter: CollectionFilter): boolean {
     const request = item.request;
     if (!request) { return false; }
-    const haystacks = [item.name, request.method, request.url, this.extractHost(request.url)];
+    const method = request.requestType === 'websocket' || /^wss?:\/\//i.test(request.url || '') ? 'WS' : request.method;
+    const haystacks = [item.name, method, request.url, this.extractHost(request.url)];
     if (!this.matchesItemType(filter.types, 'request')) { return false; }
     if (!this.matchesTerms(haystacks, filter.terms)) { return false; }
-    if (!this.matchesValues(filter.methods, request.method)) { return false; }
+    if (!this.matchesValues(filter.methods, method)) { return false; }
     if (!this.matchesValues(filter.hosts, this.extractHost(request.url))) { return false; }
     return true;
   }
@@ -337,6 +338,7 @@ export class CollectionTreeProvider
   async saveRequest(
     requestData: {
       requestId?: string;  // 기존 요청 ID (있으면 덮어쓰기)
+      requestType?: Request['requestType'];
       method: string;
       url: string;
       headers: Request['headers'];
@@ -367,6 +369,7 @@ export class CollectionTreeProvider
       const existing = this.findItemByRequestId(collections, requestData.requestId);
       if (existing?.request) {
         existing.request.name = existing.name;
+        existing.request.requestType = requestData.requestType;
         existing.request.method = requestData.method as any;
         existing.request.url = requestData.url;
         existing.request.headers = requestData.headers ?? [];
@@ -419,6 +422,7 @@ export class CollectionTreeProvider
       request: {
         id: newRequestId,
         name,
+        requestType: requestData.requestType,
         method: requestData.method as any,
         url: requestData.url,
         headers: requestData.headers ?? [],

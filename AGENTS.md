@@ -1,7 +1,7 @@
 ﻿# Tessra — 프로젝트 규칙
 
 ## 프로젝트 개요
-Tessra는 VS Code 안에서 동작하는 offline-first REST API 클라이언트 확장이다.
+Tessra는 VS Code 안에서 동작하는 offline-first API 클라이언트 확장이다.
 
 핵심 목표는 Thunder Client 스타일의 빠른 요청 워크플로를 로그인, 클라우드 의존성, 유료 제한 없이 로컬 환경에서 제공하는 것이다. 모든 데이터는 로컬에 저장되고, 네트워크 호출은 사용자가 명시적으로 보낸 API 요청에서만 발생한다.
 
@@ -17,7 +17,7 @@ Tessra는 VS Code 안에서 동작하는 offline-first REST API 클라이언트 
 - VS Code Extension API (`^1.74.0`)
 - Webview 기반 요청 패널 UI
 - TreeView 기반 사이드바 (`Collections`, `Environments`, `History`)
-- Node.js 내장 `http` / `https`
+- Node.js 내장 `http` / `https` / `net` / `tls`
 - esbuild
 - vsce
 - Mocha
@@ -41,7 +41,14 @@ tessra/
 │   │   └── types.ts
 │   ├── panels/
 │   │   ├── GuidePanel.ts
-│   │   └── RequestPanel.ts
+│   │   ├── RequestPanel.ts
+│   │   └── requestPanel/
+│   │       ├── CollectionRunner.ts
+│   │       ├── RequestExecutor.ts
+│   │       ├── WebSocketManager.ts
+│   │       ├── messages.ts
+│   │       ├── requestPanelHtml.ts
+│   │       └── requestUtils.ts
 │   ├── providers/
 │   │   ├── CollectionTreeProvider.ts
 │   │   ├── EnvironmentTreeProvider.ts
@@ -56,7 +63,8 @@ tessra/
 │   │   ├── ResponseCompareService.ts
 │   │   ├── ScriptRunner.ts
 │   │   ├── StorageService.ts
-│   │   └── VariableService.ts
+│   │   ├── VariableService.ts
+│   │   └── WebSocketService.ts
 │   ├── test/
 │   │   └── unit/
 │   └── webview/
@@ -89,11 +97,11 @@ tessra/
 16. `tessra.requestPanelTheme` 설정과 Command Palette 기반 요청 패널 테마 프리셋 선택 (`default`, `minimal-cool`, `product`, `bold-color`)
 17. `tessra.workspaceProfile` 설정 기반 워크스페이스 로컬 저장 프로필 분리와 현재 프로필 표시 (`default`는 메인 작업용, 사용자 지정 프로필은 프로젝트/실험 분리용)
 18. 컬렉션 러너 실패 요청만 재실행, 요청별 history 저장 설정을 따른 실행 결과 저장
+19. WebSocket `ws://` / `wss://` 연결, 텍스트 메시지 전송, 수신/전송 로그, binary frame base64 표시
 
 ### 남아 있는 큰 항목
-1. WebSocket 지원
-2. 추가 UI 폴리싱과 사용성 디테일 보강
-3. 수동 E2E 점검 범위 확대
+1. 추가 UI 폴리싱과 사용성 디테일 보강
+2. 수동 E2E 점검 범위 확대
 
 ## 빌드 & 테스트
 ```bash

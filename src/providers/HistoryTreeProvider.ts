@@ -49,7 +49,9 @@ export class HistoryTreeProvider
   }
 
   getTreeItem(entry: HistoryEntry): vscode.TreeItem {
-    const method = entry.request.method;
+    const method = entry.request.requestType === 'websocket' || /^wss?:\/\//i.test(entry.request.url || '')
+      ? 'WS'
+      : entry.request.method;
     const url = this.shortenUrl(entry.request.url);
     const status = entry.response ? `${entry.response.status}` : LocalizationService.t('history.errorShort');
     const time = entry.response ? `${entry.response.time}ms` : '';
@@ -60,7 +62,7 @@ export class HistoryTreeProvider
     const item = new vscode.TreeItem(localizedPinLabel + label, vscode.TreeItemCollapsibleState.None);
     item.description = buildHistoryDescription(entry);
     item.tooltip = buildHistoryTooltip(entry);
-    item.iconPath = getRequestMethodIcon(method);
+    item.iconPath = getRequestMethodIcon(method, entry.request);
     item.contextValue = entry.pinned ? 'history-pinned' : 'history';
 
     item.command = {
@@ -162,7 +164,9 @@ export class HistoryTreeProvider
   }
 
   private matchesEntry(entry: HistoryEntry, filter: HistoryFilter): boolean {
-    const method = entry.request.method.toLowerCase();
+    const method = (entry.request.requestType === 'websocket' || /^wss?:\/\//i.test(entry.request.url || ''))
+      ? 'ws'
+      : entry.request.method.toLowerCase();
     const url = entry.request.url.toLowerCase();
     const host = this.extractHost(entry.request.url);
     const status = entry.response ? String(entry.response.status) : 'error';

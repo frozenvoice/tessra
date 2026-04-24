@@ -1,6 +1,6 @@
 ﻿# Tessra
 
-VS Code 안에서 동작하는 로컬 우선 REST API 클라이언트입니다.
+VS Code 안에서 동작하는 로컬 우선 API 클라이언트입니다.
 
 로그인도 없고, 클라우드 동기화도 없고, 핵심 기능을 잠가두는 유료 장벽도 없습니다.
 
@@ -16,8 +16,9 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 로컬 JSON 저장
 - cURL / OpenAPI / Postman import / export 지원
 - Scripts, collections, environments, response compare, code generation 지원
+- WebSocket `ws://` / `wss://` 연결과 메시지 송수신 워크플로 지원
 - VS Code Webview + TreeView 기반
-- Node.js 내장 `http` / `https` 사용
+- Node.js 내장 `http` / `https` / `net` / `tls` 사용
 
 ## 기능
 
@@ -36,6 +37,12 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 인증값과 민감한 key/value 입력 마스킹 및 reveal 버튼
 - 헤더 / 파라미터 일괄 붙여넣기
 - 샘플 요청 불러오기, 가이드 열기, 환경 전환, URL 포커스 같은 빈 상태 퀵 액션
+
+### WebSocket
+- URL이 `ws://` 또는 `wss://`로 시작하면 WebSocket 탭으로 감지
+- 연결 handshake에 headers, query params, auth, 워크스페이스 default headers, 환경 변수, TLS override 설정 적용
+- 기본 액션 버튼으로 연결 / 연결 해제, Body 탭은 전송할 텍스트 메시지 작성기로 사용
+- 전송 / 수신 메시지를 WebSocket 로그로 표시하고, 수신한 binary frame은 base64로 표시
 
 ### 요청별 Settings 탭
 - 탭별 timeout

@@ -41,7 +41,14 @@ function summarizeBodyType(bodyType: RequestBodyType | undefined): string {
   return bodyType.toUpperCase();
 }
 
-export function getRequestMethodIcon(method: string): vscode.ThemeIcon {
+function isWebSocketRequest(request: Pick<Request, 'requestType' | 'url'>): boolean {
+  return request.requestType === 'websocket' || /^wss?:\/\//i.test(request.url || '');
+}
+
+export function getRequestMethodIcon(method: string, request?: Pick<Request, 'requestType' | 'url'>): vscode.ThemeIcon {
+  if (request && isWebSocketRequest(request)) {
+    return new vscode.ThemeIcon('broadcast', new vscode.ThemeColor('charts.purple'));
+  }
   const normalized = normalizeMethod(method);
   if (!normalized) {
     return new vscode.ThemeIcon('globe');
@@ -63,9 +70,9 @@ export function summarizeRequestLocation(url: string): string {
   }
 }
 
-export function buildRequestTreeDescription(request: Pick<Request, 'method' | 'url' | 'bodyType'>): string {
+export function buildRequestTreeDescription(request: Pick<Request, 'requestType' | 'method' | 'url' | 'bodyType'>): string {
   const parts = [
-    String(request.method || 'GET').toUpperCase(),
+    isWebSocketRequest(request) ? 'WS' : String(request.method || 'GET').toUpperCase(),
     summarizeRequestLocation(request.url),
   ];
   if (request.bodyType && request.bodyType !== 'none' && request.bodyType !== 'raw') {
@@ -75,7 +82,7 @@ export function buildRequestTreeDescription(request: Pick<Request, 'method' | 'u
 }
 
 export function buildRequestTreeTooltip(request: Request): string {
-  const headline = `${String(request.method || 'GET').toUpperCase()} ${request.url || '-'}`;
+  const headline = `${isWebSocketRequest(request) ? 'WS' : String(request.method || 'GET').toUpperCase()} ${request.url || '-'}`;
   const detailLine = [
     `${LocalizationService.t('webview.params')}: ${countEnabled(request.params)}`,
     `${LocalizationService.t('webview.headers')}: ${countEnabled(request.headers)}`,
@@ -117,7 +124,7 @@ export function buildHistoryTooltip(entry: HistoryEntry): string {
     : LocalizationService.t('history.errorShort');
 
   return [
-    `${String(entry.request.method || 'GET').toUpperCase()} ${entry.request.url || '-'}`,
+    `${isWebSocketRequest(entry.request) ? 'WS' : String(entry.request.method || 'GET').toUpperCase()} ${entry.request.url || '-'}`,
     responseLine,
     LocalizationService.formatDateTime(new Date(entry.timestamp)),
   ].join('\n');

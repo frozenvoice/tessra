@@ -78,6 +78,7 @@ export interface AuthConfig {
 export interface TabState {
   name: string;
   autoName?: boolean;
+  requestType?: 'http' | 'websocket';
   requestEditorTab?: 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'settings';
   method: HttpMethod;
   url: string;
@@ -119,6 +120,7 @@ export interface TabState {
 export interface Request extends RequestSettings {
   id: string;
   name: string;
+  requestType?: 'http' | 'websocket';
   method: HttpMethod;
   url: string;
   headers: KeyValue[];
@@ -219,6 +221,9 @@ export enum MessageType {
   OpenResponseUrl = 'openResponseUrl',
   OpenGuide = 'openGuide',
   FlushedTabState = 'flushedTabState',
+  WebSocketConnect = 'websocketConnect',
+  WebSocketDisconnect = 'websocketDisconnect',
+  WebSocketSend = 'websocketSend',
 
   // Extension -> Webview
   RestoreTabState = 'restoreTabState',
@@ -234,6 +239,8 @@ export enum MessageType {
   SaveResponseBodyResult = 'saveResponseBodyResult',
   PickFileResult = 'pickFileResult',
   FlushTabState = 'flushTabState',
+  WebSocketStatus = 'websocketStatus',
+  WebSocketMessage = 'websocketMessage',
 
   // 컬렉션 러너
   RunCollectionStart = 'runCollectionStart',
@@ -260,6 +267,7 @@ export interface SendRequestMessage extends RequestSettings {
 export interface SaveRequestMessage extends RequestSettings {
   type: MessageType.SaveRequest;
   requestId?: string;
+  requestType?: 'http' | 'websocket';
   method: HttpMethod;
   url: string;
   headers: KeyValue[];
@@ -440,6 +448,26 @@ export interface ReceiveResponseMessage {
   durationMs?: number;
 }
 
+export interface WebSocketConnectMessage extends RequestSettings {
+  type: MessageType.WebSocketConnect;
+  tabId: string;
+  url: string;
+  headers: KeyValue[];
+  params: KeyValue[];
+  auth: AuthConfig;
+}
+
+export interface WebSocketDisconnectMessage {
+  type: MessageType.WebSocketDisconnect;
+  tabId: string;
+}
+
+export interface WebSocketSendMessage {
+  type: MessageType.WebSocketSend;
+  tabId: string;
+  message: string;
+}
+
 export interface ResponseErrorMessage {
   type: MessageType.ResponseError;
   tabId: string;
@@ -460,6 +488,7 @@ export interface RequestCanceledMessage {
 export interface LoadRequestMessage extends RequestSettings {
   type: MessageType.LoadRequest;
   requestId?: string;
+  requestType?: 'http' | 'websocket';
   method: HttpMethod;
   url: string;
   headers: KeyValue[];
@@ -511,6 +540,25 @@ export interface FlushTabStateMessage {
   type: MessageType.FlushTabState;
 }
 
+export interface WebSocketStatusMessage {
+  type: MessageType.WebSocketStatus;
+  tabId: string;
+  status: 'connecting' | 'open' | 'closed' | 'error';
+  error?: string;
+  code?: number;
+  reason?: string;
+}
+
+export interface WebSocketDataMessage {
+  type: MessageType.WebSocketMessage;
+  tabId: string;
+  direction: 'in' | 'out';
+  messageType: 'text' | 'binary' | 'system';
+  data: string;
+  size?: number;
+  timestamp: number;
+}
+
 export type IncomingWebviewMessage =
   | SendRequestMessage
   | SaveRequestMessage
@@ -533,6 +581,9 @@ export type IncomingWebviewMessage =
   | OpenResponseUrlMessage
   | OpenGuideMessage
   | FlushedTabStateMessage
+  | WebSocketConnectMessage
+  | WebSocketDisconnectMessage
+  | WebSocketSendMessage
   | WebviewReadyMessage;
 
 export type OutgoingWebviewMessage =
@@ -546,6 +597,8 @@ export type OutgoingWebviewMessage =
   | UpdateLocalizationMessage
   | LoadDefaultHeadersMessage
   | PickFileResultMessage
-  | FlushTabStateMessage;
+  | FlushTabStateMessage
+  | WebSocketStatusMessage
+  | WebSocketDataMessage;
 
 export type WebviewMessage = IncomingWebviewMessage | OutgoingWebviewMessage;

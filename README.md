@@ -1,6 +1,6 @@
 ﻿# Tessra
 
-The local-first REST API client for VS Code.
+The local-first API client for VS Code.
 
 No login. No cloud sync. No paywalled core workflows.
 
@@ -16,8 +16,9 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 - Local JSON storage only
 - cURL, OpenAPI, and Postman import/export
 - Scripts, collections, environments, response compare, and code generation
+- WebSocket `ws://` / `wss://` connect and message workflow
 - Built on VS Code Webview + TreeView
-- Uses Node.js built-in `http` / `https`
+- Uses Node.js built-in `http` / `https` / `net` / `tls`
 
 ## Features
 
@@ -36,6 +37,12 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 - Masked auth and sensitive key/value inputs with reveal controls
 - Bulk paste for headers and query params
 - Empty-state quick actions for a sample request, the guide, environment switching, and URL focus
+
+### WebSocket
+- `ws://` and `wss://` tabs are detected from the URL
+- Handshake requests use headers, query params, auth, workspace default headers, environment variables, and TLS override settings
+- Connect and disconnect from the primary action; the Body tab acts as the outgoing text message composer
+- Inbound and outbound messages render in a dedicated WebSocket log, with inbound binary frames shown as base64
 
 ### Request settings
 - Timeout per tab

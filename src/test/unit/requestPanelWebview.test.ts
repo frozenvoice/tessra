@@ -53,6 +53,18 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.emptyPlaceholder': 'Press + or Ctrl+T to create a new request',
   'webview.loading': 'Sending request...',
   'webview.loading.hint': 'You can keep editing headers, body, or settings while the response comes back.',
+  'webview.connect': 'Connect',
+  'webview.disconnect': 'Disconnect',
+  'webview.connected': 'Connected',
+  'webview.connecting': 'Connecting...',
+  'webview.disconnected': 'Disconnected',
+  'webview.sendMessage': 'Send Message',
+  'webview.websocket': 'WebSocket',
+  'webview.websocketMessages': 'Messages',
+  'webview.websocketComposer': 'Use the Body tab as the outgoing WebSocket message composer.',
+  'webview.websocketNoMessages': 'No WebSocket messages yet.',
+  'webview.websocketMessagePlaceholder': 'Type a message in Body, then press Send Message.',
+  'webview.websocketBinaryMessage': 'Binary message ({size} bytes, base64)',
   'webview.requestedAt': 'Requested',
   'webview.receivedAt': 'Received',
   'webview.endedAt': 'Ended',
@@ -482,6 +494,7 @@ describe('RequestPanel Webview', () => {
   let requestExecutorSource: string;
   let collectionRunnerSource: string;
   let requestUtilsSource: string;
+  let webSocketManagerSource: string;
   let html: string;
   let script: string;
 
@@ -491,6 +504,7 @@ describe('RequestPanel Webview', () => {
     requestExecutorSource = readSourceFile('src/panels/requestPanel/RequestExecutor.ts');
     collectionRunnerSource = readSourceFile('src/panels/requestPanel/CollectionRunner.ts');
     requestUtilsSource = readSourceFile('src/panels/requestPanel/requestUtils.ts');
+    webSocketManagerSource = readSourceFile('src/panels/requestPanel/WebSocketManager.ts');
     html = renderHtml(extractHtmlTemplate(htmlSource));
     script = extractInlineScript(html);
   });
@@ -535,6 +549,27 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /if \(e\.ctrlKey \|\| e\.metaKey \|\| e\.shiftKey \|\| e\.altKey\) return;/);
     assert.match(script, /if \(e\.isComposing \|\| e\.keyCode === 229\) return;/);
     assert.match(script, /e\.preventDefault\(\);[\s\S]*handlePrimaryAction\(\);/);
+  });
+
+  it('supports WebSocket tabs from the request panel', () => {
+    assert.match(script, /function isWebSocketUrl\(url\)/);
+    assert.match(script, /function normalizeRequestType\(value, url\)/);
+    assert.match(script, /function renderWebSocketResponse\(tab\)/);
+    assert.match(script, /type: 'websocketConnect'/);
+    assert.match(script, /type: 'websocketDisconnect'/);
+    assert.match(script, /type: 'websocketSend'/);
+    assert.match(script, /if \(msg\.type === 'websocketStatus'\)/);
+    assert.match(script, /if \(msg\.type === 'websocketMessage'\)/);
+    assert.match(script, /requestType: normalizeRequestType\(t\.requestType, t\.url\)/);
+    assert.match(script, /requestType: msg\.requestType/);
+    assert.match(htmlSource, /\.ws-console\{display:flex;flex-direction:column;gap:10px;/);
+    assert.match(source, /new WebSocketManager\(new WebSocketService\(\)/);
+    assert.match(source, /case MessageType\.WebSocketConnect:/);
+    assert.match(source, /case MessageType\.WebSocketDisconnect:/);
+    assert.match(source, /case MessageType\.WebSocketSend:/);
+    assert.match(webSocketManagerSource, /VariableService\.resolve\(message\.url, vars\)/);
+    assert.match(webSocketManagerSource, /AuthService\.applyAuth\(auth, finalHeaders, finalParams, vars\)/);
+    assert.match(webSocketManagerSource, /MessageType\.WebSocketMessage/);
   });
 
   it('renders and collects every auth type from the auth tab UI', () => {

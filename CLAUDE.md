@@ -1,7 +1,7 @@
 ﻿# Tessra 프로젝트 메모
 
 ## 제품 정체성
-Tessra는 VS Code 안에서 동작하는 local-first REST API 클라이언트다.
+Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 - 로그인 없음
 - 클라우드 동기화 없음
@@ -9,7 +9,7 @@ Tessra는 VS Code 안에서 동작하는 local-first REST API 클라이언트다
 - 사용자가 직접 보내는 API 요청 외의 네트워크 호출 없음
 - 모든 데이터는 로컬 JSON 파일로 저장
 
-## 현재 구현 범위 (2026-04-11 기준)
+## 현재 구현 범위 (2026-04-24 기준)
 
 ### 요청 작성 / 전송
 - `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
@@ -18,6 +18,7 @@ Tessra는 VS Code 안에서 동작하는 local-first REST API 클라이언트다
 - `Ctrl+Enter` / `Cmd+Enter` 전송
 - 진행 중 요청 취소
 - 요청 상태 표시와 응답 상태 애니메이션
+- `ws://` / `wss://` WebSocket 탭 자동 감지, 연결 / 연결 해제, 텍스트 메시지 전송
 
 ### Body 타입
 - `none`
@@ -101,6 +102,12 @@ Tessra는 VS Code 안에서 동작하는 local-first REST API 클라이언트다
 - skip default headers
 - disable scripts
 
+### WebSocket
+- handshake에 headers, query params, auth, default headers, 환경 변수, TLS override 적용
+- Body 탭을 전송 메시지 작성기로 사용
+- 수신 / 전송 메시지 로그 표시
+- 수신 binary frame은 base64로 표시
+
 ### UI 언어
 - `tessra.displayLanguage` 설정으로 Tessra 패널/프롬프트/알림/인앱 가이드 언어 선택
 - 기본값은 영어
@@ -126,9 +133,11 @@ Tessra는 VS Code 안에서 동작하는 local-first REST API 클라이언트다
 - OpenAPI JSON 파일을 선택하면 paths, methods, base URL 예시를 컬렉션과 환경으로 변환
 
 ## 현재 구조 메모
-- 사용자 요청 패널 UI는 `src/panels/RequestPanel.ts`의 webview 문자열 안에 들어 있다
+- 요청 패널 오케스트레이션은 `src/panels/RequestPanel.ts`, HTML/webview 문자열은 `src/panels/requestPanel/requestPanelHtml.ts`에 있다
+- HTTP 실행은 `src/panels/requestPanel/RequestExecutor.ts`, 컬렉션 러너는 `src/panels/requestPanel/CollectionRunner.ts`, WebSocket 세션 관리는 `src/panels/requestPanel/WebSocketManager.ts`가 담당한다
 - highlight.js 관련 리소스는 `src/webview/hljs.ts`에서 관리한다
 - HTTP 요청 실행은 `src/services/HttpService.ts`
+- WebSocket 프레임/handshake 처리는 Node.js 내장 `net` / `tls` 기반 `src/services/WebSocketService.ts`에서 담당한다
 - storage는 `src/services/StorageService.ts`
 - scripts는 `src/services/ScriptRunner.ts`
 - import/export는 `src/services/ImportExportService.ts`
@@ -137,7 +146,6 @@ Tessra는 VS Code 안에서 동작하는 local-first REST API 클라이언트다
 - 저장 JSON 파싱 실패 시 `.corrupt-*` 백업과 사용자 경고 후 기본값으로 복구한다
 
 ## 남은 큰 작업
-- WebSocket 지원
 - 더 많은 수동 E2E 검증
 - UI/UX 디테일 추가 보강
 
