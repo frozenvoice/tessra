@@ -175,9 +175,13 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.unsavedCloseNamedPrompt': '"{name}" has unsaved changes.',
 };
 
-function readRequestPanelSource(): string {
-  const filePath = path.resolve(__dirname, '../../../../src/panels/RequestPanel.ts');
+function readSourceFile(relativePath: string): string {
+  const filePath = path.resolve(__dirname, '../../../../', relativePath);
   return fs.readFileSync(filePath, 'utf8');
+}
+
+function readRequestPanelSource(): string {
+  return readSourceFile('src/panels/RequestPanel.ts');
 }
 
 function extractHtmlTemplate(source: string): string {
@@ -474,12 +478,20 @@ function createLinkedFocusHarness() {
 
 describe('RequestPanel Webview', () => {
   let source: string;
+  let htmlSource: string;
+  let requestExecutorSource: string;
+  let collectionRunnerSource: string;
+  let requestUtilsSource: string;
   let html: string;
   let script: string;
 
   before(() => {
     source = readRequestPanelSource();
-    html = renderHtml(extractHtmlTemplate(source));
+    htmlSource = readSourceFile('src/panels/requestPanel/requestPanelHtml.ts');
+    requestExecutorSource = readSourceFile('src/panels/requestPanel/RequestExecutor.ts');
+    collectionRunnerSource = readSourceFile('src/panels/requestPanel/CollectionRunner.ts');
+    requestUtilsSource = readSourceFile('src/panels/requestPanel/requestUtils.ts');
+    html = renderHtml(extractHtmlTemplate(htmlSource));
     script = extractInlineScript(html);
   });
 
@@ -620,9 +632,9 @@ describe('RequestPanel Webview', () => {
   });
 
   it('ships distinct visual signatures for the request panel theme presets', () => {
-    assert.match(source, /body\[data-panel-theme="minimal-cool"\] \.tab\.active\{[\s\S]*box-shadow:inset 0 -2px 0 rgba\(125,200,255,.9\);/);
-    assert.match(source, /body\[data-panel-theme="product"\] \.settings-group-title,\s*body\[data-panel-theme="product"\] \.script-helper-label,/);
-    assert.match(source, /body\[data-panel-theme="bold-color"\] \.status-2xx\{[\s\S]*linear-gradient\(135deg,#133a22,#1f7a34\)/);
+    assert.match(htmlSource, /body\[data-panel-theme="minimal-cool"\] \.tab\.active\{[\s\S]*box-shadow:inset 0 -2px 0 rgba\(125,200,255,.9\);/);
+    assert.match(htmlSource, /body\[data-panel-theme="product"\] \.settings-group-title,\s*body\[data-panel-theme="product"\] \.script-helper-label,/);
+    assert.match(htmlSource, /body\[data-panel-theme="bold-color"\] \.status-2xx\{[\s\S]*linear-gradient\(135deg,#133a22,#1f7a34\)/);
   });
 
   it('preserves auto-generated tab names across restore so localization can update them after restart', () => {
@@ -671,10 +683,11 @@ describe('RequestPanel Webview', () => {
   });
 
   it('cancels collection retry delays when stop is requested', () => {
-    assert.match(source, /private async waitForCollectionRetryDelay\(ms: number\): Promise<void>/);
-    assert.match(source, /this\.currentCollectionDelayCancel = cancel;/);
-    assert.match(source, /await this\.waitForCollectionRetryDelay\(settings\.retryDelayMs\);/);
-    assert.match(source, /case MessageType\.StopCollectionRun:[\s\S]*this\.currentCollectionDelayCancel\?\.\(\);[\s\S]*this\.currentCollectionDelayCancel = null;/);
+    assert.match(collectionRunnerSource, /private async waitForCollectionRetryDelay\(ms: number\): Promise<void>/);
+    assert.match(collectionRunnerSource, /this\.currentCollectionDelayCancel = cancel;/);
+    assert.match(collectionRunnerSource, /await this\.waitForCollectionRetryDelay\(settings\.retryDelayMs\);/);
+    assert.match(collectionRunnerSource, /stop\(\): void \{[\s\S]*this\.currentCollectionRequest\?\.abort\(\);[\s\S]*this\.currentCollectionDelayCancel\?\.\(\);[\s\S]*this\.currentCollectionDelayCancel = null;/);
+    assert.match(source, /case MessageType\.StopCollectionRun:[\s\S]*this\.collectionRunner\.stop\(\);/);
   });
 
   it('resolves active environment variables before copying or generating code', () => {
@@ -689,19 +702,19 @@ describe('RequestPanel Webview', () => {
 
   it('queues outbound webview messages until the webview is ready', () => {
     assert.match(source, /private pendingWebviewMessages: unknown\[\] = \[\];/);
-    assert.match(source, /if \(!this\.webviewReady && this\.shouldQueueWebviewMessage\(message\)\) \{/);
+    assert.match(source, /if \(!this\.webviewReady && shouldQueueWebviewMessage\(message\)\) \{/);
     assert.match(source, /this\.pendingWebviewMessages\.push\(message\);/);
     assert.match(source, /private flushPendingWebviewMessages\(\): void \{/);
     assert.match(source, /this\.flushPendingWebviewMessages\(\);/);
   });
 
   it('uses pre-request method and body type changes for the actual send path', () => {
-    assert.match(source, /private static normalizeMethod\(method: string \| undefined, fallback: Request\['method'\] = 'GET'\): Request\['method'\]/);
-    assert.match(source, /const initialMethod = RequestPanel\.normalizeMethod\(message\.method\);/);
-    assert.match(source, /const method = RequestPanel\.normalizeMethod\(requestState\.method, initialMethod\);/);
-    assert.match(source, /requestState\.method = method;/);
-    assert.match(source, /requestState\.bodyType = bodyType;/);
-    assert.match(source, /this\.httpService\.send\(\s*method,\s*url,/);
+    assert.match(requestUtilsSource, /export function normalizeMethod\(method: string \| undefined, fallback: Request\['method'\] = 'GET'\): Request\['method'\]/);
+    assert.match(requestExecutorSource, /const initialMethod = normalizeMethod\(message\.method\);/);
+    assert.match(requestExecutorSource, /const method = normalizeMethod\(requestState\.method, initialMethod\);/);
+    assert.match(requestExecutorSource, /requestState\.method = method;/);
+    assert.match(requestExecutorSource, /requestState\.bodyType = bodyType;/);
+    assert.match(requestExecutorSource, /this\.httpService\.send\(\s*method,\s*url,/);
   });
 
   it('renders the expanded request settings controls', () => {
@@ -793,11 +806,11 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /var activeTab = tabs\.find\(function\(t\) \{ return t\.id === activeTabId; \}\);/);
     assert.match(script, /applyAdaptiveRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, activeTab\);/);
     assert.match(script, /if \(savedHeight\) \{[\s\S]*?\} else \{[\s\S]*?applyAdaptiveRequestAreaHeight\(\s*adaptiveReqArea,\s*mainContent\.querySelector\('\.split'\),/);
-    assert.match(source, /\.res-area\{flex:1 1 0;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:0 10px\}/);
-    assert.match(source, /\.res-empty-shell\{flex:1;min-height:0;overflow:auto;padding:8px 0 12px\}/);
-    assert.match(source, /\.var-usage\{display:flex;align-items:center;gap:6px;padding:0;flex-wrap:wrap\}/);
-    assert.match(source, /\.json-body\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;border:1px solid rgba\(255,255,255,.08\);font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;white-space:pre-wrap;word-break:break-word;overflow:auto;flex:1;min-height:0;line-height:1\.3;/);
-    assert.match(source, /\.json-tree\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;border:1px solid rgba\(255,255,255,.08\);font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;overflow:auto;flex:1;min-height:0;line-height:1\.3;user-select:text;/);
+    assert.match(htmlSource, /\.res-area\{flex:1 1 0;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:0 10px\}/);
+    assert.match(htmlSource, /\.res-empty-shell\{flex:1;min-height:0;overflow:auto;padding:8px 0 12px\}/);
+    assert.match(htmlSource, /\.var-usage\{display:flex;align-items:center;gap:6px;padding:0;flex-wrap:wrap\}/);
+    assert.match(htmlSource, /\.json-body\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;border:1px solid rgba\(255,255,255,.08\);font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;white-space:pre-wrap;word-break:break-word;overflow:auto;flex:1;min-height:0;line-height:1\.3;/);
+    assert.match(htmlSource, /\.json-tree\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;border:1px solid rgba\(255,255,255,.08\);font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;overflow:auto;flex:1;min-height:0;line-height:1\.3;user-select:text;/);
   });
 
   it('normalizes and persists request settings in tab state and save actions', () => {
@@ -1033,24 +1046,24 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /js-toggle-script-help/);
     assert.match(script, /const activeTab = tabs\.find\(t => t\.id === activeTabId\);/);
     assert.match(script, /activeTab\.scriptHelpCollapsed = activeTab\.scriptHelpCollapsed !== true/);
-    assert.match(source, /\.req-area\{flex:1 1 0;min-height:0;overflow:hidden;padding:2px 8px;display:flex;flex-direction:column\}/);
-    assert.match(source, /\.url-primary-group\{display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 auto\}/);
-    assert.match(source, /\.url-hero-actions\{display:flex;align-items:stretch;justify-content:flex-end;flex:0 0 auto\}/);
-    assert.match(source, /\.url-secondary-btn\{min-height:28px;padding:0 8px;border-radius:6px;gap:6px;font-size:13px;/);
-    assert.match(source, /\.response-summary-card\{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:2px 0;border:none;background:transparent;box-shadow:none;border-radius:0;flex-wrap:nowrap;min-width:0\}/);
-    assert.match(source, /\.response-stat-inline\{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;font-size:13px;font-weight:700;/);
-    assert.match(source, /\.response-action-cluster\{display:flex;align-items:center;justify-content:flex-end;gap:3px;flex-wrap:nowrap;flex:0 0 auto\}/);
-    assert.match(source, /\.actions-more-menu\{display:none;position:absolute;/);
-    assert.match(source, /\.divider-grip\{position:relative;z-index:1;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;/);
-    assert.match(source, /\.json-body\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;/);
-    assert.match(source, /\.runner-row\.method-GET::before\{background:linear-gradient\(180deg,rgba\(78,201,78,.8\),rgba\(78,201,78,.18\)\)\}/);
-    assert.match(source, /\.env-editor\.linked-focus-active\{border-color:rgba\(87,166,255,.26\)\}/);
-    assert.match(source, /\.script-helper-shell\.collapsed\{gap:10px\}/);
-    assert.match(source, /@media \(max-height: 820px\)\{/);
+    assert.match(htmlSource, /\.req-area\{flex:1 1 0;min-height:0;overflow:hidden;padding:2px 8px;display:flex;flex-direction:column\}/);
+    assert.match(htmlSource, /\.url-primary-group\{display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 auto\}/);
+    assert.match(htmlSource, /\.url-hero-actions\{display:flex;align-items:stretch;justify-content:flex-end;flex:0 0 auto\}/);
+    assert.match(htmlSource, /\.url-secondary-btn\{min-height:28px;padding:0 8px;border-radius:6px;gap:6px;font-size:13px;/);
+    assert.match(htmlSource, /\.response-summary-card\{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:2px 0;border:none;background:transparent;box-shadow:none;border-radius:0;flex-wrap:nowrap;min-width:0\}/);
+    assert.match(htmlSource, /\.response-stat-inline\{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;font-size:13px;font-weight:700;/);
+    assert.match(htmlSource, /\.response-action-cluster\{display:flex;align-items:center;justify-content:flex-end;gap:3px;flex-wrap:nowrap;flex:0 0 auto\}/);
+    assert.match(htmlSource, /\.actions-more-menu\{display:none;position:absolute;/);
+    assert.match(htmlSource, /\.divider-grip\{position:relative;z-index:1;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;/);
+    assert.match(htmlSource, /\.json-body\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;/);
+    assert.match(htmlSource, /\.runner-row\.method-GET::before\{background:linear-gradient\(180deg,rgba\(78,201,78,.8\),rgba\(78,201,78,.18\)\)\}/);
+    assert.match(htmlSource, /\.env-editor\.linked-focus-active\{border-color:rgba\(87,166,255,.26\)\}/);
+    assert.match(htmlSource, /\.script-helper-shell\.collapsed\{gap:10px\}/);
+    assert.match(htmlSource, /@media \(max-height: 820px\)\{/);
   });
 
   it('shows richer collection runner status updates', () => {
-    assert.match(source, /type: 'runCollectionStatus'/);
+    assert.match(collectionRunnerSource, /type: 'runCollectionStatus'/);
     assert.match(script, /function updateRunnerStatus\(msg\)/);
     assert.match(script, /class="runner-live-status"/);
     assert.match(script, /tr\('webview\.runSending'\)/);
@@ -1058,9 +1071,9 @@ describe('RequestPanel Webview', () => {
   });
 
   it('persists collection runner results to history when enabled', () => {
-    assert.match(source, /let historyRequest: Request \| null = null;/);
-    assert.match(source, /historyRequest = this\.createHistoryRequestSnapshot\(/);
-    assert.match(source, /if \(!this\.collectionRunAbort && settings\.saveToHistory && historyRequest\) \{/);
-    assert.match(source, /response \? \{ status: response\.status, statusText: response\.statusText, time: response\.time \} : null/);
+    assert.match(collectionRunnerSource, /let historyRequest: Request \| null = null;/);
+    assert.match(collectionRunnerSource, /historyRequest = createHistoryRequestSnapshot\(/);
+    assert.match(collectionRunnerSource, /if \(!this\.collectionRunAbort && settings\.saveToHistory && historyRequest\) \{/);
+    assert.match(collectionRunnerSource, /response \? \{ status: response\.status, statusText: response\.statusText, time: response\.time \} : null/);
   });
 });
