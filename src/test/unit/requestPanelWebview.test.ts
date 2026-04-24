@@ -5,6 +5,7 @@ import * as vm from 'vm';
 
 const TEST_STRINGS: Record<string, string> = {
   'webview.newTab': 'New tab',
+  'webview.requestTabs': 'Request tabs',
   'webview.environment': 'Environment:',
   'webview.unsavedChanges': 'Unsaved changes',
   'webview.autoSaved': 'Auto-saved',
@@ -39,6 +40,9 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.authSummaryApiKeyQuery': 'API Key (Query)',
   'webview.manage': 'Manage',
   'webview.save': 'Save',
+  'webview.close': 'Close',
+  'webview.remove': 'Remove',
+  'webview.more': 'More',
   'webview.addHeader': '+ Add Header',
   'webview.bulkPaste': 'Bulk Paste',
   'webview.bulkPasteParams': 'Paste query string or one key/value per line',
@@ -617,6 +621,28 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /if \(e\.altKey && !e\.ctrlKey && !e\.metaKey && digitMatch\)/);
     assert.match(script, /\['params', 'headers', 'body', 'auth', 'scripts', 'settings'\]/);
     assert.match(script, /\['resBody', 'resCookies', 'resHeaders', 'resTests', 'resPreview'\]/);
+  });
+
+  it('renders request tabs and utility controls with accessible semantics', () => {
+    assert.ok(
+      html.includes('<div class="tab-bar" id="tabBar" role="tablist" aria-label="Request tabs">'),
+      'request tabs should be exposed as a tablist'
+    );
+    assert.ok(
+      html.includes('<button class="add-tab" id="addTabBtn" type="button" title="New tab" aria-label="New tab">+</button>'),
+      'new-tab control should be a named button'
+    );
+    assert.match(script, /el\.setAttribute\('role', 'tab'\)/);
+    assert.match(script, /el\.setAttribute\('tabindex', tab\.id === activeTabId \? '0' : '-1'\)/);
+    assert.match(script, /el\.setAttribute\('aria-selected', tab\.id === activeTabId \? 'true' : 'false'\)/);
+    assert.match(script, /'<button class="close-tab" type="button" data-id="' \+ tab\.id \+ '" title="' \+ escapeAttr\(tr\('webview\.close'\)\)/);
+    assert.match(script, /if \(e\.key === 'Enter' \|\| e\.key === ' '\)/);
+    assert.match(script, /class="actions-more-menu js-actions-more-menu" id="responseActionsMoreMenu" role="menu"/);
+    assert.match(script, /aria-haspopup="menu" aria-expanded="false" aria-controls="responseActionsMoreMenu"/);
+    assert.match(script, /moreBtn\.setAttribute\('aria-expanded', 'true'\)/);
+    assert.match(script, /activeFormatMenuState\.button\.setAttribute\('aria-expanded', 'false'\)/);
+    assert.match(script, /role="menuitem"/);
+    assert.match(script, /class="rm" type="button" title="' \+ escapeAttr\(tr\('webview\.remove'\)\)/);
   });
 
   it('renders variable hover preview helpers with active environment values', () => {

@@ -64,7 +64,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .req-tab.active.tab-HEAD{border-bottom-color:#abb2bf}
 .req-tab.active.tab-OPTIONS{border-bottom-color:#abb2bf}
 .req-tab.active.tab-WS{border-bottom-color:#4ec9b0;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 24px rgba(78,201,176,.13)}
-.req-tab .close-tab{opacity:.5;cursor:pointer;font-size:13px;padding:0 2px;line-height:1}
+.req-tab .close-tab{opacity:.5;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;background:transparent;border:0;color:inherit;font:inherit}
 .req-tab .close-tab:hover{opacity:1;color:var(--vscode-errorForeground)}
 .req-tab.pinned{opacity:.85;border-left:2px solid var(--vscode-focusBorder)}
 .req-tab.pinned .close-tab{display:none}
@@ -91,7 +91,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .compare-mode-options{display:flex;gap:8px;flex-wrap:wrap}
 .compare-mode-chip{padding:6px 10px;border:1px solid var(--vscode-input-border,#555);border-radius:999px;background:transparent;color:var(--vscode-foreground);cursor:pointer;font-size:12px}
 .compare-mode-chip.active{border-color:var(--vscode-charts-blue,#3794ff);color:var(--vscode-charts-blue,#3794ff);background:rgba(55,148,255,.12)}
-.add-tab{padding:4px 10px;cursor:pointer;opacity:.5;font-size:14px;display:flex;align-items:center}
+.add-tab{padding:4px 10px;cursor:pointer;opacity:.5;font-size:14px;display:flex;align-items:center;background:transparent;border:0;color:inherit;font-family:inherit}
 .add-tab:hover{opacity:1}
 .tab-ctx-menu{position:fixed;z-index:9999;background:var(--vscode-menu-background,#252526);border:1px solid var(--vscode-menu-border,#454545);border-radius:4px;padding:4px 0;min-width:160px;box-shadow:0 2px 8px rgba(0,0,0,.3);font-size:13px}
 .tab-ctx-menu .ctx-item{padding:4px 16px;cursor:pointer;color:var(--vscode-menu-foreground,#ccc)}
@@ -340,6 +340,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 /* ?섍꼍蹂???몄쭛 */
 .env-editor{padding:6px 10px;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;background:var(--vscode-sideBar-background,var(--vscode-editor-background))}
 .env-editor-title{font-size:13px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.env-editor-title .rm{background:transparent;border:0;color:inherit;font:inherit;padding:0 3px}
 .env-badge{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);padding:1px 6px;border-radius:8px;font-size:13px}
 .env-autosave-indicator{font-size:12px;color:var(--vscode-charts-green,#4ec94e);opacity:0;transition:opacity .3s;display:flex;align-items:center;gap:3px}
 .env-autosave-indicator.show{opacity:1}
@@ -932,6 +933,8 @@ body{
 .preflight-pill:focus,
 .tab:focus,
 .req-tab:focus,
+.close-tab:focus,
+.add-tab:focus,
 .add-btn:focus{
   outline:none;
 }
@@ -946,6 +949,8 @@ body{
 .preflight-pill:focus-visible,
 .tab:focus-visible,
 .req-tab:focus-visible,
+.close-tab:focus-visible,
+.add-tab:focus-visible,
 .add-btn:focus-visible{
   outline:2px solid rgba(125,200,255,.55);
   outline-offset:2px;
@@ -1545,8 +1550,8 @@ body[data-panel-theme="bold-color"] .empty-state::before{
 <body data-panel-theme="${requestPanelTheme}">
 
 <!-- ?붿껌 ??諛?-->
-<div class="tab-bar" id="tabBar">
-<div class="add-tab" id="addTabBtn" title="${LocalizationService.t('webview.newTab', undefined, displayLanguage)}">+</div>
+<div class="tab-bar" id="tabBar" role="tablist" aria-label="${LocalizationService.t('webview.requestTabs', undefined, displayLanguage)}">
+<button class="add-tab" id="addTabBtn" type="button" title="${LocalizationService.t('webview.newTab', undefined, displayLanguage)}" aria-label="${LocalizationService.t('webview.newTab', undefined, displayLanguage)}">+</button>
 </div>
 
 <!-- ?섍꼍蹂???몄쭛 (?④? ?곹깭) -->
@@ -1557,7 +1562,7 @@ body[data-panel-theme="bold-color"] .empty-state::before{
     <span style="flex:1"></span>
     <span class="env-dirty-dot" id="envDirtyDot" title="${LocalizationService.t('webview.unsavedChanges', undefined, displayLanguage)}"></span>
     <span class="env-autosave-indicator" id="envAutoSaved"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M6.27 10.87h.04l4.49-4.49-1.06-1.06-3.47 3.47-1.47-1.47-1.06 1.06 2.53 2.49z"/><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12z"/></svg> <span id="envAutoSavedLabel">${LocalizationService.t('webview.autoSaved', undefined, displayLanguage)}</span></span>
-    <span class="rm" id="envCloseBtn" style="cursor:pointer;font-size:14px;opacity:.6">&times;</span>
+    <button class="rm" id="envCloseBtn" type="button" title="${LocalizationService.t('webview.close', undefined, displayLanguage)}" aria-label="${LocalizationService.t('webview.close', undefined, displayLanguage)}" style="cursor:pointer;font-size:14px;opacity:.6">&times;</button>
   </div>
   <div id="envVarRows" class="kv-section"></div>
   <button class="add-btn" id="addEnvVarBtn">${LocalizationService.t('webview.addVariable', undefined, displayLanguage)}</button>
@@ -1569,7 +1574,7 @@ body[data-panel-theme="bold-color"] .empty-state::before{
     <span id="defaultHeadersTitle">${LocalizationService.t('webview.defaultHeaders', undefined, displayLanguage)}</span>
     <span style="flex:1"></span>
     <button class="btn btn-s" id="defaultHeadersSaveBtn" style="padding:2px 8px;font-size:13px">${LocalizationService.t('webview.save', undefined, displayLanguage)}</button>
-    <span class="rm" id="defaultHeadersCloseBtn" style="cursor:pointer;font-size:14px;opacity:.6">&times;</span>
+    <button class="rm" id="defaultHeadersCloseBtn" type="button" title="${LocalizationService.t('webview.close', undefined, displayLanguage)}" aria-label="${LocalizationService.t('webview.close', undefined, displayLanguage)}" style="cursor:pointer;font-size:14px;opacity:.6">&times;</button>
   </div>
   <div id="defaultHeaderRows" class="kv-section"></div>
   <button class="add-btn" id="addDefaultHeaderBtn">${LocalizationService.t('webview.addHeader', undefined, displayLanguage)}</button>
@@ -1616,6 +1621,7 @@ var splitDragState = null;
 function closeActiveFormatMenu() {
   if (!activeFormatMenuState) return;
   if (activeFormatMenuState.menu) activeFormatMenuState.menu.classList.remove('open');
+  if (activeFormatMenuState.button) activeFormatMenuState.button.setAttribute('aria-expanded', 'false');
   activeFormatMenuState = null;
 }
 
@@ -2758,6 +2764,8 @@ function applyRequestPanelTheme(theme) {
 function updateStaticLocalizedText() {
   document.documentElement.lang = currentDisplayLanguage;
   addTabBtn.title = tr('webview.newTab');
+  addTabBtn.setAttribute('aria-label', tr('webview.newTab'));
+  tabBar.setAttribute('aria-label', tr('webview.requestTabs'));
   if (emptyPlaceholder) emptyPlaceholder.textContent = tr('webview.emptyPlaceholder');
   setTextContent('envEditorTitle', tr('webview.environment'));
   setTextContent('envAutoSavedLabel', tr('webview.autoSaved'));
@@ -2767,6 +2775,16 @@ function updateStaticLocalizedText() {
   setTextContent('addDefaultHeaderBtn', tr('webview.addHeader'));
   var envDirty = document.getElementById('envDirtyDot');
   if (envDirty) envDirty.title = tr('webview.unsavedChanges');
+  var envClose = document.getElementById('envCloseBtn');
+  if (envClose) {
+    envClose.title = tr('webview.close');
+    envClose.setAttribute('aria-label', tr('webview.close'));
+  }
+  var defaultHeadersClose = document.getElementById('defaultHeadersCloseBtn');
+  if (defaultHeadersClose) {
+    defaultHeadersClose.title = tr('webview.close');
+    defaultHeadersClose.setAttribute('aria-label', tr('webview.close'));
+  }
 }
 
 function applyLocalizationUpdate(msg) {
@@ -3687,16 +3705,29 @@ function renderTabBar() {
     const tabMethod = isWebSocketTab(tab) ? 'WS' : tab.method;
     const el = document.createElement('div');
     el.className = 'req-tab' + (tab.id === activeTabId ? ' active' : '') + (tab.pinned ? ' pinned' : '') + ' tab-' + tabMethod;
+    el.setAttribute('role', 'tab');
+    el.setAttribute('tabindex', tab.id === activeTabId ? '0' : '-1');
+    el.setAttribute('aria-selected', tab.id === activeTabId ? 'true' : 'false');
+    el.setAttribute('aria-label', tabMethod + ' ' + tab.name);
+    el.title = tab.name;
     el.innerHTML =
       '<span class="pin-icon">\u{1F4CC}</span>' +
       '<span class="method-badge method-' + tabMethod + '">' + tabMethod + '</span>' +
       '<span class="tab-name">' + escapeHtml(truncate(tab.name, 25)) + '</span>' +
       (tab.dirty ? '<span class="dirty-dot" title="' + escapeAttr(renderRequestDirtyTitle(tab)) + '">\u25CF</span>' : '') +
-      '<span class="close-tab" data-id="' + tab.id + '">&times;</span>';
+      '<button class="close-tab" type="button" data-id="' + tab.id + '" title="' + escapeAttr(tr('webview.close')) + '" aria-label="' + escapeAttr(tr('webview.close')) + '">&times;</button>';
     el.addEventListener('click', (e) => {
-      if (e.target.classList.contains('close-tab')) {
-        closeTab(e.target.dataset.id);
+      const closeButton = e.target.closest('.close-tab');
+      if (closeButton && el.contains(closeButton)) {
+        closeTab(closeButton.dataset.id);
       } else {
+        switchTab(tab.id);
+      }
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.target.closest('.close-tab')) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
         switchTab(tab.id);
       }
     });
@@ -4632,15 +4663,15 @@ function renderContent() {
           '<button class="pin-response-btn ripple-btn js-pin-response" title="' + escapeAttr(tr('webview.pinResponse') + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '')) + '">' + pinSvg + '<span class="action-label">' + escapeHtml(tr('webview.pin')) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</span></button>' +
           '<button class="compare-btn js-compare-responses' + (pinnedResponses.length >= 2 ? ' ready' : '') + '" title="' + escapeAttr(tr('webview.comparePinned') + ' ' + compareModeShort(compareSettings.mode) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '')) + '"' + (pinnedResponses.length < 2 ? ' disabled' : '') + '>' + diffSvg + '<span class="action-label">' + escapeHtml(tr('webview.compare')) + ' ' + compareModeShort(compareSettings.mode) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</span></button>' +
           '<div class="actions-more-wrap">' +
-            '<button class="res-action-btn ripple-btn js-actions-more-btn" type="button" title="' + escapeAttr(tr('webview.more') || 'More') + '" aria-haspopup="true"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="13" cy="8" r="1.4"/></svg></button>' +
-            '<div class="actions-more-menu js-actions-more-menu">' +
-              '<button class="res-action-btn ripple-btn js-copy-response-status" type="button" title="' + escapeAttr(tr('webview.copyStatus')) + '"><span class="action-label">' + escapeHtml(tr('webview.copyStatus')) + '</span></button>' +
-              '<button class="res-action-btn ripple-btn js-copy-response-headers" type="button" title="' + escapeAttr(tr('webview.copyHeadersRaw')) + '"><span class="action-label">' + escapeHtml(tr('webview.copyHeadersRaw')) + '</span></button>' +
+            '<button class="res-action-btn ripple-btn js-actions-more-btn" type="button" title="' + escapeAttr(tr('webview.more') || 'More') + '" aria-label="' + escapeAttr(tr('webview.more') || 'More') + '" aria-haspopup="menu" aria-expanded="false" aria-controls="responseActionsMoreMenu"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="13" cy="8" r="1.4"/></svg></button>' +
+            '<div class="actions-more-menu js-actions-more-menu" id="responseActionsMoreMenu" role="menu">' +
+              '<button class="res-action-btn ripple-btn js-copy-response-status" type="button" role="menuitem" title="' + escapeAttr(tr('webview.copyStatus')) + '"><span class="action-label">' + escapeHtml(tr('webview.copyStatus')) + '</span></button>' +
+              '<button class="res-action-btn ripple-btn js-copy-response-headers" type="button" role="menuitem" title="' + escapeAttr(tr('webview.copyHeadersRaw')) + '"><span class="action-label">' + escapeHtml(tr('webview.copyHeadersRaw')) + '</span></button>' +
               ((lang === 'html' && (tab.resolvedUrl || tab.url))
-                ? '<button class="res-action-btn ripple-btn js-open-response-url" type="button" title="' + escapeAttr(tr('webview.openUrl')) + '"><span class="action-label">' + escapeHtml(tr('webview.openUrl')) + '</span></button>'
+                ? '<button class="res-action-btn ripple-btn js-open-response-url" type="button" role="menuitem" title="' + escapeAttr(tr('webview.openUrl')) + '"><span class="action-label">' + escapeHtml(tr('webview.openUrl')) + '</span></button>'
                 : '') +
-              '<button class="res-action-btn ripple-btn js-compare-last" type="button" title="' + escapeAttr(tr('webview.compareLast')) + '"' + (!lastResponse ? ' disabled' : '') + '><span class="action-label">' + escapeHtml(tr('webview.last')) + '</span></button>' +
-              '<button class="res-action-btn ripple-btn js-compare-settings" type="button" title="' + escapeAttr(tr('webview.comparisonSettings')) + '"><span class="action-label">' + escapeHtml(tr('webview.mode')) + ': ' + escapeHtml(compareModeShort(compareSettings.mode)) + '</span></button>' +
+              '<button class="res-action-btn ripple-btn js-compare-last" type="button" role="menuitem" title="' + escapeAttr(tr('webview.compareLast')) + '"' + (!lastResponse ? ' disabled' : '') + '><span class="action-label">' + escapeHtml(tr('webview.last')) + '</span></button>' +
+              '<button class="res-action-btn ripple-btn js-compare-settings" type="button" role="menuitem" title="' + escapeAttr(tr('webview.comparisonSettings')) + '"><span class="action-label">' + escapeHtml(tr('webview.mode')) + ': ' + escapeHtml(compareModeShort(compareSettings.mode)) + '</span></button>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -5164,6 +5195,7 @@ function bindContentEvents() {
       }
       closeActiveFormatMenu();
       moreMenu.classList.add('open');
+      moreBtn.setAttribute('aria-expanded', 'true');
       activeFormatMenuState = { button: moreBtn, menu: moreMenu };
     });
     moreMenu.addEventListener('click', function(e) {
@@ -5811,7 +5843,7 @@ function kvRowsHtml(items) {
       '<input type="checkbox"' + (kv.enabled !== false ? ' checked' : '') + '/>' +
       '<input type="text" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(kv.key) + '"/>' +
       kvValueControlHtml(kv.key, kv.value) +
-      '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>' +
+      '<button class="rm" type="button" title="' + escapeAttr(tr('webview.remove')) + '" aria-label="' + escapeAttr(tr('webview.remove')) + '">&times;</button>' +
     '</div>'
   ).join('');
 }
@@ -5824,7 +5856,7 @@ function addKvRow(container, key, value) {
     '<input type="checkbox" checked/>' +
     '<input type="text" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(key || '') + '"/>' +
     kvValueControlHtml(key || '', value || '') +
-    '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>';
+    '<button class="rm" type="button" title="' + escapeAttr(tr('webview.remove')) + '" aria-label="' + escapeAttr(tr('webview.remove')) + '">&times;</button>';
   row.querySelector('.rm').addEventListener('click', () => row.remove());
   container.appendChild(row);
 }
@@ -5959,7 +5991,7 @@ function formDataRowsHtml(items) {
         '<span class="formdata-file-chip js-formdata-file-chip' + (isFile && fileName ? '' : ' hidden') + '">' + escapeHtml(fileName || tf('webview.fileSelected', { name: '' })) + '</span>' +
       '</div>' +
       '<button class="btn btn-s js-formdata-browse' + (isFile ? '' : ' hidden') + '" type="button" style="padding:3px 8px">' + escapeHtml(tr('webview.browse')) + '</button>' +
-      '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>' +
+      '<button class="rm" type="button" title="' + escapeAttr(tr('webview.remove')) + '" aria-label="' + escapeAttr(tr('webview.remove')) + '">&times;</button>' +
     '</div>';
   }).join('');
 }
@@ -5987,7 +6019,7 @@ function addFormDataRow(container, type) {
       '<span class="formdata-file-chip js-formdata-file-chip hidden"></span>' +
     '</div>' +
     '<button class="btn btn-s js-formdata-browse' + (type === 'file' ? '' : ' hidden') + '" type="button" style="padding:3px 8px">' + escapeHtml(tr('webview.browse')) + '</button>' +
-    '<span class="rm" title="' + escapeAttr(tr('webview.remove')) + '">&times;</span>';
+    '<button class="rm" type="button" title="' + escapeAttr(tr('webview.remove')) + '" aria-label="' + escapeAttr(tr('webview.remove')) + '">&times;</button>';
   container.appendChild(row);
   syncFormDataRow(row);
 }

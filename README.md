@@ -265,6 +265,7 @@ npx vsce package
 ```
 
 Use `F5` in VS Code to launch an Extension Development Host.
+Use `docs/manual-e2e-checklist.md` for the manual E2E pass.
 
 ## Tech stack
 

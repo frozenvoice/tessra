@@ -35,6 +35,8 @@ Tessra는 VS Code 안에서 동작하는 offline-first API 클라이언트 확�
 ## 현재 프로젝트 구조
 ```text
 tessra/
+├── docs/
+│   └── manual-e2e-checklist.md
 ├── src/
 │   ├── extension.ts
 │   ├── models/
@@ -99,9 +101,9 @@ tessra/
 18. 컬렉션 러너 실패 요청만 재실행, 요청별 history 저장 설정을 따른 실행 결과 저장
 19. WebSocket `ws://` / `wss://` 연결, 텍스트 메시지 전송, 수신/전송 로그, binary frame base64 표시
 
-### 남아 있는 큰 항목
-1. 추가 UI 폴리싱과 사용성 디테일 보강
-2. 수동 E2E 점검 범위 확대
+### 현재 품질 기준
+1. 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴가 키보드 접근과 명확한 포커스 상태를 유지해야 한다.
+2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다.
 
 ## 빌드 & 테스트
 ```bash
@@ -111,7 +113,7 @@ npm test
 npx vsce package
 ```
 
-수동 검증은 VS Code에서 `F5`로 Extension Development Host를 띄워 수행한다.
+수동 검증은 VS Code에서 `F5`로 Extension Development Host를 띄운 뒤 `docs/manual-e2e-checklist.md` 기준으로 수행한다.
 
 ## 저장 데이터
 모든 데이터는 VS Code `globalStorage` 아래 JSON 파일로 저장된다. 기본 프로필은 루트에 저장되고, 사용자 지정 프로필은 `profiles/<profile-name>/` 아래 같은 파일 구조로 분리된다.

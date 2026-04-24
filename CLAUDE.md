@@ -145,9 +145,9 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - 로컬 저장 분리와 Arc Client → Tessra 데이터 마이그레이션은 `src/services/StorageService.ts`
 - 저장 JSON 파싱 실패 시 `.corrupt-*` 백업과 사용자 경고 후 기본값으로 복구한다
 
-## 남은 큰 작업
-- 더 많은 수동 E2E 검증
-- UI/UX 디테일 추가 보강
+## 품질 기준
+- 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다
+- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다
 
 ## 빌드 / 테스트
 ```bash

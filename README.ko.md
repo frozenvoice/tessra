@@ -264,6 +264,7 @@ npx vsce package
 ```
 
 VS Code에서 `F5`로 Extension Development Host를 띄워 확인합니다.
+수동 E2E 점검은 `docs/manual-e2e-checklist.md` 기준으로 수행합니다.
 
 ## 기술 스택
 
