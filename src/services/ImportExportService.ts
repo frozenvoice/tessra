@@ -62,6 +62,31 @@ export class ImportExportService {
     return result;
   }
 
+  static importPostmanEnvironmentDocument(document: unknown): Environment {
+    const environment = this.asObject(document);
+    if (!environment) {
+      throw new Error('The selected JSON is not a Postman Environment document.');
+    }
+
+    const hasName = typeof environment.name === 'string' && environment.name.trim().length > 0;
+    const hasValues = Array.isArray(environment.values);
+    if (!hasName && hasValues) {
+      throw new Error('Postman Environment is missing a name.');
+    }
+    if (hasName && !hasValues) {
+      throw new Error('Postman Environment is missing a values array.');
+    }
+    if (!hasName || !hasValues) {
+      throw new Error('The selected JSON is not a Postman Environment document.');
+    }
+
+    const imported = this.importEnvironment(environment);
+    if (!imported) {
+      throw new Error('The selected JSON is not a Postman Environment document.');
+    }
+    return imported;
+  }
+
   static importOpenApiDocuments(documents: unknown[]): PostmanImportResult {
     const result: PostmanImportResult = {
       collections: [],
@@ -702,11 +727,11 @@ export class ImportExportService {
   }
 
   private static importEnvironment(document: PostmanValue): Environment | null {
-    if (typeof document.name !== 'string' || !Array.isArray(document.values)) { return null; }
+    if (typeof document.name !== 'string' || !document.name.trim() || !Array.isArray(document.values)) { return null; }
 
     return {
       id: typeof document.id === 'string' && document.id ? document.id : this.generateId(),
-      name: document.name,
+      name: document.name.trim(),
       variables: document.values
         .map((value) => this.importKeyValue(value))
         .filter((value): value is KeyValue => value !== null),
@@ -962,10 +987,11 @@ export class ImportExportService {
   private static importKeyValue(value: unknown): KeyValue | null {
     const entry = this.asObject(value);
     if (!entry || typeof entry.key !== 'string') { return null; }
+    const rawValue = Object.prototype.hasOwnProperty.call(entry, 'value') ? entry.value : entry.default;
     return {
       key: entry.key,
-      value: typeof entry.value === 'string' ? entry.value : '',
-      enabled: entry.disabled !== true,
+      value: this.stringifyExampleValue(rawValue),
+      enabled: entry.disabled !== true && entry.enabled !== false,
     };
   }
 

@@ -42,6 +42,7 @@
   "command.importCurl": "Tessra: cURL をインポート",
   "command.importCollection": "Tessra: コレクションをインポート",
   "command.importOpenApi": "Tessra: OpenAPI をインポート",
+  "command.importEnvironment": "Import Environment",
   "command.exportPostmanCollection": "Postman コレクションとしてエクスポート",
   "command.exportPostmanEnvironment": "Postman 環境としてエクスポート",
   "command.collapseAll": "すべて折りたたむ",

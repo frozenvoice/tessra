@@ -79,6 +79,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - `{{variable}}` 치환
 - URL / Headers / Body / Auth / Scripts / 기타 편집 가능한 텍스트 입력에서 변수 자동완성
 - URL / Headers / Params / Body / Auth / 파일 경로까지 치환
+- Environments 제목 영역의 `Import Environment`로 Postman Environment JSON 가져오기
 - collections / history / environments / default headers / saved tabs를 분리하는 워크스페이스 로컬 저장 프로필
 
 ### Collections / History

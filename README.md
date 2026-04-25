@@ -80,6 +80,7 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 - `{{variable}}` resolution
 - Variable autocomplete in URL, headers, body, auth, scripts, and editable text inputs
 - Variable resolution for URL, headers, params, body, auth, and file paths
+- `Import Environment` from the Environments title bar for Postman Environment JSON files
 - Workspace-local storage profiles for isolating collections, history, environments, default headers, and saved tabs
 
 ### Collections and history

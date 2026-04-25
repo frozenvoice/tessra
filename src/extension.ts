@@ -151,6 +151,13 @@ export function activate(context: vscode.ExtensionContext) {
     }
   }
 
+  function refreshEnvironmentState(): void {
+    environmentProvider.reloadFromStorage();
+    environmentProvider.refresh();
+    updateStatusBar(envStatusBar, environmentProvider);
+    RequestPanel.currentPanel?.updateActiveEnv(environmentProvider.getActiveEnvironmentName());
+  }
+
   async function importStructuredDocuments(
     uris: readonly vscode.Uri[],
     options: { openApiOnly?: boolean } = {}
@@ -216,10 +223,7 @@ export function activate(context: vscode.ExtensionContext) {
     const importedEnvironmentCount = importedOpenApi.environments.length + importedPostman.environments.length;
     if (importedEnvironmentCount > 0) {
       storage.saveEnvironments(environments);
-      environmentProvider.reloadFromStorage();
-      environmentProvider.refresh();
-      updateStatusBar(envStatusBar, environmentProvider);
-      RequestPanel.currentPanel?.updateActiveEnv(environmentProvider.getActiveEnvironmentName());
+      refreshEnvironmentState();
       vscode.window.showInformationMessage(t('info.importedEnvironments', { count: importedEnvironmentCount }));
     }
 
@@ -228,6 +232,40 @@ export function activate(context: vscode.ExtensionContext) {
         collections: stats.skippedCollections,
         items: stats.skippedItems,
       }));
+    }
+  }
+
+  async function importEnvironmentDocuments(uris: readonly vscode.Uri[]): Promise<void> {
+    const environments = storage.getEnvironments();
+    let importedCount = 0;
+
+    for (const uri of uris) {
+      try {
+        const raw = await vscode.workspace.fs.readFile(uri);
+        const data = JSON.parse(Buffer.from(raw).toString('utf-8'));
+        const items = Array.isArray(data) ? data : [data];
+
+        for (const item of items) {
+          const environment = ImportExportService.importPostmanEnvironmentDocument(item);
+          environment.id = createImportId();
+          environment.name = createUniqueImportedEnvironmentName(environment.name, environments);
+          environments.push(environment);
+          importedCount++;
+        }
+      } catch (err: unknown) {
+        vscode.window.showErrorMessage(
+          t('error.importFailed', {
+            path: uri.fsPath,
+            message: err instanceof Error ? err.message : String(err),
+          })
+        );
+      }
+    }
+
+    if (importedCount > 0) {
+      storage.saveEnvironments(environments);
+      refreshEnvironmentState();
+      vscode.window.showInformationMessage(t('info.importedEnvironments', { count: importedCount }));
     }
   }
 
@@ -328,6 +366,18 @@ export function activate(context: vscode.ExtensionContext) {
       });
       if (!uris || uris.length === 0) { return; }
       await importStructuredDocuments(uris, { openApiOnly: true });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('tessra.importEnvironment', async () => {
+      const uris = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        filters: { 'JSON Files': ['json'] },
+        openLabel: t('action.import'),
+      });
+      if (!uris || uris.length === 0) { return; }
+      await importEnvironmentDocuments(uris);
     })
   );
 
@@ -797,6 +847,22 @@ function createImportId(): string {
 
 function sanitizeFilename(value: string): string {
   return value.replace(/[<>:"/\\|?*]+/g, '_');
+}
+
+function createUniqueImportedEnvironmentName(name: string, environments: Environment[]): string {
+  const existingNames = new Set(environments.map((environment) => environment.name));
+  if (!existingNames.has(name)) { return name; }
+
+  const importedName = `${name} (Imported)`;
+  if (!existingNames.has(importedName)) { return importedName; }
+
+  let index = 2;
+  let candidate = `${name} (Imported ${index})`;
+  while (existingNames.has(candidate)) {
+    index++;
+    candidate = `${name} (Imported ${index})`;
+  }
+  return candidate;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

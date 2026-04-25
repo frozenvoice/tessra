@@ -35,6 +35,9 @@ describe('extension source', () => {
   it('registers dedicated OpenAPI import, request panel theme, and workspace profile commands', () => {
     assert.match(source, /registerCommand\('tessra\.importOpenApi'/);
     assert.match(source, /ImportExportService\.importOpenApiDocuments\(openApiDocuments\)/);
+    assert.match(source, /registerCommand\('tessra\.importEnvironment'/);
+    assert.match(source, /ImportExportService\.importPostmanEnvironmentDocument\(item\)/);
+    assert.match(source, /createUniqueImportedEnvironmentName\(environment\.name, environments\)/);
     assert.match(source, /registerCommand\('tessra\.changeRequestPanelTheme'/);
     assert.match(source, /SUPPORTED_REQUEST_PANEL_THEMES\.map\(\(theme\)/);
     assert.match(source, /picker\.selectRequestPanelTheme/);

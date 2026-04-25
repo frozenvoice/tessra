@@ -56,7 +56,9 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 
 - Import OpenAPI JSON and confirm collections plus base URL environment values.
 - Import and export Postman collections.
-- Import and export Postman environments.
+- From the Environments title bar, run `Import Environment` for a valid Postman Environment JSON and confirm variables, disabled values, empty `values: []`, duplicate-name suffixing, activation, and editing.
+- Try invalid JSON, a Postman Environment without `name`, and one without `values`; confirm each shows an error and does not overwrite existing environments.
+- Export Postman environments.
 - Import cURL and copy requests as cURL.
 - Generate code for `fetch`, `axios`, and `Java HttpURLConnection`.
 

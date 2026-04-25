@@ -1,0 +1,233 @@
+{
+  "info": {
+    "_postman_id": "b1a7b8be-6f1e-4e13-86a2-democollection01",
+    "name": "Tessra Demo Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Demo requests for Tessra marketplace screenshots."
+  },
+  "item": [
+    {
+      "name": "01. Basics",
+      "item": [
+        {
+          "name": "GET Users List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?_limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "_limit",
+                  "value": "5"
+                }
+              ]
+            },
+            "description": "Simple GET request for JSON tree view screenshot."
+          }
+        },
+        {
+          "name": "GET Posts with Query",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/posts?userId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "GET request with query params."
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. JSON Body",
+      "item": [
+        {
+          "name": "POST Create Post",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Hello from Tessra\",\n  \"body\": \"This request is used for marketplace screenshots.\",\n  \"userId\": 1,\n  \"tags\": [\"demo\", \"marketplace\", \"tessra\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posts"
+              ]
+            },
+            "description": "POST request with JSON body."
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Auth & Headers",
+      "item": [
+        {
+          "name": "GET Echo with Bearer Auth",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Trace-Id",
+                "value": "trace-demo-001"
+              }
+            ],
+            "url": {
+              "raw": "{{echoUrl}}/get?source=tessra&mode=auth-demo",
+              "host": [
+                "{{echoUrl}}"
+              ],
+              "path": [
+                "get"
+              ],
+              "query": [
+                {
+                  "key": "source",
+                  "value": "tessra"
+                },
+                {
+                  "key": "mode",
+                  "value": "auth-demo"
+                }
+              ]
+            },
+            "description": "Echo request for auth/header demo."
+          }
+        },
+        {
+          "name": "POST Form URL Encoded",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "demo-user",
+                  "type": "text"
+                },
+                {
+                  "key": "role",
+                  "value": "tester",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{echoUrl}}/post",
+              "host": [
+                "{{echoUrl}}"
+              ],
+              "path": [
+                "post"
+              ]
+            },
+            "description": "URL encoded form body example."
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Preview & XML",
+      "item": [
+        {
+          "name": "GET Example HTML",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
+            "url": {
+              "raw": "{{htmlUrl}}",
+              "host": [
+                "{{htmlUrl}}"
+              ]
+            },
+            "description": "Use this for HTML preview screenshot."
+          }
+        },
+        {
+          "name": "GET XML Sample",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/xml"
+              }
+            ],
+            "url": {
+              "raw": "{{xmlUrl}}",
+              "host": [
+                "{{xmlUrl}}"
+              ]
+            },
+            "description": "Use this for XML formatting screenshot."
+          }
+        }
+      ]
+    }
+  ]
+}

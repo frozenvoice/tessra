@@ -57,6 +57,24 @@ describe('package localization files', () => {
     assert.strictEqual(en['command.changeRequestPanelTheme'], 'Tessra: Change Request Panel Theme');
     assert.strictEqual(en['command.changeWorkspaceProfile'], 'Tessra: Change Workspace Profile');
     assert.strictEqual(en['command.importCollection'], 'Tessra: Import Collection');
+    assert.strictEqual(en['command.importEnvironment'], 'Import Environment');
+  });
+
+  it('contributes Import Environment from the Environments title bar', () => {
+    const manifest = readPackageManifest();
+    const commands = manifest.contributes.commands as Array<{ command: string; title: string }>;
+    const titleMenus = manifest.contributes.menus['view/title'] as Array<{
+      command: string;
+      when: string;
+      group: string;
+    }>;
+
+    assert.ok(commands.some((command) => command.command === 'tessra.importEnvironment'));
+    assert.ok(titleMenus.some((item) =>
+      item.command === 'tessra.importEnvironment'
+      && item.when === 'view == tessra-environments'
+      && item.group === 'navigation'
+    ));
   });
 
   it('ships Korean and Japanese package localization files with Tessra command prefixes', () => {
@@ -69,7 +87,9 @@ describe('package localization files', () => {
     assert.match(ja['configuration.displayLanguage.description'], /Tessra/);
     assert.match(ko['command.changeDisplayLanguage'], /^Tessra:/);
     assert.match(ko['command.importCollection'], /^Tessra:/);
+    assert.strictEqual(ko['command.importEnvironment'], 'Import Environment');
     assert.match(ja['command.changeRequestPanelTheme'], /^Tessra:/);
+    assert.strictEqual(ja['command.importEnvironment'], 'Import Environment');
     assert.strictEqual(ko['view.collections'].length > 0, true);
     assert.strictEqual(ja['view.history'].length > 0, true);
   });

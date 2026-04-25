@@ -217,6 +217,11 @@
         "icon": "$(file-code)"
       },
       {
+        "command": "tessra.importEnvironment",
+        "title": "%command.importEnvironment%",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "tessra.exportPostmanCollection",
         "title": "%command.exportPostmanCollection%"
       },
@@ -317,6 +322,11 @@
         },
         {
           "command": "tessra.createEnvironment",
+          "when": "view == tessra-environments",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.importEnvironment",
           "when": "view == tessra-environments",
           "group": "navigation"
         },

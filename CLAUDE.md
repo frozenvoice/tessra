@@ -40,6 +40,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - 활성 환경 전환
 - `{{variable}}` 치환
 - URL / Headers / Params / Body / Auth / 파일 경로 치환
+- Environments 제목 영역의 `Import Environment`로 Postman Environment JSON 가져오기
 
 ### Collections / History
 - Collection / folder / request CRUD

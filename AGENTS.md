@@ -84,7 +84,7 @@ tessra/
 1. 멀티 탭 요청 편집기
 2. HTTP 요청 전송, 취소, 응답 표시
 3. Collections / folders / requests CRUD와 실행
-4. Environments CRUD와 `{{variable}}` 치환
+4. Environments CRUD와 `{{variable}}` 치환, Postman Environment JSON import 진입점
 5. History 저장, pin, filter, 자동 정리
 6. 인증: Basic, Bearer, API Key
 7. Body 타입: JSON, XML, form-urlencoded, form-data, binary, raw
