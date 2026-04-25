@@ -233,10 +233,13 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .tab:hover{opacity:.82;background:rgba(255,255,255,.04);transform:translateY(-1px)}
 .tab.active{opacity:1;background:rgba(0,122,204,.08);color:var(--vscode-foreground)}
 .tab.active::after{opacity:1;transform:scaleX(1)}
+.tab.active.collapsed{opacity:.8}
+.tab.active.collapsed::after{opacity:.35;transform:scaleX(.62)}
 
 
 .split{flex:1;overflow:hidden;display:flex;flex-direction:column}
 .req-area{flex:1 1 0;min-height:0;overflow:hidden;padding:2px 8px;display:flex;flex-direction:column}
+.req-area.is-collapsed{flex:0 0 auto}
 .request-editor-panel:not(.hidden){flex:1;min-height:0;display:flex;flex-direction:column;overflow-y:auto}
 .divider{height:10px;background:transparent;flex-shrink:0;cursor:row-resize;position:relative;z-index:10;border:none;display:flex;align-items:center;justify-content:center}
 .divider::before{content:"";position:absolute;left:10px;right:10px;top:50%;height:1px;transform:translateY(-50%);background:linear-gradient(90deg,rgba(255,255,255,.05),rgba(125,200,255,.2),rgba(255,255,255,.05))}
@@ -1651,31 +1654,60 @@ function releaseSplitDrag() {
   document.body.style.cursor = '';
   document.body.style.userSelect = '';
   splitDragState = null;
+  debouncePersist();
 }
 
-function getSplitPanelBounds(splitEl, dividerEl, progressEl) {
+function isRequestEditorCollapsed(tab) {
+  return tab?.requestEditorExpanded === false;
+}
+
+function getCollapsedRequestAreaHeight(splitEl) {
+  var tabsHeight = splitEl?.querySelector('.js-req-tabs')?.offsetHeight || 0;
+  return Math.max(44, tabsHeight + 8);
+}
+
+function normalizeRequestSplitHeight(value) {
+  var height = typeof value === 'number'
+    ? value
+    : Number.parseFloat(String(value || ''));
+  return Number.isFinite(height) && height > 0 ? height : null;
+}
+
+function getSplitPanelBounds(splitEl, dividerEl, progressEl, tab) {
   var chromeHeight = (dividerEl?.offsetHeight || 0) + (progressEl?.offsetHeight || 0);
   var panelSpace = Math.max(0, (splitEl?.offsetHeight || 0) - chromeHeight);
   var preferredMin = Math.max(120, Math.floor(panelSpace * 0.28));
   var minPanel = panelSpace >= preferredMin * 2
     ? preferredMin
     : Math.max(80, Math.floor(panelSpace / 2));
-  var minReq = Math.min(minPanel, Math.max(0, panelSpace - minPanel));
+  var requestMinPanel = isRequestEditorCollapsed(tab) ? getCollapsedRequestAreaHeight(splitEl) : minPanel;
+  var minReq = Math.min(requestMinPanel, Math.max(0, panelSpace - minPanel));
   var maxReq = Math.max(minReq, panelSpace - minPanel);
   return { minReq: minReq, maxReq: maxReq };
 }
 
-function applyManualRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, requestedHeight) {
+function applyManualRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, requestedHeight, tab, rememberManualHeight) {
   if (!reqArea || !splitEl) return;
   var nextHeight = typeof requestedHeight === 'number'
     ? requestedHeight
     : Number.parseFloat(String(requestedHeight || ''));
   if (!Number.isFinite(nextHeight)) return;
-  var bounds = getSplitPanelBounds(splitEl, dividerEl, progressEl);
+  var bounds = getSplitPanelBounds(splitEl, dividerEl, progressEl, tab);
   var clampedHeight = Math.min(bounds.maxReq, Math.max(bounds.minReq, nextHeight));
   reqArea.style.height = clampedHeight + 'px';
   reqArea.style.flex = 'none';
+  reqArea.classList.toggle('is-collapsed', isRequestEditorCollapsed(tab));
   reqArea.dataset.manualHeight = '1';
+  if (rememberManualHeight !== false && tab && !isRequestEditorCollapsed(tab)) {
+    tab.requestSplitHeightPx = clampedHeight;
+  }
+}
+
+function applyStoredRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, tab) {
+  var storedHeight = normalizeRequestSplitHeight(tab?.requestSplitHeightPx);
+  if (storedHeight === null) return false;
+  applyManualRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, storedHeight, tab, false);
+  return true;
 }
 
 function shouldPreferResponseLayout(tab) {
@@ -1691,7 +1723,20 @@ function clearAdaptiveRequestAreaHeight(reqArea) {
 
 function applyAdaptiveRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, tab) {
   if (!reqArea || !splitEl) return;
-  if (reqArea.dataset.manualHeight === '1') return;
+  if (reqArea.dataset.manualHeight === '1' && !isRequestEditorCollapsed(tab)) return;
+  reqArea.classList.toggle('is-collapsed', isRequestEditorCollapsed(tab));
+  if (!isRequestEditorCollapsed(tab) && applyStoredRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, tab)) {
+    return;
+  }
+  if (isRequestEditorCollapsed(tab)) {
+    var collapsedBounds = getSplitPanelBounds(splitEl, dividerEl, progressEl, tab);
+    var collapsedHeight = Math.min(collapsedBounds.maxReq, Math.max(collapsedBounds.minReq, getCollapsedRequestAreaHeight(splitEl)));
+    reqArea.style.height = collapsedHeight + 'px';
+    reqArea.style.flex = 'none';
+    reqArea.dataset.autoHeight = '1';
+    delete reqArea.dataset.manualHeight;
+    return;
+  }
   if (!shouldPreferResponseLayout(tab)) {
     clearAdaptiveRequestAreaHeight(reqArea);
     return;
@@ -1699,7 +1744,7 @@ function applyAdaptiveRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl,
   var chromeHeight = (dividerEl?.offsetHeight || 0) + (progressEl?.offsetHeight || 0);
   var panelSpace = Math.max(0, (splitEl?.offsetHeight || 0) - chromeHeight);
   if (!panelSpace) return;
-  var bounds = getSplitPanelBounds(splitEl, dividerEl, progressEl);
+  var bounds = getSplitPanelBounds(splitEl, dividerEl, progressEl, tab);
   var targetRatio = panelSpace < 420 ? 0.34 : panelSpace < 560 ? 0.38 : 0.42;
   var requestEditorTab = normalizeRequestEditorTab(tab.requestEditorTab);
   if (requestEditorTab === 'scripts' || requestEditorTab === 'body') {
@@ -1734,12 +1779,14 @@ document.addEventListener('mousemove', function(e) {
   }
   var dy = e.clientY - splitDragState.startY;
   var newH = splitDragState.startH + dy;
+  var activeTab = tabs.find(function(t) { return t.id === activeTabId; });
   applyManualRequestAreaHeight(
     splitDragState.reqArea,
     splitDragState.splitEl,
     splitDragState.divider,
     splitDragState.progressEl,
-    newH
+    newH,
+    activeTab
   );
 });
 
@@ -2751,17 +2798,19 @@ window.addEventListener('resize', function() {
   var splitEl = mainContent.querySelector('.split');
   var dividerEl = mainContent.querySelector('.divider');
   var progressEl = mainContent.querySelector('.bullet-progress');
-  if (reqArea.dataset.manualHeight === '1') {
+  var activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+  if (reqArea.dataset.manualHeight === '1' && !isRequestEditorCollapsed(activeTab)) {
     applyManualRequestAreaHeight(
       reqArea,
       splitEl,
       dividerEl,
       progressEl,
-      reqArea.offsetHeight || reqArea.style.height
+      reqArea.offsetHeight || reqArea.style.height,
+      activeTab,
+      false
     );
     return;
   }
-  var activeTab = tabs.find(function(t) { return t.id === activeTabId; });
   applyAdaptiveRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, activeTab);
 });
 
@@ -2867,7 +2916,7 @@ document.addEventListener('keydown', (e) => {
     const requestTabName = ['params', 'headers', 'body', 'auth', 'scripts', 'settings'][index];
     if (requestTabName) {
       e.preventDefault();
-      switchRequestEditorTabInContent(mainContent, requestTabName);
+      switchRequestEditorTabInContent(mainContent, requestTabName, { expand: true });
     }
   }
 });
@@ -3046,6 +3095,8 @@ function markDirty() {
     const tab = applyRequestSettings({
       id,
     requestEditorTab: normalizeRequestEditorTab(data?.requestEditorTab),
+    requestEditorExpanded: data?.requestEditorExpanded !== false,
+    requestSplitHeightPx: normalizeRequestSplitHeight(data?.requestSplitHeightPx),
     requestId: data?.requestId || null,
     name: autoName ? tr('webview.stage.newRequest') : (incomingName || tr('webview.stage.newRequest')),
     autoName: autoName,
@@ -3464,20 +3515,53 @@ function saveActiveTabState() {
   tab.requestEditorTab = normalizeRequestEditorTab(mc.querySelector('.js-req-tabs .tab.active')?.dataset.tab || tab.requestEditorTab);
 }
 
-function switchRequestEditorTabInContent(mc, tabName) {
+function refreshRequestEditorLayout() {
+  var schedule = typeof requestAnimationFrame === 'function'
+    ? requestAnimationFrame
+    : function(callback) { return setTimeout(callback, 0); };
+  schedule(function() {
+    if (typeof mainContent === 'undefined' || !mainContent || typeof applyAdaptiveRequestAreaHeight !== 'function') return;
+    var reqArea = mainContent.querySelector('.req-area');
+    if (!reqArea) return;
+    var splitEl = mainContent.querySelector('.split');
+    var dividerEl = mainContent.querySelector('.divider');
+    var progressEl = mainContent.querySelector('.bullet-progress');
+    var activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (reqArea.dataset.manualHeight === '1' && !isRequestEditorCollapsed(activeTab)) {
+      applyManualRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, reqArea.offsetHeight || reqArea.style.height, activeTab, false);
+      return;
+    }
+    applyAdaptiveRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, activeTab);
+  });
+}
+
+function switchRequestEditorTabInContent(mc, tabName, options) {
   if (!mc) return;
   var normalizedTabName = normalizeRequestEditorTab(tabName);
-  var tabsEl = mc.querySelectorAll('.js-req-tabs .tab');
-  tabsEl.forEach(function(x) { x.classList.toggle('active', x.dataset.tab === normalizedTabName); });
-  var panels = { params: '.js-params-panel', headers: '.js-headers-panel', body: '.js-body-panel', auth: '.js-auth-panel', scripts: '.js-scripts-panel', settings: '.js-settings-panel' };
-  Object.keys(panels).forEach(function(key) {
-    mc.querySelector(panels[key])?.classList.toggle('hidden', key !== normalizedTabName);
-  });
   var activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+  var previousTabName = normalizeRequestEditorTab(activeTab?.requestEditorTab);
+  var isSameTab = !!activeTab && previousTabName === normalizedTabName;
+  var shouldExpand = options?.expand === true
+    ? true
+    : (isSameTab ? activeTab.requestEditorExpanded === false : true);
   if (activeTab) {
     activeTab.requestEditorTab = normalizedTabName;
+    activeTab.requestEditorExpanded = shouldExpand;
   }
+  var tabsEl = mc.querySelectorAll('.js-req-tabs .tab');
+  tabsEl.forEach(function(x) {
+    var isActive = x.dataset.tab === normalizedTabName;
+    x.classList.toggle('active', isActive);
+    x.classList.toggle('collapsed', isActive && !shouldExpand);
+    x.setAttribute('aria-selected', String(isActive));
+    x.setAttribute('aria-expanded', String(isActive && shouldExpand));
+  });
+  var panels = { params: '.js-params-panel', headers: '.js-headers-panel', body: '.js-body-panel', auth: '.js-auth-panel', scripts: '.js-scripts-panel', settings: '.js-settings-panel' };
+  Object.keys(panels).forEach(function(key) {
+    mc.querySelector(panels[key])?.classList.toggle('hidden', !shouldExpand || key !== normalizedTabName);
+  });
   if (normalizedTabName === 'headers') refreshDefaultHeadersBanner(mc);
+  refreshRequestEditorLayout();
 }
 
 var linkedFocusTimer = null;
@@ -3620,7 +3704,7 @@ function switchRequestEditorTabAndRevealInContent(mc, meta) {
   if (!mc || !meta) return;
   var metaValue = String(meta);
   var tabName = metaValue.split(':')[0];
-  switchRequestEditorTabInContent(mc, tabName);
+  switchRequestEditorTabInContent(mc, tabName, { expand: true });
   revealLinkedTargetInContent(mc, metaValue);
 }
 
@@ -4453,12 +4537,19 @@ function renderContent() {
 
   const stage = getRequestStageInfo(tab);
   const activeRequestEditorTab = normalizeRequestEditorTab(tab.requestEditorTab);
-  const showParamsEditor = activeRequestEditorTab === 'params';
-  const showHeadersEditor = activeRequestEditorTab === 'headers';
-  const showBodyEditor = activeRequestEditorTab === 'body';
-  const showAuthEditor = activeRequestEditorTab === 'auth';
-  const showScriptsEditor = activeRequestEditorTab === 'scripts';
-  const showSettingsEditor = activeRequestEditorTab === 'settings';
+  const requestEditorExpanded = tab.requestEditorExpanded !== false;
+  const isParamsTab = activeRequestEditorTab === 'params';
+  const isHeadersTab = activeRequestEditorTab === 'headers';
+  const isBodyTab = activeRequestEditorTab === 'body';
+  const isAuthTab = activeRequestEditorTab === 'auth';
+  const isScriptsTab = activeRequestEditorTab === 'scripts';
+  const isSettingsTab = activeRequestEditorTab === 'settings';
+  const showParamsEditor = requestEditorExpanded && isParamsTab;
+  const showHeadersEditor = requestEditorExpanded && isHeadersTab;
+  const showBodyEditor = requestEditorExpanded && isBodyTab;
+  const showAuthEditor = requestEditorExpanded && isAuthTab;
+  const showScriptsEditor = requestEditorExpanded && isScriptsTab;
+  const showSettingsEditor = requestEditorExpanded && isSettingsTab;
   const envLine =
     '<div class="request-topline">' +
       '<div class="request-stage stage-' + stage.tone + '"><span class="stage-dot"></span>' + escapeHtml(stage.label) + '</div>' +
@@ -4805,13 +4896,13 @@ function renderContent() {
     requestInfoRowHtml +
     '<div class="split">' +
       '<div class="req-area">' +
-        '<div class="tabs js-req-tabs">' +
-          '<div class="tab' + (showParamsEditor ? ' active' : '') + '" data-tab="params">' + escapeHtml(tr('webview.params')) + '</div>' +
-          '<div class="tab' + (showHeadersEditor ? ' active' : '') + '" data-tab="headers">' + escapeHtml(tr('webview.headers')) + '</div>' +
-          '<div class="tab' + (showBodyEditor ? ' active' : '') + '" data-tab="body">' + escapeHtml(tr('webview.body')) + '</div>' +
-          '<div class="tab' + (showAuthEditor ? ' active' : '') + '" data-tab="auth">' + escapeHtml(tr('webview.auth')) + '</div>' +
-          '<div class="tab' + (showScriptsEditor ? ' active' : '') + '" data-tab="scripts">' + escapeHtml(tr('webview.scripts')) + '</div>' +
-          '<div class="tab' + (showSettingsEditor ? ' active' : '') + '" data-tab="settings">' + escapeHtml(tr('webview.settings')) + '</div>' +
+        '<div class="tabs js-req-tabs" role="tablist">' +
+          '<div class="tab' + (isParamsTab ? ' active' : '') + (isParamsTab && !requestEditorExpanded ? ' collapsed' : '') + '" data-tab="params" role="tab" tabindex="0" aria-selected="' + (isParamsTab ? 'true' : 'false') + '" aria-expanded="' + (showParamsEditor ? 'true' : 'false') + '">' + escapeHtml(tr('webview.params')) + '</div>' +
+          '<div class="tab' + (isHeadersTab ? ' active' : '') + (isHeadersTab && !requestEditorExpanded ? ' collapsed' : '') + '" data-tab="headers" role="tab" tabindex="0" aria-selected="' + (isHeadersTab ? 'true' : 'false') + '" aria-expanded="' + (showHeadersEditor ? 'true' : 'false') + '">' + escapeHtml(tr('webview.headers')) + '</div>' +
+          '<div class="tab' + (isBodyTab ? ' active' : '') + (isBodyTab && !requestEditorExpanded ? ' collapsed' : '') + '" data-tab="body" role="tab" tabindex="0" aria-selected="' + (isBodyTab ? 'true' : 'false') + '" aria-expanded="' + (showBodyEditor ? 'true' : 'false') + '">' + escapeHtml(tr('webview.body')) + '</div>' +
+          '<div class="tab' + (isAuthTab ? ' active' : '') + (isAuthTab && !requestEditorExpanded ? ' collapsed' : '') + '" data-tab="auth" role="tab" tabindex="0" aria-selected="' + (isAuthTab ? 'true' : 'false') + '" aria-expanded="' + (showAuthEditor ? 'true' : 'false') + '">' + escapeHtml(tr('webview.auth')) + '</div>' +
+          '<div class="tab' + (isScriptsTab ? ' active' : '') + (isScriptsTab && !requestEditorExpanded ? ' collapsed' : '') + '" data-tab="scripts" role="tab" tabindex="0" aria-selected="' + (isScriptsTab ? 'true' : 'false') + '" aria-expanded="' + (showScriptsEditor ? 'true' : 'false') + '">' + escapeHtml(tr('webview.scripts')) + '</div>' +
+          '<div class="tab' + (isSettingsTab ? ' active' : '') + (isSettingsTab && !requestEditorExpanded ? ' collapsed' : '') + '" data-tab="settings" role="tab" tabindex="0" aria-selected="' + (isSettingsTab ? 'true' : 'false') + '" aria-expanded="' + (showSettingsEditor ? 'true' : 'false') + '">' + escapeHtml(tr('webview.settings')) + '</div>' +
         '</div>' +
         '<div class="js-params-panel request-editor-panel kv-section' + (showParamsEditor ? '' : ' hidden') + '">' +
           '<div class="js-param-rows">' + kvRowsHtml(tab.params) + '</div>' +
@@ -4957,7 +5048,7 @@ function renderContent() {
   }
 
   
-  if (savedHeight) {
+  if (savedHeight && !isRequestEditorCollapsed(tab)) {
     var newReqArea = mainContent.querySelector('.req-area');
     if (newReqArea) {
       applyManualRequestAreaHeight(
@@ -4965,7 +5056,9 @@ function renderContent() {
         mainContent.querySelector('.split'),
         mainContent.querySelector('.divider'),
         mainContent.querySelector('.bullet-progress'),
-        savedHeight
+        savedHeight,
+        tab,
+        false
       );
     }
   } else {
@@ -5368,6 +5461,12 @@ function bindContentEvents() {
   mc.querySelector('.js-req-tabs')?.addEventListener('click', (e) => {
     const t = e.target.closest('.tab');
     if (!t) return;
+    switchRequestEditorTabInContent(mc, t.dataset.tab);
+  });
+  mc.querySelector('.js-req-tabs')?.addEventListener('keydown', (e) => {
+    const t = e.target.closest('.tab');
+    if (!t || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
     switchRequestEditorTabInContent(mc, t.dataset.tab);
   });
 
@@ -6165,11 +6264,11 @@ function refreshEnvironmentEditorLayout() {
     var splitEl = mainContent.querySelector('.split');
     var dividerEl = mainContent.querySelector('.divider');
     var progressEl = mainContent.querySelector('.bullet-progress');
-    if (reqArea.dataset.manualHeight === '1') {
-      applyManualRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, reqArea.offsetHeight || reqArea.style.height);
+    var activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (reqArea.dataset.manualHeight === '1' && !isRequestEditorCollapsed(activeTab)) {
+      applyManualRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, reqArea.offsetHeight || reqArea.style.height, activeTab, false);
       return;
     }
-    var activeTab = tabs.find(function(t) { return t.id === activeTabId; });
     applyAdaptiveRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, activeTab);
   });
 }
@@ -7937,7 +8036,7 @@ function handleVariableAutocompleteKeydown(event) {
 function persistTabState() {
     saveActiveTabState();
     var tabData = tabs.map(function(t) {
-    return Object.assign({ name: t.name, autoName: !!t.autoName, requestType: normalizeRequestType(t.requestType, t.url), requestEditorTab: normalizeRequestEditorTab(t.requestEditorTab), method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, scriptHelpCollapsed: t.scriptHelpCollapsed === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
+    return Object.assign({ name: t.name, autoName: !!t.autoName, requestType: normalizeRequestType(t.requestType, t.url), requestEditorTab: normalizeRequestEditorTab(t.requestEditorTab), requestSplitHeightPx: normalizeRequestSplitHeight(t.requestSplitHeightPx) || undefined, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, scriptHelpCollapsed: t.scriptHelpCollapsed === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
     });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
   vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx), compareSettings: cloneCompareSettings(compareSettings) });

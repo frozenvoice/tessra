@@ -9,11 +9,12 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - 사용자가 직접 보내는 API 요청 외의 네트워크 호출 없음
 - 모든 데이터는 로컬 JSON 파일로 저장
 
-## 현재 구현 범위 (2026-04-24 기준)
+## 현재 구현 범위 (2026-04-26 기준)
 
 ### 요청 작성 / 전송
 - `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
 - 멀티 탭 요청 편집기
+- 활성 요청 편집 탭 재클릭으로 해당 본문 접기 / 다시 펼치기
 - URL 입력창 `Enter` 전송
 - `Ctrl+Enter` / `Cmd+Enter` 전송
 - 진행 중 요청 취소

@@ -14,6 +14,7 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 - Create, switch, close, pin, duplicate, and reorder enough request tabs to force horizontal tab overflow.
 - Confirm keyboard flows: `Ctrl+T`, `Ctrl+W`, `Ctrl+Enter`, `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+F`, `Alt+1..6`, and `Alt+Shift+1..5`.
 - Confirm the add-tab control, request tabs, close buttons, response action menu, and key row remove buttons are keyboard reachable and visibly focused.
+- Confirm request editor tabs stay tab-based: re-click the active Params / Headers / Body / Auth / Scripts / Settings tab to collapse its body, re-click to expand it, switch to another tab to show only that tab's body, and verify a manually dragged request/response divider position is restored after collapse/expand.
 - Send HTTP requests with `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, and `OPTIONS`.
 - Cancel a slow request and confirm the active tab and history state remain consistent.
 - Verify request settings: timeout, redirects, TLS validation override, max response size, retry count, retry delay, stop after headers, save to history, skip default headers, and disable scripts.

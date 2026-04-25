@@ -304,11 +304,14 @@ class FakeClassList {
 class FakeElement {
   public readonly classList: FakeClassList;
   public readonly dataset: Record<string, string> = {};
+  public readonly attributes: Record<string, string> = {};
+  public readonly style: Record<string, string> = {};
   public readonly children: FakeElement[] = [];
   public parent: FakeElement | null = null;
   public focusCalls: unknown[] = [];
   public scrollCalls: unknown[] = [];
   public isConnected = true;
+  public offsetHeight = 0;
   public tabindex?: string;
 
   constructor(public readonly tagName = 'div', initialClasses: string[] = []) {
@@ -336,6 +339,9 @@ class FakeElement {
           || (typeof node.tabindex === 'string' && node.tabindex !== '-1')
       );
     }
+    if (selector.startsWith('.')) {
+      return this.collect((node) => node.matches(selector));
+    }
     return [];
   }
 
@@ -354,6 +360,10 @@ class FakeElement {
 
   focus(options?: unknown) {
     this.focusCalls.push(options);
+  }
+
+  setAttribute(name: string, value: string) {
+    this.attributes[name] = value;
   }
 
   scrollIntoView(options?: unknown) {
@@ -486,7 +496,11 @@ function createLinkedFocusHarness() {
 
   return {
     mc,
+    paramsPanel: panels.params,
+    headersPanel: panels.headers,
     settingsPanel: panels.settings,
+    paramsTabButton: tabButtons.find((button) => button.dataset.tab === 'params')!,
+    headersTabButton: tabButtons.find((button) => button.dataset.tab === 'headers')!,
     settingsTabButton: tabButtons.find((button) => button.dataset.tab === 'settings')!,
     saveHistoryToggle,
     saveHistoryInput,
@@ -710,13 +724,91 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /const REQUEST_EDITOR_TABS = \['params', 'headers', 'body', 'auth', 'scripts', 'settings'\];/);
     assert.match(script, /function normalizeRequestEditorTab\(value\)/);
     assert.match(script, /requestEditorTab: normalizeRequestEditorTab\(data\?\.requestEditorTab\),/);
+    assert.match(script, /requestEditorExpanded: data\?\.requestEditorExpanded !== false,/);
+    assert.match(script, /requestSplitHeightPx: normalizeRequestSplitHeight\(data\?\.requestSplitHeightPx\),/);
     assert.match(script, /requestEditorTab: normalizeRequestEditorTab\(mc\.querySelector\('\.js-req-tabs \.tab\.active'\)\?\.dataset\.tab \|\| tab\.requestEditorTab\),/);
     assert.match(script, /tab\.requestEditorTab = normalizeRequestEditorTab\(mc\.querySelector\('\.js-req-tabs \.tab\.active'\)\?\.dataset\.tab \|\| tab\.requestEditorTab\);/);
     assert.match(script, /activeTab\.requestEditorTab = normalizedTabName;/);
+    assert.match(script, /activeTab\.requestEditorExpanded = shouldExpand;/);
     assert.match(script, /const activeRequestEditorTab = normalizeRequestEditorTab\(tab\.requestEditorTab\);/);
+    assert.match(script, /const requestEditorExpanded = tab\.requestEditorExpanded !== false;/);
     assert.match(script, /requestEditorTab: normalizeRequestEditorTab\(t\.requestEditorTab\),/);
-    assert.match(script, /<div class="tab' \+ \(showScriptsEditor \? ' active' : ''\) \+ '" data-tab="scripts">/);
+    assert.match(script, /requestSplitHeightPx: normalizeRequestSplitHeight\(t\.requestSplitHeightPx\) \|\| undefined,/);
+    assert.match(script, /<div class="tab' \+ \(isScriptsTab \? ' active' : ''\) \+ \(isScriptsTab && !requestEditorExpanded \? ' collapsed' : ''\) \+ '" data-tab="scripts" role="tab" tabindex="0"/);
     assert.match(script, /<div class="js-scripts-panel request-editor-panel body-section' \+ \(showScriptsEditor \? '' : ' hidden'\) \+ '">/);
+  });
+
+  it('toggles the active request editor tab body without adding accordion sections', () => {
+    assert.doesNotMatch(script, /renderRequestSection|js-section-toggle|request-section/);
+    assert.match(script, /var shouldExpand = options\?\.expand === true/);
+    assert.match(script, /x\.classList\.toggle\('collapsed', isActive && !shouldExpand\);/);
+    assert.match(script, /mc\.querySelector\(panels\[key\]\)\?\.classList\.toggle\('hidden', !shouldExpand \|\| key !== normalizedTabName\);/);
+    assert.match(script, /mc\.querySelector\('\.js-req-tabs'\)\?\.addEventListener\('keydown'/);
+
+    const toggleScript = extractScriptSegment(
+      script,
+      'function refreshRequestEditorLayout',
+      'var linkedFocusTimer'
+    );
+    const animation = createAnimationHarness();
+    const harness = createLinkedFocusHarness();
+    harness.paramsPanel.classList.remove('hidden');
+    const toggleContext: Record<string, unknown> = {
+      tabs: [{ id: 'tab_1', requestEditorTab: 'params', requestEditorExpanded: true }],
+      activeTabId: 'tab_1',
+      normalizeRequestEditorTab: (value: string) => {
+        return ['params', 'headers', 'body', 'auth', 'scripts', 'settings'].includes(String(value || ''))
+          ? String(value)
+          : 'params';
+      },
+      requestAnimationFrame: animation.requestAnimationFrame,
+      setTimeout: animation.setTimeout,
+      refreshDefaultHeadersBanner: () => undefined,
+    };
+
+    vm.createContext(toggleContext);
+    vm.runInContext(toggleScript, toggleContext);
+
+    const switchRequestEditorTabInContent = toggleContext.switchRequestEditorTabInContent as (
+      mc: FakeRootElement,
+      tabName: string,
+      options?: { expand?: boolean }
+    ) => void;
+    switchRequestEditorTabInContent(harness.mc, 'params');
+
+    assert.strictEqual(
+      (toggleContext.tabs as Array<{ requestEditorExpanded: boolean }>)[0].requestEditorExpanded,
+      false,
+      'same active tab click should collapse its panel'
+    );
+    assert.ok(harness.paramsPanel.classList.contains('hidden'), 'active panel should be hidden when collapsed');
+    assert.ok(harness.paramsTabButton.classList.contains('active'), 'active tab should stay highlighted while collapsed');
+    assert.ok(harness.paramsTabButton.classList.contains('collapsed'), 'collapsed active tab should get a subtle state class');
+    assert.strictEqual(harness.paramsTabButton.attributes['aria-expanded'], 'false');
+
+    switchRequestEditorTabInContent(harness.mc, 'params');
+    assert.strictEqual(
+      (toggleContext.tabs as Array<{ requestEditorExpanded: boolean }>)[0].requestEditorExpanded,
+      true,
+      'same active tab click should expand the panel again'
+    );
+    assert.ok(!harness.paramsPanel.classList.contains('hidden'), 'active panel should be shown again');
+    assert.strictEqual(harness.paramsTabButton.attributes['aria-expanded'], 'true');
+
+    switchRequestEditorTabInContent(harness.mc, 'headers');
+    assert.strictEqual(
+      (toggleContext.tabs as Array<{ requestEditorTab: string; requestEditorExpanded: boolean }>)[0].requestEditorTab,
+      'headers',
+      'different tab click should switch the active request editor tab'
+    );
+    assert.strictEqual(
+      (toggleContext.tabs as Array<{ requestEditorExpanded: boolean }>)[0].requestEditorExpanded,
+      true,
+      'different tab click should expand the newly active panel'
+    );
+    assert.ok(harness.paramsPanel.classList.contains('hidden'), 'previous panel should be hidden');
+    assert.ok(!harness.headersPanel.classList.contains('hidden'), 'new panel should be shown');
+    assert.ok(harness.headersTabButton.classList.contains('active'), 'new tab should be active');
   });
 
   it('localizes dirty-close prompts and file picker labels', () => {
@@ -855,24 +947,96 @@ describe('RequestPanel Webview', () => {
   });
 
   it('keeps response panes scrollable and preserves an adaptive response-first split', () => {
-    assert.match(script, /function getSplitPanelBounds\(splitEl, dividerEl, progressEl\)/);
-    assert.match(script, /function applyManualRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, requestedHeight\)/);
+    assert.match(script, /function getSplitPanelBounds\(splitEl, dividerEl, progressEl, tab\)/);
+    assert.match(script, /function applyManualRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, requestedHeight, tab, rememberManualHeight\)/);
     assert.match(script, /function shouldPreferResponseLayout\(tab\)/);
     assert.match(script, /function applyAdaptiveRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, tab\)/);
+    assert.match(script, /function getCollapsedRequestAreaHeight\(splitEl\)/);
+    assert.match(script, /function applyStoredRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, tab\)/);
+    assert.match(script, /tab\.requestSplitHeightPx = clampedHeight;/);
+    assert.match(script, /debouncePersist\(\);/);
+    assert.match(script, /requestMinPanel = isRequestEditorCollapsed\(tab\) \? getCollapsedRequestAreaHeight\(splitEl\) : minPanel/);
+    assert.match(script, /reqArea\.dataset\.manualHeight === '1' && !isRequestEditorCollapsed\(activeTab\)/);
     assert.match(script, /var targetRatio = panelSpace < 420 \? 0\.34 : panelSpace < 560 \? 0\.38 : 0\.42;/);
     assert.match(script, /window\.addEventListener\('resize', function\(\) \{/);
     assert.match(script, /var splitEl = mainContent\.querySelector\('\.split'\);/);
     assert.match(script, /applyManualRequestAreaHeight\(\s*reqArea,\s*splitEl,\s*dividerEl,\s*progressEl,/);
     assert.match(script, /applyManualRequestAreaHeight\(\s*splitDragState\.reqArea,\s*splitDragState\.splitEl,/);
-    assert.match(script, /if \(reqArea\.dataset\.manualHeight === '1'\) \{/);
     assert.match(script, /var activeTab = tabs\.find\(function\(t\) \{ return t\.id === activeTabId; \}\);/);
     assert.match(script, /applyAdaptiveRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, activeTab\);/);
-    assert.match(script, /if \(savedHeight\) \{[\s\S]*?\} else \{[\s\S]*?applyAdaptiveRequestAreaHeight\(\s*adaptiveReqArea,\s*mainContent\.querySelector\('\.split'\),/);
+    assert.match(script, /if \(savedHeight && !isRequestEditorCollapsed\(tab\)\) \{[\s\S]*?\} else \{[\s\S]*?applyAdaptiveRequestAreaHeight\(\s*adaptiveReqArea,\s*mainContent\.querySelector\('\.split'\),/);
     assert.match(htmlSource, /\.res-area\{flex:1 1 0;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:0 10px\}/);
     assert.match(htmlSource, /\.res-empty-shell\{flex:1;min-height:0;overflow:auto;padding:8px 0 12px\}/);
     assert.match(htmlSource, /\.var-usage\{display:flex;align-items:center;gap:6px;padding:0;flex-wrap:wrap\}/);
     assert.match(htmlSource, /\.json-body\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;border:1px solid rgba\(255,255,255,.08\);font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;white-space:pre-wrap;word-break:break-word;overflow:auto;flex:1;min-height:0;line-height:1\.3;/);
     assert.match(htmlSource, /\.json-tree\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;border:1px solid rgba\(255,255,255,.08\);font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;overflow:auto;flex:1;min-height:0;line-height:1\.3;user-select:text;/);
+  });
+
+  it('allows a much smaller request split minimum while the active editor tab is collapsed', () => {
+    const splitScript = extractScriptSegment(
+      script,
+      'function isRequestEditorCollapsed',
+      'document.addEventListener'
+    );
+    const splitContext: Record<string, unknown> = {};
+    vm.createContext(splitContext);
+    vm.runInContext(splitScript, splitContext);
+
+    const getSplitPanelBounds = splitContext.getSplitPanelBounds as (
+      splitEl: FakeElement,
+      dividerEl: FakeElement,
+      progressEl: FakeElement,
+      tab?: { requestEditorExpanded?: boolean }
+    ) => { minReq: number; maxReq: number };
+    const applyManualRequestAreaHeight = splitContext.applyManualRequestAreaHeight as (
+      reqArea: FakeElement,
+      splitEl: FakeElement,
+      dividerEl: FakeElement,
+      progressEl: FakeElement,
+      requestedHeight: number,
+      tab?: { requestEditorExpanded?: boolean; requestSplitHeightPx?: number },
+      rememberManualHeight?: boolean
+    ) => void;
+    const applyAdaptiveRequestAreaHeight = splitContext.applyAdaptiveRequestAreaHeight as (
+      reqArea: FakeElement,
+      splitEl: FakeElement,
+      dividerEl: FakeElement,
+      progressEl: FakeElement,
+      tab?: { response?: unknown; requestEditorExpanded?: boolean; requestSplitHeightPx?: number }
+    ) => void;
+
+    const splitEl = new FakeElement('div', ['split']);
+    splitEl.offsetHeight = 600;
+    const reqArea = splitEl.append(new FakeElement('div', ['req-area']));
+    const tabsEl = reqArea.append(new FakeElement('div', ['js-req-tabs']));
+    tabsEl.offsetHeight = 28;
+    const dividerEl = new FakeElement('div', ['divider']);
+    dividerEl.offsetHeight = 10;
+    const progressEl = new FakeElement('div', ['bullet-progress']);
+    progressEl.offsetHeight = 0;
+
+    const expandedBounds = getSplitPanelBounds(splitEl, dividerEl, progressEl, { requestEditorExpanded: true });
+    const collapsedBounds = getSplitPanelBounds(splitEl, dividerEl, progressEl, { requestEditorExpanded: false });
+
+    assert.ok(expandedBounds.minReq >= 120, 'expanded request pane keeps the regular editing minimum');
+    assert.ok(collapsedBounds.minReq <= 50, 'collapsed request pane minimum should be close to the tab bar height');
+    assert.ok(collapsedBounds.maxReq === expandedBounds.maxReq, 'response pane minimum should stay protected');
+
+    const tab = { response: {}, requestEditorExpanded: true, requestSplitHeightPx: undefined as number | undefined };
+    applyManualRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, 260, tab);
+    assert.strictEqual(tab.requestSplitHeightPx, 260, 'manual divider drag should store the expanded split height');
+    assert.strictEqual(reqArea.style.height, '260px');
+
+    tab.requestEditorExpanded = false;
+    applyAdaptiveRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, tab);
+    assert.strictEqual(tab.requestSplitHeightPx, 260, 'collapse should not discard the stored expanded split height');
+    assert.strictEqual(reqArea.style.height, '44px', 'collapsed request pane should shrink to the tab row height');
+    assert.strictEqual(reqArea.dataset.manualHeight, undefined);
+
+    tab.requestEditorExpanded = true;
+    applyAdaptiveRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, tab);
+    assert.strictEqual(reqArea.style.height, '260px', 'expand should restore the stored manual split height');
+    assert.strictEqual(tab.requestSplitHeightPx, 260, 'restoring should not rewrite the saved manual preference');
   });
 
   it('normalizes and persists request settings in tab state and save actions', () => {
@@ -1049,7 +1213,7 @@ describe('RequestPanel Webview', () => {
   it('reveals linked settings targets after the target tab is shown and focuses the mapped control', () => {
     const linkedFocusScript = extractScriptSegment(
       script,
-      'function switchRequestEditorTabInContent',
+      'function refreshRequestEditorLayout',
       'function switchResponseTabInContent'
     );
     const animation = createAnimationHarness();

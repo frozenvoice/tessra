@@ -25,6 +25,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 ### 요청 작성
 - `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
 - 멀티 탭 요청 편집기와 탭 고정
+- 활성 요청 편집 탭을 다시 클릭해 탭 바는 유지한 채 본문을 접거나 다시 펼치기
 - URL 입력창에서 `Enter`로 바로 전송
 - `Ctrl+Enter` / macOS에서는 `Cmd+Enter` 전송
 - 마지막 정상 응답을 유지한 채 진행 중 요청 취소

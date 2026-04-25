@@ -25,6 +25,7 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 ### Request editing
 - HTTP methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
 - Multi-tab request editor with pinned tabs
+- Re-click the active request editor tab to collapse or restore its body while keeping the tab bar visible
 - `Enter` in the URL field sends the request
 - `Ctrl+Enter` / `Cmd+Enter` also sends the request
 - Cancel in-flight requests without discarding the last good response

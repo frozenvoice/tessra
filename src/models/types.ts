@@ -80,6 +80,7 @@ export interface TabState {
   autoName?: boolean;
   requestType?: 'http' | 'websocket';
   requestEditorTab?: 'params' | 'headers' | 'body' | 'auth' | 'scripts' | 'settings';
+  requestSplitHeightPx?: number;
   method: HttpMethod;
   url: string;
   headers: KeyValue[];
