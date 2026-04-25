@@ -152,6 +152,7 @@ describe('LocalizationService source', () => {
   it('keeps preflight, masking, and runner status copy translated for every supported language', () => {
     const keys = [
       'webview.summaryEnvironment',
+      'webview.environmentNone',
       'webview.summaryProfile',
       'webview.profileDefaultTooltip',
       'webview.profileCustomTooltip',

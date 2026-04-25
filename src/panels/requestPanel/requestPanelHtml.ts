@@ -31,14 +31,14 @@ export function getRequestPanelHtml(input: RequestPanelHtmlInput): string {
 <meta http-equiv="Content-Security-Policy" content="${csp}"/>
 <title>Tessra</title>
 <style nonce="${nonce}">
-/* highlight.js vs2015 ?뚮쭏 (?몃씪?? */
+
 pre code.hljs{display:block;overflow-x:auto;padding:0}code.hljs{padding:0}.hljs{background:transparent;color:#dcdcdc}.hljs-keyword,.hljs-literal,.hljs-name,.hljs-symbol{color:#569cd6}.hljs-link{color:#569cd6;text-decoration:underline}.hljs-built_in,.hljs-type{color:#4ec9b0}.hljs-class,.hljs-number{color:#b8d7a3}.hljs-meta .hljs-string,.hljs-string{color:#d69d85}.hljs-regexp,.hljs-template-tag{color:#9a5334}.hljs-formula,.hljs-function,.hljs-params,.hljs-subst,.hljs-title{color:#dcdcdc}.hljs-comment,.hljs-quote{color:#57a64a;font-style:italic}.hljs-doctag{color:#608b4e}.hljs-meta,.hljs-meta .hljs-keyword,.hljs-tag{color:#9b9b9b}.hljs-template-variable,.hljs-variable{color:#bd63c5}.hljs-attr,.hljs-attribute{color:#9cdcfe}.hljs-section{color:gold}.hljs-emphasis{font-style:italic}.hljs-strong{font-weight:700}.hljs-bullet,.hljs-selector-attr,.hljs-selector-class,.hljs-selector-id,.hljs-selector-pseudo,.hljs-selector-tag{color:#d7ba7d}.hljs-addition{background-color:#144212;display:inline-block;width:100%}.hljs-deletion{background-color:#600;display:inline-block;width:100%}
 </style>
 <style nonce="${nonce}">
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);color:var(--vscode-foreground);background:var(--vscode-editor-background);display:flex;flex-direction:column;height:100vh;overflow:hidden}
 
-/* === ?붿껌 ??諛?=== */
+
 .tab-bar{display:flex;background:var(--vscode-editorGroupHeader-tabsBackground,var(--vscode-editor-background));border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;overflow-x:auto;scrollbar-width:thin}
 .tab-bar::-webkit-scrollbar{height:3px}
 .req-tab{position:relative;display:flex;align-items:center;gap:5px;padding:3px 10px;font-size:13px;cursor:pointer;border-right:1px solid var(--vscode-panel-border,#333);white-space:nowrap;opacity:.68;min-width:0;flex-shrink:0;user-select:none;transition:background .18s,opacity .18s,transform .18s,box-shadow .18s;border-bottom:3px solid transparent;border-radius:6px 6px 0 0;margin-top:2px;background:rgba(255,255,255,.015)}
@@ -99,10 +99,10 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .tab-ctx-menu .ctx-item.disabled{opacity:.4;cursor:default;pointer-events:none}
 .tab-ctx-menu .ctx-sep{height:1px;margin:4px 8px;background:var(--vscode-menu-separatorBackground,#454545)}
 
-/* === 硫붿씤 而⑦뀗痢?=== */
+
 .main-content{flex:1;overflow:hidden;display:flex;flex-direction:column}
 
-/* URL 諛?*/
+
 .request-topline{display:flex;align-items:flex-start;gap:6px;padding:4px 10px 0;flex-shrink:0;flex-wrap:wrap}
 .request-stage{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font-size:12px;font-weight:700;letter-spacing:.03em;background:rgba(255,255,255,.03)}
 .request-stage .stage-dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 10px currentColor}
@@ -200,7 +200,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btn-s{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
 .btn-s:hover{background:var(--vscode-button-secondaryHoverBackground)}
-/* Send 踰꾪듉 */
+
 .btn-send{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:8px;padding:4px 14px;background:linear-gradient(135deg,#0078d4,#1683eb);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s,filter .15s;box-shadow:0 12px 28px rgba(0,120,212,.22);min-height:32px;flex-shrink:0}
 .btn-send:hover{background:linear-gradient(135deg,#1683eb,#2697ff);transform:translateY(-1px);box-shadow:0 18px 36px rgba(0,120,212,.28)}
 .btn-send svg{flex-shrink:0}
@@ -221,12 +221,12 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .btn-send.state-canceled:hover{background:linear-gradient(135deg,#9f6d1e,#d59a37)}
 .btn-send.state-ready .btn-send-secondary{opacity:.95}
 .btn-keyhint{padding:2px 5px;border-radius:999px;background:rgba(255,255,255,.18);font-size:10px;line-height:1;letter-spacing:.02em}
-/* Stop 踰꾪듉 (?꾩넚 以? */
+
 .btn-stop{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;background:linear-gradient(135deg,#c42b1c,#e04535);color:#fff;border:none;border-radius:13px;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 12px 26px rgba(224,69,53,.18);min-height:40px;flex-shrink:0}
 .btn-stop:hover{background:linear-gradient(135deg,#d53b2c,#f05f4c);transform:translateY(-1px);box-shadow:0 18px 34px rgba(224,69,53,.24)}
 .btn-stop .stop-icon{display:inline-block;width:10px;height:10px;background:#fff;border-radius:1px}
 
-/* ?대? ??*/
+
 .tabs{display:flex;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;padding:0 10px;gap:4px;flex-wrap:wrap}
 .tab{position:relative;padding:4px 10px;cursor:pointer;border-bottom:none;opacity:.54;font-size:12px;user-select:none;text-transform:uppercase;letter-spacing:.08em;transition:opacity .15s,background .15s,color .15s,transform .15s,box-shadow .15s;border-radius:6px 6px 0 0}
 .tab::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:2px;border-radius:999px;background:linear-gradient(90deg,#4ea6ff,#78dbc6);opacity:0;transform:scaleX(.56);transform-origin:center;transition:transform .18s ease,opacity .18s ease}
@@ -234,7 +234,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .tab.active{opacity:1;background:rgba(0,122,204,.08);color:var(--vscode-foreground)}
 .tab.active::after{opacity:1;transform:scaleX(1)}
 
-/* ?⑤꼸 ?덉씠?꾩썐 */
+
 .split{flex:1;overflow:hidden;display:flex;flex-direction:column}
 .req-area{flex:1 1 0;min-height:0;overflow:hidden;padding:2px 8px;display:flex;flex-direction:column}
 .request-editor-panel:not(.hidden){flex:1;min-height:0;display:flex;flex-direction:column;overflow-y:auto}
@@ -290,8 +290,10 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .kv-row input[type="text"],.kv-row input[type="password"]{flex:1;padding:3px 5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
 .kv-row .rm{background:transparent;border:none;color:var(--vscode-errorForeground,#f44);cursor:pointer;font-size:13px;padding:0 3px;line-height:1}
 .add-btn{background:transparent;border:none;color:var(--vscode-textLink-foreground,#3794ff);padding:4px 2px;border-radius:4px;cursor:pointer;font-size:13px;opacity:.7;margin-top:4px}
+.add-btn:disabled{opacity:.4;cursor:not-allowed;text-decoration:none}
 .auto-badge{font-size:13px;opacity:.4;white-space:nowrap;margin-left:2px;user-select:none}
 .add-btn:hover{opacity:1;text-decoration:underline}
+.add-btn:disabled:hover{opacity:.4;text-decoration:none}
 
 /* Body */
 .body-type-select{padding:3px 5px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:2px;font-size:13px;margin-bottom:4px}
@@ -306,7 +308,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .auth-row{display:flex;gap:4px;align-items:center}
 .auth-row label{font-size:13px;opacity:.6;min-width:55px}
 
-/* Settings ?⑤꼸 */
+
 .settings-section{padding:10px 4px}
 .settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 .settings-card{position:relative;overflow:hidden;padding:15px 15px 14px;border-radius:18px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018));box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 16px 34px rgba(0,0,0,.16);transition:transform .14s ease,border-color .14s ease,box-shadow .14s ease}
@@ -337,17 +339,26 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .settings-field-meta{display:flex;flex-direction:column;gap:2px}
 .settings-field-meta .settings-hint{font-size:12px}
 
-/* ?섍꼍蹂???몄쭛 */
-.env-editor{padding:6px 10px;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;background:var(--vscode-sideBar-background,var(--vscode-editor-background))}
+
+.env-editor{padding:4px 10px;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;background:var(--vscode-sideBar-background,var(--vscode-editor-background))}
 .env-editor-title{font-size:13px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.env-editor-summary{padding:4px 6px;border-radius:6px;cursor:pointer;user-select:none;transition:background .12s ease}
+.env-editor-summary:hover{background:rgba(255,255,255,.055)}
+.env-editor-caret{width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:5px solid currentColor;opacity:.75;transition:transform .12s ease;flex:0 0 auto}
+.env-editor:not(.collapsed) .env-editor-caret{transform:rotate(90deg)}
+.env-editor-body{padding-top:2px}
+.env-editor.collapsed .env-editor-title{margin-bottom:0}
+.env-editor.collapsed .env-editor-body{display:none}
 .env-editor-title .rm{background:transparent;border:0;color:inherit;font:inherit;padding:0 3px}
 .env-badge{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);padding:1px 6px;border-radius:8px;font-size:13px}
+.env-badge.muted{background:transparent;color:var(--vscode-descriptionForeground,#a8a8a8);padding-left:0}
+.env-var-count{font-size:12px;font-weight:600;color:var(--vscode-descriptionForeground,#a8a8a8);white-space:nowrap}
 .env-autosave-indicator{font-size:12px;color:var(--vscode-charts-green,#4ec94e);opacity:0;transition:opacity .3s;display:flex;align-items:center;gap:3px}
 .env-autosave-indicator.show{opacity:1}
 .env-dirty-dot{width:6px;height:6px;border-radius:50%;background:var(--vscode-editorWarning-foreground,#cca700);display:none}
 .env-dirty-dot.show{display:inline-block}
 
-/* ?묐떟 */
+
 .response-summary{display:flex;flex-direction:column;gap:8px;padding-top:0}
 .res-sticky-shell{position:sticky;top:0;z-index:4;background:linear-gradient(180deg,var(--vscode-editor-background) 0%,var(--vscode-editor-background) 88%,rgba(0,0,0,0) 100%);padding-top:0}
 .response-summary-card{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:2px 0;border:none;background:transparent;box-shadow:none;border-radius:0;flex-wrap:nowrap;min-width:0}
@@ -435,7 +446,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .test-row-fail .res-header-key,.test-row-fail .res-header-value{color:#ffb3b3}
 .test-row-pass .res-header-key,.test-row-pass .res-header-value{color:inherit}
 
-/* ?묐떟 鍮꾧탳 (Pin / Compare) */
+
 .pin-response-btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border:1px solid var(--vscode-input-border,#555);border-radius:6px;background:transparent;color:var(--vscode-foreground);font-size:13px;cursor:pointer;transition:background .15s,transform .1s;user-select:none}
 .pin-response-btn:hover{background:var(--vscode-button-secondaryHoverBackground,rgba(255,255,255,.1));transform:scale(1.05)}
 .pin-response-btn:active{transform:scale(.92)}
@@ -445,7 +456,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .compare-btn:active:not(:disabled){transform:scale(.92)}
 .compare-btn:disabled{opacity:.35;cursor:default;transform:none}
 .compare-btn.ready{border-color:var(--vscode-charts-blue,#3794ff);color:var(--vscode-charts-blue,#3794ff)}
-/* ?묐떟 而⑦뀓?ㅽ듃 硫붾돱 */
+
 .res-ctx-menu{position:fixed;z-index:9999;min-width:200px;background:var(--vscode-menu-background,#252526);color:var(--vscode-menu-foreground,#ccc);border:1px solid var(--vscode-menu-border,#454545);border-radius:5px;padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,.4);font-size:13px}
 .res-ctx-menu .ctx-item{padding:6px 16px;cursor:pointer;display:flex;align-items:center;gap:8px}
 .res-ctx-menu .ctx-item:hover{background:var(--vscode-menu-selectionBackground,#094771)}
@@ -456,7 +467,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .json-body{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.018));padding:14px 16px;border-radius:18px;border:1px solid rgba(255,255,255,.08);font-family:var(--vscode-editor-font-family,monospace);font-size:13px;white-space:pre-wrap;word-break:break-word;overflow:auto;flex:1;min-height:0;line-height:1.3;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
 .json-key{color:#9cdcfe}.json-str{color:#ce9178}.json-num{color:#b5cea8}.json-bool{color:#569cd6}.json-null{color:#569cd6}
 
-/* ?묐떟 諛붾뵒 ?대컮 */
+
 .res-body-toolbar{display:flex;align-items:center;gap:6px;padding:4px 0 2px;flex-shrink:0;flex-wrap:wrap}
 .res-body-toolbar .toggle-group{display:flex;border:1px solid var(--vscode-input-border,#555);border-radius:999px;overflow:hidden;margin-right:4px;background:rgba(255,255,255,.025)}
 .res-body-toolbar .toggle-btn{padding:5px 10px;font-size:12px;cursor:pointer;background:transparent;color:var(--vscode-foreground);border:none;opacity:.62;user-select:none;letter-spacing:.04em;text-transform:uppercase}
@@ -492,7 +503,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .formdata-file-chip{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);font-size:12px;color:var(--vscode-descriptionForeground,#c2c2c2)}
 .formdata-file-chip.hidden{display:none}
 
-/* JSON ?몃━ 酉?*/
+
 .json-tree{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.018));padding:14px 16px;border-radius:18px;border:1px solid rgba(255,255,255,.08);font-family:var(--vscode-editor-font-family,monospace);font-size:13px;overflow:auto;flex:1;min-height:0;line-height:1.3;user-select:text;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
 .jt-node{padding-left:16px}
 .jt-row{display:flex;align-items:baseline;white-space:nowrap;gap:6px;padding:2px 8px;border-radius:10px;transition:background .12s ease}
@@ -518,7 +529,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .xml-path-copy:hover{color:#93c8ff}
 .response-path-hint{display:inline-flex;align-items:center;padding:0 6px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font-size:11px;color:var(--vscode-descriptionForeground,#a5a5a5)}
 
-/* Format ?쒕∼?ㅼ슫 */
+
 .fmt-wrap{position:relative;display:inline-block}
 .fmt-menu{display:none;position:absolute;top:100%;left:0;z-index:100;background:var(--vscode-dropdown-background,#252526);border:1px solid var(--vscode-dropdown-border,#555);border-radius:3px;padding:4px 0;min-width:170px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .fmt-menu.open{display:block}
@@ -535,17 +546,17 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .spinner{display:inline-block;width:11px;height:11px;border:2px solid var(--vscode-foreground);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* 怨듯넻 ripple 踰꾪듉 ?④낵 */
+
 .ripple-btn{position:relative;overflow:hidden;transition:transform .05s ease}
 .ripple-btn .ripple-circle{position:absolute;border-radius:50%;background:rgba(255,255,255,.4);transform:scale(0);animation:ripple-expand .35s ease-out forwards;pointer-events:none}
 @keyframes ripple-expand{0%{transform:scale(0);opacity:1}100%{transform:scale(5);opacity:0}}
-/* ?대┃ ??諛곌꼍??flash */
+
 .ripple-btn.btn-flash{background:rgba(255,255,255,.25)!important}
-/* ?뚮┝ ??諛붿슫?????먮옒 ?쒗??*/
+
 @keyframes btn-bounce{0%{transform:scale(.85)}40%{transform:scale(.85)}60%{transform:scale(1.05)}100%{transform:scale(1)}}
 .ripple-btn.btn-bouncing{animation:btn-bounce .25s cubic-bezier(.22,.68,0,1.2) forwards}
 
-/* ========== Send 踰꾪듉 ?대┃ ?댄럺??========== */
+
 @keyframes send-click{
   0%{transform:scale(.82);box-shadow:0 0 25px 6px rgba(0,120,212,.8)}
   40%{transform:scale(1.05) translateY(-2px);box-shadow:0 0 12px 3px rgba(0,120,212,.4)}
@@ -555,7 +566,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .send-click{animation:send-click .25s cubic-bezier(.22,.68,0,1.2) forwards!important;transition:none!important}
 .send-click-flash{background:#40a0ff!important}
 
-/* ========== ?꾩넚 以?珥앹븣 濡쒕뵫 諛?========== */
+
 .bullet-progress{height:3px;width:100%;background:rgba(255,255,255,.05);overflow:hidden;flex-shrink:0;position:relative;opacity:0;transition:opacity .15s}
 .bullet-progress.active{opacity:1}
 @keyframes bullet-run{
@@ -563,7 +574,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
   100%{left:100%}
 }
 .bullet-progress .bullet-glow{position:absolute;top:0;height:100%;width:60px;background:linear-gradient(90deg,transparent,#4da6ff 30%,#80bfff 60%,transparent);border-radius:2px;animation:bullet-run 1.2s ease-in-out infinite;box-shadow:0 0 8px rgba(77,166,255,.5)}
-/* ?꾨즺 ?? 珥앹븣???앷퉴吏 ?щ젮媛硫??щ씪吏?*/
+
 @keyframes bullet-finish{
   0%{left:var(--pos);opacity:1}
   100%{left:100%;opacity:0}
@@ -571,8 +582,8 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .bullet-progress.finishing .bullet-glow{animation:bullet-finish .2s ease-out forwards}
 .bullet-progress.finishing{transition:opacity .15s .2s;opacity:0}
 
-/* ========== Stop 踰꾪듉 ?寃⑷컧 ========== */
-/* stop: transform + box-shadow ?섎굹??keyframe?쇰줈 ?⑹묠 */
+
+
 @keyframes stop-slam{
   0%{transform:scale(.82);box-shadow:0 0 20px rgba(255,50,50,.8)}
   40%{transform:scale(.82);box-shadow:0 0 16px rgba(255,50,50,.6)}
@@ -581,62 +592,62 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 }
 .btn-stop.stop-slam{animation:stop-slam .35s cubic-bezier(.22,.68,0,1.2) forwards!important;transition:none!important}
 .btn-stop.stop-flash{background:#ff6b6b!important}
-/* Stop vignette flash (?붾㈃ 鍮④컙 ?ㅻ쾭?덉씠) */
+
 @keyframes stop-vignette{0%{opacity:.22}100%{opacity:0}}
 .stop-vignette-flash{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;background:radial-gradient(ellipse at center,transparent 40%,rgba(255,40,40,.35) 100%);animation:stop-vignette .25s ease-out forwards}
 
-/* ========== Send?뭆top ?꾪솚 ========== */
+
 @keyframes icon-fade-in{0%{opacity:0}100%{opacity:1}}
 .btn-stop .stop-icon{animation:icon-fade-in .2s ease}
 .btn-send svg{animation:icon-fade-in .2s ease}
 
-/* Send 踰꾪듉 鍮?以꾧린 ?④낵 */
+
 .btn-send .send-streak{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;border-radius:6px;overflow:hidden}
 .btn-send .send-streak::after{content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:none}
 .btn-send.streak-active .send-streak::after{animation:send-streak .5s ease-out forwards}
 @keyframes send-streak{0%{left:-60%}100%{left:120%}}
 
-/* 踰꾪듉 ?쇰뱶諛??띿뒪??*/
+
 .btn-feedback{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);white-space:nowrap;font-size:12px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .15s}
 .btn-feedback.show{opacity:1}
 
 
-/* URL ?낅젰? 鍮?以꾧린 sweep */
+
 @keyframes url-sweep{0%{background-position:-100% 0}100%{background-position:200% 0}}
 .url-input-wrap.sweep::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0;border-radius:3px;pointer-events:none;background:linear-gradient(90deg,transparent 0%,rgba(0,122,204,.25) 40%,rgba(0,122,204,.45) 50%,rgba(0,122,204,.25) 60%,transparent 100%);background-size:50% 100%;background-repeat:no-repeat;animation:url-sweep .3s ease forwards}
 
-/* ?꾩넚 以??ㅼ삩 ?꾩뒪 */
+
 @keyframes neon-pulse{0%{border-color:#007acc;box-shadow:0 0 3px rgba(0,122,204,.4)}50%{border-color:#3af;box-shadow:0 0 8px rgba(51,170,255,.6)}100%{border-color:#007acc;box-shadow:0 0 3px rgba(0,122,204,.4)}}
 .url-bar input.neon-active{animation:neon-pulse 1.5s ease infinite;border-color:#007acc}
 
-/* Send?묬ancel ?꾪솚 ?щ씪?대뱶 */
+
 @keyframes btn-slide-in{from{opacity:0;transform:translateX(6px)}to{opacity:1;transform:translateX(0)}}
 .btn-sending{pointer-events:auto;position:relative;min-width:58px;animation:btn-slide-in .2s ease}
 .btn-sending .spinner{width:10px;height:10px;border-width:1.5px;margin-right:3px}
 
-/* 2xx ?깃났: 珥덈줉 鍮???컻 + scale 諛붿슫??*/
+
 @keyframes badge-pop{0%{transform:scale(1.5);box-shadow:0 0 20px rgba(78,201,78,.9)}40%{transform:scale(.95);box-shadow:0 0 8px rgba(78,201,78,.4)}70%{transform:scale(1.08)}100%{transform:scale(1);box-shadow:none}}
 .status.flash-success{animation:badge-pop .35s cubic-bezier(.17,.67,.35,1.5)}
 
-/* 4xx/5xx ?ㅽ뙣: shake ?붾뱾由?(醫뚯슦 3px, 3?? + 鍮④컙 flash */
+
 @keyframes badge-shake{0%,100%{transform:translateX(0);box-shadow:none}10%{transform:translateX(-3px)}20%{transform:translateX(3px)}30%{transform:translateX(-3px)}40%{transform:translateX(3px)}50%{transform:translateX(-3px)}60%{transform:translateX(3px)}70%{transform:translateX(0)}}
 .status.flash-error{animation:badge-shake .35s ease;box-shadow:0 0 12px rgba(255,50,50,.6)}
 
-/* 4xx/5xx ?붾㈃ ?꾩껜 鍮④컙??踰덉찉 */
+
 @keyframes screen-flash-red{0%{opacity:.18}100%{opacity:0}}
 .screen-flash{position:fixed;top:0;left:0;right:0;bottom:0;background:#c94e4e;pointer-events:none;z-index:9999;animation:screen-flash-red .12s ease forwards}
 
-/* ?묐떟 ?곸뿭 ?щ옩 (諛붿슫?? */
+
 @keyframes res-slam{0%{opacity:0;transform:translateY(-10px)}60%{opacity:1;transform:translateY(2px)}100%{transform:translateY(0)}}
 .res-area.slide-in{animation:res-slam .25s cubic-bezier(.22,.68,0,1.2)}
 
-/* ?꾨줈洹몃젅??諛?*/
 
-/* PERFECT! ?띿뒪??*/
+
+
 @keyframes perfect-pop{0%{opacity:0;transform:scale(.5)}30%{opacity:1;transform:scale(1.1)}60%{transform:scale(.95)}100%{opacity:0;transform:scale(1)}}
 .perfect-badge{position:absolute;top:-18px;right:0;font-size:9px;font-weight:800;color:#4ec94e;letter-spacing:1px;pointer-events:none;animation:perfect-pop .8s ease forwards;text-shadow:0 0 6px rgba(78,201,78,.5)}
 
-/* 寃쎄낵?쒓컙 ?ㅼ떆媛??쒖떆 */
+
 .elapsed-timer{font-size:13px;opacity:.6;margin-left:4px;font-variant-numeric:tabular-nums}
 
 .placeholder{display:flex;align-items:center;justify-content:center;flex:1;opacity:.25;font-size:13px}
@@ -678,7 +689,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .var-usage-scopes{display:inline-flex;flex-wrap:wrap;gap:4px}
 .var-usage-scope{display:inline-flex;align-items:center;padding:1px 5px;border-radius:999px;font-size:10px;background:rgba(87,166,255,.1);color:#93c8ff;border:1px solid rgba(87,166,255,.16)}
 
-/* ?ㅼ펷?덊넠 濡쒕뵫 UI */
+
 @keyframes skeleton-pulse{0%{opacity:.15}50%{opacity:.3}100%{opacity:.15}}
 .skeleton-loader{padding:12px 10px;display:flex;flex-direction:column;gap:8px}
 .skeleton-line{height:14px;border-radius:4px;background:var(--vscode-foreground,#ccc);animation:skeleton-pulse 1.2s ease-in-out infinite}
@@ -687,7 +698,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .skeleton-line:nth-child(3){width:55%;animation-delay:.3s}
 .skeleton-line:nth-child(4){width:40%;animation-delay:.45s}
 
-/* 鍮??붿껌 ???덈궡 */
+
 .empty-tab-hint{display:flex;align-items:center;justify-content:center;flex:1;color:var(--vscode-descriptionForeground,#888);font-size:13px;opacity:.5;text-align:center;padding:20px;user-select:none}
 .script-editor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 .script-helper-shell{padding:12px;border-radius:14px;border:1px solid rgba(87,166,255,.12);background:linear-gradient(180deg,rgba(87,166,255,.06),rgba(255,255,255,.02));display:flex;flex-direction:column;gap:12px;margin-bottom:12px}
@@ -750,7 +761,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .default-header-chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.06);font-size:12px;font-family:var(--vscode-editor-font-family,monospace)}
 .default-header-chip.override{border-color:rgba(229,192,123,.24);background:rgba(229,192,123,.1);color:#f0c995}
 
-/* 而щ젆???щ꼫 */
+
 .runner-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:var(--vscode-editor-background);z-index:100;display:flex;flex-direction:column;overflow:hidden}
 .runner-header{padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border,#444);display:flex;align-items:center;gap:8px;flex-shrink:0}
 .runner-header h3{font-size:13px;font-weight:600;flex:1;margin:0}
@@ -778,7 +789,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .runner-row.method-HEAD::before,.runner-row.method-OPTIONS::before{background:linear-gradient(180deg,rgba(171,178,191,.78),rgba(171,178,191,.18))}
 .runner-detail{padding:6px 12px;background:var(--vscode-input-background);border-bottom:1px solid var(--vscode-panel-border,#333);font-family:var(--vscode-editor-font-family,monospace);font-size:13px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto}
 
-/* ?쒖꽦 ?섍꼍 ?쒖떆 */
+
 .env-indicator{font-size:13px;opacity:.6;padding:0 10px 2px;flex-shrink:0}
 .env-indicator .var-name{color:#dcdcaa}
 :root{
@@ -931,6 +942,7 @@ body{
 .empty-state-action:focus,
 .request-status-chip:focus,
 .preflight-pill:focus,
+.env-editor-summary:focus,
 .tab:focus,
 .req-tab:focus,
 .close-tab:focus,
@@ -947,6 +959,7 @@ body{
 .empty-state-action:focus-visible,
 .request-status-chip:focus-visible,
 .preflight-pill:focus-visible,
+.env-editor-summary:focus-visible,
 .tab:focus-visible,
 .req-tab:focus-visible,
 .close-tab:focus-visible,
@@ -1549,26 +1562,30 @@ body[data-panel-theme="bold-color"] .empty-state::before{
 </head>
 <body data-panel-theme="${requestPanelTheme}">
 
-<!-- ?붿껌 ??諛?-->
+
 <div class="tab-bar" id="tabBar" role="tablist" aria-label="${LocalizationService.t('webview.requestTabs', undefined, displayLanguage)}">
 <button class="add-tab" id="addTabBtn" type="button" title="${LocalizationService.t('webview.newTab', undefined, displayLanguage)}" aria-label="${LocalizationService.t('webview.newTab', undefined, displayLanguage)}">+</button>
 </div>
 
-<!-- ?섍꼍蹂???몄쭛 (?④? ?곹깭) -->
-<div id="envEditor" class="env-editor hidden">
-  <div class="env-editor-title">
+
+<div id="envEditor" class="env-editor collapsed">
+  <div class="env-editor-title env-editor-summary" id="envEditorToggle" role="button" tabindex="0" aria-expanded="false" aria-controls="envEditorBody">
+    <span class="env-editor-caret" aria-hidden="true"></span>
     <span id="envEditorTitle">${LocalizationService.t('webview.environment', undefined, displayLanguage)}</span>
-    <span class="env-badge" id="envEditorName"></span>
+    <span class="env-badge muted" id="envEditorName">${LocalizationService.t('webview.environmentNone', undefined, displayLanguage)}</span>
+    <span class="env-var-count" id="envEditorVarCount"></span>
     <span style="flex:1"></span>
     <span class="env-dirty-dot" id="envDirtyDot" title="${LocalizationService.t('webview.unsavedChanges', undefined, displayLanguage)}"></span>
     <span class="env-autosave-indicator" id="envAutoSaved"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M6.27 10.87h.04l4.49-4.49-1.06-1.06-3.47 3.47-1.47-1.47-1.06 1.06 2.53 2.49z"/><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12z"/></svg> <span id="envAutoSavedLabel">${LocalizationService.t('webview.autoSaved', undefined, displayLanguage)}</span></span>
     <button class="rm" id="envCloseBtn" type="button" title="${LocalizationService.t('webview.close', undefined, displayLanguage)}" aria-label="${LocalizationService.t('webview.close', undefined, displayLanguage)}" style="cursor:pointer;font-size:14px;opacity:.6">&times;</button>
   </div>
-  <div id="envVarRows" class="kv-section"></div>
-  <button class="add-btn" id="addEnvVarBtn">${LocalizationService.t('webview.addVariable', undefined, displayLanguage)}</button>
+  <div class="env-editor-body" id="envEditorBody">
+    <div id="envVarRows" class="kv-section"></div>
+    <button class="add-btn" id="addEnvVarBtn" disabled>${LocalizationService.t('webview.addVariable', undefined, displayLanguage)}</button>
+  </div>
 </div>
 
-<!-- 湲곕낯 ?ㅻ뜑 ?몄쭛 (?④? ?곹깭) -->
+
 <div id="defaultHeadersEditor" class="env-editor hidden">
   <div class="env-editor-title">
     <span id="defaultHeadersTitle">${LocalizationService.t('webview.defaultHeaders', undefined, displayLanguage)}</span>
@@ -1580,7 +1597,7 @@ body[data-panel-theme="bold-color"] .empty-state::before{
   <button class="add-btn" id="addDefaultHeaderBtn">${LocalizationService.t('webview.addHeader', undefined, displayLanguage)}</button>
 </div>
 
-<!-- 硫붿씤 (??퀎 而⑦뀗痢? -->
+
 <div class="main-content" id="mainContent">
   <div class="placeholder" id="emptyPlaceholder">${LocalizationService.t('webview.emptyPlaceholder', undefined, displayLanguage)}</div>
 </div>
@@ -1593,19 +1610,22 @@ let currentDisplayLanguage = ${JSON.stringify(displayLanguage)};
 const REQUEST_PANEL_THEMES = ['default', 'minimal-cool', 'product', 'bold-color'];
 let currentRequestPanelTheme = ${JSON.stringify(requestPanelTheme)};
 
-// === ???곹깭 愿由?===
+
 let tabs = [];       // { id, name, method, url, headers, params, body, auth, response, error, loading }
 let activeTabId = null;
 let tabIdCounter = 0;
 let currentEnvName = null;
 let currentWorkspaceProfile = 'default';
 let editingEnvId = null;
-let activeVarKeys = [];  // ?쒖꽦 ?섍꼍??蹂????紐⑸줉
+let envEditorEnvName = null;
+let envEditorVariableCount = 0;
+let envEditorCollapsed = true;
+let activeVarKeys = [];
 let activeVarValues = {};
 let workspaceDefaultHeaders = [];
-let pendingSaveBtn = null;          // Save 踰꾪듉 ?ㅼ씠?쇰줈洹??꾨즺 ?湲?
-let pendingSaveResponseBtn = null;  // Save Response Body 踰꾪듉 ?ㅼ씠?쇰줈洹??꾨즺 ?湲?
-var _pendingCloseAfterSave = null;  // dirty ???リ린 ????????レ쓣 ??ID
+let pendingSaveBtn = null;
+let pendingSaveResponseBtn = null;
+var _pendingCloseAfterSave = null;
 const VALID_BODY_TYPES = ['none', 'json', 'xml', 'form', 'formdata', 'binary', 'raw'];
 
 const DEFAULT_COMPARE_IGNORE_HEADERS = ['date', 'set-cookie', 'x-request-id', 'x-correlation-id', 'x-amzn-trace-id'];
@@ -2719,7 +2739,7 @@ function normalizeBodyType(bodyType) {
   return bodyType === 'text' ? 'raw' : 'none';
 }
 
-// === ??諛?===
+
 const tabBar = document.getElementById('tabBar');
 const addTabBtn = document.getElementById('addTabBtn');
 const mainContent = document.getElementById('mainContent');
@@ -2780,6 +2800,7 @@ function updateStaticLocalizedText() {
     envClose.title = tr('webview.close');
     envClose.setAttribute('aria-label', tr('webview.close'));
   }
+  refreshEnvironmentEditorSummary();
   var defaultHeadersClose = document.getElementById('defaultHeadersCloseBtn');
   if (defaultHeadersClose) {
     defaultHeadersClose.title = tr('webview.close');
@@ -2877,8 +2898,6 @@ mainContent.addEventListener('focusout', function(event) {
   hideVariablePreviewPopover();
 });
 
-updateStaticLocalizedText();
-
 function knownDefaultTabNames() {
   return ['New Request', '새 요청', '新しいリクエスト', 'Nouvelle requête'];
 }
@@ -2887,7 +2906,7 @@ function isKnownDefaultTabName(name) {
   return knownDefaultTabNames().indexOf(name) >= 0;
 }
 
-// ???ㅻ깄???앹꽦 (dirty 鍮꾧탳??
+
 function normalizeNumberSetting(value) {
   var num = parseInt(value, 10);
   return Number.isFinite(num) && num > 0 ? num : 0;
@@ -2978,10 +2997,10 @@ function snapshotTab(tab) {
   });
 }
 
-// ??씠 dirty ?곹깭?몄? ?먮퀎
+
 function isTabDirty(tab) {
   if (!tab) return false;
-  // ???? URL, ?ㅻ뜑, ?뚮씪誘명꽣, 諛붾뵒 以??섎굹?쇰룄 ?낅젰?섎㈃ dirty
+  
   if (!tab._snapshot) {
     return !!(
       tab.url ||
@@ -3004,11 +3023,11 @@ function isTabDirty(tab) {
       tab.disableScripts
     );
   }
-  // 而щ젆?섏뿉??遺덈윭???? ?ㅻ깄???鍮?蹂寃?媛먯?
+  
   return snapshotTab(tab) !== tab._snapshot;
 }
 
-// dirty ?곹깭 媛깆떊 ????諛?由щ젋??
+
 function markDirty() {
   var tab = tabs.find(function(t){return t.id === activeTabId});
   if (!tab) return;
@@ -3027,7 +3046,7 @@ function markDirty() {
     const tab = applyRequestSettings({
       id,
     requestEditorTab: normalizeRequestEditorTab(data?.requestEditorTab),
-    requestId: data?.requestId || null,  // 而щ젆???덉뒪?좊━ ?붿껌 ID (以묐났 ??諛⑹?)
+    requestId: data?.requestId || null,
     name: autoName ? tr('webview.stage.newRequest') : (incomingName || tr('webview.stage.newRequest')),
     autoName: autoName,
     requestType: normalizeRequestType(data?.requestType, data?.url),
@@ -3051,7 +3070,7 @@ function markDirty() {
       scriptHelpCollapsed: data?.scriptHelpCollapsed === true,
       pinned: data?.pinned || false,
       dirty: false,
-    _snapshot: null,  // 而щ젆?섏뿉??遺덈윭????쓽 ?먮낯 ?ㅻ깄??
+    _snapshot: null,
     response: null,
     websocketStatus: 'closed',
     websocketMessages: [],
@@ -3069,7 +3088,7 @@ function markDirty() {
     requestEndedAt: normalizeEpochMs(data?.requestEndedAt),
     durationMs: normalizeDurationMs(data?.durationMs),
   }, data);
-  // 而щ젆???덉뒪?좊━?먯꽌 遺덈윭????씠硫??ㅻ깄?????
+  
   if (data?.requestId) {
     tab._snapshot = snapshotTab(tab);
   }
@@ -3111,7 +3130,7 @@ function closeTab(id) {
   const tab = tabs.find(t => t.id === id);
   if (!tab) return;
   if (tab.pinned) return;
-  // dirty ?곹깭硫??꾩옱 ??媛??숆린?????ы솗??
+  
   if (id === activeTabId) saveActiveTabState();
   tab.dirty = isTabDirty(tab);
   if (tab.dirty) {
@@ -3121,9 +3140,9 @@ function closeTab(id) {
   doCloseTab(id);
 }
 
-// dirty ???リ린 ?뺤씤 ?ㅼ씠?쇰줈洹?
+
 function showDirtyConfirm(tabId) {
-  // 湲곗〈 ?ㅼ씠?쇰줈洹??쒓굅
+  
   var old = document.getElementById('dirtyConfirmOverlay');
   if (old) old.remove();
   var overlay = document.createElement('div');
@@ -3144,7 +3163,7 @@ function showDirtyConfirm(tabId) {
     if (!action) return;
     overlay.remove();
     if (action === 'save') {
-      // ??????リ린: saveRequest ?꾩넚 ??寃곌낵?먯꽌 ???リ린
+      
       var tab = tabs.find(function(t){return t.id === tabId});
       if (tab && tab.url) {
         if (tabId === activeTabId) saveActiveTabState();
@@ -3156,11 +3175,11 @@ function showDirtyConfirm(tabId) {
     } else if (action === 'discard') {
       doCloseTab(tabId);
     }
-    // cancel: ?꾨Т寃껊룄 ????
+    
   });
 }
 
-// ?щ윭 ???쇨큵 ?リ린 (dirty ??? ?섎굹???쒖감 ?뺤씤)
+
 function closeTabs(ids) {
   if (!ids || ids.length === 0) return;
   var queue = ids.slice();
@@ -3205,12 +3224,12 @@ function closeTabs(ids) {
         doCloseTab(tabId);
         next();
       }
-      // cancel: ?섎㉧吏??紐⑤몢 痍⑥냼
+      
     });
   }
 }
 
-// === ?대┃ ripple ?댄럺??===
+
 function addRipple(btn, e) {
   const rect = btn.getBoundingClientRect();
   const x = e.clientX - rect.left;
@@ -3225,7 +3244,7 @@ function addRipple(btn, e) {
   circle.addEventListener('animationend', () => circle.remove());
 }
 
-// 踰꾪듉 ?띿뒪???꾩떆 蹂寃??쇰뱶諛?
+
 function showBtnFeedback(btn, text, duration) {
   duration = duration || 1500;
   const origHtml = btn.innerHTML;
@@ -3252,14 +3271,14 @@ function showCopyToast(text, duration) {
   }, duration);
 }
 
-// Send 鍮?以꾧린 ?④낵
+
 function triggerSendStreak(btn) {
   btn.classList.add('streak-active');
   setTimeout(() => btn.classList.remove('streak-active'), 400);
 }
 
-// Send 踰꾪듉 ?대┃ ?댄럺????源붾걫???뚮┝ + 湲濡쒖슦
-// renderContent()媛 吏곹썑??DOM??援먯껜?섎?濡?setTimeout(0)?쇰줈 ??踰꾪듉???곸슜
+
+
 function triggerSendSlam(btn) {
   triggerSendStreak(btn);
   setTimeout(function() {
@@ -3273,16 +3292,16 @@ function triggerSendSlam(btn) {
   }, 0);
 }
 
-// Stop 踰꾪듉 ?寃⑷컧 (slam + glow + flash + vignette ???⑥씪 keyframe?쇰줈 ?듯빀)
+
 function triggerStopSlam(btn) {
-  // slam ?뚮┝ + 湲濡쒖슦 (?섎굹??animation?쇰줈 ?듯빀)
+  
   btn.classList.remove('stop-slam');
   void btn.offsetWidth;
   btn.classList.add('stop-slam');
-  // 諛곌꼍??flash (160ms)
+  
   btn.classList.add('stop-flash');
   setTimeout(function() { btn.classList.remove('stop-flash'); }, 160);
-  // slam ?대옒???뺣━
+  
   setTimeout(function() { btn.classList.remove('stop-slam'); }, 400);
   // vignette flash
   var vig = document.createElement('div');
@@ -3291,18 +3310,18 @@ function triggerStopSlam(btn) {
   setTimeout(function() { vig.remove(); }, 300);
 }
 
-// ?꾩뿭 ripple ?대깽???꾩엫 (紐⑤뱺 .ripple-btn ??? + flash/bounce ?④낵
-// Send/Stop 踰꾪듉? ?꾩슜 slam ?몃뱾?ш? 泥섎━?섎?濡??ш린??ripple留?
+
+
 document.addEventListener('click', function(e) {
   const btn = e.target.closest('.ripple-btn');
   if (!btn) return;
   addRipple(btn, e);
-  // Send/Stop 踰꾪듉? ?꾩슜 ?④낵 ?ъ슜
+  
   if (btn.classList.contains('btn-send') || btn.classList.contains('btn-stop')) return;
-  // 諛곌꼍??flash (0.1珥?
+  
   btn.classList.add('btn-flash');
   setTimeout(function() { btn.classList.remove('btn-flash'); }, 100);
-  // ?뚮┝ ??諛붿슫?????먮옒 ?쒗??
+  
   btn.classList.remove('btn-bouncing');
   void btn.offsetWidth;
   btn.classList.add('btn-bouncing');
@@ -3695,10 +3714,10 @@ function applyBulkEditor(mc, target) {
 }
 
 function renderTabBar() {
-  // 湲곗〈 ???붿냼 ?쒓굅
+  
   tabBar.querySelectorAll('.req-tab').forEach(el => el.remove());
 
-  // pinned ??쓣 ?쇱そ??怨좎젙
+  
   const sorted = tabs.filter(t => t.pinned).concat(tabs.filter(t => !t.pinned));
 
   for (const tab of sorted) {
@@ -3783,7 +3802,7 @@ function showTabContextMenu(x, y, tabId) {
   menu.style.top = y + 'px';
   document.body.appendChild(menu);
 
-  // 硫붾돱媛 酉고룷??諛뽰쑝濡??섍?硫?蹂댁젙
+  
   var rect = menu.getBoundingClientRect();
   if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + 'px';
   if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 4) + 'px';
@@ -4425,7 +4444,7 @@ function renderContent() {
     );
     return;
   }
-  // 由щ젋?????섎룞 議곗젅???붿껌 ?곸뿭 ?믪씠 蹂댁〈
+  
   var prevReqArea = mainContent.querySelector('.req-area');
   var savedHeight = prevReqArea && prevReqArea.dataset.manualHeight ? prevReqArea.style.height : null;
   const tab = tabs.find(t => t.id === activeTabId);
@@ -4481,7 +4500,7 @@ function renderContent() {
       : (lang === 'xml' && !searchState.query
           ? renderXmlBodyWithPaths(displayBodyText)
           : renderResponseBody(displayBodyText, lang, searchState.query, searchState.index, searchState));
-    // ?묐떟 ?ㅻ뜑瑜??뚯씠釉?HTML濡??앹꽦
+    
     const headerEntries = Object.entries(r.headers);
     const headerCount = headerEntries.length;
     let headersTableHtml = '<table class="res-header-table">' +
@@ -4492,9 +4511,9 @@ function renderContent() {
     }
     headersTableHtml += '</tbody></table>';
 
-    // Set-Cookie ?뚯떛?섏뿬 荑좏궎 ?뚯씠釉??앹꽦
-    // rawSetCookies媛 ?덉쑝硫?媛쒕퀎 荑좏궎 諛곗뿴 ?ъ슜 (expires ?쇳몴 臾몄젣 ?놁쓬)
-    // ?놁쑝硫??ㅻ뜑?먯꽌 異붿텧 ???뺢퇋?앹쑝濡?荑좏궎 寃쎄퀎 遺꾨━
+    
+    
+    
     let allCookieStrs = [];
     if (r.rawSetCookies && r.rawSetCookies.length > 0) {
       allCookieStrs = r.rawSetCookies;
@@ -4504,7 +4523,7 @@ function renderContent() {
         .map(([,v]) => String(v))
         .join(', ');
       if (cookieHeader) {
-        // ?쇳몴 ?ㅼ뿉 "?뚰뙆踰?=" ?⑦꽩???ㅻ㈃ ??荑좏궎 ?쒖옉 (expires ?좎쭨 ?쇳몴? 援щ퀎)
+        
         allCookieStrs = cookieHeader.split(/,\\s*(?=[A-Za-z_][A-Za-z0-9_]*=)/);
       }
     }
@@ -4607,7 +4626,7 @@ function renderContent() {
           searchToolbarHtml +
         '</div>'
       : '';
-    // 移섑솚???ㅼ젣 URL ?쒖떆
+    
     const resolvedUrlDisplay = tab.resolvedUrl
       ? '<div class="resolved-url js-resolved-url" title="' + escapeAttr(tr('webview.clickToCopy')) + '">' + escapeHtml(tab.resolvedUrl) + '</div>'
       : '';
@@ -4929,7 +4948,7 @@ function renderContent() {
       '<div class="res-area' + (tab.response && tab.slideIn ? ' slide-in' : '') + '">' + resHtml + '</div>' +
     '</div>';
 
-  // ?대깽??諛붿씤??
+  
   bindContentEvents();
 
   var previewFrame = mainContent.querySelector('.js-res-preview');
@@ -4937,7 +4956,7 @@ function renderContent() {
     syncPreviewFrame(previewFrame, tab);
   }
 
-  // ?섎룞 議곗젅 ?믪씠 蹂듭썝
+  
   if (savedHeight) {
     var newReqArea = mainContent.querySelector('.req-area');
     if (newReqArea) {
@@ -4993,13 +5012,13 @@ function bindContentEvents() {
     syncVariableAutocomplete(e.target);
   });
 
-  // 硫붿꽌??蹂寃?????諛??낅뜲?댄듃
+  
   mc.querySelector('.js-method')?.addEventListener('change', (e) => {
     const tab = tabs.find(t => t.id === activeTabId);
     if (tab) { tab.method = e.target.value; markDirty(); renderTabBar(); refreshRequestPreflight(mc); }
   });
 
-  // URL ?낅젰 ??誘몄튂??蹂??泥댄겕 + ?먮룞 ???
+  
   var urlInputEl = mc.querySelector('.js-url');
   if (urlInputEl) {
     urlInputEl.addEventListener('input', function() {
@@ -5028,11 +5047,11 @@ function bindContentEvents() {
       var ov = mc.querySelector('.js-var-overlay');
       if (ov) ov.scrollLeft = urlInputEl.scrollLeft;
     });
-    // 珥덇린 泥댄겕
+    
     setTimeout(checkUnresolvedVars, 50);
   }
 
-  // Send / Stop ?대┃ ?寃⑷컧
+  
   const sendBtn = mc.querySelector('.js-send');
   if (sendBtn) {
     sendBtn.addEventListener('click', () => {
@@ -5106,7 +5125,7 @@ function bindContentEvents() {
     }
   });
 
-  // Save (?대? ??λ맂 ??씠硫???뼱?곌린, ????씠硫??꾩튂 ?좏깮 ?ㅼ씠?쇰줈洹?
+  
   mc.querySelector('.js-save')?.addEventListener('click', function() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
@@ -5115,7 +5134,7 @@ function bindContentEvents() {
     vscode.postMessage(buildSaveRequestMessage(tab, tab.requestId || undefined));
   });
 
-  // Save As (???대쫫/?꾩튂濡??????requestId ?놁씠 ?꾩넚?섏뿬 ????ぉ ?앹꽦)
+  
   mc.querySelector('.js-save-as')?.addEventListener('click', function() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
@@ -5124,7 +5143,7 @@ function bindContentEvents() {
     vscode.postMessage(buildSaveRequestMessage(tab));
   });
 
-  // Copy as cURL (+ "Copied!" ?쇰뱶諛?
+  
   mc.querySelector('.js-copy-curl')?.addEventListener('click', function() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
@@ -5141,7 +5160,7 @@ function bindContentEvents() {
     showBtnFeedback(this, tr('webview.opened'), 1000);
   });
 
-  // Copy Response Body (+ "Copied!" ?쇰뱶諛?
+  
   mc.querySelector('.js-copy-response')?.addEventListener('click', function() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab?.response) return;
@@ -5207,7 +5226,7 @@ function bindContentEvents() {
     });
   }
 
-  // 移섑솚??URL ?대┃ ???대┰蹂대뱶 蹂듭궗
+  
   mc.querySelector('.js-resolved-url')?.addEventListener('click', (e) => {
     const el = e.currentTarget;
     const url = el.textContent;
@@ -5218,7 +5237,7 @@ function bindContentEvents() {
     setTimeout(() => { el.textContent = orig; el.classList.remove('copied'); }, 1200);
   });
 
-  // Save Response Body (?ㅼ씠?쇰줈洹??꾨즺 ?꾩뿉留?"Saved ?? ?쇰뱶諛?
+  
   mc.querySelector('.js-save-response')?.addEventListener('click', function() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab?.response) return;
@@ -5345,21 +5364,21 @@ function bindContentEvents() {
 
   updatePinCompareButtons(mc);
 
-  // ?붿껌 ???꾪솚
+  
   mc.querySelector('.js-req-tabs')?.addEventListener('click', (e) => {
     const t = e.target.closest('.tab');
     if (!t) return;
     switchRequestEditorTabInContent(mc, t.dataset.tab);
   });
 
-  // ?묐떟 ???꾪솚 (Body / Headers / Preview)
+  
   mc.querySelector('.js-res-tabs')?.addEventListener('click', (e) => {
     const t = e.target.closest('.tab');
     if (!t) return;
     switchResponseTabInContent(mc, t.dataset.tab);
   });
 
-  // Tree/Raw ?좉?
+  
   mc.querySelector('.js-res-body-toolbar')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.toggle-btn');
     if (btn) {
@@ -5369,7 +5388,7 @@ function bindContentEvents() {
       const raw = mc.querySelector('.js-res-raw');
       if (tree) tree.classList.toggle('hidden', btn.dataset.mode !== 'tree');
       if (raw) raw.classList.toggle('hidden', btn.dataset.mode !== 'raw');
-      // Expand/Collapse 踰꾪듉? Tree 紐⑤뱶?먯꽌留??쒖꽦
+      
       mc.querySelectorAll('.js-expand-all,.js-collapse-all').forEach(b => b.style.display = btn.dataset.mode === 'tree' ? '' : 'none');
       syncResponseSearch(mc);
     }
@@ -5438,7 +5457,7 @@ function bindContentEvents() {
     mc.querySelectorAll('.js-res-tree .jt-ellipsis').forEach(el => el.classList.remove('hidden'));
   });
 
-  // Format ?쒕∼?ㅼ슫
+  
   const fmtBtn = mc.querySelector('.js-fmt-btn');
   const fmtMenu = mc.querySelector('.js-fmt-menu');
   if (fmtBtn && fmtMenu) {
@@ -5454,7 +5473,7 @@ function bindContentEvents() {
     });
     fmtMenu.addEventListener('click', (e) => { e.stopPropagation(); });
 
-    // ?ㅽ????좏깮
+    
     fmtMenu.querySelectorAll('.js-fmt-style').forEach(item => {
       item.addEventListener('click', () => {
         fmtMenu.querySelectorAll('.js-fmt-style .check').forEach(c => { c.textContent = ' '; });
@@ -5462,7 +5481,7 @@ function bindContentEvents() {
         applyFormat(mc);
       });
     });
-    // ?ㅼ뿬?곌린 ?좏깮
+    
     fmtMenu.querySelectorAll('.js-fmt-indent').forEach(item => {
       item.addEventListener('click', () => {
         fmtMenu.querySelectorAll('.js-fmt-indent .check').forEach(c => { c.textContent = ' '; });
@@ -5472,12 +5491,12 @@ function bindContentEvents() {
     });
   }
 
-  // XML/JSON 珥덇린 ?щ㎎ ?곸슜 (?묐떟 ?섏떊 ??利됱떆 ?щ㎎??
+  
   if (mc.querySelector('.js-res-body-toolbar')) {
     applyFormat(mc);
   }
 
-  // JSON ?몃━ 珥덇린 ?뚮뜑留?
+  
   const treeContainer = mc.querySelector('.js-res-tree');
   if (treeContainer && !treeContainer.hasChildNodes()) {
     const tab = tabs.find(t => t.id === activeTabId);
@@ -5491,7 +5510,7 @@ function bindContentEvents() {
     }
   }
 
-  // KV 추가
+  
   bindKvRow(mc.querySelector('.js-param-rows'));
   bindKvRow(mc.querySelector('.js-header-rows'));
 
@@ -5526,14 +5545,14 @@ function bindContentEvents() {
     });
   });
 
-  // Auth ???蹂寃?
+  
   mc.querySelector('.js-auth-type')?.addEventListener('change', (e) => {
     const fields = mc.querySelector('.js-auth-fields');
     if (fields) fields.innerHTML = authFieldsHtml(e.target.value);
     markDirty();
     refreshDraftInsights(mc);
   });
-  // Auth 필드 입력 변경 감지
+  
   mc.querySelector('.js-auth-fields')?.addEventListener('input', function() {
     markDirty();
     refreshDraftInsights(mc);
@@ -5548,7 +5567,7 @@ function bindContentEvents() {
     e.target.textContent = revealing ? tr('webview.hideShort') : tr('webview.revealShort');
   });
 
-  // Body ???蹂寃???Content-Type ?먮룞 ?ㅼ젙
+  
   mc.querySelector('.js-body-type')?.addEventListener('change', (e) => {
     const bodyType = e.target.value;
     const activeTab = tabs.find(t => t.id === activeTabId);
@@ -5563,11 +5582,11 @@ function bindContentEvents() {
     markDirty();
     refreshDraftInsights(mc);
   });
-  // 珥덇린 ?뚮뜑留???auto Content-Type ?숆린??
+  
   var initBodyType = mc.querySelector('.js-body-type')?.value || 'none';
   if (initBodyType !== 'none' && !isWebSocketTab(tabs.find(t => t.id === activeTabId))) syncAutoContentType(mc, initBodyType);
 
-  // Settings ?낅젰 蹂寃?媛먯?
+  
   var settingsPanel = mc.querySelector('.js-settings-panel');
   if (settingsPanel) {
     var refreshSettingsDraftUi = function() {
@@ -5585,7 +5604,7 @@ function bindContentEvents() {
     });
   }
 
-  // === textarea ?먮룞 ?믪씠 議곗젅 ===
+  // === textarea auto grow ===
   var bodyTa = mc.querySelector('.js-body');
   if (bodyTa) {
     function autoGrow() {
@@ -5665,7 +5684,7 @@ function bindContentEvents() {
     debouncePersist();
   });
 
-  // === ?쒕옒洹?援щ텇??===
+  
   var divider = mc.querySelector('.divider');
   var splitEl = mc.querySelector('.split');
   var reqArea = mc.querySelector('.req-area');
@@ -5704,13 +5723,13 @@ function syncAutoContentType(mc, bodyType) {
   var headerRows = mc.querySelector('.js-header-rows');
   if (!headerRows) return;
 
-  // 湲곗〈 auto Content-Type ???쒓굅
+  
   headerRows.querySelectorAll('.kv-row[data-auto="content-type"]').forEach(function(r) { r.remove(); });
 
   var ct = BODY_TYPE_CT[bodyType];
-  if (!ct) return; // none?대㈃ 異붽??섏? ?딆쓬
+  if (!ct) return;
 
-  // ?섎룞?쇰줈 Content-Type???대? ?덉쑝硫?異붽??섏? ?딆쓬
+  
   var hasManual = false;
   headerRows.querySelectorAll('.kv-row:not([data-auto])').forEach(function(row) {
     var keyInput = row.querySelectorAll('input[type="text"]')[0];
@@ -5718,7 +5737,7 @@ function syncAutoContentType(mc, bodyType) {
   });
   if (hasManual) return;
 
-  // auto ??異붽?
+  
   var row = document.createElement('div');
   row.className = 'kv-row';
   row.dataset.auto = 'content-type';
@@ -5765,9 +5784,9 @@ function sendActiveTab() {
   if (!ensureTrustedScriptsBeforeSend(tab)) return;
   const mc = mainContent;
 
-  // 1) Send 踰꾪듉 ?뚮┝ ?④낵 ??renderContent?먯꽌 Stop?쇰줈 ?꾪솚??
+  
 
-  // 2) URL ?낅젰? 鍮?以꾧린 sweep
+  
   var urlWrap = mc.querySelector('.url-input-wrap');
   if (urlWrap) {
     urlWrap.classList.remove('sweep');
@@ -5776,7 +5795,7 @@ function sendActiveTab() {
     setTimeout(function() { urlWrap.classList.remove('sweep'); }, 350);
   }
 
-  // auto Content-Type ?ы븿???꾩껜 ?ㅻ뜑 ?섏쭛
+  
   const allHeaders = collectAllKv(mc.querySelector('.js-header-rows'));
   tab.loading = true;
   tab.lastEvent = 'sending';
@@ -5790,18 +5809,18 @@ function sendActiveTab() {
   tab.durationMs = null;
   renderContent();
 
-  // 3) ?꾩넚 以??ㅼ삩 ?꾩뒪 (renderContent ???ㅼ떆 荑쇰━)
+  
   var urlInput = mc.querySelector('.js-url');
   if (urlInput) {
     urlInput.classList.add('neon-active');
   }
 
-  // 3珥???寃쎄낵?쒓컙 ?ㅼ떆媛??쒖떆 + ?꾨줈洹몃젅??諛?
+  
   var elapsedTimer = null;
   var progressTimer = setTimeout(function() {
     if (!tab.loading) return;
     tab.progressVisible = true;
-    // 寃쎄낵?쒓컙 ?쒖떆 ?쒖옉
+    
       var timerEl = mc.querySelector('.js-elapsed-timer');
       if (!timerEl) {
         var loadingDiv = mc.querySelector('.js-loading-summary') || mc.querySelector('.res-area > div');
@@ -5865,7 +5884,7 @@ function collectKv(container) {
   if (!container) return [];
   const arr = [];
   container.querySelectorAll('.kv-row').forEach(row => {
-    if (row.dataset.auto) return; // auto ???쒖쇅
+    if (row.dataset.auto) return;
     const cb = row.querySelector('input[type="checkbox"]');
     const inputs = row.querySelectorAll('input[type="text"],input[type="password"]');
     if (inputs[0]?.value) arr.push({ key: inputs[0].value, value: inputs[1].value, enabled: cb?.checked !== false });
@@ -6130,20 +6149,114 @@ function collectAuth(mc) {
   return auth;
 }
 
-// === ?섍꼍蹂???몄쭛 ===
-const envEditor = document.getElementById('envEditor');
-const envEditorName = document.getElementById('envEditorName');
-const envVarRows = document.getElementById('envVarRows');
 
-document.getElementById('addEnvVarBtn').addEventListener('click', () => {
+const envEditor = document.getElementById('envEditor');
+const envEditorToggle = document.getElementById('envEditorToggle');
+const envEditorName = document.getElementById('envEditorName');
+const envEditorVarCount = document.getElementById('envEditorVarCount');
+const envVarRows = document.getElementById('envVarRows');
+const addEnvVarBtn = document.getElementById('addEnvVarBtn');
+const envCloseBtn = document.getElementById('envCloseBtn');
+
+function refreshEnvironmentEditorLayout() {
+  requestAnimationFrame(function() {
+    var reqArea = mainContent?.querySelector('.req-area');
+    if (!reqArea) return;
+    var splitEl = mainContent.querySelector('.split');
+    var dividerEl = mainContent.querySelector('.divider');
+    var progressEl = mainContent.querySelector('.bullet-progress');
+    if (reqArea.dataset.manualHeight === '1') {
+      applyManualRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, reqArea.offsetHeight || reqArea.style.height);
+      return;
+    }
+    var activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+    applyAdaptiveRequestAreaHeight(reqArea, splitEl, dividerEl, progressEl, activeTab);
+  });
+}
+
+function refreshEnvironmentEditorSummary() {
+  var hasEnvironment = !!editingEnvId && !!envEditorEnvName;
+  if (envEditorName) {
+    envEditorName.textContent = hasEnvironment ? envEditorEnvName : tr('webview.environmentNone');
+    envEditorName.classList.toggle('muted', !hasEnvironment);
+  }
+  if (envEditorVarCount) {
+    envEditorVarCount.textContent = hasEnvironment ? '(' + tfCount('environment.vars', envEditorVariableCount) + ')' : '';
+  }
+}
+
+function refreshEnvironmentEditorCountFromRows() {
+  envEditorVariableCount = collectKv(envVarRows).length;
+  refreshEnvironmentEditorSummary();
+}
+
+function syncEnvironmentEditorControls() {
+  if (addEnvVarBtn) {
+    addEnvVarBtn.disabled = !editingEnvId;
+  }
+}
+
+function applyEnvironmentEditorCollapsed() {
+  if (!envEditor) return;
+  envEditor.classList.toggle('collapsed', envEditorCollapsed);
+  envEditorToggle?.setAttribute('aria-expanded', String(!envEditorCollapsed));
+  refreshEnvironmentEditorLayout();
+}
+
+function setEnvironmentEditorCollapsed(collapsed) {
+  envEditorCollapsed = collapsed;
+  applyEnvironmentEditorCollapsed();
+}
+
+function toggleEnvironmentEditor() {
+  setEnvironmentEditorCollapsed(!envEditorCollapsed);
+}
+
+function setEnvironmentEditorData(envId, envName, variables) {
+  flushPendingEnvironmentSave();
+  editingEnvId = envId || null;
+  envEditorEnvName = envName || null;
+  var items = Array.isArray(variables) ? variables : [];
+  envEditorVariableCount = editingEnvId ? items.length : 0;
+  envVarRows.innerHTML = editingEnvId ? kvRowsHtml(items) : '';
+  envVarRows.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+  envDirtyDot?.classList.remove('show');
+  envAutoSaved?.classList.remove('show');
+  refreshEnvironmentEditorSummary();
+  syncEnvironmentEditorControls();
+  refreshEnvironmentEditorLayout();
+}
+
+addEnvVarBtn.addEventListener('click', () => {
+  if (!editingEnvId) return;
   addKvRow(envVarRows);
   envVarRows?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+  refreshEnvironmentEditorCountFromRows();
   envScheduleSave();
 });
-document.getElementById('envCloseBtn').addEventListener('click', () => envEditor.classList.add('hidden'));
-bindKvRow(envVarRows, { onChange: envScheduleSave });
+envEditorToggle?.addEventListener('click', toggleEnvironmentEditor);
+envEditorToggle?.addEventListener('keydown', function(event) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    toggleEnvironmentEditor();
+  }
+});
+envCloseBtn.addEventListener('click', (event) => {
+  event.stopPropagation();
+  envEditor.classList.add('hidden');
+});
+bindKvRow(envVarRows, {
+  onChange: () => {
+    refreshEnvironmentEditorCountFromRows();
+    envScheduleSave();
+  }
+});
+applyEnvironmentEditorCollapsed();
+refreshEnvironmentEditorSummary();
+syncEnvironmentEditorControls();
+updateStaticLocalizedText();
 
-// ?섍꼍蹂???먮룞???(debounce 500ms)
+
 const envDirtyDot = document.getElementById('envDirtyDot');
 const envAutoSaved = document.getElementById('envAutoSaved');
 let envSaveTimer = null;
@@ -6155,14 +6268,23 @@ function envMarkDirty() {
 }
 
 function envAutoSave() {
+  clearTimeout(envSaveTimer);
+  envSaveTimer = null;
   if (!editingEnvId) return;
   const vars = collectKv(envVarRows);
   vscode.postMessage({ type: 'saveEnvironmentVars', envId: editingEnvId, variables: vars });
-  // ????꾨즺 ?쇰뱶諛?
+  
   envDirtyDot.classList.remove('show');
   envAutoSaved.classList.add('show');
   clearTimeout(envAutoSavedTimer);
   envAutoSavedTimer = setTimeout(() => envAutoSaved.classList.remove('show'), 2000);
+}
+
+function flushPendingEnvironmentSave() {
+  if (!envSaveTimer) return;
+  clearTimeout(envSaveTimer);
+  envSaveTimer = null;
+  envAutoSave();
 }
 
 function envScheduleSave() {
@@ -6171,14 +6293,14 @@ function envScheduleSave() {
   envSaveTimer = setTimeout(envAutoSave, 500);
 }
 
-// ?낅젰 蹂寃?媛먯? (input, checkbox, blur)
+
 envVarRows.addEventListener('focusout', () => {
   if (!editingEnvId) return;
   clearTimeout(envSaveTimer);
   envAutoSave();
 });
 
-// === 湲곕낯 ?ㅻ뜑 ?몄쭛 ===
+
 const defaultHeadersEditor = document.getElementById('defaultHeadersEditor');
 const defaultHeaderRows = document.getElementById('defaultHeaderRows');
 
@@ -6200,7 +6322,7 @@ document.getElementById('defaultHeadersSaveBtn').addEventListener('click', () =>
   vscode.postMessage({ type: 'saveDefaultHeaders', headers: headers });
 });
 
-// === Extension ??Webview 硫붿떆吏 ===
+
 window.addEventListener('message', (event) => {
   const msg = event.data;
 
@@ -6295,7 +6417,7 @@ window.addEventListener('message', (event) => {
     applyResponseTiming(tab, msg);
     tab.slideIn = true;
 
-    // ?ㅼ삩 ?꾩뒪 ?쒓굅
+    
     var neonEl = mainContent.querySelector('.js-url.neon-active');
     if (neonEl) neonEl.classList.remove('neon-active');
 
@@ -6324,7 +6446,7 @@ window.addEventListener('message', (event) => {
       tab.responseTab = 'resBody';
     }
     if (activeTabId === msg.tabId) {
-      // 珥앹븣 濡쒕뵫 諛? ?앷퉴吏 ?щ젮媛硫??щ씪吏???꾨즺 ?좊땲硫붿씠??
+      
       var bp = mainContent.querySelector('.js-bullet-progress');
       if (bp) {
         var glow = bp.querySelector('.bullet-glow');
@@ -6335,20 +6457,20 @@ window.addEventListener('message', (event) => {
         }
         bp.classList.add('finishing');
       }
-      // ?꾨즺 ?좊땲硫붿씠??0.25珥? ??renderContent
+      
       setTimeout(function() {
         renderContent();
         setTimeout(function() {
           var sc = tab.response ? Math.floor(tab.response.status / 100) : 0;
           var isError = (sc >= 4 || !tab.response);
 
-          // ?곹깭肄붾뱶 諛곗? ?④낵
+          
           var badge = mainContent.querySelector('.status');
           if (badge) {
             badge.classList.add(isError ? 'flash-error' : 'flash-success');
           }
 
-          // 4xx/5xx: ?붾㈃ ?꾩껜 鍮④컙??踰덉찉
+          
           if (isError && tab.response) {
             var flash = document.createElement('div');
             flash.className = 'screen-flash';
@@ -6356,7 +6478,7 @@ window.addEventListener('message', (event) => {
             setTimeout(function() { flash.remove(); }, 150);
           }
 
-          // 鍮좊Ⅸ ?묐떟 (100ms ?댄븯): PERFECT!
+          
           if (tab.response && tab.response.time <= 100) {
             var meta = mainContent.querySelector('.response-meta');
             if (meta) {
@@ -6371,7 +6493,7 @@ window.addEventListener('message', (event) => {
         }, 30);
       }, 250);
     }
-    // slide-in? ??踰덈쭔 ?곸슜
+    
     setTimeout(function() { tab.slideIn = false; }, 300);
   }
 
@@ -6384,14 +6506,14 @@ window.addEventListener('message', (event) => {
     var restoreTabs = msg.tabs || [];
     var restoreIdx = msg.activeIndex || 0;
     if (restoreTabs.length > 0) {
-      // 珥덇린 鍮????쒓굅 (??씠 1媛쒖씠怨?URL??鍮꾩뼱?덉쑝硫?
+      
       if (tabs.length === 1 && !tabs[0].url) {
         tabs.splice(0, 1);
       }
       for (var ri = 0; ri < restoreTabs.length; ri++) {
         createTab(restoreTabs[ri]);
       }
-      // ?쒖꽦 ??蹂듭썝
+      
       if (restoreIdx >= 0 && restoreIdx < tabs.length) {
         switchTab(tabs[restoreIdx].id);
       }
@@ -6409,7 +6531,7 @@ window.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'loadRequest') {
-    // 以묐났 ??諛⑹?: requestId媛 ?덉쑝硫?湲곗〈 ??뿉??寃??
+    
     if (msg.requestId) {
       var existing = tabs.find(function(t) { return t.requestId === msg.requestId; });
       if (existing) {
@@ -6466,10 +6588,7 @@ window.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'loadEnvironment') {
-    editingEnvId = msg.envId;
-    envEditorName.textContent = msg.envName;
-    envVarRows.innerHTML = kvRowsHtml(msg.variables || []);
-    envVarRows.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+    setEnvironmentEditorData(msg.envId, msg.envName, msg.variables || []);
     envEditor.classList.remove('hidden');
   }
 
@@ -6488,14 +6607,17 @@ window.addEventListener('message', (event) => {
   if (msg.type === 'updateActiveEnv') {
     currentEnvName = msg.envName;
     currentWorkspaceProfile = msg.profileName || 'default';
+    if (Object.prototype.hasOwnProperty.call(msg, 'envId')) {
+      setEnvironmentEditorData(msg.envId || null, msg.envName || null, msg.variables || []);
+    }
     refreshToplineStatusChips(mainContent);
     refreshRequestPreflight(mainContent);
   }
 
-  // === Save 寃곌낵 ?쇰뱶諛?===
+  
   if (msg.type === 'saveRequestResult') {
     if (msg.saved) {
-      // ??뿉 而щ젆???붿껌 ID? ?대쫫 ?곌껐 + dirty 珥덇린??
+      
       var savedTab = _pendingCloseAfterSave
         ? tabs.find(function(t){return t.id === _pendingCloseAfterSave})
         : tabs.find(function(t){return t.id === activeTabId});
@@ -6510,14 +6632,14 @@ window.addEventListener('message', (event) => {
       if (pendingSaveBtn) {
         showBtnFeedback(pendingSaveBtn, tr('webview.saved'), 1200);
       }
-      // dirty ?뺤씤 ?ㅼ씠?쇰줈洹몄뿉??"??? ?좏깮 ???リ린
+      
       if (_pendingCloseAfterSave) {
         doCloseTab(_pendingCloseAfterSave);
         _pendingCloseAfterSave = null;
       }
       debouncePersist();
     } else {
-      // ???痍⑥냼 ??pendingClose??痍⑥냼
+      
       _pendingCloseAfterSave = null;
     }
     pendingSaveBtn = null;
@@ -6529,7 +6651,7 @@ window.addEventListener('message', (event) => {
     pendingSaveResponseBtn = null;
   }
 
-  // === 而щ젆???щ꼫 硫붿떆吏 ===
+  
   if (msg.type === 'runCollectionStart') {
     showRunner(msg.name, msg.total);
   }
@@ -6544,7 +6666,7 @@ window.addEventListener('message', (event) => {
   }
 });
 
-// === 而щ젆???щ꼫 UI ===
+
 var runnerOverlay = null;
 var runnerResults = [];
 var runnerStatusState = null;
@@ -6552,7 +6674,7 @@ var runnerStatusState = null;
 function showRunner(name, total) {
   runnerResults = [];
   runnerStatusState = null;
-  // ?ㅻ쾭?덉씠 ?앹꽦
+  
   if (runnerOverlay) runnerOverlay.remove();
   runnerOverlay = document.createElement('div');
   runnerOverlay.className = 'runner-overlay';
@@ -6582,13 +6704,13 @@ function showRunner(name, total) {
 
   document.body.appendChild(runnerOverlay);
 
-  // Stop 踰꾪듉
+  
   runnerOverlay.querySelector('.js-runner-stop').addEventListener('click', function() {
     vscode.postMessage({ type: 'stopCollectionRun' });
     this.disabled = true;
     this.textContent = tr('webview.runStopping');
   });
-  // Close 踰꾪듉
+  
   runnerOverlay.querySelector('.js-runner-close').addEventListener('click', function() {
     if (runnerOverlay) { runnerOverlay.remove(); runnerOverlay = null; }
   });
@@ -6603,7 +6725,7 @@ function showRunner(name, total) {
     this.disabled = true;
     vscode.postMessage({ type: 'rerunFailedCollection', failedIndices: failedIndices });
   });
-  // ???대┃ ?대깽???꾩엫
+  
   runnerOverlay.querySelector('.js-runner-list').addEventListener('click', function(e) {
     var row = e.target.closest('.runner-row');
     if (!row) return;
@@ -6677,10 +6799,10 @@ function updateRunnerRow(msg) {
     '<span class="rr-icon">' + icon + '</span>';
   list.appendChild(row);
 
-  // 寃곌낵 ???
+  
   runnerResults[msg.index] = { error: msg.error, response: msg.response, failed: !isPassed };
 
-  // ?꾨줈洹몃젅???낅뜲?댄듃
+  
   var pct = Math.round(((msg.index + 1) / msg.total) * 100);
   runnerOverlay.querySelector('.js-runner-counter').textContent = (msg.index + 1) + '/' + msg.total;
   runnerOverlay.querySelector('.js-runner-bar').style.width = pct + '%';
@@ -6690,16 +6812,16 @@ function updateRunnerRow(msg) {
     existingRow.classList.toggle('active', Number(existingRow.dataset.idx) === Number(msg.index));
   });
 
-  // ?먮룞 ?ㅽ겕濡?
+  
   list.scrollTop = list.scrollHeight;
 }
 
 function finishRunner(msg) {
   if (!runnerOverlay) return;
-  // ?ㅽ뵾???쒓굅
+  
   var spinner = runnerOverlay.querySelector('.js-runner-spinner');
   if (spinner) spinner.remove();
-  // Stop ??Close ?꾪솚
+  
   var stopBtn = runnerOverlay.querySelector('.js-runner-stop');
   if (stopBtn) stopBtn.classList.add('hidden');
   var rerunBtn = runnerOverlay.querySelector('.js-runner-rerun');
@@ -6713,15 +6835,15 @@ function finishRunner(msg) {
   var liveCopy = runnerOverlay.querySelector('.js-runner-live-copy');
   if (liveTitle) liveTitle.textContent = tr('webview.runStatus');
   if (liveCopy) liveCopy.textContent = msg.stopped ? tr('webview.runStopping') : '';
-  // 理쒖쥌 ?쒓컙 ?쒖떆
+  
   runnerOverlay.querySelector('.js-runner-time').textContent = tr('webview.runTime') + ': ' + msg.time + 'ms';
-  // 諛?100% (?먮뒗 以묐떒 ???꾩옱 媛??좎?)
+  
   if (!msg.stopped) {
     runnerOverlay.querySelector('.js-runner-bar').style.width = '100%';
   }
 }
 
-// === JSON ?몃━ 酉?===
+
 function appendJsonPath(basePath, segment, isArray) {
   if (segment === '' || segment === undefined || segment === null) return basePath || '$';
   if (isArray) return (basePath || '$') + '[' + segment + ']';
@@ -6967,8 +7089,8 @@ function renderXmlBodyWithPaths(body) {
   }).join('') + '</div>';
 }
 
-// === Content-Type 媛먯? 諛?援щЦ ?섏씠?쇱씠??(highlight.js) ===
-// hljs ?몄뼱 留ㅽ븨
+
+
 var hljsLangMap = { json: 'json', html: 'html', xml: 'xml', js: 'javascript', css: 'css', text: 'plaintext' };
 
 function detectLang(ct, body) {
@@ -7003,19 +7125,19 @@ function isBinaryContentType(ct) {
 }
 
 function highlightBody(body, lang) {
-  // JSON? pretty-print ???섏씠?쇱씠??(_formatted_json?대㈃ ?대? ?щ㎎??
+  
   if (lang === 'json') {
     try { body = JSON.stringify(JSON.parse(body), null, 2); } catch {}
   }
   var actualLang = lang === '_formatted_json' ? 'json' : lang;
-  // hljs ?ъ슜 媛?ν븯硫??쇱씠釉뚮윭由??섏씠?쇱씠??
+  
   if (typeof hljs !== 'undefined') {
     var hljsLang = hljsLangMap[actualLang] || 'plaintext';
     try {
       return hljs.highlight(body, { language: hljsLang }).value;
     } catch {}
   }
-  // fallback: ?⑥닚 escape
+  
   return escapeHtml(body);
 }
 
@@ -7191,7 +7313,7 @@ function stepResponseSearch(mc, delta) {
   syncResponseSearch(mc);
 }
 
-// === Format 湲곕뒫 (JSON + XML) ===
+
 function getFormatOptions(mc) {
   var toolbar = mc.querySelector('.js-res-body-toolbar');
   if (!toolbar) return null;
@@ -7225,7 +7347,7 @@ function applyFormat(mc) {
   } else {
     return;
   }
-  // Raw 酉??낅뜲?댄듃
+  
   var rawEl = mc.querySelector('.js-res-raw');
   if (rawEl) {
     var searchQuery = tab.responseSearchQuery || '';
@@ -7233,7 +7355,7 @@ function applyFormat(mc) {
       ? renderXmlBodyWithPaths(formatted)
       : renderResponseBody(formatted, opts.lang, searchQuery, tab.responseSearchIndex || 0, getResponseSearchState(tab));
   }
-  // JSON ?몃━???щ젋?붾쭅 (pretty?먯꽌???섎? ?놁?留??쇨????좎?)
+  
   if (opts.lang === 'json') {
     var treeEl = mc.querySelector('.js-res-tree');
     if (treeEl) {
@@ -7257,17 +7379,17 @@ function formatJson(body, style, indent) {
   } catch { return body; }
 }
 
-// === XML ?щ㎎??(?뺢퇋??湲곕컲, ?몃? ?쇱씠釉뚮윭由??놁쓬) ===
+
 function formatXml(xml, style, indent) {
-  // ?좏뻾 怨듬갚/以꾨컮轅??뺢퇋??
+  
   xml = xml.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
 
   if (style === 'compact') {
-    // ?쒓렇 ?ъ씠??怨듬갚/以꾨컮轅??쒓굅
+    
     return xml.replace(/>\\s+</g, '><').replace(/^\\s+|\\s+$/g, '');
   }
 
-  // ?좏겙 遺꾨━: XML ?좎뼵, 二쇱꽍, CDATA, ??꾪겢濡쒖쭠, ?щ뒗?쒓렇, ?ル뒗?쒓렇, ?띿뒪??
+  
   var tokens = xmlTokenize(xml);
 
   if (style === 'inline') {
@@ -7323,17 +7445,17 @@ function xmlBuildPretty(tokens, indent) {
 }
 
 function xmlBuildInline(tokens, indent) {
-  // Inline Children: ?먯떇???띿뒪???섎굹嫄곕굹 ?먯떇???섎굹肉먯씠硫???以꾨줈
-  // 1?④퀎: ?몃━ 援ъ“ ?뚯븙 ??inline ?먯젙
+  
+  
   var lines = [];
   var depth = 0;
   var i = 0;
   while (i < tokens.length) {
     var t = tokens[i];
     if (t.type === 'open') {
-      // ?ㅼ쓬 ?좏겙???띿뒪???ル뒗?쒓렇 ?먮뒗 ?⑥씪 ?먯떇+?ル뒗?쒓렇?몄? ?뺤씤
+      
       if (i + 2 < tokens.length && tokens[i+1].type === 'text' && tokens[i+2].type === 'close') {
-        // <tag>text</tag> ????以?
+        
         lines.push(indentStr(depth, indent) + t.value + tokens[i+1].value + tokens[i+2].value);
         i += 3;
         continue;
@@ -7343,7 +7465,7 @@ function xmlBuildInline(tokens, indent) {
         i += 3;
         continue;
       }
-      // ?먯떇???섎굹 (open + text + close) ??寃쎌슦: <parent><child>text</child></parent>
+      
       if (i + 4 < tokens.length &&
           tokens[i+1].type === 'open' && tokens[i+2].type === 'text' &&
           tokens[i+3].type === 'close' && tokens[i+4].type === 'close') {
@@ -7508,7 +7630,7 @@ function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;
 function escapeAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function truncate(s, n) { return s.length > n ? s.substring(0, n-1) + '...' : s; }
 
-// 誘몄튂??蹂??泥댄겕 (URL ?낅젰?)
+
 function checkUnresolvedVars() {
   var urlEl = mainContent.querySelector('.js-url');
   var overlay = mainContent.querySelector('.js-var-overlay');
@@ -7532,7 +7654,7 @@ function checkUnresolvedVars() {
     });
     overlay.innerHTML = html;
     overlay.classList.remove('hidden');
-    // ?ㅽ겕濡??숆린??
+    
     overlay.scrollLeft = urlEl.scrollLeft;
   } else {
     overlay.innerHTML = '';
@@ -7811,7 +7933,7 @@ function handleVariableAutocompleteKeydown(event) {
   return false;
 }
 
-// ???곹깭瑜?Extension???꾩넚 (??μ슜)
+
 function persistTabState() {
     saveActiveTabState();
     var tabData = tabs.map(function(t) {
@@ -7821,7 +7943,7 @@ function persistTabState() {
   vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx), compareSettings: cloneCompareSettings(compareSettings) });
 }
 
-// ??蹂寃??꾪솚/?リ린 ???먮룞 ???(?붾컮?댁뒪)
+
 var _persistTimer = null;
 var variablePreviewPopover = null;
 var variableAutocompletePopover = null;
@@ -7831,10 +7953,10 @@ function debouncePersist() {
   _persistTimer = setTimeout(persistTabState, 1000);
 }
 
-// 珥덇린 ?곹깭: 鍮????섎굹 ?앹꽦
+
 createTab();
 
-// webview 以鍮??좏샇 ?꾩넚
+
 vscode.postMessage({ type: 'webviewReady' });
 </script>
 <script nonce="${nonce}" src="${hljsUri}"></script>

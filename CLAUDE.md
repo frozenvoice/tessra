@@ -70,6 +70,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ### Environment UX
 - URL / Headers / Body / Auth / Scripts 등 편집 가능한 텍스트 입력에서 `{{variable}}` 자동완성
+- 요청 패널 상단 환경 변수 편집 영역은 기본 접힘 상태이며, 헤더에서 활성 환경 이름과 변수 개수를 표시
 
 ### Scripts
 - Pre-request script

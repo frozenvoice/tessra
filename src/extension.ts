@@ -40,11 +40,11 @@ export function activate(context: vscode.ExtensionContext) {
   const t = (key: string, params?: Record<string, string | number>) => LocalizationService.t(key, params);
   const storage = new StorageService(context);
   if (storage.didMigrateLegacyStorage()) {
-    vscode.window.showInformationMessage('기존 Arc Client 데이터를 마이그레이션했습니다');
+    vscode.window.showInformationMessage('Migrated existing Arc Client data into Tessra.');
   }
   const legacyMigrationError = storage.getLegacyMigrationError();
   if (legacyMigrationError) {
-    vscode.window.showErrorMessage(`기존 Arc Client 데이터 마이그레이션에 실패했습니다: ${legacyMigrationError}`);
+    vscode.window.showErrorMessage(`Failed to migrate existing Arc Client data into Tessra: ${legacyMigrationError}`);
   }
   const collectionProvider = new CollectionTreeProvider(storage);
   const historyProvider = new HistoryTreeProvider(storage);
@@ -60,7 +60,7 @@ export function activate(context: vscode.ExtensionContext) {
     dragAndDropController: historyProvider,
   });
 
-  // 히스토리 뷰 타이틀 갱신 (개수 + 필터 표시)
+  // Update collection view description with counts and filter text.
   function updateCollectionDescription(): void {
     const visible = collectionProvider.visibleCollectionCount;
     const total = collectionProvider.totalCollectionCount;
@@ -68,9 +68,9 @@ export function activate(context: vscode.ExtensionContext) {
     const parts: string[] = [];
     if (total > 0) { parts.push(filter ? `${visible}/${total}` : String(total)); }
     if (filter) { parts.push(filter); }
-    collectionTreeView.description = parts.length > 0 ? parts.join(' · ') : undefined;
-    collectionTreeView.description = parts.length > 0 ? parts.join(' · ') : undefined;
-    collectionTreeView.description = parts.length > 0 ? parts.join(' · ') : undefined;
+    collectionTreeView.description = parts.length > 0 ? parts.join(' | ') : undefined;
+    collectionTreeView.description = parts.length > 0 ? parts.join(' | ') : undefined;
+    collectionTreeView.description = parts.length > 0 ? parts.join(' | ') : undefined;
   }
 
   function updateHistoryDescription(): void {
@@ -80,7 +80,7 @@ export function activate(context: vscode.ExtensionContext) {
     const parts: string[] = [];
     if (count > 0) { parts.push(filter ? `${visible}/${count}` : String(count)); }
     if (filter) { parts.push(filter); }
-    historyTreeView.description = parts.length > 0 ? parts.join(' · ') : undefined;
+    historyTreeView.description = parts.length > 0 ? parts.join(' | ') : undefined;
   }
   historyProvider.onCountChanged = () => updateHistoryDescription();
   collectionProvider.onDidChangeTreeData(() => updateCollectionDescription());
@@ -116,7 +116,7 @@ export function activate(context: vscode.ExtensionContext) {
     try {
       await Promise.all(updates);
     } catch {
-      // 레거시 테마 값 정리는 조용히 시도하고 실패해도 확장 동작은 계속한다.
+      // Best-effort cleanup for the old theme value; keep the extension running if it fails.
     }
   }
 
@@ -613,13 +613,13 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 환경 클릭: 싱글클릭 → 변수 편집, 더블클릭 → 활성/비활성 토글
+  // Environment click: single click edits variables, double click toggles active state.
   let envClickTimer: ReturnType<typeof setTimeout> | null = null;
   let envLastClickId: string | null = null;
   context.subscriptions.push(
     vscode.commands.registerCommand('tessra.onEnvironmentClick', (env: Environment) => {
       if (envLastClickId === env.id && envClickTimer) {
-        // 더블클릭: 활성/비활성 토글 + 변수 편집 화면 표시
+        // Double click: toggle active state and show the variable editor.
         clearTimeout(envClickTimer);
         envClickTimer = null;
         envLastClickId = null;
@@ -637,7 +637,7 @@ export function activate(context: vscode.ExtensionContext) {
         RequestPanel.show(context.extensionUri);
         RequestPanel.currentPanel?.loadEnvironment(env);
       } else {
-        // 싱글클릭: 대기 후 변수 편집
+        // Single click: wait briefly before opening the variable editor.
         if (envClickTimer) { clearTimeout(envClickTimer); }
         envLastClickId = env.id;
         envClickTimer = setTimeout(() => {

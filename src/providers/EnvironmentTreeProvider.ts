@@ -5,7 +5,7 @@ import { LocalizationService } from '../services/LocalizationService';
 
 const ENV_MIME = 'application/vnd.tessra.environment';
 
-// 환경변수 TreeView 프로바이더 (드래그앤드롭 지원)
+// Environment TreeView provider with drag-and-drop support.
 export class EnvironmentTreeProvider
   implements vscode.TreeDataProvider<Environment>, vscode.TreeDragAndDropController<Environment>
 {
@@ -15,7 +15,7 @@ export class EnvironmentTreeProvider
   readonly dragMimeTypes = [ENV_MIME];
   readonly dropMimeTypes = [ENV_MIME];
 
-  // 현재 활성 환경 ID
+  // Current active environment ID.
   private _activeEnvId: string | null;
 
   constructor(private storage: StorageService) {
@@ -40,13 +40,13 @@ export class EnvironmentTreeProvider
     this.storage.saveActiveEnvironmentId(value);
   }
 
-  // 드래그 시작: 환경 ID를 전달
+  // Start drag by passing environment IDs.
   handleDrag(source: readonly Environment[], dataTransfer: vscode.DataTransfer): void {
     if (source.length === 0) { return; }
     dataTransfer.set(ENV_MIME, new vscode.DataTransferItem(source.map((e) => e.id)));
   }
 
-  // 드롭: 환경 순서 변경
+  // Drop environments to reorder them.
   handleDrop(target: Environment | undefined, dataTransfer: vscode.DataTransfer): void {
     const raw = dataTransfer.get(ENV_MIME);
     if (!raw) { return; }
@@ -54,7 +54,7 @@ export class EnvironmentTreeProvider
     if (target && draggedIds.includes(target.id)) { return; }
 
     const envs = this.storage.getEnvironments();
-    // 드래그된 항목 추출
+    // Collect dragged items.
     const dragged: Environment[] = [];
     for (const id of draggedIds) {
       const idx = envs.findIndex((e) => e.id === id);
@@ -64,9 +64,9 @@ export class EnvironmentTreeProvider
     }
     if (dragged.length === 0) { return; }
 
-    // 삽입 위치 결정
+    // Decide insertion position.
     if (!target) {
-      // 루트 끝에 추가
+      // Append at root when there is no target.
       envs.push(...dragged);
     } else {
       const targetIdx = envs.findIndex((e) => e.id === target.id);
@@ -93,20 +93,20 @@ export class EnvironmentTreeProvider
       vscode.TreeItemCollapsibleState.None
     );
     item.description = isActive
-      ? `✓ ${LocalizationService.t('environment.active')}`
+      ? LocalizationService.t('environment.active')
       : LocalizationService.t('environment.vars', { count: env.variables.length });
     item.description = isActive
-      ? `${LocalizationService.t('environment.active')} · ${varsLabel}`
+      ? `${LocalizationService.t('environment.active')} | ${varsLabel}`
       : varsLabel;
     item.iconPath = new vscode.ThemeIcon(
       isActive ? 'pass-filled' : 'symbol-variable',
       isActive ? new vscode.ThemeColor('charts.green') : new vscode.ThemeColor('charts.blue')
     );
     item.description = isActive
-      ? `${LocalizationService.t('environment.active')} · ${LocalizationService.t('environment.vars', { count: env.variables.length })}`
+      ? `${LocalizationService.t('environment.active')} | ${LocalizationService.t('environment.vars', { count: env.variables.length })}`
       : LocalizationService.t('environment.vars', { count: env.variables.length });
     item.tooltip = isActive
-      ? `${env.name}\n${LocalizationService.t('environment.active')} · ${varsLabel}`
+      ? `${env.name}\n${LocalizationService.t('environment.active')} | ${varsLabel}`
       : `${env.name}\n${varsLabel}`;
     item.description = isActive
       ? `${LocalizationService.t('environment.active')} | ${varsLabel}`
@@ -116,7 +116,7 @@ export class EnvironmentTreeProvider
       : `${env.name}\n${varsLabel}`;
     item.contextValue = isActive ? 'environment-active' : 'environment';
 
-    // 싱글클릭: 변수 편집, 더블클릭: 활성/비활성 토글
+    // Single click edits variables; double click toggles active state.
     item.command = {
       command: 'tessra.onEnvironmentClick',
       title: LocalizationService.t('environment.clickTitle'),
@@ -130,7 +130,7 @@ export class EnvironmentTreeProvider
     return this.storage.getEnvironments();
   }
 
-  // 새 환경 생성
+  // Create a new environment.
   async createEnvironment(): Promise<void> {
     const name = await vscode.window.showInputBox({
       prompt: LocalizationService.t('environment.name.prompt'),
@@ -148,7 +148,7 @@ export class EnvironmentTreeProvider
     this.refresh();
   }
 
-  // 이름 변경
+  // Rename an environment.
   async renameEnvironment(env: Environment): Promise<void> {
     const newName = await vscode.window.showInputBox({
       prompt: LocalizationService.t('environment.rename.prompt'),
@@ -163,7 +163,7 @@ export class EnvironmentTreeProvider
     this.refresh();
   }
 
-  // 삭제
+  // Delete an environment.
   async deleteEnvironment(env: Environment): Promise<void> {
     const confirm = await vscode.window.showWarningMessage(
       LocalizationService.t('environment.delete.confirm', { name: env.name }),
@@ -177,14 +177,14 @@ export class EnvironmentTreeProvider
     if (idx >= 0) { envs.splice(idx, 1); }
     this.storage.saveEnvironments(envs);
 
-    // 활성 환경이 삭제되면 비활성화
+    // Deactivate if the active environment was deleted.
     if (this.activeEnvId === env.id) {
       this.activeEnvId = null;
     }
     this.refresh();
   }
 
-  // 활성 환경의 변수 목록 반환
+  // Return variables from the active environment.
   getActiveVariables(): import('../models/types').KeyValue[] {
     if (!this.activeEnvId) { return []; }
     const env = this.storage.getEnvironment(this.activeEnvId);

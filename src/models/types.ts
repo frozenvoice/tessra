@@ -511,7 +511,9 @@ export interface LoadEnvironmentMessage {
 
 export interface UpdateActiveEnvMessage {
   type: MessageType.UpdateActiveEnv;
+  envId?: string | null;
   envName: string | null;
+  variables?: KeyValue[];
   profileName?: string;
 }
 

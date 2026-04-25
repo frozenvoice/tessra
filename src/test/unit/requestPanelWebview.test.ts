@@ -7,6 +7,7 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.newTab': 'New tab',
   'webview.requestTabs': 'Request tabs',
   'webview.environment': 'Environment:',
+  'webview.environmentNone': 'None',
   'webview.unsavedChanges': 'Unsaved changes',
   'webview.autoSaved': 'Auto-saved',
   'webview.addVariable': '+ Add Variable',
@@ -971,6 +972,23 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /tr\('webview\.saveToHistoryOffStatus'\)/);
     assert.match(script, /tr\('webview\.environment'\)/);
     assert.doesNotMatch(script, /<span class="var-name">\{\{env\}\}<\/span>/);
+  });
+
+  it('renders the environment editor as a collapsed summary with accessible toggle handling', () => {
+    assert.match(html, /<div id="envEditor" class="env-editor collapsed">/);
+    assert.match(html, /id="envEditorToggle" role="button" tabindex="0" aria-expanded="false" aria-controls="envEditorBody"/);
+    assert.match(html, /class="env-editor-caret" aria-hidden="true"/);
+    assert.match(html, /id="envEditorName">None<\/span>/);
+    assert.match(html, /id="envEditorVarCount"/);
+    assert.match(html, /id="envEditorBody"/);
+    assert.match(script, /function toggleEnvironmentEditor\(\)/);
+    assert.match(script, /envEditorToggle\?\.addEventListener\('keydown'/);
+    assert.match(script, /setEnvironmentEditorData\(msg\.envId \|\| null, msg\.envName \|\| null, msg\.variables \|\| \[\]\)/);
+    assert.match(source, /variables,\s*profileName: RequestPanel\.storage\.getWorkspaceProfileName\(\)/);
+    assert.ok(
+      script.indexOf('const envEditorName = document.getElementById') < script.lastIndexOf('updateStaticLocalizedText();'),
+      'initial localized text refresh should run after environment editor elements are bound'
+    );
   });
 
   it('renders response search controls and search syncing helpers', () => {

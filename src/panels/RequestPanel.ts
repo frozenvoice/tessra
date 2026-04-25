@@ -36,7 +36,7 @@ import {
 } from './requestPanel/messages';
 import { getRequestPanelHtml } from './requestPanel/requestPanelHtml';
 
-// Webview ?붿껌 ?⑤꼸 愿由?(?ㅼ쨷 ??吏??
+// Request webview panel manager with multi-tab support.
 export class RequestPanel {
   public static currentPanel: RequestPanel | undefined;
   public static storage: StorageService;
@@ -93,11 +93,11 @@ export class RequestPanel {
 
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
-    // ??λ맂 ???곹깭 蹂듭썝
+    // Restore saved tab state.
     this.restoreTabState();
   }
 
-  // ??λ맂 ???곹깭瑜?webview???꾩넚
+  // Prepare saved tab state for the webview.
   private restoreTabState() {
     const state = RequestPanel.storage.getTabState();
     if (state && (state.tabs.length > 0 || state.compareSettings)) {
@@ -138,7 +138,7 @@ export class RequestPanel {
     return nonce;
   }
 
-  // ?⑤꼸 ?쒖떆. createNewTab=true?대㈃ ????룄 ?앹꽦
+  // Show the panel. createNewTab=true opens an additional tab.
   public static show(extensionUri: vscode.Uri, createNewTab: boolean = false) {
     if (RequestPanel.currentPanel) {
       if (!RequestPanel.currentPanel.webviewReady) {
@@ -275,9 +275,13 @@ export class RequestPanel {
   }
 
   public updateActiveEnv(envName: string | null) {
+    const envId = RequestPanel.environmentProvider.activeEnvId;
+    const variables = RequestPanel.environmentProvider.getActiveVariables();
     this.postMessage({
       type: MessageType.UpdateActiveEnv,
+      envId,
       envName,
+      variables,
       profileName: RequestPanel.storage.getWorkspaceProfileName(),
     });
     this.sendActiveVarsToWebview();
@@ -299,11 +303,11 @@ export class RequestPanel {
 
   private async handleMessage(message: unknown) {
     if (!isIncomingWebviewMessage(message)) { return; }
-    // Webview 珥덇린???꾨즺 ????λ맂 ??蹂듭썝
+    // Restore saved state after the webview finishes initializing.
     if (message.type === 'webviewReady') {
       this.webviewReady = true;
-      // 留?webviewReady留덈떎 ??μ냼?먯꽌 ???곹깭瑜??쎌뼱 蹂듭썝
-      // (retainContextWhenHidden ?놁씠 蹂듭썝???⑤꼸? ?④??믫몴????webview媛 ?ъ깮?깅맖)
+      // Read the latest saved state each time the webview reports readiness.
+      // With retainContextWhenHidden disabled, VS Code can recreate the webview.
       const state = this.pendingRestore ?? RequestPanel.storage.getTabState();
       if (state && (state.tabs.length > 0 || state.compareSettings)) {
         this.postMessage({
@@ -486,7 +490,7 @@ export class RequestPanel {
     }
   }
 
-  // ?쒖꽦 ?섍꼍蹂????紐⑸줉??webview???꾨떖
+  // Send active environment variables to the webview.
   private sendActiveVarsToWebview() {
     const vars = RequestPanel.environmentProvider.getActiveVariables();
     const varKeys = vars.filter(v => v.enabled && v.key).map(v => v.key);
@@ -526,7 +530,7 @@ export class RequestPanel {
     }
   }
 
-  // Content-Type ???뚯씪 ?뺤옣??留ㅽ븨
+  // Map Content-Type values to file extensions.
   private static contentTypeToExt(ct: string): string {
     const mime = ct.split(';')[0].trim().toLowerCase();
     const map: Record<string, string> = {
@@ -551,10 +555,10 @@ export class RequestPanel {
     return map[mime] || 'txt';
   }
 
-  // ?묐떟 諛붾뵒瑜??뚯씪濡????
+  // Save response body to a file.
   private async saveResponseBody(body: string, contentType: string, bodyBase64?: string): Promise<boolean> {
     const ext = RequestPanel.contentTypeToExt(contentType);
-    // 湲곕낯 ?뚯씪紐? response_YYYYMMDD_HHmmss.?뺤옣??
+    // Default filename: response_YYYYMMDD_HHmmss.ext.
     const now = new Date();
     const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
     const uri = await vscode.window.showSaveDialog({
@@ -576,7 +580,7 @@ export class RequestPanel {
     }
   }
 
-  // ???묐떟???꾩떆 ?뚯씪濡???ν븯怨?VS Code diff ?먮뵒?곕줈 鍮꾧탳
+  // Save two responses as temporary files and compare them in VS Code diff.
   private async compareResponses(message: CompareResponsesMessage): Promise<void> {
     const comparison = ResponseCompareService.prepareComparison(message.left, message.right, message.options);
     try {
@@ -597,10 +601,10 @@ export class RequestPanel {
     }
   }
 
-  // diff??蹂몃Ц ?щ㎎??
+  // Format response bodies for diff view.
   private formatForDiff(body: string, ext: string): string {
     if (ext === 'json') {
-      try { return JSON.stringify(JSON.parse(body), null, 2); } catch { /* ?뚯떛 ?ㅽ뙣 ???먮낯 諛섑솚 */ }
+      try { return JSON.stringify(JSON.parse(body), null, 2); } catch { /* Return original body when JSON parsing fails. */ }
     }
     if (ext === 'xml' || ext === 'html') {
       return RequestPanel.prettyXml(body);
@@ -653,28 +657,28 @@ export class RequestPanel {
     vscode.window.showInformationMessage(LocalizationService.t('panel.copiedCode', { label: target.label }));
   }
 
-  // XML/HTML Pretty ?щ㎎??(?몃뜶???곸슜)
+  // Pretty-print XML/HTML with simple indentation.
   private static prettyXml(xml: string): string {
-    // 湲곗〈 怨듬갚 ?뺣━
+    // Normalize existing spacing.
     let formatted = '';
     let indent = 0;
     const tab = '  ';
-    // ?쒓렇 ?⑥쐞濡?遺꾨━
+    // Split by tags.
     const parts = xml.replace(/>\s*</g, '><').split(/(<[^>]+>)/);
     for (const part of parts) {
       if (!part.trim()) continue;
-      // ?ル뒗 ?쒓렇
+      // Closing tag.
       if (part.match(/^<\/\w/)) {
         indent = Math.max(0, indent - 1);
         formatted += tab.repeat(indent) + part + '\n';
-      // ?먭린 ?リ린 ?쒓렇 ?먮뒗 ?좎뼵
+      // Self-closing tag or declaration.
       } else if (part.match(/\/>$/) || part.match(/^<\?/) || part.match(/^<!--/) || part.match(/^<!DOCTYPE/i)) {
         formatted += tab.repeat(indent) + part + '\n';
-      // ?щ뒗 ?쒓렇
+      // Opening tag.
       } else if (part.match(/^<\w/)) {
         formatted += tab.repeat(indent) + part + '\n';
         indent++;
-      // ?띿뒪???몃뱶
+      // Text node.
       } else {
         formatted += tab.repeat(indent) + part + '\n';
       }
@@ -687,13 +691,13 @@ export class RequestPanel {
     RequestPanel.currentPanel = undefined;
     this.collectionRunner.stop();
     this.webSocketManager.disconnectAll();
-    // ?⑤꼸 ?ロ옄 ??留덉?留됱쑝濡???λ맂 ???곹깭 ?좎? (webview?먯꽌 二쇨린?곸쑝濡??꾩넚)
+    // Tab state is saved periodically from the webview before disposal.
     for (const d of this.disposables) { d.dispose(); }
     this.disposables = [];
   }
 
   // ===================================================================
-  // Webview HTML (?ㅼ쨷 ??+ ?섍꼍蹂???몄쭛 + 蹂??移섑솚 誘몃━蹂닿린)
+  // Webview HTML for request tabs, environment editing, and variable preview.
   // ===================================================================
   private getHtmlContent(): string {
     return getRequestPanelHtml({

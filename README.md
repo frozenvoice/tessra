@@ -30,6 +30,7 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 - Cancel in-flight requests without discarding the last good response
 - Request stage strip, richer empty states, status-aware response feedback, and polished response actions
 - Topline request summary chips for environment, auth, default headers, scripts, and history behavior
+- Collapsed-by-default environment variable editor with active environment name and variable count
 - Preflight warnings for unresolved `{{variables}}` before you send
 - Clickable status chips that jump to the relevant request area, focus it, and briefly highlight the linked card
 - Draft change chips that summarize which request sections changed before you save or send

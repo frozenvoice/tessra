@@ -130,4 +130,3 @@
 2. `images/screenshot-request-compose.png`
 3. `images/screenshot-html-preview.png`
 4. `images/screenshot-history.png`
-

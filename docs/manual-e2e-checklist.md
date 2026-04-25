@@ -23,6 +23,8 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 ## Variables And Scripts
 
 - Create, edit, switch, and delete environments.
+- Confirm the request panel environment editor renders collapsed by default, shows the active environment name plus variable count, expands/collapses from the header, and shows `Environment: None` when no environment is active.
+- Confirm requests still resolve environment variables while the editor is collapsed, and after editing variables while expanded.
 - Resolve `{{variable}}` values across URL, params, headers, body, auth, and scripts.
 - Confirm unresolved variables are surfaced before send.
 - Confirm variable preview and autocomplete work from text inputs and textareas.

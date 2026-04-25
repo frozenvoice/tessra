@@ -1,18 +1,18 @@
 # Tessra ガイド
 
-Tessra は VS Code 内で動作するローカルファーストの REST API クライアントです。
+Tessra は VS Code 向けのローカル優先 REST API クライアントです。
 
-ログイン不要、クラウド同期なし、主要機能に課金の壁もありません。
+ログイン、クラウド同期、有料制限なしで主要なワークフローを使えます。
 
 ## クイックスタート
 
 1. Activity Bar から Tessra を開きます。
-2. `Tessra: New Request` を実行するか `+` をクリックします。
+2. `Tessra: New Request` を実行するか、`+` をクリックします。
 3. HTTP メソッドを選び、URL を入力します。
 4. params、headers、body、auth、scripts、request settings を入力します。
-5. `Send` を押すか、URL 入力欄で `Enter` を押します。
+5. `Send` をクリックするか、URL 入力欄で `Enter` を押します。
 
-変数の使用例:
+環境変数の使用例:
 
 ```text
 URL: {{baseUrl}}/users
@@ -23,39 +23,47 @@ Body: {"env":"{{envName}}"}
 ## リクエスト作成
 
 - メソッド: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
-- ボディタイプ: `json`, `xml`, `form-urlencoded`, `form-data`, `binary`, `raw`
+- Body タイプ: `json`, `xml`, `form-urlencoded`, `form-data`, `binary`, `raw`
 - 認証: No Auth, Basic, Bearer Token, API Key
-- マルチタブ編集とタブのピン留め
-- URL 入力欄で `Enter` を押すとすぐ送信
+- ピン留めタブ付きのマルチタブ編集
+- URL 入力欄で `Enter` を押すと、アクティブなリクエストを送信します。
+- 上部のサマリーチップには、現在の環境、認証方式、デフォルトヘッダーの使用、スクリプト、履歴動作が表示されます。
+- 機密性のある認証値は、表示操作をするまでマスクされます。
+- ヘッダーやクエリパラメータを 1 行ずつ追加せず、一括貼り付けできます。
+- 送信前に未解決の `{{variables}}` がある場合、Tessra が警告します。
 
 ## レスポンスワークスペース
 
-- `Body`、`Headers`、`Cookies`、`Tests` タブに加えて、意味のある静的 HTML がある場合のみ `Preview` タブが表示されます
-- 動的 HTML ページは `Body` タブに残り、HTTP/HTTPS の元ページは `URL を開く` アクションで開けます
-- レスポンスメタデータに読みやすい所要時間と送信/受信時刻を表示します
-- JSON ツリービューアー
-- XML フォーマット: `Pretty`, `Compact`, `Inline Children`
-- レスポンス本文の保存とコピー
-- `Raw`, `Normalized`, `Pretty` モードでレスポンス比較
+- タブ: `Body`, `Headers`, `Cookies`, `Tests`、意味のある静的 HTML がある場合の `Preview`
+- 動的 HTML ページは `Body` に残し、HTTP/HTTPS として解決されたページは `Open URL` で開けます。
+- レスポンスメタデータには、読みやすい duration とリクエスト/受信時刻が表示されます。
+- 固定レスポンスツールバーから検索、比較、コピー、保存アクションを使えます。
+- レスポンス本文検索は、次/前への移動、大文字小文字の区別、正規表現モードに対応します。
+- JSON tree viewer
+- XML format: `Pretty`, `Compact`, `Inline Children`
+- レスポンス本文の保存またはコピー
+- `Raw`, `Normalized`, `Pretty` モードでレスポンスを比較
+- 比較状態チップには、現在のモード、メタデータ要約の使用、ピン留めレスポンスの準備状態が表示されます。
 
-## Collections / History / Environments
+## コレクション、履歴、環境
 
-- コレクション、フォルダー、保存済みリクエストの作成
-- Drag & Drop で整理
+- コレクション、フォルダー、保存済みリクエストを作成
+- Drag and drop でリクエストを整理
 - コレクション全体を実行
-- 実行時スナップショットと timing metadata として履歴を保存
-- アクティブ環境の切り替えと `{{variables}}` の利用
+- コレクション実行では、アクティブなリクエスト、現在の試行回数、リトライのカウントダウンを表示
+- 実行済みスナップショットと timing metadata を履歴に保存
+- アクティブ環境の切り替えと、リクエスト全体での `{{variables}}` 解決
 
 ## ワークスペースプロファイル
 
-- `default` は普段の Tessra 作業を置くメインのローカル保存領域です
-- 別プロジェクト、取り込んだ OpenAPI / Postman データ、試験用ワークフローを既存作業と混ぜたくないときは新しいプロファイルを作ってください
-- プロファイルは collections、history、environments、default headers、saved tabs を丸ごと分離します
-- 実運用では次の分け方が分かりやすいです
-  - プロファイル: 別プロジェクトや別ワークフロー
-  - 環境: 同一プロジェクト内の `local`, `staging`, `prod`
-- `Tessra: Change Workspace Profile` から切り替えや新規作成ができます
-- リクエスト上部のプロファイルチップに現在のプロファイルが表示され、`default` には意味を説明するツールチップが付きます
+- `default` は普段の Tessra 作業に使うメインのローカル保存領域です。
+- 別のプロジェクト、インポートした spec、実験を現在のコレクションや履歴と混ぜたくないときは、別のプロファイルを作成します。
+- プロファイルは collections、history、environments、default headers、saved tabs を分離します。
+- 実用的な目安:
+  - 異なるプロジェクトや作業フローはプロファイルで分けます。
+  - 同じプロジェクト内の `local`, `staging`, `prod` は環境で分けます。
+- `Tessra: Change Workspace Profile` でプロファイルを切り替えたり作成したりできます。
+- リクエストヘッダーには現在のプロファイルが表示され、`default` プロファイルチップに hover すると意味が表示されます。
 
 ## Scripts
 
@@ -64,24 +72,26 @@ Body: {"env":"{{envName}}"}
 - `pm.test`, `pm.expect`, `pm.environment`
 - script logs と test 結果の表示
 
-## リクエストごとの Settings
+## リクエスト別 Settings
 
 - Timeout
 - Follow redirects
 - Save to history
+- リクエストツールバーまたは Headers タブのバナーから `Default Headers` を開く
 - TLS override
 - 最大レスポンスサイズ
-- Retry count / retry delay
-- Headers 受信後に停止
-- Default headers をスキップ
-- Scripts を無効化
-- 意味のある静的 HTML がある場合は Preview を自動で開く
+- Retry count と retry delay
+- Stop after headers
+- Skip default headers
+- Disable scripts
+- 安全性や動作を変える設定は視覚的に強調されます。
+- レスポンスに意味のある静的 HTML が含まれる場合、Preview を自動的に開きます。
 
 ## 表示言語
 
 - `Tessra: Change Display Language` で `English`, `Korean`, `Japanese` を切り替えられます。
 - Tessra はパネル、プロンプト、通知、アプリ内ガイドに独自の表示言語設定を使います。
-- VS Code の設定ラベルと Command Palette のコマンド名は引き続き VS Code locale に従います。
+- VS Code Settings のラベルと Command Palette のタイトルは引き続き VS Code locale に従います。
 
 ## キーボードショートカット
 
@@ -90,11 +100,11 @@ Body: {"env":"{{envName}}"}
 - `Enter`: URL 入力欄から送信
 - `Ctrl+Enter`: リクエスト送信
 
-macOS では `Cmd` を使います。
+macOS では `Ctrl` の代わりに `Cmd` を使用します。
 
 ## ローカル保存
 
-Tessra のデータはすべて VS Code `globalStorage` 配下の JSON ファイルとしてローカル保存されます。
+すべての Tessra データは VS Code `globalStorage` 配下の JSON ファイルにローカル保存されます。
 
 - `collections.json`
 - `history.json`
@@ -103,4 +113,4 @@ Tessra のデータはすべて VS Code `globalStorage` 配下の JSON ファイ
 - `default-headers.json`
 - `tab-state.json`
 
-Tessra がネットワークを使うのは、ユーザーが明示的に API リクエストを送るときだけです。
+Tessra は、ユーザーが明示的に API リクエストを送信したときだけネットワークを使用します。
