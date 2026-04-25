@@ -316,7 +316,7 @@ export class StorageService {
   // 히스토리 자동 정리: maxItems 초과 시 pinned 아닌 오래된 항목부터 삭제
   // 삭제된 개수를 반환
   pruneHistory(history: HistoryEntry[]): number {
-    const maxItems = vscode.workspace.getConfiguration('tessra').get<number>('historyMaxItems', 100);
+    const maxItems = vscode.workspace.getConfiguration('tessra').get<number>('historyMaxItems', 500);
     if (history.length <= maxItems) { return 0; }
 
     let removed = 0;

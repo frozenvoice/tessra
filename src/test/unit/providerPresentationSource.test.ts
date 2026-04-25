@@ -24,6 +24,25 @@ describe('Provider presentation source', () => {
     assert.match(historySource, /getRequestMethodIcon/);
   });
 
+  it('groups history entries by pinned state and local date without changing storage order', () => {
+    assert.match(historySource, /type HistoryGroupId = 'pinned' \| 'today' \| 'yesterday' \| 'thisWeek' \| 'older';/);
+    assert.match(historySource, /type HistoryTreeNode = HistoryEntry \| HistoryGroupNode;/);
+    assert.match(historySource, /TreeDataProvider<HistoryTreeNode>/);
+    assert.match(historySource, /get visibleCount\(\): number \{\s*return this\.getFilteredEntries\(\)\.length;/);
+    assert.match(historySource, /return this\.groupEntries\(this\.getFilteredEntries\(\)\);/);
+    assert.match(historySource, /history\.group\.pinned/);
+    assert.match(historySource, /history\.group\.today/);
+    assert.match(historySource, /history\.group\.yesterday/);
+    assert.match(historySource, /history\.group\.thisWeek/);
+    assert.match(historySource, /history\.group\.older/);
+    assert.match(historySource, /if \(entry\.pinned\) \{ continue; \}/);
+    assert.match(historySource, /startOfLocalDay\(date: Date\)/);
+    assert.match(historySource, /startOfLocalWeek\(date: Date\)/);
+    assert.match(historySource, /item\.contextValue = 'history-group';/);
+    assert.match(historySource, /item\.command = \{\s*command: 'tessra\.loadFromHistory'/);
+    assert.match(historySource, /if \(!this\.isHistoryEntry\(target\)\) \{ return; \}/);
+  });
+
   it('adds richer tooltips and metadata to environment items', () => {
     assert.match(environmentSource, /const varsLabel = LocalizationService\.t\('environment\.vars'/);
     assert.match(environmentSource, /item\.tooltip = isActive/);

@@ -1,7 +1,7 @@
 {
   "displayName": "Tessra - API Client",
   "description": "A streamlined, offline-first API testing tool for VS Code. No login, no cloud, no limits.",
-  "configuration.historyMaxItems.description": "Maximum number of history entries to keep. When the limit is exceeded, the oldest unpinned entries are removed automatically.",
+  "configuration.historyMaxItems.description": "Maximum number of non-pinned history entries to keep. Pinned entries are preserved and may allow the total history count to exceed this limit.",
   "configuration.allowInsecureCertificates.description": "Disable HTTPS certificate validation only for HTTPS requests that use self-signed certificates. Use this only when necessary.",
   "configuration.displayLanguage.description": "Display language used by Tessra panels, prompts, notifications, and the in-app guide. The guide is localized only when a matching guide file exists; otherwise it falls back to English. VS Code settings labels and command titles still follow the VS Code locale.",
   "configuration.requestPanelTheme.description": "Visual preset used by the Tessra request panel. Switch between the default polish, a minimal cool look, a stronger product feel, or bolder colors.",
@@ -28,6 +28,7 @@
   "command.duplicate": "Duplicate",
   "command.saveAs": "Save As...",
   "command.clearHistory": "Clear History",
+  "command.openHistorySettings": "Tessra: Open History Settings",
   "command.pin": "Pin",
   "command.unpin": "Unpin",
   "command.deletePinned": "Delete (Pinned)",

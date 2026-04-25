@@ -14,17 +14,26 @@ interface HistoryFilter {
   pinned?: boolean;
 }
 
-// 히스토리 TreeView 프로바이더 (드래그앤드롭 지원)
+type HistoryGroupId = 'pinned' | 'today' | 'yesterday' | 'thisWeek' | 'older';
+
+interface HistoryGroupNode {
+  kind: 'group';
+  id: HistoryGroupId;
+  labelKey: string;
+  entries: HistoryEntry[];
+}
+
+type HistoryTreeNode = HistoryEntry | HistoryGroupNode;
+
 export class HistoryTreeProvider
-  implements vscode.TreeDataProvider<HistoryEntry>, vscode.TreeDragAndDropController<HistoryEntry>
+  implements vscode.TreeDataProvider<HistoryTreeNode>, vscode.TreeDragAndDropController<HistoryTreeNode>
 {
-  private _onDidChangeTreeData = new vscode.EventEmitter<void>();
+  private _onDidChangeTreeData = new vscode.EventEmitter<HistoryTreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   readonly dragMimeTypes = [MIME];
   readonly dropMimeTypes = [MIME];
 
-  // 검색 필터
   private _filterText = '';
   get filterText(): string { return this._filterText; }
   set filterText(value: string) {
@@ -32,32 +41,40 @@ export class HistoryTreeProvider
     this.refresh();
   }
 
-  // 뷰 타이틀 갱신 콜백 (extension.ts에서 설정)
   onCountChanged: ((count: number) => void) | undefined;
 
   constructor(private storage: StorageService) {}
 
   refresh(): void {
-    this._onDidChangeTreeData.fire();
-    // 개수 갱신 알림
+    this._onDidChangeTreeData.fire(undefined);
     const count = this.storage.getHistory().length;
     this.onCountChanged?.(count);
   }
 
   get visibleCount(): number {
-    return this.getChildren().length;
+    return this.getFilteredEntries().length;
   }
 
-  getTreeItem(entry: HistoryEntry): vscode.TreeItem {
+  getTreeItem(node: HistoryTreeNode): vscode.TreeItem {
+    if (this.isGroupNode(node)) {
+      const item = new vscode.TreeItem(
+        LocalizationService.t(node.labelKey),
+        vscode.TreeItemCollapsibleState.Expanded
+      );
+      item.description = String(node.entries.length);
+      item.contextValue = 'history-group';
+      item.iconPath = new vscode.ThemeIcon(node.id === 'pinned' ? 'pinned' : 'calendar');
+      return item;
+    }
+
+    const entry = node;
     const method = entry.request.requestType === 'websocket' || /^wss?:\/\//i.test(entry.request.url || '')
       ? 'WS'
       : entry.request.method;
     const url = this.shortenUrl(entry.request.url);
-    const status = entry.response ? `${entry.response.status}` : LocalizationService.t('history.errorShort');
-    const time = entry.response ? `${entry.response.time}ms` : '';
     const label = `${method} ${url}`;
 
-    const pinLabel = entry.pinned ? '📌 ' : '';
+    const pinLabel = entry.pinned ? '[Pinned] ' : '';
     const localizedPinLabel = entry.pinned ? (LocalizationService.t('history.pinnedTag') || pinLabel) : '';
     const item = new vscode.TreeItem(localizedPinLabel + label, vscode.TreeItemCollapsibleState.None);
     item.description = buildHistoryDescription(entry);
@@ -74,55 +91,117 @@ export class HistoryTreeProvider
     return item;
   }
 
-  getChildren(): HistoryEntry[] {
+  getChildren(element?: HistoryTreeNode): HistoryTreeNode[] {
+    if (this.isGroupNode(element)) {
+      return element.entries;
+    }
+    return this.groupEntries(this.getFilteredEntries());
+  }
+
+  private getFilteredEntries(): HistoryEntry[] {
     let entries = this.storage.getHistory();
     const filter = this.parseFilter(this._filterText);
     if (this.hasActiveFilter(filter)) {
       entries = entries.filter((entry) => this.matchesEntry(entry, filter));
     }
-
-    // pinned 항목을 최상단에 고정 (각 그룹 내 순서는 유지)
-    const pinned = entries.filter((e) => e.pinned);
-    const unpinned = entries.filter((e) => !e.pinned);
-    return [...pinned, ...unpinned];
+    return entries;
   }
 
-  // === 드래그앤드롭 ===
+  private groupEntries(entries: HistoryEntry[]): HistoryGroupNode[] {
+    const groups: HistoryGroupNode[] = [];
+    const pinned = entries.filter((entry) => entry.pinned);
+    if (pinned.length > 0) {
+      groups.push({ kind: 'group', id: 'pinned', labelKey: 'history.group.pinned', entries: pinned });
+    }
 
-  handleDrag(source: readonly HistoryEntry[], dataTransfer: vscode.DataTransfer): void {
-    dataTransfer.set(MIME, new vscode.DataTransferItem(
-      source.map((e) => e.id)
-    ));
+    const buckets: Record<Exclude<HistoryGroupId, 'pinned'>, HistoryEntry[]> = {
+      today: [],
+      yesterday: [],
+      thisWeek: [],
+      older: [],
+    };
+
+    for (const entry of entries) {
+      if (entry.pinned) { continue; }
+      buckets[this.resolveDateGroup(entry)].push(entry);
+    }
+
+    const orderedGroups: Array<{ id: Exclude<HistoryGroupId, 'pinned'>; labelKey: string }> = [
+      { id: 'today', labelKey: 'history.group.today' },
+      { id: 'yesterday', labelKey: 'history.group.yesterday' },
+      { id: 'thisWeek', labelKey: 'history.group.thisWeek' },
+      { id: 'older', labelKey: 'history.group.older' },
+    ];
+
+    for (const group of orderedGroups) {
+      const groupedEntries = buckets[group.id];
+      if (groupedEntries.length > 0) {
+        groups.push({ kind: 'group', id: group.id, labelKey: group.labelKey, entries: groupedEntries });
+      }
+    }
+
+    return groups;
   }
 
-  handleDrop(target: HistoryEntry | undefined, dataTransfer: vscode.DataTransfer): void {
+  private resolveDateGroup(entry: HistoryEntry): Exclude<HistoryGroupId, 'pinned'> {
+    const timestamp = new Date(entry.timestamp);
+    if (Number.isNaN(timestamp.getTime())) {
+      return 'older';
+    }
+
+    const todayStart = this.startOfLocalDay(new Date()).getTime();
+    const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
+    const weekStart = this.startOfLocalWeek(new Date()).getTime();
+    const entryTime = this.startOfLocalDay(timestamp).getTime();
+
+    if (entryTime >= todayStart) { return 'today'; }
+    if (entryTime >= yesterdayStart) { return 'yesterday'; }
+    if (entryTime >= weekStart) { return 'thisWeek'; }
+    return 'older';
+  }
+
+  private startOfLocalDay(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
+  private startOfLocalWeek(date: Date): Date {
+    const start = this.startOfLocalDay(date);
+    const day = start.getDay();
+    const daysSinceMonday = day === 0 ? 6 : day - 1;
+    start.setDate(start.getDate() - daysSinceMonday);
+    return start;
+  }
+
+  handleDrag(source: readonly HistoryTreeNode[], dataTransfer: vscode.DataTransfer): void {
+    const entryIds = source
+      .filter((node): node is HistoryEntry => this.isHistoryEntry(node))
+      .map((entry) => entry.id);
+    if (entryIds.length === 0) { return; }
+    dataTransfer.set(MIME, new vscode.DataTransferItem(entryIds));
+  }
+
+  handleDrop(target: HistoryTreeNode | undefined, dataTransfer: vscode.DataTransfer): void {
+    if (!this.isHistoryEntry(target)) { return; }
     const raw = dataTransfer.get(MIME);
     if (!raw) { return; }
-    const draggedIds: string[] = raw.value;
-    if (!draggedIds || draggedIds.length === 0) { return; }
-    if (target && draggedIds.includes(target.id)) { return; }
+    const draggedIds = Array.isArray(raw.value) ? raw.value.filter((value): value is string => typeof value === 'string') : [];
+    if (draggedIds.length === 0 || draggedIds.includes(target.id)) { return; }
 
     const history = this.storage.getHistory();
-
-    // 드래그된 항목 추출
     const dragged: HistoryEntry[] = [];
-    const remaining = history.filter((e) => {
-      if (draggedIds.includes(e.id)) {
-        dragged.push(e);
+    const remaining = history.filter((entry) => {
+      if (draggedIds.includes(entry.id)) {
+        dragged.push(entry);
         return false;
       }
       return true;
     });
+    if (dragged.length === 0) { return; }
 
-    // 드롭 위치 계산
-    let insertIdx = 0;
-    if (target) {
-      insertIdx = remaining.findIndex((e) => e.id === target.id);
-      if (insertIdx < 0) { insertIdx = remaining.length; }
-      else { insertIdx += 1; } // 대상 바로 아래
-    }
+    const insertIdx = remaining.findIndex((entry) => entry.id === target.id);
+    if (insertIdx < 0) { return; }
 
-    remaining.splice(insertIdx, 0, ...dragged);
+    remaining.splice(insertIdx + 1, 0, ...dragged);
     this.storage.saveHistory(remaining);
     this.refresh();
   }
@@ -192,5 +271,13 @@ export class HistoryTreeProvider
     } catch {
       return '';
     }
+  }
+
+  private isGroupNode(node: HistoryTreeNode | undefined): node is HistoryGroupNode {
+    return !!node && (node as HistoryGroupNode).kind === 'group';
+  }
+
+  private isHistoryEntry(node: HistoryTreeNode | undefined): node is HistoryEntry {
+    return !!node && !this.isGroupNode(node);
   }
 }

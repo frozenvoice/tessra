@@ -85,7 +85,7 @@ tessra/
 2. HTTP 요청 전송, 취소, 응답 표시
 3. Collections / folders / requests CRUD와 실행
 4. Environments CRUD와 `{{variable}}` 치환, Postman Environment JSON import 진입점
-5. History 저장, pin, filter, 자동 정리
+5. History 저장, pin, filter, 날짜 그룹화, 자동 정리와 보존 개수 설정 진입점
 6. 인증: Basic, Bearer, API Key
 7. Body 타입: JSON, XML, form-urlencoded, form-data, binary, raw
 8. Pre-request / Test scripts (`pm`, `env`, `test`, `expect`, `assert` 내장 지원, 접이식 stepper 도움말, 인앱 예제 힌트 포함, import된 스크립트는 명시적으로 신뢰 처리하기 전까지 기본 비활성화)

@@ -561,6 +561,12 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('tessra.openHistorySettings', () => {
+      vscode.commands.executeCommand('workbench.action.openSettings', 'tessra.historyMaxItems');
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('tessra.createEnvironment', () => {
       environmentProvider.createEnvironment();
     })

@@ -1,7 +1,7 @@
 {
   "displayName": "Tessra - API Client",
   "description": "VS Code 向けのシンプルなオフライン優先 API テストツールです。ログイン、クラウド、制限はありません。",
-  "configuration.historyMaxItems.description": "保持する履歴項目の最大数です。上限を超えると、ピン留めされていない最も古い項目が自動的に削除されます。",
+  "configuration.historyMaxItems.description": "保持するピン留めされていない履歴項目の最大数です。ピン留めされた項目は保持されるため、履歴全体の件数がこの上限を超える場合があります。",
   "configuration.allowInsecureCertificates.description": "自己署名証明書を使う HTTPS リクエストでのみ、HTTPS 証明書の検証を無効にします。必要な場合だけ使用してください。",
   "configuration.displayLanguage.description": "Tessra のパネル、プロンプト、通知、アプリ内ガイドで使用する表示言語です。一致するガイドファイルがある場合だけローカライズされたガイドを使用し、ない場合は英語に戻ります。VS Code の設定ラベルとコマンド名は引き続き VS Code の locale に従います。",
   "configuration.requestPanelTheme.description": "Tessra リクエストパネルで使用するビジュアルプリセットです。デフォルト、ミニマルクール、よりプロダクト感のある見た目、または大胆なカラーから選択できます。",
@@ -28,6 +28,7 @@
   "command.duplicate": "複製",
   "command.saveAs": "名前を付けて保存...",
   "command.clearHistory": "履歴を消去",
+  "command.openHistorySettings": "Tessra: 履歴設定を開く",
   "command.pin": "ピン留め",
   "command.unpin": "ピン留めを解除",
   "command.deletePinned": "削除（ピン留め）",

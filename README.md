@@ -96,7 +96,8 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 - Collection filtering with `method:`, `host:`, and `type:` tokens
 - History pinning and filtering with `status:`, `method:`, `host:`, and `pinned:` tokens
 - History snapshots store the executed request state plus timing metadata
-- History pruning via `tessra.historyMaxItems`
+- History pruning via `tessra.historyMaxItems`, with pinned entries preserved
+- History Settings action from the History view opens the retention setting directly
 - Denser sidebar rows with method/host summaries and collection/folder item counts
 
 ### Response viewer
@@ -187,8 +188,12 @@ Run `Tessra: Open Guide` to open the user guide inside VS Code.
 
 ### `tessra.historyMaxItems`
 - Type: `number`
-- Default: `100`
-- Maximum number of history entries to keep
+- Default: `500`
+- Minimum: `50`
+- Maximum: `5000`
+- Maximum number of non-pinned history entries to keep
+- Pinned entries are preserved, so total history count may exceed this limit
+- You can open this setting from the History view title bar with `Tessra: Open History Settings`
 
 ### `tessra.allowInsecureCertificates`
 - Type: `boolean`

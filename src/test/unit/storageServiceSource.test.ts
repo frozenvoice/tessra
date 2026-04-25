@@ -71,4 +71,10 @@ describe('storage service source', () => {
     assert.match(source, /fs\.writeFileSync\(tempPath,/);
     assert.match(source, /fs\.renameSync\(tempPath, filePath\)/);
   });
+
+  it('keeps history pruning count-based with a 500 item default fallback', () => {
+    assert.match(source, /pruneHistory\(history: HistoryEntry\[\]\): number/);
+    assert.match(source, /getConfiguration\('tessra'\)\.get<number>\('historyMaxItems', 500\)/);
+    assert.match(source, /if \(!history\[i\]\.pinned\) \{/);
+  });
 });

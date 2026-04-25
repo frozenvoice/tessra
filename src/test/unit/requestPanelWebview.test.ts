@@ -1155,6 +1155,11 @@ describe('RequestPanel Webview', () => {
     );
   });
 
+  it('uses the 500 item history retention fallback for status messages', () => {
+    assert.match(source, /getConfiguration\('tessra'\)\.get<number>\('historyMaxItems', 500\)/);
+    assert.match(source, /History: \$\{removed\} old items removed \(max \$\{maxItems\}\)/);
+  });
+
   it('renders response search controls and search syncing helpers', () => {
     assert.match(script, /function getResponseSearchState\(tab\)/);
     assert.match(script, /function findResponseSearchMatches\(body, query, options\)/);

@@ -27,6 +27,9 @@ describe('package localization files', () => {
 
     assert.ok(properties['tessra.displayLanguage']);
     assert.ok(properties['tessra.requestPanelTheme']);
+    assert.strictEqual(properties['tessra.historyMaxItems'].default, 500);
+    assert.strictEqual(properties['tessra.historyMaxItems'].minimum, 50);
+    assert.strictEqual(properties['tessra.historyMaxItems'].maximum, 5000);
     const legacyDisplayLanguageKey = ['a' + 'rc', 'client'].join('-') + '.displayLanguage';
     assert.strictEqual(properties[legacyDisplayLanguageKey], undefined);
     assert.deepStrictEqual(properties['tessra.displayLanguage'].enumItemLabels, [
@@ -58,9 +61,12 @@ describe('package localization files', () => {
     assert.strictEqual(en['command.changeWorkspaceProfile'], 'Tessra: Change Workspace Profile');
     assert.strictEqual(en['command.importCollection'], 'Tessra: Import Collection');
     assert.strictEqual(en['command.importEnvironment'], 'Import Environment');
+    assert.strictEqual(en['command.openHistorySettings'], 'Tessra: Open History Settings');
+    assert.match(en['configuration.historyMaxItems.description'], /non-pinned history entries/);
+    assert.match(en['configuration.historyMaxItems.description'], /Pinned entries are preserved/);
   });
 
-  it('contributes Import Environment from the Environments title bar', () => {
+  it('contributes Import Environment and History Settings from their view title bars', () => {
     const manifest = readPackageManifest();
     const commands = manifest.contributes.commands as Array<{ command: string; title: string }>;
     const titleMenus = manifest.contributes.menus['view/title'] as Array<{
@@ -70,9 +76,15 @@ describe('package localization files', () => {
     }>;
 
     assert.ok(commands.some((command) => command.command === 'tessra.importEnvironment'));
+    assert.ok(commands.some((command) => command.command === 'tessra.openHistorySettings'));
     assert.ok(titleMenus.some((item) =>
       item.command === 'tessra.importEnvironment'
       && item.when === 'view == tessra-environments'
+      && item.group === 'navigation'
+    ));
+    assert.ok(titleMenus.some((item) =>
+      item.command === 'tessra.openHistorySettings'
+      && item.when === 'view == tessra-history'
       && item.group === 'navigation'
     ));
   });
@@ -90,6 +102,8 @@ describe('package localization files', () => {
     assert.strictEqual(ko['command.importEnvironment'], 'Import Environment');
     assert.match(ja['command.changeRequestPanelTheme'], /^Tessra:/);
     assert.strictEqual(ja['command.importEnvironment'], 'Import Environment');
+    assert.match(ko['command.openHistorySettings'], /^Tessra:/);
+    assert.match(ja['command.openHistorySettings'], /^Tessra:/);
     assert.strictEqual(ko['view.collections'].length > 0, true);
     assert.strictEqual(ja['view.history'].length > 0, true);
   });

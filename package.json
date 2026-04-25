@@ -42,9 +42,9 @@
       "properties": {
         "tessra.historyMaxItems": {
           "type": "number",
-          "default": 100,
-          "minimum": 10,
-          "maximum": 1000,
+          "default": 500,
+          "minimum": 50,
+          "maximum": 5000,
           "description": "%configuration.historyMaxItems.description%"
         },
         "tessra.allowInsecureCertificates": {
@@ -141,6 +141,11 @@
         "command": "tessra.clearHistory",
         "title": "%command.clearHistory%",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "tessra.openHistorySettings",
+        "title": "%command.openHistorySettings%",
+        "icon": "$(settings-gear)"
       },
       {
         "command": "tessra.pinHistory",
@@ -377,6 +382,11 @@
         },
         {
           "command": "tessra.clearHistory",
+          "when": "view == tessra-history",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.openHistorySettings",
           "when": "view == tessra-history",
           "group": "navigation"
         }

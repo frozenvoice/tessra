@@ -95,7 +95,8 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - `method:` / `host:` / `type:` 토큰을 지원하는 Collection 필터
 - `status:` / `method:` / `host:` / `pinned:` 토큰을 지원하는 History 필터
 - 실행 시점 스냅샷과 timing metadata 기반 history 저장
-- `tessra.historyMaxItems` 기준 자동 정리
+- 고정 항목은 유지하면서 `tessra.historyMaxItems` 기준 자동 정리
+- History view 제목 영역의 History Settings 액션으로 보존 개수 설정 바로 열기
 - 메서드/호스트 요약, 컬렉션/폴더 개수를 보여주는 더 촘촘한 사이드바 정보 밀도
 
 ### 응답 뷰어
@@ -186,8 +187,12 @@ VS Code 안에서 사용자 가이드를 보려면 `Tessra: Open Guide`를 실�
 
 ### `tessra.historyMaxItems`
 - 타입: `number`
-- 기본값: `100`
-- history에 유지할 최대 항목 수
+- 기본값: `500`
+- 최소값: `50`
+- 최대값: `5000`
+- history에 유지할 non-pinned 항목의 최대 수
+- pinned 항목은 유지되므로 전체 history 개수는 이 제한을 초과할 수 있음
+- History view 제목 영역의 `Tessra: 히스토리 설정 열기`에서 바로 열 수 있음
 
 ### `tessra.allowInsecureCertificates`
 - 타입: `boolean`

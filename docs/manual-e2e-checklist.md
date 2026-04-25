@@ -40,7 +40,9 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 - Run a collection, stop a run, and rerun failed requests only.
 - Confirm runner results save to history only when each request has Save to history enabled.
 - Pin, unpin, delete, and filter history using `status:`, `method:`, `host:`, and `pinned:` tokens.
-- Set `tessra.historyMaxItems` low enough to confirm pruning.
+- Confirm History groups entries under Pinned, Today, Yesterday, This Week, and Older; empty groups stay hidden, group rows do not reopen requests, and leaf rows still reopen requests.
+- Open History Settings from the History view title bar and confirm VS Code Settings searches for `tessra.historyMaxItems`.
+- Set `tessra.historyMaxItems` low enough to confirm non-pinned pruning while pinned entries are preserved.
 - Switch `tessra.workspaceProfile`, create a custom profile, and confirm collections, history, environments, default headers, and saved tabs are isolated.
 - Corrupt one storage JSON file in a disposable profile and confirm Tessra creates a `.corrupt-*` backup, warns, and falls back to defaults.
 - In a disposable user-data directory, confirm first-run Arc Client storage migration copies data only when Tessra storage is empty.

@@ -515,7 +515,7 @@ export class RequestPanel {
     response: { status: number; statusText: string; time: number } | null,
     timing?: RequestTiming
   ) {
-    const maxItems = vscode.workspace.getConfiguration('tessra').get<number>('historyMaxItems', 100);
+    const maxItems = vscode.workspace.getConfiguration('tessra').get<number>('historyMaxItems', 500);
     const removed = RequestPanel.storage.addHistoryEntry({
       id: Date.now().toString(36) + Math.random().toString(36).substring(2, 8),
       request,

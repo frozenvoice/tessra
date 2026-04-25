@@ -51,6 +51,11 @@ describe('extension source', () => {
     assert.match(source, /update\(\s*'workspaceProfile'/);
   });
 
+  it('opens the Tessra history retention setting from a dedicated command', () => {
+    assert.match(source, /registerCommand\('tessra\.openHistorySettings'/);
+    assert.match(source, /executeCommand\('workbench\.action\.openSettings', 'tessra\.historyMaxItems'\)/);
+  });
+
   it('marks imported scripts as untrusted until the user reviews them', () => {
     assert.match(source, /function hasImportedScripts\(scripts: RequestScripts\): boolean \{/);
     assert.match(source, /const scripts = normalizeImportedScripts\(value\.scripts\);/);
