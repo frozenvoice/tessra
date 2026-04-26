@@ -8,6 +8,28 @@ VS Code 안에서 동작하는 로컬 우선 API 클라이언트입니다.
 
 Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게 요청을 만들고 실행하려는 개발자를 위한 확장입니다. 모든 데이터는 로컬에 남고, 네트워크 호출은 사용자가 직접 보내는 API 요청에서만 발생합니다.
 
+## 스크린샷
+
+### 메인 워크스페이스
+컬렉션, 환경, 변수, 히스토리, 응답 뷰어를 한 로컬 워크스페이스에서 다룹니다.
+
+![Tessra 메인 워크스페이스](https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/images/screenshot-main.png)
+
+### 요청 작성
+파라미터, 헤더, JSON 바디, 인증, 스크립트, 환경 변수를 함께 구성합니다.
+
+![Tessra 요청 작성](https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/images/screenshot-request-compose.png)
+
+### HTML 미리보기
+정적 HTML 응답을 VS Code 안에서 안전하게 미리 봅니다.
+
+![Tessra HTML 미리보기](https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/images/screenshot-html-preview.png)
+
+### 히스토리와 컬렉션 러너
+요청 히스토리를 날짜별로 묶고 상태 요약과 함께 컬렉션을 실행합니다.
+
+![Tessra 히스토리와 러너](https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/images/screenshot-history.png)
+
 ## 왜 Tessra인가요?
 
 - 오프라인 우선 워크플로
@@ -149,18 +171,7 @@ pm.environment.set("sessionKey", String(body.key));
 
 ## 설치
 
-```bash
-npm install
-npm run build
-npm run package
-```
-
-그 다음 VS Code에서:
-
-1. `Extensions` 열기
-2. 우측 상단 `...` 클릭
-3. `Install from VSIX...` 선택
-4. 생성된 `.vsix` 파일 선택
+Tessra는 VS Code Marketplace에서 설치하세요. 오프라인 환경에서는 다운로드한 `.vsix` 파일을 **Extensions: Install from VSIX...**로 설치할 수 있습니다.
 
 ## 빠른 시작
 
@@ -259,27 +270,6 @@ macOS에서는 `Cmd`를 사용합니다.
 - Windows: `%APPDATA%\Code\User\globalStorage\tessra.tessra\`
 - macOS: `~/Library/Application Support/Code/User/globalStorage/tessra.tessra/`
 - Linux: `~/.config/Code/User/globalStorage/tessra.tessra/`
-
-## 개발
-
-```bash
-npm run build
-npm run watch
-npm test
-npm run package
-```
-
-VS Code에서 `F5`로 Extension Development Host를 띄워 확인합니다.
-수동 E2E 점검은 `docs/manual-e2e-checklist.md` 기준으로 수행합니다.
-
-## 기술 스택
-
-- TypeScript (`strict`)
-- VS Code Extension API (`^1.74.0`)
-- Node.js 내장 `http` / `https`
-- Webview + TreeView
-- esbuild
-- Mocha
 
 ## 원칙
 

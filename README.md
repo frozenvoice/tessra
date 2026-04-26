@@ -13,22 +13,22 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 ### Main workspace
 Collections, environments, variables, history, and the response viewer in one local workspace.
 
-![Tessra main workspace](images/screenshot-main.png)
+![Tessra main workspace](https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/images/screenshot-main.png)
 
 ### Compose requests
 Build requests with params, headers, JSON bodies, auth, scripts, and environment variables.
 
-![Compose requests in Tessra](images/screenshot-request-compose.png)
+![Compose requests in Tessra](https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/images/screenshot-request-compose.png)
 
 ### HTML preview
 Preview static HTML responses safely inside VS Code.
 
-![HTML preview in Tessra](images/screenshot-html-preview.png)
+![HTML preview in Tessra](https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/images/screenshot-html-preview.png)
 
 ### History and collection runner
 Group request history by date and run collections with status summaries.
 
-![History and runner in Tessra](images/screenshot-history.png)
+![History and runner in Tessra](https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/images/screenshot-history.png)
 
 ## Why Tessra
 
@@ -172,18 +172,7 @@ Then use `{{sessionKey}}` in request 2.
 
 ## Install
 
-```bash
-npm install
-npm run build
-npm run package
-```
-
-Then in VS Code:
-
-1. Open `Extensions`
-2. Click `...`
-3. Select `Install from VSIX...`
-4. Choose the generated `.vsix` file
+Install Tessra from the VS Code Marketplace. For offline environments, install the downloaded `.vsix` with **Extensions: Install from VSIX...**.
 
 ## Quick start
 
@@ -282,27 +271,6 @@ Typical locations:
 - Windows: `%APPDATA%\Code\User\globalStorage\tessra.tessra\`
 - macOS: `~/Library/Application Support/Code/User/globalStorage/tessra.tessra/`
 - Linux: `~/.config/Code/User/globalStorage/tessra.tessra/`
-
-## Development
-
-```bash
-npm run build
-npm run watch
-npm test
-npm run package
-```
-
-Use `F5` in VS Code to launch an Extension Development Host.
-Use `docs/manual-e2e-checklist.md` for the manual E2E pass.
-
-## Tech stack
-
-- TypeScript (`strict`)
-- VS Code Extension API (`^1.74.0`)
-- Node.js built-in `http` / `https`
-- Webview + TreeView
-- esbuild
-- Mocha
 
 ## Principles
 
