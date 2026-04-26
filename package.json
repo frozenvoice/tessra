@@ -8,7 +8,7 @@
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tessra/tessra"
+    "url": "https://github.com/frozenvoice/tessra"
   },
   "engines": {
     "vscode": "^1.74.0"

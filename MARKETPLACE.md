@@ -27,7 +27,7 @@ Use this near the top of the Marketplace README:
 
 ## Screenshot Plan
 
-Store final files in [images/marketplace](/E:/Dev/GitHub/tessra/images/marketplace).
+Store final files in `images/marketplace/`.
 
 ### Screenshot 1
 Title: Multi-tab request workflow
