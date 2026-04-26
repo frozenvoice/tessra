@@ -3,13 +3,9 @@
   "displayName": "Tessra - API Client",
   "description": "A streamlined, offline-first API testing tool for VS Code. No login, no cloud, no limits.",
   "version": "1.0.0",
-  "publisher": "tessra",
+  "publisher": "frozenvoice",
   "license": "MIT",
   "icon": "images/icon.png",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/frozenvoice/tessra"
-  },
   "engines": {
     "vscode": "^1.74.0"
   },
