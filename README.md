@@ -8,6 +8,28 @@ No login. No cloud sync. No paywalled core workflows.
 
 Tessra is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
 
+## Screenshots
+
+### Main workspace
+Collections, environments, variables, history, and the response viewer in one local workspace.
+
+![Tessra main workspace](images/screenshot-main.png)
+
+### Compose requests
+Build requests with params, headers, JSON bodies, auth, scripts, and environment variables.
+
+![Compose requests in Tessra](images/screenshot-request-compose.png)
+
+### HTML preview
+Preview static HTML responses safely inside VS Code.
+
+![HTML preview in Tessra](images/screenshot-html-preview.png)
+
+### History and collection runner
+Group request history by date and run collections with status summaries.
+
+![History and runner in Tessra](images/screenshot-history.png)
+
 ## Why Tessra
 
 - Offline-first workflow
@@ -153,7 +175,7 @@ Then use `{{sessionKey}}` in request 2.
 ```bash
 npm install
 npm run build
-npx vsce package
+npm run package
 ```
 
 Then in VS Code:
@@ -253,8 +275,6 @@ All extension data is stored under VS Code `globalStorage` as JSON files. The de
 - `variables.json`
 - `tab-state.json`
 
-On first activation after the Tessra rename, if the Tessra storage folder has no existing data, Tessra checks the legacy pre-rename storage folders and copies existing data files into the new `tessra.tessra` folder. If Tessra data already exists, migration is skipped to avoid overwriting local data.
-
 If a stored JSON file cannot be parsed, Tessra keeps a `.corrupt-*` backup beside the original file, warns you, and uses defaults for that file until it is saved again.
 
 Typical locations:
@@ -269,7 +289,7 @@ Typical locations:
 npm run build
 npm run watch
 npm test
-npx vsce package
+npm run package
 ```
 
 Use `F5` in VS Code to launch an Extension Development Host.

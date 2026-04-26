@@ -2,6 +2,8 @@
 
 ## 1.0.0
 
-- Rebranded the extension to Tessra.
-- Updated package metadata, command IDs, view IDs, settings keys, default User-Agent, and documentation to use Tessra.
-- Added first-run migration from legacy Arc Client globalStorage when Tessra storage is empty.
+- Initial public release of Tessra.
+- Added local-first REST API requests with collections, environments, variables, and history.
+- Added response viewer with JSON tree, headers, cookies, HTML preview, search, save, copy, pin, and compare tools.
+- Added collection runner, cURL import/export, Postman collection/environment support, and code generation.
+- Added offline-first storage with no login, no cloud sync, and local workspace data.

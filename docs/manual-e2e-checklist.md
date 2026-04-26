@@ -45,7 +45,6 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 - Set `tessra.historyMaxItems` low enough to confirm non-pinned pruning while pinned entries are preserved.
 - Switch `tessra.workspaceProfile`, create a custom profile, and confirm collections, history, environments, default headers, and saved tabs are isolated.
 - Corrupt one storage JSON file in a disposable profile and confirm Tessra creates a `.corrupt-*` backup, warns, and falls back to defaults.
-- In a disposable user-data directory, confirm first-run Arc Client storage migration copies data only when Tessra storage is empty.
 
 ## Response Experience
 

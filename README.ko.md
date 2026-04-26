@@ -152,7 +152,7 @@ pm.environment.set("sessionKey", String(body.key));
 ```bash
 npm install
 npm run build
-npx vsce package
+npm run package
 ```
 
 그 다음 VS Code에서:
@@ -252,8 +252,6 @@ macOS에서는 `Cmd`를 사용합니다.
 - `variables.json`
 - `tab-state.json`
 
-Tessra 이름 변경 후 첫 활성화 시 Tessra 저장 폴더에 기존 데이터가 없으면, 이전 Arc Client 저장 폴더(`arc.arc-client`, `arc-client`)를 확인해 기존 데이터 파일을 새 `tessra.tessra` 폴더로 복사합니다. 이미 Tessra 데이터가 있으면 로컬 데이터 덮어쓰기를 막기 위해 마이그레이션을 건너뜁니다.
-
 저장된 JSON 파일을 파싱할 수 없으면 Tessra는 원본 옆에 `.corrupt-*` 백업을 남기고 경고를 표시한 뒤, 해당 파일이 다시 저장될 때까지 기본값을 사용합니다.
 
 일반적인 경로:
@@ -268,7 +266,7 @@ Tessra 이름 변경 후 첫 활성화 시 Tessra 저장 폴더에 기존 데이
 npm run build
 npm run watch
 npm test
-npx vsce package
+npm run package
 ```
 
 VS Code에서 `F5`로 Extension Development Host를 띄워 확인합니다.

@@ -13,3 +13,11 @@ CLAUDE.md
 **/*.test.js
 **/*.test.ts
 **/*.zip
+images/tessra-activityba.png
+images/icon.tmp.png
+!images/icon.png
+!images/tessra-activitybar.svg
+!images/screenshot-main.png
+!images/screenshot-request-compose.png
+!images/screenshot-html-preview.png
+!images/screenshot-history.png

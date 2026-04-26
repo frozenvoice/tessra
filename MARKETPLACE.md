@@ -68,5 +68,5 @@ Caption: Turn a working request into reusable code in seconds.
 - Korean `README.ko.md` is linked near the top
 - `package.json` description is concise and clear
 - `package.nls.json` and `package.nls.ko.json` cover UI strings
-- Add a real extension icon before publish
-- Prepare at least 3 polished screenshots before the first listing
+- Use the prepared `images/icon.png` extension icon
+- Keep the README screenshots polished and up to date
