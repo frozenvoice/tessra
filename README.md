@@ -4,8 +4,6 @@ The local-first API client for VS Code.
 
 No login. No cloud sync. No paywalled core workflows.
 
-[Korean README](./README.ko.md)
-
 Tessra is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
 
 ## Screenshots
