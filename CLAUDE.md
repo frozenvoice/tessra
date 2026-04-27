@@ -19,7 +19,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - `Ctrl+Enter` / `Cmd+Enter` 전송
 - 진행 중 요청 취소
 - 요청 상태 표시와 응답 상태 애니메이션
-- `ws://` / `wss://` WebSocket 탭 자동 감지, 연결 / 연결 해제, 텍스트 메시지 전송
+- `ws://` / `wss://` WebSocket 탭 자동 감지, 연결 / 연결 해제, 텍스트 메시지 전송, 선택형 keepalive
 
 ### Body 타입
 - `none`
@@ -106,9 +106,11 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - disable scripts
 
 ### WebSocket
+- raw URL 또는 `{{variable}}` 치환 후 URL 기준으로 WebSocket 탭 감지
 - handshake에 headers, query params, auth, default headers, 환경 변수, TLS override 적용
 - Body 탭을 전송 메시지 작성기로 사용
-- 수신 / 전송 메시지 로그 표시
+- 기본 OFF인 app-level keepalive 옵션으로 연결 중 텍스트 ping 주기 전송 가능
+- 수신 / 전송 / close 진단 메시지 로그 표시
 - 수신 binary frame은 base64로 표시
 
 ### UI 언어

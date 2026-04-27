@@ -63,10 +63,13 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 샘플 요청 불러오기, 가이드 열기, 환경 전환, URL 포커스 같은 빈 상태 퀵 액션
 
 ### WebSocket
-- URL이 `ws://` 또는 `wss://`로 시작하면 WebSocket 탭으로 감지
+- raw URL 또는 `{{variable}}` 치환 후 URL이 `ws://` / `wss://`로 시작하면 WebSocket 탭으로 감지
 - 연결 handshake에 headers, query params, auth, 워크스페이스 default headers, 환경 변수, TLS override 설정 적용
 - 기본 액션 버튼으로 연결 / 연결 해제, Body 탭은 전송할 텍스트 메시지 작성기로 사용
-- 전송 / 수신 메시지를 WebSocket 로그로 표시하고, 수신한 binary frame은 base64로 표시
+- 전송 / 수신 / close 진단 메시지를 WebSocket 로그로 표시하고, 수신한 binary frame은 base64로 표시
+- 요청별 app-level keepalive 옵션으로 주기적인 텍스트 ping 전송 가능. 기본값은 꺼짐
+- 공개 echo 스모크 테스트에는 `wss://ws.ifelse.io`를 권장
+- 공개 echo 서버는 가용성이나 idle timeout 정책이 바뀔 수 있음. `1006`으로 닫히면 다른 endpoint를 시도하거나 서버가 app-level ping 메시지를 지원할 때 keepalive를 켜서 확인
 
 ### 요청별 Settings 탭
 - 탭별 timeout

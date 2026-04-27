@@ -257,6 +257,9 @@ export class RequestPanel {
       skipDefaultHeaders: req.skipDefaultHeaders === true,
       disableScripts: req.disableScripts === true,
       scriptsTrusted: req.scriptsTrusted !== false,
+      webSocketKeepAliveEnabled: req.webSocketKeepAliveEnabled === true,
+      webSocketKeepAliveIntervalSeconds: req.webSocketKeepAliveIntervalSeconds ?? 30,
+      webSocketKeepAliveMessage: req.webSocketKeepAliveMessage ?? 'ping',
       name: req.name || `${req.method} ${req.url}`,
     });
   }
@@ -361,6 +364,9 @@ export class RequestPanel {
           skipDefaultHeaders: message.skipDefaultHeaders === true,
           disableScripts: message.disableScripts === true,
           scriptsTrusted: message.scriptsTrusted !== false,
+          webSocketKeepAliveEnabled: message.webSocketKeepAliveEnabled === true,
+          webSocketKeepAliveIntervalSeconds: message.webSocketKeepAliveIntervalSeconds ?? 30,
+          webSocketKeepAliveMessage: message.webSocketKeepAliveMessage ?? 'ping',
         });
         this.postMessage({
           type: MessageType.SaveRequestResult,

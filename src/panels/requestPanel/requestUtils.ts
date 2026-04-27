@@ -23,6 +23,9 @@ export type ResolvedRequestSettings = {
   skipDefaultHeaders: boolean;
   disableScripts: boolean;
   scriptsTrusted: boolean;
+  webSocketKeepAliveEnabled: boolean;
+  webSocketKeepAliveIntervalSeconds: number;
+  webSocketKeepAliveMessage: string;
 };
 
 export type RequestTiming = {
@@ -30,6 +33,11 @@ export type RequestTiming = {
   requestEndedAt: number;
   durationMs?: number;
 };
+
+export const DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS = 30;
+export const MIN_WS_KEEPALIVE_INTERVAL_SECONDS = 5;
+export const MAX_WS_KEEPALIVE_INTERVAL_SECONDS = 300;
+export const DEFAULT_WS_KEEPALIVE_MESSAGE = 'ping';
 
 const UNRESOLVED_VAR_PATTERN = /\{\{([^}]+)\}\}/g;
 
@@ -78,6 +86,17 @@ export function normalizeCount(value: number | undefined): number {
   return Number.isFinite(value) && (value ?? 0) > 0 ? Math.floor(value as number) : 0;
 }
 
+export function normalizeWebSocketKeepAliveInterval(value: number | undefined): number {
+  const normalized = normalizeCount(value);
+  if (normalized <= 0) { return DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS; }
+  return Math.min(MAX_WS_KEEPALIVE_INTERVAL_SECONDS, Math.max(MIN_WS_KEEPALIVE_INTERVAL_SECONDS, normalized));
+}
+
+export function normalizeWebSocketKeepAliveMessage(value: string | undefined): string {
+  const normalized = String(value ?? '').trim();
+  return normalized || DEFAULT_WS_KEEPALIVE_MESSAGE;
+}
+
 export function normalizeEpochMs(value: number | undefined): number | undefined {
   if (!Number.isFinite(value)) { return undefined; }
   const normalized = Math.floor(value as number);
@@ -111,6 +130,9 @@ export function normalizeRequestSettings(settings?: RequestSettings): ResolvedRe
     skipDefaultHeaders: settings?.skipDefaultHeaders === true,
     disableScripts: settings?.disableScripts === true,
     scriptsTrusted: settings?.scriptsTrusted !== false,
+    webSocketKeepAliveEnabled: settings?.webSocketKeepAliveEnabled === true,
+    webSocketKeepAliveIntervalSeconds: normalizeWebSocketKeepAliveInterval(settings?.webSocketKeepAliveIntervalSeconds),
+    webSocketKeepAliveMessage: normalizeWebSocketKeepAliveMessage(settings?.webSocketKeepAliveMessage),
   };
 }
 
@@ -134,6 +156,9 @@ export function cloneRequestSettings(settings: ResolvedRequestSettings): Request
     skipDefaultHeaders: settings.skipDefaultHeaders,
     disableScripts: settings.disableScripts,
     scriptsTrusted: settings.scriptsTrusted,
+    webSocketKeepAliveEnabled: settings.webSocketKeepAliveEnabled,
+    webSocketKeepAliveIntervalSeconds: settings.webSocketKeepAliveIntervalSeconds,
+    webSocketKeepAliveMessage: settings.webSocketKeepAliveMessage,
   };
 }
 

@@ -228,6 +228,34 @@
           }
         }
       ]
+    },
+    {
+      "name": "05. WebSocket",
+      "item": [
+        {
+          "name": "WS Echo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"hello\",\n  \"from\": \"tessra-demo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{wsBaseUrl}}",
+              "host": [
+                "{{wsBaseUrl}}"
+              ]
+            },
+            "description": "WebSocket echo request. Tessra detects WebSocket mode after wsBaseUrl resolves to wss://ws.ifelse.io."
+          }
+        }
+      ]
     }
   ]
 }

@@ -68,9 +68,13 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 
 ## WebSocket
 
-- Connect to `ws://` and `wss://` endpoints.
+- Connect to `ws://` and `wss://` endpoints. Prefer `wss://ws.ifelse.io` for public echo smoke tests.
+- Confirm `{{variable}}` URLs that resolve to `ws://` or `wss://` switch to WebSocket mode, and URLs that resolve to `http://` or `https://` stay in HTTP mode.
 - Send text messages from the Body tab composer.
 - Confirm inbound and outbound messages are logged in order.
+- Confirm manual disconnect logs `Disconnected by user`; remote or idle closes log code, reason, and `wasClean`.
+- Keep WebSocket keepalive off by default, then enable it with a short interval and confirm periodic app-level ping messages appear while connected.
+- Disconnect, close the tab, and reconnect with keepalive enabled to confirm only one interval is active and `Keepalive stopped` is logged during cleanup.
 - Confirm binary frames render as base64 with byte counts.
 - Disconnect manually and close an active WebSocket tab.
 

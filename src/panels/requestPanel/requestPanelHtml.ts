@@ -320,6 +320,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .settings-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .settings-label{font-size:13px;opacity:.8;min-width:80px;font-weight:600}
 .settings-input{width:80px;padding:4px 8px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:4px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
+.settings-input.settings-text-input{width:min(220px,100%)}
 .settings-input:focus{outline:1px solid var(--vscode-focusBorder)}
 .settings-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .settings-hint{font-size:13px;opacity:.4}
@@ -1634,6 +1635,10 @@ const VALID_BODY_TYPES = ['none', 'json', 'xml', 'form', 'formdata', 'binary', '
 const DEFAULT_COMPARE_IGNORE_HEADERS = ['date', 'set-cookie', 'x-request-id', 'x-correlation-id', 'x-amzn-trace-id'];
 const DEFAULT_COMPARE_IGNORE_JSON_PATHS = ['$.timestamp', '$.traceId', '$.requestId', '$.correlationId'];
 const DEFAULT_COMPARE_FOLD_UNCHANGED = true;
+const DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS = 30;
+const MIN_WS_KEEPALIVE_INTERVAL_SECONDS = 5;
+const MAX_WS_KEEPALIVE_INTERVAL_SECONDS = 300;
+const DEFAULT_WS_KEEPALIVE_MESSAGE = 'ping';
 const REQUEST_EDITOR_TABS = ['params', 'headers', 'body', 'auth', 'scripts', 'settings'];
 var pinnedResponses = [];
 var lastResponse = null;
@@ -1937,7 +1942,10 @@ function buildDraftTabFromContent(mc) {
     retryDelayMs: normalizeNumberSetting(mc.querySelector('.js-retry-delay')?.value),
     stopAfterHeaders: stopAfterHeadersInput ? stopAfterHeadersInput.checked === true : !!tab.stopAfterHeaders,
     skipDefaultHeaders: skipDefaultHeadersInput ? skipDefaultHeadersInput.checked === true : !!tab.skipDefaultHeaders,
-    disableScripts: disableScriptsInput ? disableScriptsInput.checked === true : !!tab.disableScripts
+    disableScripts: disableScriptsInput ? disableScriptsInput.checked === true : !!tab.disableScripts,
+    webSocketKeepAliveEnabled: mc.querySelector('.js-ws-keepalive-enabled')?.checked === true,
+    webSocketKeepAliveIntervalSeconds: normalizeWebSocketKeepAliveInterval(mc.querySelector('.js-ws-keepalive-interval')?.value),
+    webSocketKeepAliveMessage: normalizeWebSocketKeepAliveMessage(mc.querySelector('.js-ws-keepalive-message')?.value)
   });
 }
 
@@ -1976,6 +1984,9 @@ function createRequestChangeBaseline(tab) {
     stopAfterHeaders: false,
     skipDefaultHeaders: false,
     disableScripts: false,
+    webSocketKeepAliveEnabled: false,
+    webSocketKeepAliveIntervalSeconds: DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS,
+    webSocketKeepAliveMessage: DEFAULT_WS_KEEPALIVE_MESSAGE,
   };
   if (!tab?._snapshot) {
     return baseline;
@@ -2004,6 +2015,9 @@ function createRequestChangeBaseline(tab) {
     baseline.stopAfterHeaders = settings.stopAfterHeaders === true;
     baseline.skipDefaultHeaders = settings.skipDefaultHeaders === true;
     baseline.disableScripts = settings.disableScripts === true;
+    baseline.webSocketKeepAliveEnabled = settings.webSocketKeepAliveEnabled === true;
+    baseline.webSocketKeepAliveIntervalSeconds = normalizeWebSocketKeepAliveInterval(settings.webSocketKeepAliveIntervalSeconds);
+    baseline.webSocketKeepAliveMessage = normalizeWebSocketKeepAliveMessage(settings.webSocketKeepAliveMessage);
   } catch {}
   return baseline;
 }
@@ -2481,12 +2495,56 @@ function isWebSocketUrl(url) {
   return /^wss?:\\/\\//i.test(String(url || '').trim());
 }
 
+function hasUnresolvedTemplateVariables(text) {
+  return /\\{\\{[^}]+\\}\\}/.test(String(text || ''));
+}
+
+function hasTemplateVariables(text) {
+  return /\\{\\{[^}]+\\}\\}/.test(String(text || ''));
+}
+
+function resolveTemplateVariables(text) {
+  if (!text) return text;
+  return String(text).replace(/\\{\\{([^}]+)\\}\\}/g, function(match, name) {
+    var key = String(name || '').trim();
+    return Object.prototype.hasOwnProperty.call(activeVarValues, key) ? String(activeVarValues[key] ?? '') : match;
+  });
+}
+
+function getUrlModeInfo(rawUrl) {
+  var raw = String(rawUrl || '').trim();
+  var resolved = String(resolveTemplateVariables(raw) || '').trim();
+  var hasVariables = hasTemplateVariables(raw);
+  var unresolved = hasVariables && hasUnresolvedTemplateVariables(resolved);
+  return {
+    rawUrl: raw,
+    resolvedUrl: resolved && !unresolved ? resolved : '',
+    hasVariables: hasVariables,
+    unresolved: unresolved
+  };
+}
+
+function getResolvedUrlForMode(rawUrl) {
+  return getUrlModeInfo(rawUrl).resolvedUrl;
+}
+
 function normalizeRequestType(value, url) {
-  var text = String(url || '').trim();
-  if (isWebSocketUrl(text)) return 'websocket';
-  if (/^https?:\\/\\//i.test(text)) return 'http';
-  if (text && text.indexOf('{{') < 0) return 'http';
-  return value === 'websocket' ? 'websocket' : 'http';
+  var modeInfo = getUrlModeInfo(url);
+  var candidate = modeInfo.resolvedUrl || (modeInfo.unresolved ? '' : modeInfo.rawUrl);
+  if (isWebSocketUrl(candidate)) return 'websocket';
+  if (/^https?:\\/\\//i.test(candidate)) return 'http';
+  if (candidate) return 'http';
+  return value === 'websocket' && isWebSocketUrl(modeInfo.rawUrl) && !modeInfo.unresolved ? 'websocket' : 'http';
+}
+
+function syncRequestTypeFromUrl(tab) {
+  if (!tab) return 'http';
+  tab.requestType = normalizeRequestType(tab.requestType, tab.url);
+  return tab.requestType;
+}
+
+function syncAllRequestTypesFromUrls() {
+  tabs.forEach(syncRequestTypeFromUrl);
 }
 
 function isWebSocketTab(tab) {
@@ -2961,6 +3019,17 @@ function normalizeNumberSetting(value) {
   return Number.isFinite(num) && num > 0 ? num : 0;
 }
 
+function normalizeWebSocketKeepAliveInterval(value) {
+  var num = normalizeNumberSetting(value);
+  if (num <= 0) return DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS;
+  return Math.min(MAX_WS_KEEPALIVE_INTERVAL_SECONDS, Math.max(MIN_WS_KEEPALIVE_INTERVAL_SECONDS, num));
+}
+
+function normalizeWebSocketKeepAliveMessage(value) {
+  var text = String(value ?? '').trim();
+  return text || DEFAULT_WS_KEEPALIVE_MESSAGE;
+}
+
 function normalizeTlsValidation(value) {
   return value === 'strict' || value === 'insecure' ? value : 'default';
 }
@@ -2978,6 +3047,9 @@ function getRequestSettings(data) {
     skipDefaultHeaders: data?.skipDefaultHeaders === true,
     disableScripts: data?.disableScripts === true,
     scriptsTrusted: data?.scriptsTrusted !== false,
+    webSocketKeepAliveEnabled: data?.webSocketKeepAliveEnabled === true,
+    webSocketKeepAliveIntervalSeconds: normalizeWebSocketKeepAliveInterval(data?.webSocketKeepAliveIntervalSeconds),
+    webSocketKeepAliveMessage: normalizeWebSocketKeepAliveMessage(data?.webSocketKeepAliveMessage),
   };
 }
 
@@ -2994,6 +3066,9 @@ function applyRequestSettings(target, data) {
   target.skipDefaultHeaders = settings.skipDefaultHeaders;
   target.disableScripts = settings.disableScripts;
   target.scriptsTrusted = settings.scriptsTrusted;
+  target.webSocketKeepAliveEnabled = settings.webSocketKeepAliveEnabled;
+  target.webSocketKeepAliveIntervalSeconds = settings.webSocketKeepAliveIntervalSeconds;
+  target.webSocketKeepAliveMessage = settings.webSocketKeepAliveMessage;
   return target;
 }
 
@@ -3010,6 +3085,9 @@ function requestSettingsSnapshot(tab) {
     skipDefaultHeaders: !!tab.skipDefaultHeaders,
     disableScripts: !!tab.disableScripts,
     scriptsTrusted: tab.scriptsTrusted !== false,
+    webSocketKeepAliveEnabled: tab.webSocketKeepAliveEnabled === true,
+    webSocketKeepAliveIntervalSeconds: normalizeWebSocketKeepAliveInterval(tab.webSocketKeepAliveIntervalSeconds),
+    webSocketKeepAliveMessage: normalizeWebSocketKeepAliveMessage(tab.webSocketKeepAliveMessage),
   };
 }
 
@@ -3069,7 +3147,10 @@ function isTabDirty(tab) {
       tab.retryDelayMs ||
       tab.stopAfterHeaders ||
       tab.skipDefaultHeaders ||
-      tab.disableScripts
+      tab.disableScripts ||
+      tab.webSocketKeepAliveEnabled ||
+      normalizeWebSocketKeepAliveInterval(tab.webSocketKeepAliveIntervalSeconds) !== DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS ||
+      normalizeWebSocketKeepAliveMessage(tab.webSocketKeepAliveMessage) !== DEFAULT_WS_KEEPALIVE_MESSAGE
     );
   }
   
@@ -3139,6 +3220,7 @@ function markDirty() {
     requestEndedAt: normalizeEpochMs(data?.requestEndedAt),
     durationMs: normalizeDurationMs(data?.durationMs),
   }, data);
+  syncRequestTypeFromUrl(tab);
   
   if (data?.requestId) {
     tab._snapshot = snapshotTab(tab);
@@ -3157,6 +3239,12 @@ function clearTabRequestState(tab) {
   if (tab._elapsedTimer) { clearInterval(tab._elapsedTimer); tab._elapsedTimer = null; }
 }
 
+function disconnectWebSocketIfOpen(tab) {
+  if (tab?.websocketStatus && tab.websocketStatus !== 'closed') {
+    websocketDisconnect(tab);
+  }
+}
+
 function doCloseTab(id) {
   const idx = tabs.findIndex(t => t.id === id);
   if (idx < 0) return;
@@ -3165,9 +3253,7 @@ function doCloseTab(id) {
     clearTabRequestState(tab);
     vscode.postMessage({ type: 'cancelRequest', tabId: id });
   }
-  if (isWebSocketTab(tab) && tab.websocketStatus && tab.websocketStatus !== 'closed') {
-    vscode.postMessage({ type: 'websocketDisconnect', tabId: id });
-  }
+  disconnectWebSocketIfOpen(tab);
   tabs.splice(idx, 1);
   if (activeTabId === id) {
     activeTabId = tabs.length > 0 ? tabs[Math.min(idx, tabs.length - 1)].id : null;
@@ -3398,6 +3484,63 @@ function websocketStatusLabel(status) {
   return tr('webview.disconnected');
 }
 
+function websocketCloseCodeLabel(code) {
+  var labels = {
+    1000: 'Normal Closure',
+    1001: 'Going Away',
+    1002: 'Protocol Error',
+    1003: 'Unsupported Data',
+    1005: 'No Status Received',
+    1006: 'Abnormal Closure',
+    1007: 'Invalid Frame Payload Data',
+    1008: 'Policy Violation',
+    1009: 'Message Too Big',
+    1010: 'Mandatory Extension',
+    1011: 'Internal Error',
+    1012: 'Service Restart',
+    1013: 'Try Again Later',
+    1015: 'TLS Handshake Failure'
+  };
+  return labels[code] || '';
+}
+
+function compactDiagnosticText(value, fallback) {
+  var text = String(value || fallback || '').trim();
+  if (!text) return '(no reason)';
+  return text.length > 480 ? text.substring(0, 477) + '...' : text;
+}
+
+function formatWebSocketCloseMessage(msg) {
+  var source = msg.closeSource || (msg.wasClean === true ? 'remote' : 'unexpected');
+  var lines = [
+    tr(source === 'user'
+      ? 'webview.websocketClosedByUser'
+      : (source === 'unexpected'
+        ? 'webview.websocketClosedUnexpectedly'
+        : 'webview.websocketClosedByRemote'))
+  ];
+  var code = typeof msg.code === 'number'
+    ? msg.code
+    : (source === 'unexpected' ? 1006 : 1005);
+  var reason = compactDiagnosticText(msg.reason, source === 'user' ? 'User disconnect' : websocketCloseCodeLabel(code));
+  var wasClean = typeof msg.wasClean === 'boolean'
+    ? msg.wasClean
+    : source !== 'unexpected';
+  lines.push('code: ' + code);
+  lines.push('reason: ' + reason);
+  lines.push('wasClean: ' + String(wasClean));
+  return lines.join('\\n');
+}
+
+function formatWebSocketErrorMessage(msg) {
+  var lines = [tr('webview.websocketError')];
+  lines.push('message: ' + compactDiagnosticText(msg.error, tr('webview.stage.failed')));
+  if (msg.errorDetail && msg.errorDetail !== msg.error) {
+    lines.push('detail: ' + compactDiagnosticText(msg.errorDetail, ''));
+  }
+  return lines.join('\\n');
+}
+
 function websocketConnect(tab) {
   if (!tab) return;
   saveActiveTabState();
@@ -3432,6 +3575,9 @@ function websocketConnect(tab) {
     skipDefaultHeaders: !!tab.skipDefaultHeaders,
     disableScripts: !!tab.disableScripts,
     scriptsTrusted: tab.scriptsTrusted !== false,
+    webSocketKeepAliveEnabled: tab.webSocketKeepAliveEnabled === true,
+    webSocketKeepAliveIntervalSeconds: normalizeWebSocketKeepAliveInterval(tab.webSocketKeepAliveIntervalSeconds),
+    webSocketKeepAliveMessage: normalizeWebSocketKeepAliveMessage(tab.webSocketKeepAliveMessage),
   });
 }
 
@@ -3476,7 +3622,10 @@ function handlePrimaryAction() {
 
 function switchTab(id) {
   if (activeTabId === id) return;
+  var previousTab = tabs.find(function(t) { return t.id === activeTabId; });
   saveActiveTabState();
+  disconnectWebSocketIfOpen(previousTab);
+  syncRequestTypeFromUrl(tabs.find(function(t) { return t.id === id; }));
   activeTabId = id;
   renderTabBar();
   renderContent();
@@ -3493,7 +3642,7 @@ function saveActiveTabState() {
   if (!methodEl) return;
   tab.method = methodEl.value;
   tab.url = urlEl.value;
-  tab.requestType = normalizeRequestType(tab.requestType, tab.url);
+  syncRequestTypeFromUrl(tab);
   tab.headers = collectKv(mc.querySelector('.js-header-rows'));
   tab.params = collectKv(mc.querySelector('.js-param-rows'));
   tab.body = mc.querySelector('.js-body')?.value || '';
@@ -3512,6 +3661,9 @@ function saveActiveTabState() {
   tab.stopAfterHeaders = mc.querySelector('.js-stop-after-headers')?.checked === true;
   tab.skipDefaultHeaders = mc.querySelector('.js-skip-default-headers')?.checked === true;
   tab.disableScripts = mc.querySelector('.js-disable-scripts')?.checked === true;
+  tab.webSocketKeepAliveEnabled = mc.querySelector('.js-ws-keepalive-enabled')?.checked === true;
+  tab.webSocketKeepAliveIntervalSeconds = normalizeWebSocketKeepAliveInterval(mc.querySelector('.js-ws-keepalive-interval')?.value);
+  tab.webSocketKeepAliveMessage = normalizeWebSocketKeepAliveMessage(mc.querySelector('.js-ws-keepalive-message')?.value);
   tab.requestEditorTab = normalizeRequestEditorTab(mc.querySelector('.js-req-tabs .tab.active')?.dataset.tab || tab.requestEditorTab);
 }
 
@@ -3604,7 +3756,8 @@ function resolveLinkedFocusTargetInContent(mc, targetKey) {
     'settings:max-response-size': '.js-max-response-size',
     'settings:retry-count': '.js-retry-count',
     'settings:retry-delay': '.js-retry-delay',
-    'settings:tls-validation': '.js-tls-validation'
+    'settings:tls-validation': '.js-tls-validation',
+    'settings:websocket-keepalive': '.js-ws-keepalive-enabled'
   };
   var selector = selectors[targetKey] || selectors[String(targetKey).split(':')[0]] || null;
   if (!selector) return null;
@@ -3805,6 +3958,7 @@ function renderTabBar() {
   const sorted = tabs.filter(t => t.pinned).concat(tabs.filter(t => !t.pinned));
 
   for (const tab of sorted) {
+    syncRequestTypeFromUrl(tab);
     const tabMethod = isWebSocketTab(tab) ? 'WS' : tab.method;
     const el = document.createElement('div');
     el.className = 'req-tab' + (tab.id === activeTabId ? ' active' : '') + (tab.pinned ? ' pinned' : '') + ' tab-' + tabMethod;
@@ -3920,7 +4074,7 @@ function showTabContextMenu(x, y, tabId) {
         break;
       case 'duplicate':
         saveActiveTabState();
-        createTab({ name: tab.name, autoName: !!tab.autoName, requestType: tab.requestType, requestEditorTab: tab.requestEditorTab, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, scriptsTrusted: tab.scriptsTrusted !== false, jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent, responseSearchQuery: tab.responseSearchQuery || '', responseSearchIndex: typeof tab.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0, responseSearchCaseSensitive: tab.responseSearchCaseSensitive === true, responseSearchRegex: tab.responseSearchRegex === true, scriptHelpCollapsed: tab.scriptHelpCollapsed === true });
+        createTab({ name: tab.name, autoName: !!tab.autoName, requestType: tab.requestType, requestEditorTab: tab.requestEditorTab, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: tab.followRedirects, saveToHistory: tab.saveToHistory, tlsValidation: tab.tlsValidation, maxResponseSizeKb: tab.maxResponseSizeKb, retryCount: tab.retryCount, retryDelayMs: tab.retryDelayMs, stopAfterHeaders: tab.stopAfterHeaders, skipDefaultHeaders: tab.skipDefaultHeaders, disableScripts: tab.disableScripts, scriptsTrusted: tab.scriptsTrusted !== false, webSocketKeepAliveEnabled: tab.webSocketKeepAliveEnabled === true, webSocketKeepAliveIntervalSeconds: normalizeWebSocketKeepAliveInterval(tab.webSocketKeepAliveIntervalSeconds), webSocketKeepAliveMessage: normalizeWebSocketKeepAliveMessage(tab.webSocketKeepAliveMessage), jsonFormatStyle: tab.jsonFormatStyle, xmlFormatStyle: tab.xmlFormatStyle, formatIndent: tab.formatIndent, responseSearchQuery: tab.responseSearchQuery || '', responseSearchIndex: typeof tab.responseSearchIndex === 'number' ? tab.responseSearchIndex : 0, responseSearchCaseSensitive: tab.responseSearchCaseSensitive === true, responseSearchRegex: tab.responseSearchRegex === true, scriptHelpCollapsed: tab.scriptHelpCollapsed === true });
         break;
     }
   });
@@ -3945,6 +4099,9 @@ function getRequestStageInfo(tab) {
     }
     if (tab.websocketStatus === 'error' && tab.error) {
       return { tone: 'error', label: tr('webview.stage.failed'), detail: truncate(tab.error, 96) };
+    }
+    if (tab.websocketStatus === 'closed' && (tab.websocketMessages || []).length > 0) {
+      return { tone: 'idle', label: tr('webview.disconnected'), detail: tr('webview.websocket') };
     }
     if (tab.url) {
       return { tone: 'ready', label: tr('webview.websocket'), detail: tr('webview.websocketComposer') };
@@ -4095,6 +4252,9 @@ function buildSampleRequestData() {
     stopAfterHeaders: false,
     skipDefaultHeaders: false,
     disableScripts: false,
+    webSocketKeepAliveEnabled: false,
+    webSocketKeepAliveIntervalSeconds: DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS,
+    webSocketKeepAliveMessage: DEFAULT_WS_KEEPALIVE_MESSAGE,
   };
 }
 
@@ -4533,6 +4693,7 @@ function renderContent() {
   var savedHeight = prevReqArea && prevReqArea.dataset.manualHeight ? prevReqArea.style.height : null;
   const tab = tabs.find(t => t.id === activeTabId);
   if (!tab) return;
+  syncRequestTypeFromUrl(tab);
   const isWs = isWebSocketTab(tab);
 
   const stage = getRequestStageInfo(tab);
@@ -5031,6 +5192,26 @@ function renderContent() {
                 '</div>' +
               '</div>' +
             '</div>' +
+            (isWs ?
+              '<div class="settings-card">' +
+                '<div class="settings-group">' +
+                  '<div class="settings-group-title">' + escapeHtml(tr('webview.websocket')) + '</div>' +
+                  '<div class="settings-group-note">' + escapeHtml(tr('webview.webSocketKeepAlive.note')) + '</div>' +
+                  '<div class="settings-toggle-grid">' +
+                    '<label class="settings-toggle"><input class="js-ws-keepalive-enabled" type="checkbox"' + (tab.webSocketKeepAliveEnabled ? ' checked' : '') + '/><span>' + escapeHtml(tr('webview.webSocketKeepAlive')) + '<span class="settings-inline-note">' + escapeHtml(tr('webview.webSocketKeepAlive.note')) + '</span></span></label>' +
+                  '</div>' +
+                  '<div class="settings-row">' +
+                    '<label class="settings-label">' + escapeHtml(tr('webview.webSocketKeepAliveInterval')) + '</label>' +
+                    '<input class="js-ws-keepalive-interval settings-input" type="number" min="' + MIN_WS_KEEPALIVE_INTERVAL_SECONDS + '" max="' + MAX_WS_KEEPALIVE_INTERVAL_SECONDS + '" placeholder="' + escapeAttr(String(DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS)) + '" value="' + escapeAttr(String(normalizeWebSocketKeepAliveInterval(tab.webSocketKeepAliveIntervalSeconds))) + '"/>' +
+                    '<div class="settings-field-meta"><span class="settings-hint">' + escapeHtml(tr('webview.webSocketKeepAliveIntervalUnit')) + '</span></div>' +
+                  '</div>' +
+                  '<div class="settings-row">' +
+                    '<label class="settings-label">' + escapeHtml(tr('webview.webSocketKeepAliveMessage')) + '</label>' +
+                    '<input class="js-ws-keepalive-message settings-input settings-text-input" type="text" placeholder="' + escapeAttr(DEFAULT_WS_KEEPALIVE_MESSAGE) + '" value="' + escapeAttr(normalizeWebSocketKeepAliveMessage(tab.webSocketKeepAliveMessage)) + '"/>' +
+                  '</div>' +
+                '</div>' +
+              '</div>'
+              : '') +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -5114,12 +5295,20 @@ function bindContentEvents() {
   
   var urlInputEl = mc.querySelector('.js-url');
   if (urlInputEl) {
-    urlInputEl.addEventListener('input', function() {
+    urlInputEl.addEventListener('input', function(e) {
       var activeTab = tabs.find(t => t.id === activeTabId);
       var wasWs = isWebSocketTab(activeTab);
+      if (activeTab) {
+        activeTab.url = e.target.value;
+        syncRequestTypeFromUrl(activeTab);
+      }
       checkUnresolvedVars();
       markDirty();
       activeTab = tabs.find(t => t.id === activeTabId);
+      if (activeTab) {
+        activeTab.url = e.target.value;
+        syncRequestTypeFromUrl(activeTab);
+      }
       if (wasWs !== isWebSocketTab(activeTab)) {
         renderTabBar();
         renderContent();
@@ -6453,10 +6642,9 @@ window.addEventListener('message', (event) => {
     if (msg.status === 'open') {
       appendWebSocketMessage(tab, { direction: 'in', messageType: 'system', data: tr('webview.connected') });
     } else if (msg.status === 'closed') {
-      var closeDetail = msg.code ? ' (' + msg.code + (msg.reason ? ' ' + msg.reason : '') + ')' : '';
-      appendWebSocketMessage(tab, { direction: 'in', messageType: 'system', data: tr('webview.disconnected') + closeDetail });
+      appendWebSocketMessage(tab, { direction: 'in', messageType: 'system', data: formatWebSocketCloseMessage(msg) });
     } else if (msg.status === 'error') {
-      appendWebSocketMessage(tab, { direction: 'in', messageType: 'system', data: msg.error || tr('webview.stage.failed') });
+      appendWebSocketMessage(tab, { direction: 'in', messageType: 'system', data: formatWebSocketErrorMessage(msg) });
     }
     if (activeTabId === msg.tabId) {
       renderTabBar();
@@ -6622,11 +6810,14 @@ window.addEventListener('message', (event) => {
   if (msg.type === 'activeVarKeys') {
     activeVarKeys = msg.varKeys || [];
     activeVarValues = msg.varValues || {};
+    syncAllRequestTypesFromUrls();
     checkUnresolvedVars();
     syncVariablePreviewHints(mainContent);
     if (variableAutocompleteState?.target) {
       syncVariableAutocomplete(variableAutocompleteState.target);
     }
+    renderTabBar();
+    renderContent();
   }
 
   if (msg.type === 'loadRequest') {
@@ -6663,6 +6854,9 @@ window.addEventListener('message', (event) => {
       skipDefaultHeaders: msg.skipDefaultHeaders === true,
       disableScripts: msg.disableScripts === true,
       scriptsTrusted: msg.scriptsTrusted !== false,
+      webSocketKeepAliveEnabled: msg.webSocketKeepAliveEnabled === true,
+      webSocketKeepAliveIntervalSeconds: normalizeWebSocketKeepAliveInterval(msg.webSocketKeepAliveIntervalSeconds),
+      webSocketKeepAliveMessage: normalizeWebSocketKeepAliveMessage(msg.webSocketKeepAliveMessage),
     });
   }
 
@@ -7725,8 +7919,20 @@ function buildResponseTimingMetaHtml(tab) {
   }
   return '<div class="response-timing-row"' + title + '><span class="timing-flow"><span class="timing-prefix">' + escapeHtml(tr(endedKey)) + '</span><span class="timing-value">' + escapeHtml(formatResponseTimingValue(endedAt)) + '</span></span></div>';
 }
-function escapeHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function escapeAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function stringifyForHtml(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+  try {
+    if (typeof value === 'object') {
+      var json = JSON.stringify(value);
+      if (typeof json === 'string') return json;
+    }
+  } catch {}
+  return String(value);
+}
+function escapeHtml(s) { return stringifyForHtml(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escapeAttr(s) { return stringifyForHtml(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function truncate(s, n) { return s.length > n ? s.substring(0, n-1) + '...' : s; }
 
 

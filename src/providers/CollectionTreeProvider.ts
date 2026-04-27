@@ -360,6 +360,9 @@ export class CollectionTreeProvider
       skipDefaultHeaders?: RequestSettings['skipDefaultHeaders'];
       disableScripts?: RequestSettings['disableScripts'];
       scriptsTrusted?: RequestSettings['scriptsTrusted'];
+      webSocketKeepAliveEnabled?: RequestSettings['webSocketKeepAliveEnabled'];
+      webSocketKeepAliveIntervalSeconds?: RequestSettings['webSocketKeepAliveIntervalSeconds'];
+      webSocketKeepAliveMessage?: RequestSettings['webSocketKeepAliveMessage'];
     }
   ): Promise<{ requestId: string; name: string } | null> {
     const collections = this.storage.getCollections();
@@ -391,6 +394,9 @@ export class CollectionTreeProvider
           existing.request.skipDefaultHeaders = requestData.skipDefaultHeaders === true;
           existing.request.disableScripts = requestData.disableScripts === true;
           existing.request.scriptsTrusted = requestData.scriptsTrusted !== false;
+          existing.request.webSocketKeepAliveEnabled = requestData.webSocketKeepAliveEnabled === true;
+          existing.request.webSocketKeepAliveIntervalSeconds = requestData.webSocketKeepAliveIntervalSeconds ?? 30;
+          existing.request.webSocketKeepAliveMessage = requestData.webSocketKeepAliveMessage ?? 'ping';
           this.storage.saveCollections(collections);
           this.refresh();
         return { requestId: existing.request.id, name: existing.name };
@@ -444,6 +450,9 @@ export class CollectionTreeProvider
         skipDefaultHeaders: requestData.skipDefaultHeaders === true,
         disableScripts: requestData.disableScripts === true,
         scriptsTrusted: requestData.scriptsTrusted !== false,
+        webSocketKeepAliveEnabled: requestData.webSocketKeepAliveEnabled === true,
+        webSocketKeepAliveIntervalSeconds: requestData.webSocketKeepAliveIntervalSeconds ?? 30,
+        webSocketKeepAliveMessage: requestData.webSocketKeepAliveMessage ?? 'ping',
       },
     };
 

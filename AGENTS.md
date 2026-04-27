@@ -99,7 +99,7 @@ tessra/
 16. `tessra.requestPanelTheme` 설정과 Command Palette 기반 요청 패널 테마 프리셋 선택 (`default`, `minimal-cool`, `product`, `bold-color`)
 17. `tessra.workspaceProfile` 설정 기반 워크스페이스 로컬 저장 프로필 분리와 현재 프로필 표시 (`default`는 메인 작업용, 사용자 지정 프로필은 프로젝트/실험 분리용)
 18. 컬렉션 러너 실패 요청만 재실행, 요청별 history 저장 설정을 따른 실행 결과 저장
-19. WebSocket `ws://` / `wss://` 연결, 텍스트 메시지 전송, 수신/전송 로그, binary frame base64 표시
+19. WebSocket `ws://` / `wss://` 연결과 `{{variable}}` 치환 후 URL 기준 모드 감지, 텍스트 메시지 전송, 선택형 app-level keepalive, 수신/전송/close 진단 로그, binary frame base64 표시
 
 ### 현재 품질 기준
 1. 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴가 키보드 접근과 명확한 포커스 상태를 유지해야 한다.

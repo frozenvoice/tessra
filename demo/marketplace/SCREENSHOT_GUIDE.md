@@ -10,7 +10,7 @@
 - 컬렉션 이름: `Tessra Demo Collection`
 - 환경 이름: `Tessra Demo Environment`
 - 활성 환경: `Tessra Demo Environment`
-- 사용 변수: `baseUrl`, `echoUrl`, `htmlUrl`, `xmlUrl`, `apiKey`, `bearerToken`
+- 사용 변수: `baseUrl`, `echoUrl`, `htmlUrl`, `xmlUrl`, `wsBaseUrl`, `apiKey`, `bearerToken`
 - 권장 레이아웃: 왼쪽 Tessra 사이드바에 `Collections`, `Environments`, `History`가 보이고, 오른쪽에는 요청 패널이 넓게 보이도록 둔다.
 - 환경 활성화 방법: `Environments` 뷰에서 `Tessra Demo Environment`를 우클릭한 뒤 `Set Active` / `활성으로 설정`을 선택하거나, 상태 표시줄의 환경 항목에서 `Tessra: Switch Environment` / `Tessra: 환경 전환`으로 선택한다.
 - README 권장 이미지 경로:

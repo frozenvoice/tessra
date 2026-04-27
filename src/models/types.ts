@@ -49,6 +49,9 @@ export interface RequestSettings {
   skipDefaultHeaders?: boolean;
   disableScripts?: boolean;
   scriptsTrusted?: boolean;
+  webSocketKeepAliveEnabled?: boolean;
+  webSocketKeepAliveIntervalSeconds?: number;
+  webSocketKeepAliveMessage?: string;
 }
 
 export interface ScriptLogEntry {
@@ -102,6 +105,9 @@ export interface TabState {
   skipDefaultHeaders?: boolean;
   disableScripts?: boolean;
   scriptsTrusted?: boolean;
+  webSocketKeepAliveEnabled?: boolean;
+  webSocketKeepAliveIntervalSeconds?: number;
+  webSocketKeepAliveMessage?: string;
   jsonFormatStyle?: 'pretty' | 'compact';
   xmlFormatStyle?: 'pretty' | 'compact' | 'inline';
   formatIndent?: '2' | '4' | 'tab';
@@ -548,8 +554,11 @@ export interface WebSocketStatusMessage {
   tabId: string;
   status: 'connecting' | 'open' | 'closed' | 'error';
   error?: string;
+  errorDetail?: string;
   code?: number;
   reason?: string;
+  wasClean?: boolean;
+  closeSource?: 'user' | 'remote' | 'unexpected';
 }
 
 export interface WebSocketDataMessage {

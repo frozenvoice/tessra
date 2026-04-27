@@ -61,10 +61,13 @@ Group request history by date and run collections with status summaries.
 - Empty-state quick actions for a sample request, the guide, environment switching, and URL focus
 
 ### WebSocket
-- `ws://` and `wss://` tabs are detected from the URL
+- `ws://` and `wss://` tabs are detected from the raw URL or the URL after `{{variables}}` resolve
 - Handshake requests use headers, query params, auth, workspace default headers, environment variables, and TLS override settings
 - Connect and disconnect from the primary action; the Body tab acts as the outgoing text message composer
-- Inbound and outbound messages render in a dedicated WebSocket log, with inbound binary frames shown as base64
+- Inbound, outbound, and close diagnostic messages render in a dedicated WebSocket log, with inbound binary frames shown as base64
+- Optional app-level keepalive can send a text ping at a per-request interval; it is off by default
+- For a public echo smoke test, try `wss://ws.ifelse.io`
+- Public echo servers can change availability or idle timeout policies; if one closes with code `1006`, try another endpoint or enable keepalive when the server supports app-level ping messages
 
 ### Request settings
 - Timeout per tab
@@ -208,7 +211,7 @@ Run `Tessra: Open Guide` to open the user guide inside VS Code.
 - Type: `boolean`
 - Default: `false`
 - Disables HTTPS certificate validation only when explicitly enabled
-- Intended for self-signed local development environments
+- Intended for self-signed local or internal environments
 
 ### `tessra.displayLanguage`
 - Type: `string`

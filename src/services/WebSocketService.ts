@@ -15,6 +15,7 @@ export interface WebSocketConnectOptions {
 export interface WebSocketCloseInfo {
   code?: number;
   reason?: string;
+  wasClean: boolean;
 }
 
 export interface WebSocketMessage {
@@ -83,10 +84,14 @@ export class WebSocketConnection extends EventEmitter {
     });
 
     this.socket.on('error', (error) => this.fail(error));
-    this.socket.on('close', () => {
+    this.socket.on('close', (hadError) => {
       if (this.closed) { return; }
       this.closed = true;
-      this.emit('close', {});
+      this.emit('close', {
+        code: 1006,
+        reason: hadError ? 'Socket closed with error' : 'Abnormal Closure',
+        wasClean: false,
+      });
     });
   }
 
@@ -166,7 +171,7 @@ export class WebSocketConnection extends EventEmitter {
       const reason = payload.length > 2 ? payload.subarray(2).toString('utf-8') : '';
       if (!this.closed) {
         this.closed = true;
-        this.emit('close', { code, reason });
+        this.emit('close', { code, reason, wasClean: true });
       }
       this.socket.end();
       return;

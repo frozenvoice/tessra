@@ -44,6 +44,10 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.close': 'Close',
   'webview.remove': 'Remove',
   'webview.more': 'More',
+  'webview.send': 'Send',
+  'webview.sendAgain': 'Send Again',
+  'webview.stop': 'Stop',
+  'webview.retry': 'Retry',
   'webview.addHeader': '+ Add Header',
   'webview.bulkPaste': 'Bulk Paste',
   'webview.bulkPasteParams': 'Paste query string or one key/value per line',
@@ -70,6 +74,15 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.websocketNoMessages': 'No WebSocket messages yet.',
   'webview.websocketMessagePlaceholder': 'Type a message in Body, then press Send Message.',
   'webview.websocketBinaryMessage': 'Binary message ({size} bytes, base64)',
+  'webview.websocketClosedByUser': 'Disconnected by user',
+  'webview.websocketClosedByRemote': 'Connection closed by remote',
+  'webview.websocketClosedUnexpectedly': 'Connection closed unexpectedly',
+  'webview.websocketError': 'WebSocket error',
+  'webview.webSocketKeepAlive': 'WebSocket keep alive',
+  'webview.webSocketKeepAlive.note': 'Send an app-level text ping while the socket is connected.',
+  'webview.webSocketKeepAliveInterval': 'Keep alive interval',
+  'webview.webSocketKeepAliveMessage': 'Keep alive message',
+  'webview.webSocketKeepAliveIntervalUnit': 'seconds',
   'webview.requestedAt': 'Requested',
   'webview.receivedAt': 'Received',
   'webview.endedAt': 'Ended',
@@ -572,11 +585,24 @@ describe('RequestPanel Webview', () => {
 
   it('supports WebSocket tabs from the request panel', () => {
     assert.match(script, /function isWebSocketUrl\(url\)/);
+    assert.match(script, /function getResolvedUrlForMode\(rawUrl\)/);
     assert.match(script, /function normalizeRequestType\(value, url\)/);
+    assert.match(script, /function syncRequestTypeFromUrl\(tab\)/);
+    assert.match(script, /syncAllRequestTypesFromUrls\(\);/);
+    assert.match(script, /for \(const tab of sorted\) \{[\s\S]*syncRequestTypeFromUrl\(tab\);[\s\S]*const tabMethod = isWebSocketTab\(tab\) \? 'WS' : tab\.method;/);
+    assert.match(script, /urlInputEl\.addEventListener\('input', function\(e\) \{[\s\S]*activeTab\.url = e\.target\.value;[\s\S]*syncRequestTypeFromUrl\(activeTab\);/);
     assert.match(script, /function renderWebSocketResponse\(tab\)/);
+    assert.match(script, /function formatWebSocketCloseMessage\(msg\)/);
+    assert.match(script, /function websocketCloseCodeLabel\(code\)/);
+    assert.match(script, /function formatWebSocketErrorMessage\(msg\)/);
+    assert.match(script, /function disconnectWebSocketIfOpen\(tab\)/);
+    assert.match(script, /disconnectWebSocketIfOpen\(previousTab\);/);
     assert.match(script, /type: 'websocketConnect'/);
     assert.match(script, /type: 'websocketDisconnect'/);
     assert.match(script, /type: 'websocketSend'/);
+    assert.match(script, /webSocketKeepAliveEnabled: tab\.webSocketKeepAliveEnabled === true/);
+    assert.match(script, /webSocketKeepAliveIntervalSeconds: normalizeWebSocketKeepAliveInterval\(tab\.webSocketKeepAliveIntervalSeconds\)/);
+    assert.match(script, /webSocketKeepAliveMessage: normalizeWebSocketKeepAliveMessage\(tab\.webSocketKeepAliveMessage\)/);
     assert.match(script, /if \(msg\.type === 'websocketStatus'\)/);
     assert.match(script, /if \(msg\.type === 'websocketMessage'\)/);
     assert.match(script, /requestType: normalizeRequestType\(t\.requestType, t\.url\)/);
@@ -588,7 +614,294 @@ describe('RequestPanel Webview', () => {
     assert.match(source, /case MessageType\.WebSocketSend:/);
     assert.match(webSocketManagerSource, /VariableService\.resolve\(message\.url, vars\)/);
     assert.match(webSocketManagerSource, /AuthService\.applyAuth\(auth, finalHeaders, finalParams, vars\)/);
+    assert.match(webSocketManagerSource, /manualDisconnectTabs/);
+    assert.match(webSocketManagerSource, /closeSource/);
+    assert.match(webSocketManagerSource, /User disconnect/);
+    assert.match(webSocketManagerSource, /startKeepAlive/);
+    assert.match(webSocketManagerSource, /stopKeepAlive/);
+    assert.match(webSocketManagerSource, /setInterval/);
+    assert.match(webSocketManagerSource, /clearInterval/);
     assert.match(webSocketManagerSource, /MessageType\.WebSocketMessage/);
+  });
+
+  it('detects WebSocket tabs from resolved URL variables', () => {
+    const modeScript = extractScriptSegment(
+      script,
+      'function isWebSocketUrl(url)',
+      'function normalizeCompareList(value, fallback)'
+    );
+    const context: {
+      activeVarValues: Record<string, string>;
+      normalizeRequestType?: (value: string | undefined, url: string) => 'http' | 'websocket';
+      syncRequestTypeFromUrl?: (tab: { requestType?: string; url?: string }) => 'http' | 'websocket';
+      syncAllRequestTypesFromUrls?: () => void;
+      tabs?: Array<{ requestType?: string; url?: string }>;
+    } = {
+      activeVarValues: {
+        wsBaseUrl: 'wss://ws.ifelse.io',
+        wsHost: 'wss://ws.ifelse.io',
+        baseUrl: 'https://jsonplaceholder.typicode.com',
+      },
+      tabs: [],
+    };
+
+    vm.createContext(context);
+    vm.runInContext(modeScript, context);
+
+    assert.strictEqual(context.normalizeRequestType?.('http', 'wss://ws.ifelse.io'), 'websocket');
+    assert.strictEqual(context.normalizeRequestType?.('http', 'ws://localhost:8080/socket'), 'websocket');
+    assert.strictEqual(context.normalizeRequestType?.('http', '{{wsBaseUrl}}'), 'websocket');
+    assert.strictEqual(context.normalizeRequestType?.('http', '{{wsHost}}/socket'), 'websocket');
+    assert.strictEqual(context.normalizeRequestType?.('websocket', '{{baseUrl}}/users'), 'http');
+    assert.strictEqual(context.normalizeRequestType?.('websocket', '{{missingWsUrl}}'), 'http');
+    assert.strictEqual(context.normalizeRequestType?.('websocket', 'wss://{{missingWsHost}}/socket'), 'http');
+
+    context.activeVarValues.wsBaseUrl = 'https://jsonplaceholder.typicode.com';
+    assert.strictEqual(context.normalizeRequestType?.('websocket', '{{wsBaseUrl}}/users'), 'http');
+
+    const tab = { requestType: 'http', url: 'wss://ws.ifelse.io' };
+    assert.strictEqual(context.syncRequestTypeFromUrl?.(tab), 'websocket');
+    assert.strictEqual(tab.requestType, 'websocket');
+
+    context.tabs = [{ requestType: 'http', url: '{{wsHost}}' }];
+    context.syncAllRequestTypesFromUrls?.();
+    assert.strictEqual(context.tabs[0].requestType, 'websocket');
+
+    context.activeVarValues.wsHost = 'https://jsonplaceholder.typicode.com';
+    context.syncAllRequestTypesFromUrls?.();
+    assert.strictEqual(context.tabs[0].requestType, 'http');
+  });
+
+  it('renders the primary button from the resolved WebSocket mode, not the HTTP method', () => {
+    const modeScript = extractScriptSegment(
+      script,
+      'function isWebSocketUrl(url)',
+      'function normalizeCompareList(value, fallback)'
+    );
+    const primaryButtonScript = extractScriptSegment(
+      script,
+      'function renderPrimaryActionButton(tab)',
+      'function buildResponseStatusLine(response)'
+    );
+    const context: {
+      activeVarValues: Record<string, string>;
+      renderPrimaryActionButton?: (tab: Record<string, unknown>) => string;
+      tr: (key: string) => string;
+      escapeHtml: (value: unknown) => string;
+      formatDurationMs: (value: unknown) => string;
+      getResponseDurationMs: () => number;
+    } = {
+      activeVarValues: {
+        wsBaseUrl: 'wss://ws.ifelse.io',
+      },
+      tr: (key: string) => TEST_STRINGS[key] ?? key,
+      escapeHtml: (value: unknown) => String(value ?? ''),
+      formatDurationMs: () => '',
+      getResponseDurationMs: () => 0,
+    };
+
+    vm.createContext(context);
+    vm.runInContext(modeScript + '\n' + primaryButtonScript, context);
+
+    const rawWsButton = context.renderPrimaryActionButton?.({
+      method: 'GET',
+      requestType: 'http',
+      url: 'wss://ws.ifelse.io',
+      websocketStatus: 'closed',
+    }) ?? '';
+    assert.match(rawWsButton, /Connect/);
+    assert.match(rawWsButton, /WebSocket/);
+    assert.doesNotMatch(rawWsButton, /Send/);
+
+    const resolvedWsButton = context.renderPrimaryActionButton?.({
+      method: 'GET',
+      requestType: 'http',
+      url: '{{wsBaseUrl}}',
+      websocketStatus: 'closed',
+    }) ?? '';
+    assert.match(resolvedWsButton, /Connect/);
+    assert.match(resolvedWsButton, /WebSocket/);
+    assert.doesNotMatch(resolvedWsButton, /Send/);
+
+    context.activeVarValues.wsBaseUrl = 'https://jsonplaceholder.typicode.com';
+    const httpButton = context.renderPrimaryActionButton?.({
+      method: 'GET',
+      requestType: 'websocket',
+      url: '{{wsBaseUrl}}/users',
+      websocketStatus: 'closed',
+    }) ?? '';
+    assert.match(httpButton, /Send/);
+    assert.doesNotMatch(httpButton, /WebSocket/);
+  });
+
+  it('escapes non-string attribute and HTML values without crashing', () => {
+    const escapeScript = extractScriptSegment(
+      script,
+      'function stringifyForHtml(value)',
+      'function checkUnresolvedVars()'
+    );
+    const context: {
+      escapeAttr?: (value: unknown) => string;
+      escapeHtml?: (value: unknown) => string;
+    } = {};
+
+    vm.createContext(context);
+    vm.runInContext(escapeScript, context);
+
+    assert.strictEqual(context.escapeAttr?.(30), '30');
+    assert.strictEqual(context.escapeAttr?.(false), 'false');
+    assert.strictEqual(context.escapeAttr?.(null), '');
+    assert.strictEqual(context.escapeHtml?.(['<tag>', '"quote"']), '[&quot;&lt;tag&gt;&quot;,&quot;\\&quot;quote\\&quot;&quot;]');
+    assert.doesNotThrow(() => context.escapeAttr?.({ url: 'wss://ws.ifelse.io', enabled: true }));
+    assert.match(context.escapeAttr?.({ url: 'wss://ws.ifelse.io' }) ?? '', /&quot;url&quot;/);
+  });
+
+  it('renders WebSocket variable URL content without throwing on settings attributes', () => {
+    const modeScript = extractScriptSegment(
+      script,
+      'function isWebSocketUrl(url)',
+      'function normalizeCompareList(value, fallback)'
+    );
+    const primaryButtonScript = extractScriptSegment(
+      script,
+      'function renderPrimaryActionButton(tab)',
+      'function buildResponseStatusLine(response)'
+    );
+    const webSocketResponseScript = extractScriptSegment(
+      script,
+      'function renderWebSocketResponse(tab)',
+      'function renderContent()'
+    );
+    const renderContentScript = extractScriptSegment(
+      script,
+      'function renderContent()',
+      'function bindContentEvents()'
+    );
+    const settingsNormalizeScript = extractScriptSegment(
+      script,
+      'function normalizeNumberSetting(value)',
+      'function normalizeTlsValidation(value)'
+    );
+    const escapeScript = extractScriptSegment(
+      script,
+      'function stringifyForHtml(value)',
+      'function checkUnresolvedVars()'
+    );
+    const mainContent = {
+      innerHTML: '',
+      querySelector: () => null,
+    };
+    const context: Record<string, unknown> = {
+      DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS: 30,
+      MIN_WS_KEEPALIVE_INTERVAL_SECONDS: 5,
+      MAX_WS_KEEPALIVE_INTERVAL_SECONDS: 300,
+      DEFAULT_WS_KEEPALIVE_MESSAGE: 'ping',
+      activeVarValues: { wsBaseUrl: 'wss://ws.ifelse.io' },
+      activeTabId: 'tab_1',
+      tabs: [{
+        id: 'tab_1',
+        method: 'GET',
+        requestType: 'http',
+        url: '{{wsBaseUrl}}',
+        requestEditorTab: 'settings',
+        requestEditorExpanded: true,
+        headers: [],
+        params: [],
+        body: '',
+        bodyType: 'raw',
+        formData: [],
+        binaryFilePath: '',
+        auth: { type: 'none' },
+        scripts: { preRequest: '', test: '' },
+        websocketStatus: 'closed',
+        websocketMessages: [],
+        webSocketKeepAliveIntervalSeconds: 30,
+        webSocketKeepAliveMessage: 'ping',
+      }],
+      mainContent,
+      tr: (key: string) => TEST_STRINGS[key] ?? key,
+      tf: (key: string) => TEST_STRINGS[key] ?? key,
+      closeActiveFormatMenu: () => undefined,
+      releaseSplitDrag: () => undefined,
+      hideVariableAutocomplete: () => undefined,
+      hideVariablePreviewPopover: () => undefined,
+      getRequestStageInfo: () => ({ tone: 'ready', label: TEST_STRINGS['webview.websocket'], detail: '' }),
+      normalizeRequestEditorTab: (value: string) => value || 'params',
+      renderToplineStatusChips: () => '',
+      renderRequestPreflight: () => '',
+      renderVariableUsage: () => '',
+      websocketStatusLabel: () => TEST_STRINGS['webview.disconnected'],
+      formatLocalTime: () => '12:00',
+      formatSize: () => '0 B',
+      kvRowsHtml: () => '',
+      renderDefaultHeadersBanner: () => '',
+      authHtml: () => '',
+      renderScriptHelpers: () => '',
+      bodyTypeLabel: (value: string) => value,
+      renderFormDataSummary: () => '',
+      formDataRowsHtml: () => '',
+      bindContentEvents: () => undefined,
+      syncPreviewFrame: () => undefined,
+      isRequestEditorCollapsed: () => false,
+      applyManualRequestAreaHeight: () => undefined,
+      applyAdaptiveRequestAreaHeight: () => undefined,
+    };
+
+    vm.createContext(context);
+    vm.runInContext(
+      modeScript + '\n' + settingsNormalizeScript + '\n' + primaryButtonScript + '\n' + webSocketResponseScript + '\n' + renderContentScript + '\n' + escapeScript,
+      context
+    );
+
+    assert.doesNotThrow(() => (context.renderContent as () => void)());
+    assert.match(mainContent.innerHTML, /method-WS/);
+    assert.match(mainContent.innerHTML, /Connect/);
+    assert.match(mainContent.innerHTML, /WebSocket/);
+    assert.match(mainContent.innerHTML, /js-ws-keepalive-interval[^>]+min="5"[^>]+max="300"[^>]+value="30"/);
+  });
+
+  it('formats WebSocket close diagnostics for the message log', () => {
+    const closeScript = extractScriptSegment(
+      script,
+      'function websocketStatusLabel(status)',
+      'function websocketConnect(tab)'
+    );
+    const context: {
+      tr: (key: string) => string;
+      formatWebSocketCloseMessage?: (message: {
+        closeSource?: 'user' | 'remote' | 'unexpected';
+        code?: number;
+        reason?: string;
+        wasClean?: boolean;
+      }) => string;
+      formatWebSocketErrorMessage?: (message: { error?: string; errorDetail?: string }) => string;
+    } = {
+      tr: (key: string) => TEST_STRINGS[key] ?? key,
+    };
+
+    vm.createContext(context);
+    vm.runInContext(closeScript, context);
+
+    assert.strictEqual(
+      context.formatWebSocketCloseMessage?.({ closeSource: 'user', code: 1000, reason: 'User disconnect', wasClean: true }),
+      'Disconnected by user\ncode: 1000\nreason: User disconnect\nwasClean: true'
+    );
+    assert.strictEqual(
+      context.formatWebSocketCloseMessage?.({ closeSource: 'remote', code: 1000, reason: 'Normal Closure', wasClean: true }),
+      'Connection closed by remote\ncode: 1000\nreason: Normal Closure\nwasClean: true'
+    );
+    assert.strictEqual(
+      context.formatWebSocketCloseMessage?.({ closeSource: 'unexpected', code: 1006, reason: 'Abnormal Closure', wasClean: false }),
+      'Connection closed unexpectedly\ncode: 1006\nreason: Abnormal Closure\nwasClean: false'
+    );
+    assert.strictEqual(
+      context.formatWebSocketCloseMessage?.({ closeSource: 'remote', code: 1001, reason: '', wasClean: true }),
+      'Connection closed by remote\ncode: 1001\nreason: Going Away\nwasClean: true'
+    );
+    assert.strictEqual(
+      context.formatWebSocketErrorMessage?.({ error: 'socket hang up', errorDetail: 'Error: socket hang up\n    at test' }),
+      'WebSocket error\nmessage: socket hang up\ndetail: Error: socket hang up\n    at test'
+    );
   });
 
   it('renders and collects every auth type from the auth tab UI', () => {
@@ -881,6 +1194,12 @@ describe('RequestPanel Webview', () => {
     assert.ok(html.includes('Retry Count'), 'settings tab should include retry count');
     assert.ok(html.includes('Retry Delay'), 'settings tab should include retry delay');
     assert.ok(html.includes('TLS'), 'settings tab should include TLS override');
+    assert.ok(html.includes('WebSocket keep alive'), 'settings tab should include WebSocket keepalive toggle');
+    assert.ok(html.includes('Keep alive interval'), 'settings tab should include WebSocket keepalive interval');
+    assert.ok(html.includes('Keep alive message'), 'settings tab should include WebSocket keepalive message');
+    assert.match(script, /const MIN_WS_KEEPALIVE_INTERVAL_SECONDS = 5;/);
+    assert.match(script, /const MAX_WS_KEEPALIVE_INTERVAL_SECONDS = 300;/);
+    assert.match(script, /min="' \+ MIN_WS_KEEPALIVE_INTERVAL_SECONDS \+ '" max="' \+ MAX_WS_KEEPALIVE_INTERVAL_SECONDS/);
     assert.match(script, /function syncSettingsToggleStates\(mc\)/);
     assert.match(script, /settingsPanel\.addEventListener\('change', function\(e\)/);
     const settingsSegment = extractScriptSegment(
@@ -1052,10 +1371,14 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /skipDefaultHeaders:\s*data\?\.skipDefaultHeaders === true/);
     assert.match(script, /disableScripts:\s*data\?\.disableScripts === true/);
     assert.match(script, /scriptsTrusted:\s*data\?\.scriptsTrusted !== false/);
+    assert.match(script, /webSocketKeepAliveEnabled:\s*data\?\.webSocketKeepAliveEnabled === true/);
+    assert.match(script, /webSocketKeepAliveIntervalSeconds:\s*normalizeWebSocketKeepAliveInterval\(data\?\.webSocketKeepAliveIntervalSeconds\)/);
+    assert.match(script, /webSocketKeepAliveMessage:\s*normalizeWebSocketKeepAliveMessage\(data\?\.webSocketKeepAliveMessage\)/);
     assert.match(script, /buildSaveRequestMessage\(tab/);
     assert.match(script, /followRedirects:\s*!!tab\.followRedirects/);
     assert.match(script, /saveToHistory:\s*tab\.saveToHistory !== false/);
     assert.match(script, /scriptsTrusted:\s*tab\.scriptsTrusted !== false/);
+    assert.match(script, /webSocketKeepAliveEnabled:\s*tab\.webSocketKeepAliveEnabled === true/);
   });
 
   it('requires explicit trust before running imported scripts from the webview', () => {

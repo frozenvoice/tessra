@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as crypto from 'crypto';
 import * as net from 'net';
-import { WebSocketMessage, WebSocketService } from '../../services/WebSocketService';
+import { WebSocketCloseInfo, WebSocketMessage, WebSocketService } from '../../services/WebSocketService';
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
@@ -158,5 +158,110 @@ describe('WebSocketService', () => {
       () => new WebSocketService().connect('https://example.com', []),
       /WebSocket URL must start with ws:\/\/ or wss:\/\//
     );
+  });
+
+  it('reports clean remote close diagnostics', async () => {
+    const server = net.createServer((socket) => {
+      let buffer = Buffer.alloc(0);
+      let upgraded = false;
+      socket.on('data', (chunk) => {
+        if (upgraded) { return; }
+        buffer = Buffer.concat([buffer, chunk]);
+        const headerEnd = buffer.indexOf('\r\n\r\n');
+        if (headerEnd < 0) { return; }
+        upgraded = true;
+        const handshake = buffer.subarray(0, headerEnd).toString('utf-8');
+        const key = /^Sec-WebSocket-Key:\s*(.+)$/im.exec(handshake)?.[1].trim();
+        assert.ok(key, 'client handshake should include Sec-WebSocket-Key');
+        const accept = crypto.createHash('sha1').update(key + WS_GUID).digest('base64');
+        socket.write([
+          'HTTP/1.1 101 Switching Protocols',
+          'Upgrade: websocket',
+          'Connection: Upgrade',
+          `Sec-WebSocket-Accept: ${accept}`,
+          '',
+          '',
+        ].join('\r\n'));
+        const reason = Buffer.from('Normal Closure', 'utf-8');
+        const payload = Buffer.alloc(2 + reason.length);
+        payload.writeUInt16BE(1000, 0);
+        reason.copy(payload, 2);
+        socket.write(createServerFrame(0x8, payload));
+      });
+    });
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', () => resolve());
+    });
+
+    try {
+      const port = (server.address() as net.AddressInfo).port;
+      const connection = new WebSocketService().connect(`ws://127.0.0.1:${port}/socket`, []);
+      const closeInfo = await new Promise<WebSocketCloseInfo>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Timed out waiting for WebSocket close')), 3000);
+        connection.on('close', (info) => {
+          clearTimeout(timer);
+          resolve(info);
+        });
+        connection.on('error', (error) => {
+          clearTimeout(timer);
+          reject(error);
+        });
+      });
+
+      assert.deepStrictEqual(closeInfo, { code: 1000, reason: 'Normal Closure', wasClean: true });
+    } finally {
+      await closeServer(server);
+    }
+  });
+
+  it('reports abnormal socket close diagnostics when no close frame is received', async () => {
+    const server = net.createServer((socket) => {
+      let buffer = Buffer.alloc(0);
+      let upgraded = false;
+      socket.on('data', (chunk) => {
+        if (upgraded) { return; }
+        buffer = Buffer.concat([buffer, chunk]);
+        const headerEnd = buffer.indexOf('\r\n\r\n');
+        if (headerEnd < 0) { return; }
+        upgraded = true;
+        const handshake = buffer.subarray(0, headerEnd).toString('utf-8');
+        const key = /^Sec-WebSocket-Key:\s*(.+)$/im.exec(handshake)?.[1].trim();
+        assert.ok(key, 'client handshake should include Sec-WebSocket-Key');
+        const accept = crypto.createHash('sha1').update(key + WS_GUID).digest('base64');
+        socket.end([
+          'HTTP/1.1 101 Switching Protocols',
+          'Upgrade: websocket',
+          'Connection: Upgrade',
+          `Sec-WebSocket-Accept: ${accept}`,
+          '',
+          '',
+        ].join('\r\n'));
+      });
+    });
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', () => resolve());
+    });
+
+    try {
+      const port = (server.address() as net.AddressInfo).port;
+      const connection = new WebSocketService().connect(`ws://127.0.0.1:${port}/socket`, []);
+      const closeInfo = await new Promise<WebSocketCloseInfo>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Timed out waiting for WebSocket close')), 3000);
+        connection.on('close', (info) => {
+          clearTimeout(timer);
+          resolve(info);
+        });
+        connection.on('error', (error) => {
+          clearTimeout(timer);
+          reject(error);
+        });
+      });
+
+      assert.deepStrictEqual(closeInfo, { code: 1006, reason: 'Abnormal Closure', wasClean: false });
+    } finally {
+      await closeServer(server);
+    }
   });
 });
