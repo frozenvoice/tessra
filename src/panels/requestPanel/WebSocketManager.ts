@@ -236,7 +236,8 @@ export class WebSocketManager {
       }
       try {
         const payload = VariableService.resolve(rawPayload, this.host.getActiveVariables());
-        this.sendText(tabId, activeSession, payload);
+        activeSession.connection.sendPing(payload);
+        this.postSystemMessage(tabId, LocalizationService.t('panel.websocketKeepAlivePingSent'));
       } catch (error: unknown) {
         const messageText = error instanceof Error ? error.message : String(error);
         this.postSystemMessage(

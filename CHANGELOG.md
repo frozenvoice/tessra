@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.4
+
+- Fixed HTTP Stop behavior so in-flight requests are actually canceled and late canceled responses cannot overwrite newer runs.
+- Added WebSocket frame/message size limits and improved protocol-level keepalive cleanup.
+- Added automatic gzip/deflate/Brotli response decompression.
+- Added safer default response size handling for large responses.
+- Improved cURL import compatibility and warnings for unsupported or malformed flags.
+
 ## 1.0.3
 
 - Added Tessra Workspace Backup / Restore commands for exporting and restoring collections, environments, active environment, default headers, and workspace variables.

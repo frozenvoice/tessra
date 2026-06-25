@@ -47,8 +47,9 @@ export interface RequestExecutorHost {
 }
 
 export class RequestExecutor {
-  private readonly canceledRequestTabs = new Set<string>();
-  private readonly activeRequests = new Map<string, { abort: () => void }>();
+  private nextRunId = 1;
+  private readonly canceledRequestRuns = new Set<string>();
+  private readonly activeRequests = new Map<string, { runId: number; abort: () => void }>();
 
   constructor(
     private readonly httpService: HttpService,
@@ -58,12 +59,14 @@ export class RequestExecutor {
   cancel(tabId: string): void {
     const handle = this.activeRequests.get(tabId);
     if (!handle) { return; }
-    this.canceledRequestTabs.add(tabId);
+    this.canceledRequestRuns.add(this.getRunKey(tabId, handle.runId));
     handle.abort();
   }
 
   async execute(message: SendRequestMessage): Promise<void> {
     const tabId = message.tabId;
+    const runId = this.nextRunId++;
+    const runKey = this.getRunKey(tabId, runId);
     const requestStartedAt = normalizeEpochMs(message.requestStartedAt) ?? Date.now();
     const initialMethod = normalizeMethod(message.method);
     const initialBodyType = normalizeBodyType(message.bodyType);
@@ -180,6 +183,7 @@ export class RequestExecutor {
     let currentHandle: SendHandle | null = null;
     let cancelDelay: (() => void) | null = null;
     this.activeRequests.set(tabId, {
+      runId,
       abort: () => {
         currentHandle?.abort();
         cancelDelay?.();
@@ -208,7 +212,7 @@ export class RequestExecutor {
           currentHandle = null;
         } catch (err: unknown) {
           currentHandle = null;
-          if (this.canceledRequestTabs.has(tabId) || attempt >= settings.retryCount) {
+          if (this.canceledRequestRuns.has(runKey) || attempt >= settings.retryCount) {
             throw err;
           }
           await createCancelableDelay(settings.retryDelayMs, (cancel) => {
@@ -232,17 +236,20 @@ export class RequestExecutor {
         }
       }
 
-      if (this.canceledRequestTabs.delete(tabId)) {
-        this.host.postMessage({
-          type: MessageType.RequestCanceled,
-          tabId,
-          ...createRequestTiming(requestStartedAt),
-        });
+      if (this.canceledRequestRuns.delete(runKey)) {
+        if (this.isCurrentRun(tabId, runId)) {
+          this.host.postMessage({
+            type: MessageType.RequestCanceled,
+            tabId,
+            ...createRequestTiming(requestStartedAt),
+          });
+        }
         return;
       }
       if (!response) {
         throw new Error('Request did not produce a response.');
       }
+      if (!this.isCurrentRun(tabId, runId)) { return; }
 
       const responseTiming = createRequestTiming(requestStartedAt);
       let scriptResults: ScriptExecutionResult | undefined;
@@ -297,17 +304,21 @@ export class RequestExecutor {
       });
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      const wasCanceled = this.canceledRequestTabs.delete(tabId);
+      const wasCanceled = this.canceledRequestRuns.delete(runKey);
       const errorTiming = createRequestTiming(requestStartedAt);
 
       if (wasCanceled) {
-        this.host.postMessage({
-          type: MessageType.RequestCanceled,
-          tabId,
-          ...errorTiming,
-        });
+        if (this.isCurrentRun(tabId, runId)) {
+          this.host.postMessage({
+            type: MessageType.RequestCanceled,
+            tabId,
+            ...errorTiming,
+          });
+        }
         return;
       }
+
+      if (!this.isCurrentRun(tabId, runId)) { return; }
 
       if (settings.saveToHistory) {
         this.host.saveToHistory(
@@ -335,8 +346,18 @@ export class RequestExecutor {
       });
     } finally {
       cancelDelay = null;
-      this.activeRequests.delete(tabId);
+      if (this.isCurrentRun(tabId, runId)) {
+        this.activeRequests.delete(tabId);
+      }
     }
+  }
+
+  private getRunKey(tabId: string, runId: number): string {
+    return `${tabId}:${runId}`;
+  }
+
+  private isCurrentRun(tabId: string, runId: number): boolean {
+    return this.activeRequests.get(tabId)?.runId === runId;
   }
 
   private postTimedResponseError(tabId: string, error: string, startedAt?: number): void {

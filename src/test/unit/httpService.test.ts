@@ -1,6 +1,7 @@
 ﻿import * as assert from 'assert';
 import * as http from 'http';
 import * as net from 'net';
+import * as zlib from 'zlib';
 import { EventEmitter } from 'events';
 import type { RequestOptions as HttpsRequestOptions } from 'https';
 import { HttpService, HttpSendOptions } from '../../services/HttpService';
@@ -73,6 +74,42 @@ describe('HttpService', () => {
           case '/large':
             res.writeHead(200, { 'Content-Type': 'text/plain' });
             res.end('A'.repeat(10000));
+            break;
+
+          case '/huge':
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            res.end('A'.repeat(11 * 1024 * 1024));
+            break;
+
+          case '/gzip': {
+            const payload = Buffer.from(JSON.stringify({ compressed: true }), 'utf-8');
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' });
+            res.end(zlib.gzipSync(payload));
+            break;
+          }
+
+          case '/deflate': {
+            const payload = Buffer.from('deflated response', 'utf-8');
+            res.writeHead(200, { 'Content-Type': 'text/plain', 'Content-Encoding': 'deflate' });
+            res.end(zlib.deflateSync(payload));
+            break;
+          }
+
+          case '/br': {
+            const payload = Buffer.from(JSON.stringify({ brotli: true }), 'utf-8');
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'br' });
+            res.end(zlib.brotliCompressSync(payload));
+            break;
+          }
+
+          case '/bad-gzip':
+            res.writeHead(200, { 'Content-Type': 'text/plain', 'Content-Encoding': 'gzip' });
+            res.end('not really gzip');
+            break;
+
+          case '/unsupported-encoding':
+            res.writeHead(200, { 'Content-Type': 'text/plain', 'Content-Encoding': 'compress' });
+            res.end('legacy');
             break;
 
           case '/binary':
@@ -199,6 +236,43 @@ describe('HttpService', () => {
       await assert.rejects(
         () => send('GET', `${baseUrl}/large`, [], '', { maxResponseSizeBytes: 1024 }),
         /Response exceeded max size/
+      );
+    });
+
+    it('uses a safe default response size limit', async () => {
+      await assert.rejects(
+        () => send('GET', `${baseUrl}/huge`, [], ''),
+        /Response exceeded max size/
+      );
+    });
+
+    it('automatically decodes gzip JSON responses', async () => {
+      const res = await send('GET', `${baseUrl}/gzip`, [], '');
+      assert.deepStrictEqual(JSON.parse(res.body), { compressed: true });
+      assert.strictEqual(res.size, Buffer.byteLength(res.body, 'utf-8'));
+    });
+
+    it('automatically decodes deflate text responses', async () => {
+      const res = await send('GET', `${baseUrl}/deflate`, [], '');
+      assert.strictEqual(res.body, 'deflated response');
+    });
+
+    it('automatically decodes Brotli responses', async () => {
+      const res = await send('GET', `${baseUrl}/br`, [], '');
+      assert.deepStrictEqual(JSON.parse(res.body), { brotli: true });
+    });
+
+    it('rejects invalid compressed responses with a clear error', async () => {
+      await assert.rejects(
+        () => send('GET', `${baseUrl}/bad-gzip`, [], ''),
+        /Failed to decompress gzip response/
+      );
+    });
+
+    it('rejects unsupported content encodings clearly', async () => {
+      await assert.rejects(
+        () => send('GET', `${baseUrl}/unsupported-encoding`, [], ''),
+        /Unsupported content encoding: compress/
       );
     });
   });

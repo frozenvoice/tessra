@@ -262,6 +262,19 @@ describe('LocalizationService source', () => {
     assert.strictEqual(matches.length, 3);
   });
 
+  it('keeps 1.0.4 stabilization copy translated for every supported language', () => {
+    const keys = [
+      'webview.maxSizeDefault',
+      'panel.websocketKeepAlivePingSent',
+      'warn.importCurlWarnings',
+    ];
+
+    for (const key of keys) {
+      const matches = source.match(new RegExp(`'${key.replace(/\./g, '\\.')}'\\s*:`, 'g')) ?? [];
+      assert.strictEqual(matches.length, 3, `${key} should exist for every supported language`);
+    }
+  });
+
   it('keeps workspace backup notifications translated for every supported language', () => {
     const keys = [
       'info.exportedWorkspaceBackup',

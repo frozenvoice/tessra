@@ -36,7 +36,7 @@ Group request history by date and run collections with status summaries.
 - Local JSON storage only
 - cURL, OpenAPI, and Postman import/export
 - Scripts, collections, environments, response compare, and code generation
-- WebSocket `ws://` / `wss://` connect and message workflow
+- WebSocket `ws://` / `wss://` connect, message, safety limit, and keepalive workflow
 - Built on VS Code Webview + TreeView
 - Uses Node.js built-in `http` / `https` / `net` / `tls`
 
@@ -65,9 +65,10 @@ Group request history by date and run collections with status summaries.
 - Handshake requests use headers, query params, auth, workspace default headers, environment variables, and TLS override settings
 - Connect and disconnect from the primary action; the Body tab acts as the outgoing text message composer
 - Inbound, outbound, and close diagnostic messages render in a dedicated WebSocket log, with inbound binary frames shown as base64
-- Optional app-level keepalive can send a text ping at a per-request interval; it is off by default
+- WebSocket frame/message size limits protect the extension from oversized text or binary messages
+- Optional protocol-level ping keepalive can run at a per-request interval; it is off by default
 - For a public echo smoke test, try `wss://ws.ifelse.io`
-- Public echo servers can change availability or idle timeout policies; if one closes with code `1006`, try another endpoint or enable keepalive when the server supports app-level ping messages
+- Public echo servers can change availability or idle timeout policies; if one closes with code `1006`, try another endpoint or enable keepalive when the server supports ping/pong
 
 ### Request settings
 - Timeout per tab
@@ -75,7 +76,7 @@ Group request history by date and run collections with status summaries.
 - Save to history toggle
 - Manage workspace default headers from the request toolbar or Headers tab
 - TLS override: `Default`, `Strict`, `Insecure`
-- Maximum response size limit
+- Maximum response size limit, with a safer default for large responses
 - Retry count and retry delay
 - Stop after headers
 - Skip default headers
@@ -133,6 +134,7 @@ Group request history by date and run collections with status summaries.
 - JSON tree viewer
 - XML formatting with `Pretty`, `Compact`, and `Inline Children`
 - Content-Type based syntax highlighting
+- Automatic gzip, deflate, and Brotli response decoding
 - Quick copy actions for resolved URL, status line, raw headers, and response body
 - Save response body to file
 - Response compare with `Raw`, `Normalized`, and `Pretty` modes
@@ -159,7 +161,7 @@ pm.environment.set("sessionKey", String(body.key));
 Then use `{{sessionKey}}` in request 2.
 
 ### Import / Export
-- cURL import
+- cURL import with warnings for unsupported or malformed flags
 - Copy as cURL
 - OpenAPI import
 - Tessra JSON collection import

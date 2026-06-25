@@ -1639,6 +1639,7 @@ const DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS = 30;
 const MIN_WS_KEEPALIVE_INTERVAL_SECONDS = 5;
 const MAX_WS_KEEPALIVE_INTERVAL_SECONDS = 300;
 const DEFAULT_WS_KEEPALIVE_MESSAGE = 'ping';
+const DEFAULT_MAX_RESPONSE_SIZE_KB = 10240;
 const REQUEST_EDITOR_TABS = ['params', 'headers', 'body', 'auth', 'scripts', 'settings'];
 var pinnedResponses = [];
 var lastResponse = null;
@@ -1937,7 +1938,7 @@ function buildDraftTabFromContent(mc) {
     followRedirects: followRedirectsInput ? followRedirectsInput.checked === true : !!tab.followRedirects,
     saveToHistory: saveHistoryInput ? saveHistoryInput.checked !== false : tab.saveToHistory !== false,
     tlsValidation: normalizeTlsValidation(tlsValidationInput?.value || tab.tlsValidation),
-    maxResponseSizeKb: normalizeNumberSetting(mc.querySelector('.js-max-response-size')?.value),
+    maxResponseSizeKb: normalizeMaxResponseSizeSetting(mc.querySelector('.js-max-response-size')?.value),
     retryCount: normalizeNumberSetting(mc.querySelector('.js-retry-count')?.value),
     retryDelayMs: normalizeNumberSetting(mc.querySelector('.js-retry-delay')?.value),
     stopAfterHeaders: stopAfterHeadersInput ? stopAfterHeadersInput.checked === true : !!tab.stopAfterHeaders,
@@ -1978,7 +1979,7 @@ function createRequestChangeBaseline(tab) {
     followRedirects: false,
     saveToHistory: true,
     tlsValidation: 'default',
-    maxResponseSizeKb: 0,
+    maxResponseSizeKb: DEFAULT_MAX_RESPONSE_SIZE_KB,
     retryCount: 0,
     retryDelayMs: 0,
     stopAfterHeaders: false,
@@ -2009,7 +2010,7 @@ function createRequestChangeBaseline(tab) {
     baseline.followRedirects = settings.followRedirects === true;
     baseline.saveToHistory = settings.saveToHistory !== false;
     baseline.tlsValidation = normalizeTlsValidation(settings.tlsValidation);
-    baseline.maxResponseSizeKb = normalizeNumberSetting(settings.maxResponseSizeKb);
+    baseline.maxResponseSizeKb = normalizeMaxResponseSizeSetting(settings.maxResponseSizeKb);
     baseline.retryCount = normalizeNumberSetting(settings.retryCount);
     baseline.retryDelayMs = normalizeNumberSetting(settings.retryDelayMs);
     baseline.stopAfterHeaders = settings.stopAfterHeaders === true;
@@ -3019,6 +3020,11 @@ function normalizeNumberSetting(value) {
   return Number.isFinite(num) && num > 0 ? num : 0;
 }
 
+function normalizeMaxResponseSizeSetting(value) {
+  var num = normalizeNumberSetting(value);
+  return num > 0 ? num : DEFAULT_MAX_RESPONSE_SIZE_KB;
+}
+
 function normalizeWebSocketKeepAliveInterval(value) {
   var num = normalizeNumberSetting(value);
   if (num <= 0) return DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS;
@@ -3040,7 +3046,7 @@ function getRequestSettings(data) {
     followRedirects: data?.followRedirects === true,
     saveToHistory: data?.saveToHistory !== false,
     tlsValidation: normalizeTlsValidation(data?.tlsValidation),
-    maxResponseSizeKb: normalizeNumberSetting(data?.maxResponseSizeKb),
+    maxResponseSizeKb: normalizeMaxResponseSizeSetting(data?.maxResponseSizeKb),
     retryCount: normalizeNumberSetting(data?.retryCount),
     retryDelayMs: normalizeNumberSetting(data?.retryDelayMs),
     stopAfterHeaders: data?.stopAfterHeaders === true,
@@ -3078,7 +3084,7 @@ function requestSettingsSnapshot(tab) {
     followRedirects: !!tab.followRedirects,
     saveToHistory: tab.saveToHistory !== false,
     tlsValidation: normalizeTlsValidation(tab.tlsValidation),
-    maxResponseSizeKb: normalizeNumberSetting(tab.maxResponseSizeKb),
+    maxResponseSizeKb: normalizeMaxResponseSizeSetting(tab.maxResponseSizeKb),
     retryCount: normalizeNumberSetting(tab.retryCount),
     retryDelayMs: normalizeNumberSetting(tab.retryDelayMs),
     stopAfterHeaders: !!tab.stopAfterHeaders,
@@ -3568,7 +3574,7 @@ function websocketConnect(tab) {
     followRedirects: !!tab.followRedirects,
     saveToHistory: tab.saveToHistory !== false,
     tlsValidation: normalizeTlsValidation(tab.tlsValidation),
-    maxResponseSizeKb: normalizeNumberSetting(tab.maxResponseSizeKb),
+    maxResponseSizeKb: normalizeMaxResponseSizeSetting(tab.maxResponseSizeKb),
     retryCount: normalizeNumberSetting(tab.retryCount),
     retryDelayMs: normalizeNumberSetting(tab.retryDelayMs),
     stopAfterHeaders: !!tab.stopAfterHeaders,
@@ -3614,6 +3620,10 @@ function handlePrimaryAction() {
     return;
   }
   if (tab.loading) {
+    clearTabRequestState(tab);
+    tab.lastEvent = 'canceled';
+    tab.error = null;
+    renderContent();
     vscode.postMessage({ type: 'cancelRequest', tabId: tab.id });
     return;
   }
@@ -3655,7 +3665,7 @@ function saveActiveTabState() {
   tab.followRedirects = mc.querySelector('.js-follow-redirects')?.checked === true;
   tab.saveToHistory = mc.querySelector('.js-save-history')?.checked !== false;
   tab.tlsValidation = normalizeTlsValidation(mc.querySelector('.js-tls-validation')?.value);
-  tab.maxResponseSizeKb = normalizeNumberSetting(mc.querySelector('.js-max-response-size')?.value);
+  tab.maxResponseSizeKb = normalizeMaxResponseSizeSetting(mc.querySelector('.js-max-response-size')?.value);
   tab.retryCount = normalizeNumberSetting(mc.querySelector('.js-retry-count')?.value);
   tab.retryDelayMs = normalizeNumberSetting(mc.querySelector('.js-retry-delay')?.value);
   tab.stopAfterHeaders = mc.querySelector('.js-stop-after-headers')?.checked === true;
@@ -4246,7 +4256,7 @@ function buildSampleRequestData() {
     followRedirects: false,
     saveToHistory: true,
     tlsValidation: 'default',
-    maxResponseSizeKb: 0,
+    maxResponseSizeKb: DEFAULT_MAX_RESPONSE_SIZE_KB,
     retryCount: 0,
     retryDelayMs: 0,
     stopAfterHeaders: false,
@@ -5155,8 +5165,8 @@ function renderContent() {
                 '</div>' +
                 '<div class="settings-row">' +
                   '<label class="settings-label">' + escapeHtml(tr('webview.maxSize')) + '</label>' +
-                  '<input class="js-max-response-size settings-input" type="number" min="0" placeholder="0" title="' + escapeAttr(tr('webview.unlimited')) + '" value="' + (tab.maxResponseSizeKb || '') + '"/>' +
-                  '<div class="settings-field-meta"><span class="settings-hint">' + escapeHtml(tr('webview.unlimited')) + '</span></div>' +
+                  '<input class="js-max-response-size settings-input" type="number" min="0" placeholder="' + DEFAULT_MAX_RESPONSE_SIZE_KB + '" title="' + escapeAttr(tr('webview.maxSizeDefault')) + '" value="' + (tab.maxResponseSizeKb || '') + '"/>' +
+                  '<div class="settings-field-meta"><span class="settings-hint">' + escapeHtml(tr('webview.maxSizeDefault')) + '</span></div>' +
                 '</div>' +
                 '<div class="settings-row">' +
                   '<label class="settings-label">' + escapeHtml(tr('webview.retryCount')) + '</label>' +
@@ -6133,7 +6143,7 @@ function sendActiveTab() {
   vscode.postMessage({
     type: 'sendRequest', tabId: tab.id,
     requestStartedAt: requestStartedAt,
-    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: !!tab.followRedirects, saveToHistory: tab.saveToHistory !== false, tlsValidation: normalizeTlsValidation(tab.tlsValidation), maxResponseSizeKb: normalizeNumberSetting(tab.maxResponseSizeKb), retryCount: normalizeNumberSetting(tab.retryCount), retryDelayMs: normalizeNumberSetting(tab.retryDelayMs), stopAfterHeaders: !!tab.stopAfterHeaders, skipDefaultHeaders: !!tab.skipDefaultHeaders, disableScripts: !!tab.disableScripts, scriptsTrusted: tab.scriptsTrusted !== false,
+    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: !!tab.followRedirects, saveToHistory: tab.saveToHistory !== false, tlsValidation: normalizeTlsValidation(tab.tlsValidation), maxResponseSizeKb: normalizeMaxResponseSizeSetting(tab.maxResponseSizeKb), retryCount: normalizeNumberSetting(tab.retryCount), retryDelayMs: normalizeNumberSetting(tab.retryDelayMs), stopAfterHeaders: !!tab.stopAfterHeaders, skipDefaultHeaders: !!tab.skipDefaultHeaders, disableScripts: !!tab.disableScripts, scriptsTrusted: tab.scriptsTrusted !== false,
   });
 }
 

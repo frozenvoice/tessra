@@ -462,9 +462,16 @@ export function activate(context: vscode.ExtensionContext) {
       if (!input) { return; }
 
       try {
-        const req = CurlService.parse(input);
+        const result = CurlService.parseWithWarnings(input);
+        const req = result.request;
         RequestPanel.show(context.extensionUri);
         RequestPanel.currentPanel?.loadRequest(req);
+        if (result.warnings.length > 0) {
+          vscode.window.showWarningMessage(t('warn.importCurlWarnings', {
+            count: result.warnings.length,
+            warnings: result.warnings.slice(0, 4).join('; '),
+          }));
+        }
       } catch (err: unknown) {
         vscode.window.showErrorMessage(t('error.parseCurl', { message: err instanceof Error ? err.message : String(err) }));
       }

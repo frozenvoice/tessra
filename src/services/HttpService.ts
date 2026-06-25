@@ -1,5 +1,6 @@
 ﻿import * as http from 'http';
 import * as https from 'https';
+import * as zlib from 'zlib';
 import { URL } from 'url';
 import { HttpMethod, KeyValue, Response } from '../models/types';
 
@@ -18,6 +19,7 @@ export interface HttpSendOptions {
 
 // Node.js 내장 http/https 모듈로 HTTP 요청 실행
 export class HttpService {
+  static readonly DEFAULT_MAX_RESPONSE_SIZE_BYTES = 10 * 1024 * 1024;
   private static readonly REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
   private static readonly MAX_REDIRECTS = 10;
   private static readonly TEXT_CONTENT_TYPES = new Set([
@@ -49,7 +51,7 @@ export class HttpService {
     const timeoutSec = Math.max(0, options.timeoutSec ?? 0);
     const allowInsecureHttps = options.allowInsecureHttps === true;
     const followRedirects = options.followRedirects === true;
-    const maxResponseSizeBytes = Math.max(0, options.maxResponseSizeBytes ?? 0);
+    const maxResponseSizeBytes = HttpService.normalizeMaxResponseSizeBytes(options.maxResponseSizeBytes);
     const stopAfterHeaders = options.stopAfterHeaders === true;
     const startTime = Date.now();
 
@@ -261,7 +263,15 @@ export class HttpService {
           });
 
           res.on('end', () => {
-            const buffer = Buffer.concat(chunks);
+            if (aborted) { return; }
+            const rawBuffer = Buffer.concat(chunks);
+            let buffer: Buffer;
+            try {
+              buffer = HttpService.decodeResponseBody(rawBuffer, responseHeaders, maxResponseSizeBytes);
+            } catch (error: unknown) {
+              safeReject(error);
+              return;
+            }
             const contentType = responseHeaders['content-type'] ?? responseHeaders['Content-Type'] ?? '';
             const isBinary = HttpService.isBinaryContentType(contentType);
 
@@ -305,6 +315,77 @@ export class HttpService {
         reqRef?.destroy(new Error('Request was canceled'));
       },
     };
+  }
+
+  private static normalizeMaxResponseSizeBytes(value: number | undefined): number {
+    if (!Number.isFinite(value) || (value ?? 0) <= 0) {
+      return HttpService.DEFAULT_MAX_RESPONSE_SIZE_BYTES;
+    }
+    return Math.floor(value as number);
+  }
+
+  private static decodeResponseBody(
+    buffer: Buffer,
+    headers: Record<string, string>,
+    maxResponseSizeBytes: number
+  ): Buffer {
+    const encodings = HttpService.getContentEncodings(headers);
+    let decoded = buffer;
+
+    for (const encoding of encodings.reverse()) {
+      if (encoding === 'identity') { continue; }
+      try {
+        switch (encoding) {
+          case 'gzip':
+          case 'x-gzip':
+            decoded = zlib.gunzipSync(decoded, { maxOutputLength: maxResponseSizeBytes });
+            break;
+          case 'deflate':
+            decoded = zlib.inflateSync(decoded, { maxOutputLength: maxResponseSizeBytes });
+            break;
+          case 'br':
+            decoded = zlib.brotliDecompressSync(decoded, { maxOutputLength: maxResponseSizeBytes });
+            break;
+          default:
+            throw new Error(`Unsupported content encoding: ${encoding}`);
+        }
+      } catch (error: unknown) {
+        if (HttpService.isMaxOutputLengthError(error)) {
+          throw HttpService.createMaxSizeError(maxResponseSizeBytes);
+        }
+        if (error instanceof Error && error.message.startsWith('Unsupported content encoding:')) {
+          throw error;
+        }
+        throw new Error(`Failed to decompress ${encoding} response: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      if (decoded.length > maxResponseSizeBytes) {
+        throw HttpService.createMaxSizeError(maxResponseSizeBytes);
+      }
+    }
+
+    if (decoded.length > maxResponseSizeBytes) {
+      throw HttpService.createMaxSizeError(maxResponseSizeBytes);
+    }
+    return decoded;
+  }
+
+  private static getContentEncodings(headers: Record<string, string>): string[] {
+    const value = Object.entries(headers)
+      .find(([key]) => key.toLowerCase() === 'content-encoding')?.[1] ?? '';
+    return value
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  private static isMaxOutputLengthError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /maxoutputlength|buffer too large|cannot create a buffer/i.test(message);
+  }
+
+  private static createMaxSizeError(maxResponseSizeBytes: number): Error {
+    return new Error(`Response exceeded max size (${Math.ceil(maxResponseSizeBytes / 1024)} KB)`);
   }
 
   // 파일 타입이 의심되는 바이너리 응답만 base64로 원본 보존

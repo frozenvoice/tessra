@@ -38,6 +38,7 @@ export const DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS = 30;
 export const MIN_WS_KEEPALIVE_INTERVAL_SECONDS = 5;
 export const MAX_WS_KEEPALIVE_INTERVAL_SECONDS = 300;
 export const DEFAULT_WS_KEEPALIVE_MESSAGE = 'ping';
+export const DEFAULT_MAX_RESPONSE_SIZE_KB = 10 * 1024;
 
 const UNRESOLVED_VAR_PATTERN = /\{\{([^}]+)\}\}/g;
 
@@ -86,6 +87,11 @@ export function normalizeCount(value: number | undefined): number {
   return Number.isFinite(value) && (value ?? 0) > 0 ? Math.floor(value as number) : 0;
 }
 
+export function normalizeMaxResponseSizeKb(value: number | undefined): number {
+  const normalized = normalizeCount(value);
+  return normalized > 0 ? normalized : DEFAULT_MAX_RESPONSE_SIZE_KB;
+}
+
 export function normalizeWebSocketKeepAliveInterval(value: number | undefined): number {
   const normalized = normalizeCount(value);
   if (normalized <= 0) { return DEFAULT_WS_KEEPALIVE_INTERVAL_SECONDS; }
@@ -123,7 +129,7 @@ export function normalizeRequestSettings(settings?: RequestSettings): ResolvedRe
     followRedirects: settings?.followRedirects === true,
     saveToHistory: settings?.saveToHistory !== false,
     tlsValidation,
-    maxResponseSizeKb: normalizeCount(settings?.maxResponseSizeKb),
+    maxResponseSizeKb: normalizeMaxResponseSizeKb(settings?.maxResponseSizeKb),
     retryCount: normalizeCount(settings?.retryCount),
     retryDelayMs: normalizeCount(settings?.retryDelayMs),
     stopAfterHeaders: settings?.stopAfterHeaders === true,

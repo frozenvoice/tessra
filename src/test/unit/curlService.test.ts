@@ -90,10 +90,14 @@ describe('CurlService', () => {
 
     it('무시할 플래그 (--compressed, -k 등) 처리', () => {
       const curl = "curl 'https://api.example.com' --compressed -k -s -L";
-      const req = CurlService.parse(curl);
+      const result = CurlService.parseWithWarnings(curl);
+      const req = result.request;
       assert.strictEqual(req.method, 'GET');
       assert.strictEqual(req.url, 'https://api.example.com');
-      assert.strictEqual(req.headers.length, 0);
+      assert.strictEqual(req.followRedirects, true);
+      assert.strictEqual(req.tlsValidation, 'insecure');
+      assert.strictEqual(req.headers.find((header) => header.key === 'Accept-Encoding')?.value, 'gzip, deflate, br');
+      assert.ok(result.warnings.some((warning) => warning.includes('-s')));
     });
 
     it('--data-raw 옵션 파싱', () => {
@@ -132,6 +136,66 @@ describe('CurlService', () => {
   });
 
   // === generate: Request → cURL 문자열 ===
+  describe('parseWithWarnings edge flags', () => {
+    it('--data-urlencode imports form data and sets content type', () => {
+      const result = CurlService.parseWithWarnings("curl 'https://api.example.com/search' --data-urlencode 'q=hello world'");
+      assert.strictEqual(result.request.method, 'POST');
+      assert.strictEqual(result.request.body, 'q=hello%20world');
+      assert.strictEqual(result.request.bodyType, 'form');
+      assert.ok(result.request.headers.some((header) =>
+        header.key === 'Content-Type' && header.value === 'application/x-www-form-urlencoded'
+      ));
+      assert.deepStrictEqual(result.warnings, []);
+    });
+
+    it('-G moves data values into query params', () => {
+      const result = CurlService.parseWithWarnings("curl -G 'https://api.example.com/search?existing=1' -d 'q=test' --data-urlencode 'space=hello world'");
+      assert.strictEqual(result.request.method, 'GET');
+      assert.strictEqual(result.request.body, '');
+      assert.deepStrictEqual(result.request.params.map((param) => [param.key, param.value]), [
+        ['existing', '1'],
+        ['q', 'test'],
+        ['space', 'hello world'],
+      ]);
+    });
+
+    it('imports --data-binary as a raw body', () => {
+      const result = CurlService.parseWithWarnings("curl 'https://api.example.com/upload' --data-binary '{\"raw\":true}'");
+      assert.strictEqual(result.request.method, 'POST');
+      assert.strictEqual(result.request.body, '{"raw":true}');
+      assert.strictEqual(result.request.bodyType, 'raw');
+    });
+
+    it('imports --url, --user-agent, --referer, --location, --insecure, and --compressed', () => {
+      const result = CurlService.parseWithWarnings("curl --url 'https://api.example.com' --user-agent 'TessraTest' --referer 'https://ref.example' --location --insecure --compressed");
+      assert.strictEqual(result.request.url, 'https://api.example.com');
+      assert.strictEqual(result.request.followRedirects, true);
+      assert.strictEqual(result.request.tlsValidation, 'insecure');
+      assert.ok(result.request.headers.some((header) => header.key === 'User-Agent' && header.value === 'TessraTest'));
+      assert.ok(result.request.headers.some((header) => header.key === 'Referer' && header.value === 'https://ref.example'));
+      assert.ok(result.request.headers.some((header) => header.key === 'Accept-Encoding' && header.value.includes('gzip')));
+    });
+
+    it('reports missing and malformed header warnings without failing import', () => {
+      const result = CurlService.parseWithWarnings("curl 'https://api.example.com' -H -X -H 'Authorization'");
+      assert.strictEqual(result.request.url, 'https://api.example.com');
+      assert.ok(result.warnings.some((warning) => warning.includes('Missing value for -H')));
+      assert.ok(result.warnings.some((warning) => warning.includes('Malformed header ignored')));
+    });
+
+    it('reports unsupported flags as warnings', () => {
+      const result = CurlService.parseWithWarnings("curl 'https://api.example.com' --http3");
+      assert.ok(result.warnings.some((warning) => warning.includes('Unsupported cURL flag ignored: --http3')));
+    });
+
+    it('rejects malformed quotes clearly', () => {
+      assert.throws(
+        () => CurlService.parse("curl 'https://api.example.com"),
+        /unmatched quote/
+      );
+    });
+  });
+
   describe('generate', () => {
     it('단순 GET 요청 생성', () => {
       const curl = CurlService.generate({

@@ -1,68 +1,176 @@
 import { Request, KeyValue, AuthConfig, HttpMethod, RequestBodyType } from '../models/types';
 
-// cURL 파싱 및 생성 서비스
+export interface CurlParseResult {
+  request: Request;
+  warnings: string[];
+}
+
+interface TokenizeResult {
+  tokens: string[];
+  warnings: string[];
+}
+
+interface OptionToken {
+  flag: string;
+  inlineValue?: string;
+}
+
+const VALID_METHODS = new Set<HttpMethod>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+
 export class CurlService {
-
-  // === cURL 문자열 → Request 객체 변환 ===
   static parse(curl: string): Request {
-    // Windows cmd / bash 형식 자동 감지 및 정규화
+    return CurlService.parseWithWarnings(curl).request;
+  }
+
+  static parseWithWarnings(curl: string): CurlParseResult {
     const normalized = CurlService.normalizeCurl(curl);
+    const withoutCmd = normalized.replace(/^curl(?:\.exe)?\s+/i, '');
+    const tokenized = CurlService.tokenize(withoutCmd);
+    const tokens = tokenized.tokens;
+    const warnings = [...tokenized.warnings];
 
-    // curl 명령어 앞부분 제거
-    const withoutCmd = normalized.replace(/^curl\s+/i, '');
-
-    const tokens = CurlService.tokenize(withoutCmd);
     let method: HttpMethod = 'GET';
     let url = '';
     const headers: KeyValue[] = [];
     const cookies: string[] = [];
-    let body = '';
+    const bodyParts: string[] = [];
+    const dataUrlEncodeParts: string[] = [];
     const auth: AuthConfig = { type: 'none' };
     let methodExplicit = false;
+    let getWithData = false;
+    let bodyTypeHint: RequestBodyType | undefined;
+    let followRedirects = false;
+    let tlsValidation: Request['tlsValidation'] = 'default';
 
-    for (let i = 0; i < tokens.length; i++) {
-      const tok = tokens[i];
+    for (let index = 0; index < tokens.length; index++) {
+      const option = CurlService.splitOptionToken(tokens[index]);
+      const tok = option.flag;
 
-      if (tok === '-X' || tok === '--request') {
-        method = (tokens[++i] || 'GET').toUpperCase() as HttpMethod;
-        methodExplicit = true;
-      } else if (tok === '-H' || tok === '--header') {
-        const hdr = tokens[++i] || '';
-        const colonIdx = hdr.indexOf(':');
-        if (colonIdx > 0) {
-          headers.push({
-            key: hdr.substring(0, colonIdx).trim(),
-            value: hdr.substring(colonIdx + 1).trim(),
-            enabled: true,
-          });
+      const readValue = (flag: string): string | undefined => {
+        if (option.inlineValue !== undefined) { return option.inlineValue; }
+        const next = tokens[index + 1];
+        if (next === undefined || CurlService.looksLikeFlag(next)) {
+          warnings.push(`Missing value for ${flag}.`);
+          return undefined;
         }
-      } else if (tok === '-d' || tok === '--data' || tok === '--data-raw' || tok === '--data-binary') {
-        body = tokens[++i] || '';
-        if (!methodExplicit) { method = 'POST'; }
-      } else if (tok === '-b' || tok === '--cookie') {
-        // 쿠키 옵션 수집
-        cookies.push(tokens[++i] || '');
-      } else if (tok === '-u' || tok === '--user') {
-        const cred = tokens[++i] || '';
-        const sepIdx = cred.indexOf(':');
-        if (sepIdx > 0) {
-          auth.type = 'basic';
-          auth.basic = {
-            username: cred.substring(0, sepIdx),
-            password: cred.substring(sepIdx + 1),
-          };
+        index++;
+        return next;
+      };
+
+      switch (tok) {
+        case '-X':
+        case '--request': {
+          const value = readValue(tok);
+          if (!value) { break; }
+          const normalizedMethod = value.toUpperCase();
+          if (VALID_METHODS.has(normalizedMethod as HttpMethod)) {
+            method = normalizedMethod as HttpMethod;
+            methodExplicit = true;
+          } else {
+            warnings.push(`Unsupported HTTP method ignored: ${value}.`);
+          }
+          break;
         }
-      } else if (tok === '--compressed' || tok === '-s' || tok === '--silent'
-        || tok === '-k' || tok === '--insecure' || tok === '-v' || tok === '--verbose'
-        || tok === '-i' || tok === '--include' || tok === '-L' || tok === '--location') {
-        // 무시할 플래그 (값 없음)
-      } else if (!tok.startsWith('-')) {
-        // URL
-        url = tok;
+        case '-H':
+        case '--header': {
+          const value = readValue(tok);
+          if (!value) { break; }
+          CurlService.addHeader(headers, value, warnings);
+          break;
+        }
+        case '-d':
+        case '--data':
+        case '--data-ascii':
+        case '--data-raw':
+        case '--data-binary': {
+          const value = readValue(tok);
+          if (value === undefined) { break; }
+          bodyParts.push(value);
+          if (tok === '--data-binary') { bodyTypeHint = 'raw'; }
+          if (!methodExplicit && !getWithData) { method = 'POST'; }
+          break;
+        }
+        case '--data-urlencode': {
+          const value = readValue(tok);
+          if (value === undefined) { break; }
+          dataUrlEncodeParts.push(value);
+          bodyTypeHint = 'form';
+          if (!methodExplicit && !getWithData) { method = 'POST'; }
+          break;
+        }
+        case '-G':
+        case '--get':
+          getWithData = true;
+          if (!methodExplicit) { method = 'GET'; }
+          break;
+        case '--url': {
+          const value = readValue(tok);
+          if (value) { url = value; }
+          break;
+        }
+        case '-b':
+        case '--cookie': {
+          const value = readValue(tok);
+          if (value) { cookies.push(value); }
+          break;
+        }
+        case '-u':
+        case '--user': {
+          const value = readValue(tok);
+          if (!value) { break; }
+          const sepIdx = value.indexOf(':');
+          if (sepIdx > 0) {
+            auth.type = 'basic';
+            auth.basic = {
+              username: value.substring(0, sepIdx),
+              password: value.substring(sepIdx + 1),
+            };
+          } else {
+            warnings.push('Basic auth credentials should use username:password format.');
+          }
+          break;
+        }
+        case '--compressed':
+          CurlService.ensureHeader(headers, 'Accept-Encoding', 'gzip, deflate, br');
+          break;
+        case '-L':
+        case '--location':
+          followRedirects = true;
+          break;
+        case '-k':
+        case '--insecure':
+          tlsValidation = 'insecure';
+          break;
+        case '-A':
+        case '--user-agent': {
+          const value = readValue(tok);
+          if (value) { CurlService.setHeader(headers, 'User-Agent', value); }
+          break;
+        }
+        case '-e':
+        case '--referer':
+        case '--referrer': {
+          const value = readValue(tok);
+          if (value) { CurlService.setHeader(headers, 'Referer', value); }
+          break;
+        }
+        case '-s':
+        case '--silent':
+        case '-v':
+        case '--verbose':
+        case '-i':
+        case '--include':
+          warnings.push(`cURL flag ${tok} does not affect the imported request and was ignored.`);
+          break;
+        default:
+          if (tok.startsWith('-')) {
+            warnings.push(`Unsupported cURL flag ignored: ${tokens[index]}.`);
+          } else {
+            url = tok;
+          }
       }
     }
 
-    // -b 쿠키를 Cookie 헤더로 병합
     if (cookies.length > 0) {
       const existing = headers.find((h) => h.key.toLowerCase() === 'cookie');
       if (existing) {
@@ -72,20 +180,39 @@ export class CurlService {
       }
     }
 
-    // URL에서 쿼리 파라미터 추출
     const params: KeyValue[] = [];
     try {
       const parsed = new URL(url);
-      parsed.searchParams.forEach((v, k) => {
-        params.push({ key: k, value: v, enabled: true });
+      parsed.searchParams.forEach((value, key) => {
+        params.push({ key, value, enabled: true });
       });
-      // 파라미터 제거한 기본 URL
       if (params.length > 0) {
         url = parsed.origin + parsed.pathname;
       }
-    } catch { /* URL 파싱 실패 시 원본 유지 */ }
+    } catch {
+      if (!url) {
+        warnings.push('No URL was found in the cURL command.');
+      }
+    }
 
-    // Authorization 헤더에서 인증 정보 추출
+    if (getWithData) {
+      for (const part of [...bodyParts, ...dataUrlEncodeParts]) {
+        CurlService.appendDataParams(params, part, warnings);
+      }
+      bodyParts.length = 0;
+      dataUrlEncodeParts.length = 0;
+      if (!methodExplicit) { method = 'GET'; }
+    }
+
+    let body = '';
+    if (dataUrlEncodeParts.length > 0) {
+      const encodedParts = dataUrlEncodeParts.map((part) => CurlService.encodeFormPart(part, warnings));
+      body = [...bodyParts, ...encodedParts].filter((part) => part.length > 0).join('&');
+      CurlService.ensureHeader(headers, 'Content-Type', 'application/x-www-form-urlencoded');
+    } else {
+      body = bodyParts.join('&');
+    }
+
     const authHeaderIdx = headers.findIndex(
       (h) => h.key.toLowerCase() === 'authorization'
     );
@@ -99,86 +226,46 @@ export class CurlService {
         try {
           const decoded = Buffer.from(val.substring(6), 'base64').toString();
           const sepIdx = decoded.indexOf(':');
-          auth.type = 'basic';
-          auth.basic = {
-            username: decoded.substring(0, sepIdx),
-            password: decoded.substring(sepIdx + 1),
-          };
-          headers.splice(authHeaderIdx, 1);
-        } catch { /* Base64 디코딩 실패 시 헤더 유지 */ }
+          if (sepIdx > 0) {
+            auth.type = 'basic';
+            auth.basic = {
+              username: decoded.substring(0, sepIdx),
+              password: decoded.substring(sepIdx + 1),
+            };
+            headers.splice(authHeaderIdx, 1);
+          }
+        } catch {
+          warnings.push('Authorization Basic header could not be decoded and was kept as a header.');
+        }
       }
     }
 
-    // bodyType 추론
     const ctHeader = headers.find((h) => h.key.toLowerCase() === 'content-type');
     const bodyType: RequestBodyType = body
-      ? this.inferBodyType(ctHeader?.value ?? '')
+      ? (bodyTypeHint ?? this.inferBodyType(ctHeader?.value ?? ''))
       : 'none';
 
     return {
-      id: '',
-      name: `${method} ${url}`,
-      method,
-      url,
-      headers,
-      params,
-      body,
-      bodyType,
-      formData: [],
-      binaryFilePath: '',
-      auth,
-      scripts: { preRequest: '', test: '' },
+      request: {
+        id: '',
+        name: `${method} ${url}`,
+        method,
+        url,
+        headers,
+        params,
+        body,
+        bodyType,
+        formData: [],
+        binaryFilePath: '',
+        auth,
+        followRedirects,
+        tlsValidation,
+        scripts: { preRequest: '', test: '' },
+      },
+      warnings,
     };
   }
 
-  // Windows cmd 형식 자동 감지 및 정규화
-  private static normalizeCurl(raw: string): string {
-    const trimmed = raw.trim();
-
-    // Windows cmd 형식 감지: ^ 줄바꿈 연결이나 ^" 이스케이프가 있으면 cmd 형식
-    const isCmd = /\^\s*\r?\n/.test(trimmed) || /\^"/.test(trimmed);
-
-    if (isCmd) {
-      return CurlService.normalizeCmd(trimmed);
-    }
-
-    // bash 형식: \ 줄바꿈 연결
-    return trimmed.replace(/\\\s*\r?\n/g, ' ');
-  }
-
-  // Windows cmd 형식 전처리
-  // Chrome DevTools "Copy as cURL (cmd)" 출력 형식 처리
-  // 예: ^"value^\^"inner^\^"end^"  →  "value\"inner\"end"
-  //     ^{^\^"key^\^":^\^"val^\^"^}  →  {"key":"val"}
-  private static normalizeCmd(raw: string): string {
-    // 1단계: 줄 끝 ^ + 줄바꿈 → 공백 (줄 연결)
-    let result = raw.replace(/\^\s*\r?\n\s*/g, ' ');
-
-    // 2단계: 문자 단위로 ^이스케이프 해석
-    // cmd에서 ^는 바로 다음 문자를 이스케이프하는 역할
-    // ^\^" 패턴: ^ 이스케이프된 \, 그 뒤 ^" 이스케이프된 " → \"  → 최종 "
-    // ^" → ", ^{ → {, ^} → }, ^^ → ^, ^| → | 등
-    let out = '';
-    let i = 0;
-    while (i < result.length) {
-      if (result[i] === '^' && i + 1 < result.length) {
-        // ^ 다음 문자를 그대로 출력 (이스케이프 해제)
-        out += result[i + 1];
-        i += 2;
-      } else {
-        out += result[i];
-        i++;
-      }
-    }
-
-    // 3단계: 위 처리 결과에서 \" → " 변환 (cmd JSON 바디의 이스케이프된 따옴표)
-    // Chrome cmd는 JSON 내 따옴표를 ^\^" 로 표현 → 2단계 후 \" 가 됨
-    // tokenizer가 쌍따옴표 안에서 \" 를 이스케이프로 인식하므로 그대로 둠
-
-    return out;
-  }
-
-  // === Request 객체 → cURL 문자열 변환 ===
   static generate(req: {
     method: string;
     url: string;
@@ -191,8 +278,6 @@ export class CurlService {
     auth?: AuthConfig;
   }): string {
     const parts: string[] = ['curl'];
-
-    // URL + 쿼리 파라미터 조합
     let fullUrl = req.url || '';
     const activeHeaders = (req.headers ?? [])
       .filter((header) => header.enabled && header.key)
@@ -218,27 +303,25 @@ export class CurlService {
     if (activeParams.length > 0) {
       try {
         const urlObj = new URL(fullUrl);
-        for (const p of activeParams) {
-          urlObj.searchParams.append(p.key, p.value);
+        for (const param of activeParams) {
+          urlObj.searchParams.append(param.key, param.value);
         }
         fullUrl = urlObj.toString();
       } catch {
         const sep = fullUrl.includes('?') ? '&' : '?';
         const qs = activeParams
-          .map((p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`)
+          .map((param) => `${encodeURIComponent(param.key)}=${encodeURIComponent(param.value)}`)
           .join('&');
         fullUrl = fullUrl + sep + qs;
       }
     }
 
-    // 메서드 (GET이 아니면 명시)
     if (req.method && req.method !== 'GET') {
       parts.push(`-X ${req.method}`);
     }
 
     parts.push(`'${CurlService.shellEscape(fullUrl)}'`);
 
-    // 인증
     if (req.auth) {
       switch (req.auth.type) {
         case 'basic':
@@ -259,12 +342,10 @@ export class CurlService {
       }
     }
 
-    // 헤더
-    for (const h of activeHeaders) {
-      parts.push(`-H '${CurlService.shellEscape(h.key)}: ${CurlService.shellEscape(h.value)}'`);
+    for (const header of activeHeaders) {
+      parts.push(`-H '${CurlService.shellEscape(header.key)}: ${CurlService.shellEscape(header.value)}'`);
     }
 
-    // 바디
     if (req.bodyType === 'formdata' && req.formData && req.formData.length > 0) {
       for (const field of req.formData.filter((field) => field.enabled && field.key)) {
         if (field.type === 'file') {
@@ -282,24 +363,133 @@ export class CurlService {
     return parts.join(' \\\n  ');
   }
 
-  // 쉘 이스케이프 (싱글쿼트)
-  private static shellEscape(s: string): string {
-    return s.replace(/'/g, "'\\''");
+  private static splitOptionToken(token: string): OptionToken {
+    if (token.startsWith('--')) {
+      const index = token.indexOf('=');
+      if (index > 2) {
+        return {
+          flag: token.slice(0, index),
+          inlineValue: token.slice(index + 1),
+        };
+      }
+    }
+    return { flag: token };
+  }
+
+  private static looksLikeFlag(value: string): boolean {
+    return /^-{1,2}[A-Za-z][A-Za-z0-9-]*($|=)/.test(value);
+  }
+
+  private static addHeader(headers: KeyValue[], raw: string, warnings: string[]): void {
+    const colonIdx = raw.indexOf(':');
+    if (colonIdx <= 0) {
+      warnings.push(`Malformed header ignored: ${raw}. Expected "Name: value".`);
+      return;
+    }
+    const key = raw.substring(0, colonIdx).trim();
+    if (!key) {
+      warnings.push(`Malformed header ignored: ${raw}. Header name is empty.`);
+      return;
+    }
+    headers.push({
+      key,
+      value: raw.substring(colonIdx + 1).trim(),
+      enabled: true,
+    });
+  }
+
+  private static ensureHeader(headers: KeyValue[], key: string, value: string): void {
+    if (!headers.some((header) => header.key.toLowerCase() === key.toLowerCase())) {
+      headers.push({ key, value, enabled: true });
+    }
+  }
+
+  private static setHeader(headers: KeyValue[], key: string, value: string): void {
+    const existing = headers.find((header) => header.key.toLowerCase() === key.toLowerCase());
+    if (existing) {
+      existing.value = value;
+    } else {
+      headers.push({ key, value, enabled: true });
+    }
+  }
+
+  private static appendDataParams(params: KeyValue[], raw: string, warnings: string[]): void {
+    if (!raw) {
+      warnings.push('Empty data value was ignored for -G/--get.');
+      return;
+    }
+    if (raw.includes('&')) {
+      for (const [key, value] of new URLSearchParams(raw)) {
+        params.push({ key, value, enabled: true });
+      }
+      return;
+    }
+    const index = raw.indexOf('=');
+    if (index >= 0) {
+      params.push({
+        key: raw.slice(0, index),
+        value: raw.slice(index + 1),
+        enabled: true,
+      });
+    } else {
+      params.push({ key: raw, value: '', enabled: true });
+    }
+  }
+
+  private static encodeFormPart(raw: string, warnings: string[]): string {
+    if (!raw) {
+      warnings.push('Empty --data-urlencode value was ignored.');
+      return '';
+    }
+    const index = raw.indexOf('=');
+    if (index >= 0) {
+      return `${encodeURIComponent(raw.slice(0, index))}=${encodeURIComponent(raw.slice(index + 1))}`;
+    }
+    return encodeURIComponent(raw);
+  }
+
+  private static normalizeCurl(raw: string): string {
+    const trimmed = raw.trim();
+    const isCmd = /\^\s*\r?\n/.test(trimmed) || /\^"/.test(trimmed);
+    if (isCmd) {
+      return CurlService.normalizeCmd(trimmed);
+    }
+    return trimmed.replace(/\\\s*\r?\n/g, ' ');
+  }
+
+  private static normalizeCmd(raw: string): string {
+    const result = raw.replace(/\^\s*\r?\n\s*/g, ' ');
+    let out = '';
+    let index = 0;
+    while (index < result.length) {
+      if (result[index] === '^' && index + 1 < result.length) {
+        out += result[index + 1];
+        index += 2;
+      } else {
+        out += result[index];
+        index++;
+      }
+    }
+    return out;
+  }
+
+  private static shellEscape(value: string): string {
+    return value.replace(/'/g, "'\\''");
   }
 
   private static removeHeader(headers: KeyValue[], key: string): void {
     const target = key.toLowerCase();
-    for (let i = headers.length - 1; i >= 0; i--) {
-      if (headers[i].key.toLowerCase() === target) {
-        headers.splice(i, 1);
+    for (let index = headers.length - 1; index >= 0; index--) {
+      if (headers[index].key.toLowerCase() === target) {
+        headers.splice(index, 1);
       }
     }
   }
 
   private static removeParam(params: KeyValue[], key: string): void {
-    for (let i = params.length - 1; i >= 0; i--) {
-      if (params[i].key === key) {
-        params.splice(i, 1);
+    for (let index = params.length - 1; index >= 0; index--) {
+      if (params[index].key === key) {
+        params.splice(index, 1);
       }
     }
   }
@@ -312,39 +502,49 @@ export class CurlService {
     return 'raw';
   }
 
-  // 공백/따옴표를 고려한 토크나이저
-  private static tokenize(input: string): string[] {
+  private static tokenize(input: string): TokenizeResult {
     const tokens: string[] = [];
+    const warnings: string[] = [];
     let current = '';
     let inSingle = false;
     let inDouble = false;
     let escape = false;
 
-    for (const ch of input) {
+    for (const char of input) {
       if (escape) {
-        current += ch;
+        current += char;
         escape = false;
         continue;
       }
-      if (ch === '\\' && !inSingle) {
+      if (char === '\\' && !inSingle) {
         escape = true;
         continue;
       }
-      if (ch === "'" && !inDouble) {
+      if (char === "'" && !inDouble) {
         inSingle = !inSingle;
         continue;
       }
-      if (ch === '"' && !inSingle) {
+      if (char === '"' && !inSingle) {
         inDouble = !inDouble;
         continue;
       }
-      if ((ch === ' ' || ch === '\t') && !inSingle && !inDouble) {
-        if (current) { tokens.push(current); current = ''; }
+      if ((char === ' ' || char === '\t') && !inSingle && !inDouble) {
+        if (current) {
+          tokens.push(current);
+          current = '';
+        }
         continue;
       }
-      current += ch;
+      current += char;
+    }
+
+    if (escape) {
+      throw new Error('Malformed cURL command: dangling escape character.');
+    }
+    if (inSingle || inDouble) {
+      throw new Error('Malformed cURL command: unmatched quote.');
     }
     if (current) { tokens.push(current); }
-    return tokens;
+    return { tokens, warnings };
   }
 }

@@ -10,6 +10,8 @@ const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 export interface WebSocketConnectOptions {
   timeoutSec?: number;
   allowInsecureHttps?: boolean;
+  maxFrameSizeBytes?: number;
+  maxMessageSizeBytes?: number;
 }
 
 export interface WebSocketCloseInfo {
@@ -32,16 +34,24 @@ export declare interface WebSocketConnection {
 }
 
 export class WebSocketConnection extends EventEmitter {
+  static readonly DEFAULT_MAX_FRAME_SIZE_BYTES = 1024 * 1024;
+  static readonly DEFAULT_MAX_MESSAGE_SIZE_BYTES = 10 * 1024 * 1024;
+  static readonly MAX_CONFIGURABLE_SIZE_BYTES = 50 * 1024 * 1024;
+
   private buffer = Buffer.alloc(0);
   private handshakeComplete = false;
   private closed = false;
   private fragments: Buffer[] = [];
   private fragmentOpcode: number | null = null;
+  private fragmentSize = 0;
+  private lastPongAt: number | undefined;
 
   constructor(
     private readonly socket: net.Socket | tls.TLSSocket,
     private readonly expectedAccept: string,
-    private readonly timeoutMs: number
+    private readonly timeoutMs: number,
+    private readonly maxFrameSizeBytes = WebSocketConnection.DEFAULT_MAX_FRAME_SIZE_BYTES,
+    private readonly maxMessageSizeBytes = WebSocketConnection.DEFAULT_MAX_MESSAGE_SIZE_BYTES
   ) {
     super();
     this.bindSocket();
@@ -49,6 +59,15 @@ export class WebSocketConnection extends EventEmitter {
 
   sendText(message: string): void {
     this.sendFrame(0x1, Buffer.from(message, 'utf-8'));
+  }
+
+  sendPing(payload: string | Buffer = ''): void {
+    const data = Buffer.isBuffer(payload) ? payload : Buffer.from(payload, 'utf-8');
+    this.sendFrame(0x9, data.subarray(0, 125));
+  }
+
+  getLastPongAt(): number | undefined {
+    return this.lastPongAt;
   }
 
   close(code = 1000, reason = ''): void {
@@ -144,11 +163,16 @@ export class WebSocketConnection extends EventEmitter {
         const high = this.buffer.readUInt32BE(offset);
         const low = this.buffer.readUInt32BE(offset + 4);
         if (high !== 0) {
-          this.fail(new Error('WebSocket frame is too large'));
+          this.failMessageTooBig('WebSocket frame size exceeded');
           return;
         }
         length = low;
         offset += 8;
+      }
+
+      if (length > this.maxFrameSizeBytes) {
+        this.failMessageTooBig(`WebSocket frame size exceeded (${length} > ${this.maxFrameSizeBytes} bytes)`);
+        return;
       }
 
       const maskOffset = offset;
@@ -181,26 +205,40 @@ export class WebSocketConnection extends EventEmitter {
       this.sendFrame(0xA, payload);
       return;
     }
-    if (opcode === 0xA) { return; }
+    if (opcode === 0xA) {
+      this.lastPongAt = Date.now();
+      return;
+    }
 
     if (opcode === 0x0) {
       if (this.fragmentOpcode === null) { return; }
+      this.fragmentSize += payload.length;
+      if (this.fragmentSize > this.maxMessageSizeBytes) {
+        this.failMessageTooBig(`WebSocket message size exceeded (${this.fragmentSize} > ${this.maxMessageSizeBytes} bytes)`);
+        return;
+      }
       this.fragments.push(payload);
       if (fin) {
         this.emitMessage(this.fragmentOpcode, Buffer.concat(this.fragments));
         this.fragments = [];
         this.fragmentOpcode = null;
+        this.fragmentSize = 0;
       }
       return;
     }
 
     if (opcode === 0x1 || opcode === 0x2) {
+      if (payload.length > this.maxMessageSizeBytes) {
+        this.failMessageTooBig(`WebSocket message size exceeded (${payload.length} > ${this.maxMessageSizeBytes} bytes)`);
+        return;
+      }
       if (fin) {
         this.emitMessage(opcode, payload);
         return;
       }
       this.fragmentOpcode = opcode;
       this.fragments = [payload];
+      this.fragmentSize = payload.length;
     }
   }
 
@@ -238,6 +276,24 @@ export class WebSocketConnection extends EventEmitter {
     return header;
   }
 
+  private failMessageTooBig(reason: string): void {
+    if (this.handshakeComplete && !this.closed) {
+      try {
+        const reasonBuffer = Buffer.from('Message Too Big', 'utf-8');
+        const payload = Buffer.alloc(2 + reasonBuffer.length);
+        payload.writeUInt16BE(1009, 0);
+        reasonBuffer.copy(payload, 2);
+        this.sendFrame(0x8, payload);
+      } catch {
+        // Best-effort close frame; the error below is the diagnostic users see.
+      }
+    }
+    this.fragments = [];
+    this.fragmentOpcode = null;
+    this.fragmentSize = 0;
+    this.fail(new Error(reason));
+  }
+
   private fail(error: Error): void {
     if (!this.closed) {
       this.emit('error', error);
@@ -266,7 +322,19 @@ export class WebSocketService {
         rejectUnauthorized: options.allowInsecureHttps === true ? false : true,
       })
       : net.connect({ host: url.hostname, port });
-    const connection = new WebSocketConnection(socket, expectedAccept, Math.max(0, options.timeoutSec ?? 0) * 1000);
+    const connection = new WebSocketConnection(
+      socket,
+      expectedAccept,
+      Math.max(0, options.timeoutSec ?? 0) * 1000,
+      WebSocketService.normalizeSizeLimit(
+        options.maxFrameSizeBytes,
+        WebSocketConnection.DEFAULT_MAX_FRAME_SIZE_BYTES
+      ),
+      WebSocketService.normalizeSizeLimit(
+        options.maxMessageSizeBytes,
+        WebSocketConnection.DEFAULT_MAX_MESSAGE_SIZE_BYTES
+      )
+    );
 
     const requestHeaders = this.buildHandshakeHeaders(url, key, headers);
     socket.once(isSecure ? 'secureConnect' : 'connect', () => {
@@ -303,6 +371,11 @@ export class WebSocketService {
     }
 
     return `${lines.join('\r\n')}\r\n\r\n`;
+  }
+
+  private static normalizeSizeLimit(value: number | undefined, fallback: number): number {
+    if (!Number.isFinite(value) || (value ?? 0) <= 0) { return fallback; }
+    return Math.min(WebSocketConnection.MAX_CONFIGURABLE_SIZE_BYTES, Math.floor(value as number));
   }
 }
 

@@ -79,7 +79,7 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.websocketClosedUnexpectedly': 'Connection closed unexpectedly',
   'webview.websocketError': 'WebSocket error',
   'webview.webSocketKeepAlive': 'WebSocket keep alive',
-  'webview.webSocketKeepAlive.note': 'Send an app-level text ping while the socket is connected.',
+  'webview.webSocketKeepAlive.note': 'Send a protocol-level ping while the socket is connected.',
   'webview.webSocketKeepAliveInterval': 'Keep alive interval',
   'webview.webSocketKeepAliveMessage': 'Keep alive message',
   'webview.webSocketKeepAliveIntervalUnit': 'seconds',
@@ -104,6 +104,7 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.previewOfflineNoStatic': 'No meaningful static body content was detected in this response.',
   'webview.openUrl': 'Open URL',
   'webview.maxSize': 'Max Size (KB)',
+  'webview.maxSizeDefault': '0 = default 10240 KB',
   'webview.retryCount': 'Retry Count',
   'webview.retryDelay': 'Retry Delay',
   'webview.tls': 'TLS',
@@ -796,6 +797,7 @@ describe('RequestPanel Webview', () => {
       MIN_WS_KEEPALIVE_INTERVAL_SECONDS: 5,
       MAX_WS_KEEPALIVE_INTERVAL_SECONDS: 300,
       DEFAULT_WS_KEEPALIVE_MESSAGE: 'ping',
+      DEFAULT_MAX_RESPONSE_SIZE_KB: 10240,
       activeVarValues: { wsBaseUrl: 'wss://ws.ifelse.io' },
       activeTabId: 'tab_1',
       tabs: [{
@@ -1364,7 +1366,7 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /followRedirects:\s*data\?\.followRedirects === true/);
     assert.match(script, /saveToHistory:\s*data\?\.saveToHistory !== false/);
     assert.match(script, /tlsValidation:\s*normalizeTlsValidation\(data\?\.tlsValidation\)/);
-    assert.match(script, /maxResponseSizeKb:\s*normalizeNumberSetting\(data\?\.maxResponseSizeKb\)/);
+    assert.match(script, /maxResponseSizeKb:\s*normalizeMaxResponseSizeSetting\(data\?\.maxResponseSizeKb\)/);
     assert.match(script, /retryCount:\s*normalizeNumberSetting\(data\?\.retryCount\)/);
     assert.match(script, /retryDelayMs:\s*normalizeNumberSetting\(data\?\.retryDelayMs\)/);
     assert.match(script, /stopAfterHeaders:\s*data\?\.stopAfterHeaders === true/);

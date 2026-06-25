@@ -38,7 +38,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 로컬 JSON 저장
 - cURL / OpenAPI / Postman import / export 지원
 - Scripts, collections, environments, response compare, code generation 지원
-- WebSocket `ws://` / `wss://` 연결과 메시지 송수신 워크플로 지원
+- WebSocket `ws://` / `wss://` 연결, 메시지 송수신, 안전 제한, keepalive 워크플로 지원
 - VS Code Webview + TreeView 기반
 - Node.js 내장 `http` / `https` / `net` / `tls` 사용
 
@@ -67,16 +67,17 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 연결 handshake에 headers, query params, auth, 워크스페이스 default headers, 환경 변수, TLS override 설정 적용
 - 기본 액션 버튼으로 연결 / 연결 해제, Body 탭은 전송할 텍스트 메시지 작성기로 사용
 - 전송 / 수신 / close 진단 메시지를 WebSocket 로그로 표시하고, 수신한 binary frame은 base64로 표시
-- 요청별 app-level keepalive 옵션으로 주기적인 텍스트 ping 전송 가능. 기본값은 꺼짐
+- WebSocket frame/message size limit으로 과도하게 큰 text/binary 메시지로부터 확장을 보호
+- 요청별 protocol-level ping keepalive 옵션 제공. 기본값은 꺼짐
 - 공개 echo 스모크 테스트에는 `wss://ws.ifelse.io`를 권장
-- 공개 echo 서버는 가용성이나 idle timeout 정책이 바뀔 수 있음. `1006`으로 닫히면 다른 endpoint를 시도하거나 서버가 app-level ping 메시지를 지원할 때 keepalive를 켜서 확인
+- 공개 echo 서버는 가용성이나 idle timeout 정책이 바뀔 수 있음. `1006`으로 닫히면 다른 endpoint를 시도하거나 서버가 ping/pong을 지원할 때 keepalive를 켜서 확인
 
 ### 요청별 Settings 탭
 - 탭별 timeout
 - redirect follow 여부
 - history 저장 여부
 - TLS override: `Default`, `Strict`, `Insecure`
-- 최대 응답 크기 제한
+- 대용량 응답 보호를 위한 안전한 기본값이 적용된 최대 응답 크기 제한
 - retry count / retry delay
 - headers까지만 받고 종료
 - default headers 건너뛰기
@@ -134,6 +135,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - JSON 트리 뷰어
 - XML `Pretty`, `Compact`, `Inline Children` 포맷
 - Content-Type 기반 문법 강조
+- gzip, deflate, Brotli 응답 자동 해제
 - resolved URL, status line, raw headers, body를 바로 복사하는 빠른 액션
 - 응답 본문 저장
 - `Raw`, `Normalized`, `Pretty` 모드 응답 비교
@@ -160,7 +162,7 @@ pm.environment.set("sessionKey", String(body.key));
 그다음 2번 요청에서 `{{sessionKey}}`를 사용하면 됩니다.
 
 ### Import / Export
-- cURL import
+- 지원하지 않거나 형식이 잘못된 flag를 경고하는 cURL import
 - Copy as cURL
 - OpenAPI import
 - Tessra JSON collection import

@@ -9,7 +9,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - 사용자가 직접 보내는 API 요청 외의 네트워크 호출 없음
 - 모든 데이터는 로컬 JSON 파일로 저장
 
-## 현재 구현 범위 (2026-04-26 기준)
+## 현재 구현 범위 (2026-06-25 기준)
 
 ### 요청 작성 / 전송
 - `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
@@ -19,7 +19,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - `Ctrl+Enter` / `Cmd+Enter` 전송
 - 진행 중 요청 취소
 - 요청 상태 표시와 응답 상태 애니메이션
-- `ws://` / `wss://` WebSocket 탭 자동 감지, 연결 / 연결 해제, 텍스트 메시지 전송, 선택형 keepalive
+- `ws://` / `wss://` WebSocket 탭 자동 감지, 연결 / 연결 해제, 텍스트 메시지 전송, frame/message size limit, 선택형 protocol-level ping keepalive
 
 ### Body 타입
 - `none`
@@ -60,6 +60,8 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - JSON tree viewer
 - XML format options: `Pretty`, `Compact`, `Inline Children`
 - Content-Type 기반 하이라이트
+- gzip / deflate / Brotli 응답 자동 해제
+- 안전 기본값이 있는 max response size 제한
 - 응답 본문 저장
 - 응답 비교: `Raw`, `Normalized`, `Pretty`
 - ignore headers / ignore JSON paths 비교 설정
@@ -82,7 +84,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - 응답값을 환경 변수로 저장해 다음 요청에 넘기는 접이식 stepper 도움말과 삽입 버튼
 
 ### Import / Export
-- cURL import
+- warning을 포함한 cURL import
 - Copy as cURL
 - OpenAPI import
 - Tessra JSON collection import
@@ -100,7 +102,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - follow redirects
 - save to history
 - TLS override
-- max response size
+- 안전 기본값이 있는 max response size
 - retry count / retry delay
 - stop after headers
 - skip default headers
@@ -110,7 +112,8 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - raw URL 또는 `{{variable}}` 치환 후 URL 기준으로 WebSocket 탭 감지
 - handshake에 headers, query params, auth, default headers, 환경 변수, TLS override 적용
 - Body 탭을 전송 메시지 작성기로 사용
-- 기본 OFF인 app-level keepalive 옵션으로 연결 중 텍스트 ping 주기 전송 가능
+- frame/message size limit 적용
+- 기본 OFF인 protocol-level ping keepalive 옵션 제공
 - 수신 / 전송 / close 진단 메시지 로그 표시
 - 수신 binary frame은 base64로 표시
 

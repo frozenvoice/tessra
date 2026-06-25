@@ -42,10 +42,15 @@ after(() => {
 
 class FakeWebSocketConnection extends EventEmitter {
   public sent: string[] = [];
+  public pings: string[] = [];
   public closed: Array<{ code: number; reason: string }> = [];
 
   sendText(message: string): void {
     this.sent.push(message);
+  }
+
+  sendPing(payload: string | Buffer = ''): void {
+    this.pings.push(Buffer.isBuffer(payload) ? payload.toString('utf-8') : payload);
   }
 
   close(code = 1000, reason = ''): void {
@@ -127,7 +132,7 @@ describe('WebSocketManager keepalive', () => {
     assert.strictEqual(normalizeWebSocketKeepAliveMessage('  hello  '), 'hello');
   });
 
-  it('starts an app-level keepalive after open and resolves variables in the message', () => {
+  it('starts a protocol-level keepalive after open and resolves variables in the ping payload', () => {
     const { manager, service, posted, timers } = createManager();
 
     manager.connect(connectMessage());
@@ -142,14 +147,14 @@ describe('WebSocketManager keepalive', () => {
 
     timers.timers[0].callback();
 
-    assert.deepStrictEqual(service.connections[0].sent, ['{"type":"ping","from":"tessra-demo"}']);
+    assert.deepStrictEqual(service.connections[0].pings, ['{"type":"ping","from":"tessra-demo"}']);
     assert.ok(
       posted.some((message) =>
         message.type === MessageType.WebSocketMessage &&
-        message.direction === 'out' &&
-        message.data === '{"type":"ping","from":"tessra-demo"}'
+        message.direction === 'in' &&
+        String(message.data).includes('protocol ping')
       ),
-      'keepalive sends should be visible as OUT messages'
+      'keepalive protocol pings should be visible as system messages'
     );
   });
 
@@ -177,7 +182,7 @@ describe('WebSocketManager keepalive', () => {
     );
 
     timers.timers[0].callback();
-    assert.deepStrictEqual(service.connections[0].sent, []);
+    assert.deepStrictEqual(service.connections[0].pings, []);
   });
 
   it('clears the old interval before reconnecting and avoids duplicate sends', () => {
@@ -195,8 +200,8 @@ describe('WebSocketManager keepalive', () => {
     timers.timers[0].callback();
     timers.timers[1].callback();
 
-    assert.deepStrictEqual(service.connections[0].sent, []);
-    assert.deepStrictEqual(service.connections[1].sent, ['second']);
+    assert.deepStrictEqual(service.connections[0].pings, []);
+    assert.deepStrictEqual(service.connections[1].pings, ['second']);
   });
 
   it('clears keepalive on remote close and unexpected close status is reported', () => {

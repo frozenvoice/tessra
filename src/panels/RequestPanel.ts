@@ -27,6 +27,7 @@ import { CollectionRunner } from './requestPanel/CollectionRunner';
 import { WebSocketManager } from './requestPanel/WebSocketManager';
 import {
   createEmptyScripts,
+  DEFAULT_MAX_RESPONSE_SIZE_KB,
   normalizeBodyType,
   RequestTiming,
 } from './requestPanel/requestUtils';
@@ -250,7 +251,7 @@ export class RequestPanel {
       followRedirects: req.followRedirects === true,
       saveToHistory: req.saveToHistory !== false,
       tlsValidation: req.tlsValidation ?? 'default',
-      maxResponseSizeKb: req.maxResponseSizeKb ?? 0,
+      maxResponseSizeKb: req.maxResponseSizeKb ?? DEFAULT_MAX_RESPONSE_SIZE_KB,
       retryCount: req.retryCount ?? 0,
       retryDelayMs: req.retryDelayMs ?? 0,
       stopAfterHeaders: req.stopAfterHeaders === true,
@@ -357,7 +358,7 @@ export class RequestPanel {
           followRedirects: message.followRedirects === true,
           saveToHistory: message.saveToHistory !== false,
           tlsValidation: message.tlsValidation ?? 'default',
-          maxResponseSizeKb: message.maxResponseSizeKb ?? 0,
+          maxResponseSizeKb: message.maxResponseSizeKb ?? DEFAULT_MAX_RESPONSE_SIZE_KB,
           retryCount: message.retryCount ?? 0,
           retryDelayMs: message.retryDelayMs ?? 0,
           stopAfterHeaders: message.stopAfterHeaders === true,
