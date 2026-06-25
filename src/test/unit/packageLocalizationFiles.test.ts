@@ -59,8 +59,11 @@ describe('package localization files', () => {
     assert.strictEqual(en['command.changeDisplayLanguage'], 'Tessra: Change Display Language');
     assert.strictEqual(en['command.changeRequestPanelTheme'], 'Tessra: Change Request Panel Theme');
     assert.strictEqual(en['command.changeWorkspaceProfile'], 'Tessra: Change Workspace Profile');
+    assert.strictEqual(en['command.importData'], 'Tessra: Import...');
     assert.strictEqual(en['command.importCollection'], 'Tessra: Import Collection');
-    assert.strictEqual(en['command.importEnvironment'], 'Import Environment');
+    assert.strictEqual(en['command.importEnvironment'], 'Tessra: Import Environment');
+    assert.strictEqual(en['command.exportCollection'], 'Tessra: Export Collection');
+    assert.strictEqual(en['command.exportEnvironment'], 'Tessra: Export Environment');
     assert.strictEqual(en['command.exportWorkspaceBackup'], 'Tessra: Export Workspace Backup');
     assert.strictEqual(en['command.importWorkspaceBackup'], 'Tessra: Import Workspace Backup');
     assert.strictEqual(en['command.openHistorySettings'], 'Tessra: Open History Settings');
@@ -68,7 +71,7 @@ describe('package localization files', () => {
     assert.match(en['configuration.historyMaxItems.description'], /Pinned entries are preserved/);
   });
 
-  it('contributes Import Environment and History Settings from their view title bars', () => {
+  it('contributes import and export commands from the expected palette and tree menus', () => {
     const manifest = readPackageManifest();
     const commands = manifest.contributes.commands as Array<{ command: string; title: string }>;
     const titleMenus = manifest.contributes.menus['view/title'] as Array<{
@@ -76,11 +79,29 @@ describe('package localization files', () => {
       when: string;
       group: string;
     }>;
+    const contextMenus = manifest.contributes.menus['view/item/context'] as Array<{
+      command: string;
+      when: string;
+      group: string;
+    }>;
 
+    assert.ok(commands.some((command) => command.command === 'tessra.importData'));
+    assert.ok(commands.some((command) => command.command === 'tessra.importCollection'));
+    assert.ok(commands.some((command) => command.command === 'tessra.importCurl'));
+    assert.ok(commands.some((command) => command.command === 'tessra.importOpenApi'));
     assert.ok(commands.some((command) => command.command === 'tessra.importEnvironment'));
+    assert.ok(commands.some((command) => command.command === 'tessra.exportCollection'));
+    assert.ok(commands.some((command) => command.command === 'tessra.exportEnvironment'));
     assert.ok(commands.some((command) => command.command === 'tessra.exportWorkspaceBackup'));
     assert.ok(commands.some((command) => command.command === 'tessra.importWorkspaceBackup'));
     assert.ok(commands.some((command) => command.command === 'tessra.openHistorySettings'));
+    assert.strictEqual(commands.some((command) => command.command === 'tessra.exportPostmanCollection'), false);
+    assert.strictEqual(commands.some((command) => command.command === 'tessra.exportPostmanEnvironment'), false);
+    assert.ok(titleMenus.some((item) =>
+      item.command === 'tessra.importData'
+      && item.when === 'view == tessra-collections'
+      && item.group === 'navigation'
+    ));
     assert.ok(titleMenus.some((item) =>
       item.command === 'tessra.importEnvironment'
       && item.when === 'view == tessra-environments'
@@ -90,6 +111,14 @@ describe('package localization files', () => {
       item.command === 'tessra.openHistorySettings'
       && item.when === 'view == tessra-history'
       && item.group === 'navigation'
+    ));
+    assert.ok(contextMenus.some((item) =>
+      item.command === 'tessra.exportCollection'
+      && item.when === 'viewItem == collection'
+    ));
+    assert.ok(contextMenus.some((item) =>
+      item.command === 'tessra.exportEnvironment'
+      && item.when === 'viewItem == environment || viewItem == environment-active'
     ));
   });
 
@@ -102,14 +131,20 @@ describe('package localization files', () => {
     assert.match(ko['configuration.displayLanguage.description'], /Tessra/);
     assert.match(ja['configuration.displayLanguage.description'], /Tessra/);
     assert.match(ko['command.changeDisplayLanguage'], /^Tessra:/);
+    assert.match(ko['command.importData'], /^Tessra:/);
     assert.match(ko['command.importCollection'], /^Tessra:/);
+    assert.match(ko['command.importEnvironment'], /^Tessra:/);
+    assert.match(ko['command.exportCollection'], /^Tessra:/);
+    assert.match(ko['command.exportEnvironment'], /^Tessra:/);
     assert.match(ko['command.exportWorkspaceBackup'], /^Tessra:/);
     assert.match(ko['command.importWorkspaceBackup'], /^Tessra:/);
-    assert.strictEqual(ko['command.importEnvironment'], 'Import Environment');
     assert.match(ja['command.changeRequestPanelTheme'], /^Tessra:/);
+    assert.match(ja['command.importData'], /^Tessra:/);
+    assert.match(ja['command.importEnvironment'], /^Tessra:/);
+    assert.match(ja['command.exportCollection'], /^Tessra:/);
+    assert.match(ja['command.exportEnvironment'], /^Tessra:/);
     assert.match(ja['command.exportWorkspaceBackup'], /^Tessra:/);
     assert.match(ja['command.importWorkspaceBackup'], /^Tessra:/);
-    assert.strictEqual(ja['command.importEnvironment'], 'Import Environment');
     assert.match(ko['command.openHistorySettings'], /^Tessra:/);
     assert.match(ja['command.openHistorySettings'], /^Tessra:/);
     assert.strictEqual(ko['view.collections'].length > 0, true);

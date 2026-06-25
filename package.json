@@ -204,9 +204,14 @@
         "icon": "$(settings-gear)"
       },
       {
+        "command": "tessra.importData",
+        "title": "%command.importData%",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "tessra.importCurl",
         "title": "%command.importCurl%",
-        "icon": "$(cloud-download)"
+        "icon": "$(terminal)"
       },
       {
         "command": "tessra.importCollection",
@@ -224,6 +229,16 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "tessra.exportCollection",
+        "title": "%command.exportCollection%",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "tessra.exportEnvironment",
+        "title": "%command.exportEnvironment%",
+        "icon": "$(cloud-upload)"
+      },
+      {
         "command": "tessra.exportWorkspaceBackup",
         "title": "%command.exportWorkspaceBackup%",
         "icon": "$(archive)"
@@ -231,15 +246,7 @@
       {
         "command": "tessra.importWorkspaceBackup",
         "title": "%command.importWorkspaceBackup%",
-        "icon": "$(cloud-upload)"
-      },
-      {
-        "command": "tessra.exportPostmanCollection",
-        "title": "%command.exportPostmanCollection%"
-      },
-      {
-        "command": "tessra.exportPostmanEnvironment",
-        "title": "%command.exportPostmanEnvironment%"
+        "icon": "$(cloud-download)"
       },
       {
         "command": "tessra.collapseAll",
@@ -348,7 +355,7 @@
           "group": "navigation"
         },
         {
-          "command": "tessra.importCurl",
+          "command": "tessra.importData",
           "when": "view == tessra-collections",
           "group": "navigation"
         },
@@ -420,7 +427,7 @@
           "group": "1_actions@4"
         },
         {
-          "command": "tessra.exportPostmanCollection",
+          "command": "tessra.exportCollection",
           "when": "viewItem == collection",
           "group": "1_actions@5"
         },
@@ -460,7 +467,7 @@
           "group": "1_edit@2"
         },
         {
-          "command": "tessra.exportPostmanEnvironment",
+          "command": "tessra.exportEnvironment",
           "when": "viewItem == environment || viewItem == environment-active",
           "group": "1_edit@3"
         },

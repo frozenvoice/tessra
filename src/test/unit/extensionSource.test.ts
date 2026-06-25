@@ -32,7 +32,11 @@ describe('extension source', () => {
     assert.match(source, /skipDefaultHeaders:\s*node\.item\.request\.skipDefaultHeaders === true/);
   });
 
-  it('registers dedicated OpenAPI import, request panel theme, and workspace profile commands', () => {
+  it('registers dedicated import picker, OpenAPI import, request panel theme, and workspace profile commands', () => {
+    assert.match(source, /registerCommand\('tessra\.importData'/);
+    assert.match(source, /picker\.selectImportAction/);
+    assert.match(source, /picker\.importWorkspaceBackup/);
+    assert.match(source, /executeCommand\(selected\.command\)/);
     assert.match(source, /registerCommand\('tessra\.importOpenApi'/);
     assert.match(source, /ImportExportService\.importOpenApiDocuments\(openApiDocuments\)/);
     assert.match(source, /registerCommand\('tessra\.importEnvironment'/);
@@ -49,6 +53,21 @@ describe('extension source', () => {
     assert.match(source, /info\.workspaceProfileFirstCreated/);
     assert.match(source, /RequestPanel\.flushCurrentPanelState\(\)/);
     assert.match(source, /update\(\s*'workspaceProfile'/);
+  });
+
+  it('supports collection and environment exports from tree context or Command Palette', () => {
+    assert.match(source, /registerCommand\('tessra\.exportCollection', exportCollectionCommand\)/);
+    assert.match(source, /registerCommand\('tessra\.exportEnvironment', exportEnvironmentCommand\)/);
+    assert.match(source, /registerCommand\('tessra\.exportPostmanCollection', exportCollectionCommand\)/);
+    assert.match(source, /registerCommand\('tessra\.exportPostmanEnvironment', exportEnvironmentCommand\)/);
+    assert.match(source, /function isCollectionExportNode/);
+    assert.match(source, /function isEnvironmentExportTarget/);
+    assert.match(source, /picker\.selectCollectionToExport/);
+    assert.match(source, /picker\.selectEnvironmentToExport/);
+    assert.match(source, /info\.noCollectionsToExport/);
+    assert.match(source, /info\.noEnvironmentsToExport/);
+    assert.match(source, /ImportExportService\.exportCollection\(collection\)/);
+    assert.match(source, /ImportExportService\.exportEnvironment\(env\)/);
   });
 
   it('registers workspace backup export and import commands with validation and refresh', () => {

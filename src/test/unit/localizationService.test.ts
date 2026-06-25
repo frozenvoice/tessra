@@ -266,6 +266,8 @@ describe('LocalizationService source', () => {
     const keys = [
       'info.exportedWorkspaceBackup',
       'info.importedWorkspaceBackup',
+      'info.noCollectionsToExport',
+      'info.noEnvironmentsToExport',
       'error.exportWorkspaceBackupFailed',
       'error.importWorkspaceBackupFailed',
       'error.workspaceBackupInvalid',
@@ -273,6 +275,13 @@ describe('LocalizationService source', () => {
       'error.workspaceBackupUnsupportedSchemaVersion',
       'warn.workspaceBackupSecrets',
       'warn.workspaceBackupImportConfirm',
+      'picker.selectImportAction',
+      'picker.importCollection',
+      'picker.importCurl',
+      'picker.importOpenApi',
+      'picker.importWorkspaceBackup',
+      'picker.selectCollectionToExport',
+      'picker.selectEnvironmentToExport',
     ];
 
     for (const key of keys) {

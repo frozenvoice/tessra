@@ -291,6 +291,119 @@ export function activate(context: vscode.ExtensionContext) {
     }
   }
 
+  async function showImportPicker(): Promise<void> {
+    const selected = await vscode.window.showQuickPick(
+      [
+        { label: t('picker.importCollection'), command: 'tessra.importCollection' },
+        { label: t('picker.importCurl'), command: 'tessra.importCurl' },
+        { label: t('picker.importOpenApi'), command: 'tessra.importOpenApi' },
+        { label: t('picker.importWorkspaceBackup'), command: 'tessra.importWorkspaceBackup' },
+      ],
+      { placeHolder: t('picker.selectImportAction') }
+    );
+    if (!selected) { return; }
+
+    await vscode.commands.executeCommand(selected.command);
+  }
+
+  function isCollectionExportNode(value: unknown): value is Extract<CollectionNode, { kind: 'collection' }> {
+    return typeof value === 'object'
+      && value !== null
+      && (value as { kind?: unknown }).kind === 'collection';
+  }
+
+  function isEnvironmentExportTarget(value: unknown): value is Environment {
+    if (typeof value !== 'object' || value === null) { return false; }
+    const candidate = value as Partial<Environment>;
+    return typeof candidate.id === 'string'
+      && typeof candidate.name === 'string'
+      && Array.isArray(candidate.variables);
+  }
+
+  async function pickCollectionToExport(): Promise<Collection | undefined> {
+    const collections = storage.getCollections();
+    if (collections.length === 0) {
+      vscode.window.showInformationMessage(t('info.noCollectionsToExport'));
+      return undefined;
+    }
+
+    const selected = await vscode.window.showQuickPick(
+      collections.map((collection) => ({
+        label: collection.name,
+        description: collection.id,
+        collection,
+      })),
+      { placeHolder: t('picker.selectCollectionToExport') }
+    );
+    return selected?.collection;
+  }
+
+  async function pickEnvironmentToExport(): Promise<Environment | undefined> {
+    const environments = storage.getEnvironments();
+    if (environments.length === 0) {
+      vscode.window.showInformationMessage(t('info.noEnvironmentsToExport'));
+      return undefined;
+    }
+
+    const selected = await vscode.window.showQuickPick(
+      environments.map((environment) => ({
+        label: environment.name,
+        description: environment.id,
+        environment,
+      })),
+      { placeHolder: t('picker.selectEnvironmentToExport') }
+    );
+    return selected?.environment;
+  }
+
+  async function resolveCollectionExportTarget(node?: unknown): Promise<Collection | undefined> {
+    if (isCollectionExportNode(node)) { return node.collection; }
+    return pickCollectionToExport();
+  }
+
+  async function resolveEnvironmentExportTarget(env?: unknown): Promise<Environment | undefined> {
+    if (isEnvironmentExportTarget(env)) { return env; }
+    return pickEnvironmentToExport();
+  }
+
+  async function exportCollectionDocument(collection: Collection): Promise<void> {
+    const defaultName = `${sanitizeFilename(collection.name)}.postman_collection.json`;
+    const uri = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(defaultName),
+      filters: { 'JSON Files': ['json'] },
+    });
+    if (!uri) { return; }
+
+    const document = ImportExportService.exportCollection(collection);
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(document, null, 2), 'utf-8'));
+    vscode.window.showInformationMessage(t('info.exportedPostmanCollection', { path: uri.fsPath }));
+  }
+
+  async function exportEnvironmentDocument(env: Environment): Promise<void> {
+    const defaultName = `${sanitizeFilename(env.name)}.postman_environment.json`;
+    const uri = await vscode.window.showSaveDialog({
+      defaultUri: vscode.Uri.file(defaultName),
+      filters: { 'JSON Files': ['json'] },
+    });
+    if (!uri) { return; }
+
+    const document = ImportExportService.exportEnvironment(env);
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(document, null, 2), 'utf-8'));
+    vscode.window.showInformationMessage(t('info.exportedPostmanEnvironment', { path: uri.fsPath }));
+  }
+
+  async function exportCollectionCommand(node?: unknown): Promise<void> {
+    const collection = await resolveCollectionExportTarget(node);
+    if (!collection) { return; }
+    await exportCollectionDocument(collection);
+  }
+
+  async function exportEnvironmentCommand(env?: unknown): Promise<void> {
+    const environment = await resolveEnvironmentExportTarget(env);
+    if (!environment) { return; }
+    await exportEnvironmentDocument(environment);
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand('tessra.newRequest', () => {
       RequestPanel.show(context.extensionUri, !!RequestPanel.currentPanel);
@@ -330,6 +443,12 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('tessra.saveRequestAs', (node: CollectionNode) => {
       collectionProvider.saveAs(node);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('tessra.importData', async () => {
+      await showImportPicker();
     })
   );
 
@@ -474,34 +593,19 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('tessra.exportPostmanCollection', async (node: CollectionNode) => {
-      if (node.kind !== 'collection') { return; }
-      const defaultName = `${sanitizeFilename(node.collection.name)}.postman_collection.json`;
-      const uri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file(defaultName),
-        filters: { 'JSON Files': ['json'] },
-      });
-      if (!uri) { return; }
-
-      const document = ImportExportService.exportCollection(node.collection);
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(document, null, 2), 'utf-8'));
-      vscode.window.showInformationMessage(t('info.exportedPostmanCollection', { path: uri.fsPath }));
-    })
+    vscode.commands.registerCommand('tessra.exportCollection', exportCollectionCommand)
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('tessra.exportPostmanEnvironment', async (env: Environment) => {
-      const defaultName = `${sanitizeFilename(env.name)}.postman_environment.json`;
-      const uri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file(defaultName),
-        filters: { 'JSON Files': ['json'] },
-      });
-      if (!uri) { return; }
+    vscode.commands.registerCommand('tessra.exportEnvironment', exportEnvironmentCommand)
+  );
 
-      const document = ImportExportService.exportEnvironment(env);
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(document, null, 2), 'utf-8'));
-      vscode.window.showInformationMessage(t('info.exportedPostmanEnvironment', { path: uri.fsPath }));
-    })
+  context.subscriptions.push(
+    vscode.commands.registerCommand('tessra.exportPostmanCollection', exportCollectionCommand)
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('tessra.exportPostmanEnvironment', exportEnvironmentCommand)
   );
 
   context.subscriptions.push(
