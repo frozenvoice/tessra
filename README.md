@@ -116,6 +116,8 @@ Group request history by date and run collections with status summaries.
 - Duplicate / Save As
 - Run All Requests
 - Live collection runner status with active request highlighting and retry countdowns
+- Runner options for delay between requests, multiple iterations, and stop-on-failure behavior
+- Runner Stop cancels active requests, retry waits, and inter-request delays
 - Rerun failed requests only from the collection runner summary
 - Collection runner executions are saved to history when each request's Save to history setting is enabled
 - Collection filtering with `method:`, `host:`, and `type:` tokens

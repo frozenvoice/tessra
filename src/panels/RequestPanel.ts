@@ -24,7 +24,12 @@ import { LocalizationService } from '../services/LocalizationService';
 import { RequestExportService } from '../services/RequestExportService';
 import { ScriptRunner } from '../services/ScriptRunner';
 import { RequestExecutor } from './requestPanel/RequestExecutor';
-import { CollectionRunner } from './requestPanel/CollectionRunner';
+import {
+  CollectionRunner,
+  DEFAULT_COLLECTION_RUNNER_OPTIONS,
+  NormalizedCollectionRunnerOptions,
+  normalizeCollectionRunnerOptions,
+} from './requestPanel/CollectionRunner';
 import { WebSocketManager } from './requestPanel/WebSocketManager';
 import {
   createEmptyScripts,
@@ -58,6 +63,8 @@ export class RequestPanel {
   private webviewReady = false;
   private pendingWebviewMessages: unknown[] = [];
   private pendingFlushResolvers: Array<() => void> = [];
+  private pendingCollectionRun: { name: string; items: CollectionItem[] } | null = null;
+  private lastCollectionRunnerOptions: NormalizedCollectionRunnerOptions = { ...DEFAULT_COLLECTION_RUNNER_OPTIONS };
 
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
@@ -75,6 +82,7 @@ export class RequestPanel {
       getDefaultHeaders: () => RequestPanel.storage.getDefaultHeaders(),
       getAllowInsecureCertificates: () => this.getAllowInsecureCertificates(),
       getScriptTimeoutMs: () => this.getScriptTimeoutMs(),
+      showInformationMessage: (message: string) => vscode.window.showInformationMessage(message),
       saveActiveEnvironmentVariables: (variables: KeyValue[]) => this.saveActiveEnvironmentVariables(variables),
       saveToHistory: (
         request: Request,
@@ -310,7 +318,33 @@ export class RequestPanel {
 
   // 컬렉션 전체 실행 (재귀적으로 하위 폴더 포함)
   public async runCollection(name: string, items: CollectionItem[]) {
-    await this.collectionRunner.runCollection(name, items);
+    const total = this.countCollectionRequests(items);
+    if (total === 0) {
+      vscode.window.showInformationMessage(LocalizationService.t('info.noRequestsToRun'));
+      return;
+    }
+    this.pendingCollectionRun = { name, items };
+    this.postMessage({
+      type: MessageType.ConfigureCollectionRun,
+      name,
+      total,
+      options: this.lastCollectionRunnerOptions,
+    });
+  }
+
+  private countCollectionRequests(items: CollectionItem[]): number {
+    let total = 0;
+    const collect = (list: CollectionItem[]): void => {
+      for (const item of list) {
+        if (item.type === 'request' && item.request) {
+          total++;
+        } else if (item.type === 'folder' && item.children) {
+          collect(item.children);
+        }
+      }
+    };
+    collect(items);
+    return total;
   }
 
   private async handleMessage(message: unknown) {
@@ -438,6 +472,19 @@ export class RequestPanel {
       case MessageType.StopCollectionRun:
         this.collectionRunner.stop();
         break;
+      case MessageType.StartCollectionRun: {
+        const pendingRun = this.pendingCollectionRun;
+        if (!pendingRun) { break; }
+        const options = normalizeCollectionRunnerOptions({
+          delayMs: message.delayMs,
+          iterations: message.iterations,
+          stopOnFailure: message.stopOnFailure,
+        });
+        this.lastCollectionRunnerOptions = options;
+        this.pendingCollectionRun = null;
+        await this.collectionRunner.runCollection(pendingRun.name, pendingRun.items, options);
+        break;
+      }
       case MessageType.RerunFailedCollection:
         await this.collectionRunner.rerunFailed(message.failedIndices ?? []);
         break;

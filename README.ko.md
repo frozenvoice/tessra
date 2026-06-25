@@ -117,6 +117,8 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - Duplicate / Save As
 - Run All Requests
 - 현재 요청 강조와 재시도 대기 상태를 보여주는 컬렉션 러너 상태 표시
+- 요청 사이 지연, 반복 실행, 실패 시 중지를 설정할 수 있는 컬렉션 러너 옵션
+- Runner Stop은 진행 중 요청, 재시도 대기, 요청 사이 지연을 함께 중단
 - 컬렉션 러너 결과에서 실패한 요청만 다시 실행
 - 각 요청의 history 저장 설정이 켜져 있으면 컬렉션 러너 실행도 history에 저장
 - `method:` / `host:` / `type:` 토큰을 지원하는 Collection 필터

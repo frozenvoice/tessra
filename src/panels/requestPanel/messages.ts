@@ -13,6 +13,7 @@ export const INCOMING_WEBVIEW_MESSAGE_TYPES = new Set<string>([
   MessageType.SaveTabState,
   MessageType.CompareResponses,
   MessageType.StopCollectionRun,
+  MessageType.StartCollectionRun,
   MessageType.RerunFailedCollection,
   MessageType.PickFile,
   MessageType.GenerateCode,

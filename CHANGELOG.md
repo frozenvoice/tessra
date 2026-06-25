@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.7
+
+- Added Collection Runner options for request delay, iterations, and stop-on-failure behavior.
+- Improved Collection Runner cancellation for active requests, retry waits, and inter-request delays.
+- Improved runner result summaries for repeated and stopped runs.
+
 ## 1.0.6
 
 - Added recursive variable resolution for nested variables across request values.

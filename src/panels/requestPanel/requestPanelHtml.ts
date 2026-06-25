@@ -769,11 +769,15 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .runner-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:var(--vscode-editor-background);z-index:100;display:flex;flex-direction:column;overflow:hidden}
 .runner-header{padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border,#444);display:flex;align-items:center;gap:8px;flex-shrink:0}
 .runner-header h3{font-size:13px;font-weight:600;flex:1;margin:0}
+.runner-options{padding:12px;border-bottom:1px solid var(--vscode-panel-border,#444);display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:end}
+.runner-option{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--vscode-descriptionForeground,#a6a6a6)}
+.runner-option input[type="number"]{width:100%}
+.runner-option-check{flex-direction:row;align-items:center;color:var(--vscode-foreground,#ddd);padding-bottom:4px}
 .runner-progress{padding:4px 12px;font-size:13px;opacity:.7;flex-shrink:0;display:flex;align-items:center;gap:6px}
 .runner-bar{flex:1;height:3px;background:var(--vscode-input-background);border-radius:2px;overflow:hidden}
 .runner-bar-fill{height:100%;background:var(--vscode-progressBar-background,#0e70c0);transition:width .2s}
-.runner-summary{padding:6px 12px;font-size:13px;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;display:flex;gap:12px}
-.runner-summary .pass{color:#4ec94e}.runner-summary .fail{color:#e06c75}
+.runner-summary{padding:6px 12px;font-size:13px;border-bottom:1px solid var(--vscode-panel-border,#444);flex-shrink:0;display:flex;gap:12px;flex-wrap:wrap}
+.runner-summary .pass{color:#4ec94e}.runner-summary .fail{color:#e06c75}.runner-summary .skip{color:#d7ba7d}
 .runner-list{flex:1;overflow:auto;font-size:13px}
 .runner-row{position:relative;padding:8px 12px 8px 16px;display:flex;align-items:center;gap:8px;cursor:pointer;border-bottom:1px solid var(--vscode-panel-border,#222);background:rgba(255,255,255,.015);transition:background .12s ease,transform .12s ease}
 .runner-row::before{content:"";position:absolute;left:8px;top:10px;bottom:10px;width:3px;border-radius:999px;background:transparent;opacity:.9}
@@ -6965,8 +6969,11 @@ window.addEventListener('message', (event) => {
   }
 
   
+  if (msg.type === 'configureCollectionRun') {
+    showRunnerSetup(msg);
+  }
   if (msg.type === 'runCollectionStart') {
-    showRunner(msg.name, msg.total);
+    showRunner(msg);
   }
   if (msg.type === 'runCollectionStatus') {
     updateRunnerStatus(msg);
@@ -6984,29 +6991,123 @@ var runnerOverlay = null;
 var runnerResults = [];
 var runnerStatusState = null;
 
-function showRunner(name, total) {
+function normalizeRunnerDelayInput(value) {
+  var parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(60000, Math.max(0, parsed));
+}
+
+function normalizeRunnerIterationsInput(value) {
+  var parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(100, Math.max(1, parsed));
+}
+
+function showRunnerSetup(msg) {
   runnerResults = [];
   runnerStatusState = null;
+  var options = msg.options || {};
+  var delayMs = normalizeRunnerDelayInput(options.delayMs);
+  var iterations = normalizeRunnerIterationsInput(options.iterations);
+  var stopOnFailure = options.stopOnFailure === true;
+
+  if (runnerOverlay) runnerOverlay.remove();
+  runnerOverlay = document.createElement('div');
+  runnerOverlay.className = 'runner-overlay';
+  runnerOverlay.innerHTML =
+    '<div class="runner-header">' +
+      '<h3>' + escapeHtml(tf('webview.runTitle', { name: msg.name })) + '</h3>' +
+      '<button class="btn btn-s js-runner-start" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runStart')) + '</button>' +
+      '<button class="btn btn-s js-runner-close" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runClose')) + '</button>' +
+    '</div>' +
+    '<div class="runner-options">' +
+      '<label class="runner-option">' +
+        '<span>' + escapeHtml(tr('webview.runDelayMs')) + '</span>' +
+        '<input class="input js-runner-delay" type="number" min="0" max="60000" step="100" value="' + delayMs + '">' +
+      '</label>' +
+      '<label class="runner-option">' +
+        '<span>' + escapeHtml(tr('webview.runIterations')) + '</span>' +
+        '<input class="input js-runner-iterations" type="number" min="1" max="100" step="1" value="' + iterations + '">' +
+      '</label>' +
+      '<label class="runner-option runner-option-check">' +
+        '<input class="js-runner-stop-on-failure" type="checkbox"' + (stopOnFailure ? ' checked' : '') + '>' +
+        '<span>' + escapeHtml(tr('webview.runStopOnFailure')) + '</span>' +
+      '</label>' +
+    '</div>' +
+    '<div class="runner-summary">' +
+      '<span>' + escapeHtml(tr('webview.runTotal')) + ': <b>' + msg.total + '</b></span>' +
+      '<span>' + escapeHtml(tr('webview.runRuns')) + ': <b class="js-runner-runs">' + (msg.total * iterations) + '</b></span>' +
+    '</div>' +
+    '<div class="runner-live-status">' +
+      '<div class="runner-live-title">' + escapeHtml(tr('webview.runOptions')) + '</div>' +
+      '<div class="runner-live-copy">' + escapeHtml(tr('webview.runOptionsCopy')) + '</div>' +
+    '</div>';
+
+  document.body.appendChild(runnerOverlay);
+
+  var delayInput = runnerOverlay.querySelector('.js-runner-delay');
+  var iterationInput = runnerOverlay.querySelector('.js-runner-iterations');
+  var runsEl = runnerOverlay.querySelector('.js-runner-runs');
+  var updateRuns = function() {
+    if (runsEl) {
+      runsEl.textContent = String(msg.total * normalizeRunnerIterationsInput(iterationInput?.value));
+    }
+  };
+  delayInput?.addEventListener('change', function() { this.value = String(normalizeRunnerDelayInput(this.value)); });
+  iterationInput?.addEventListener('change', function() {
+    this.value = String(normalizeRunnerIterationsInput(this.value));
+    updateRuns();
+  });
+  iterationInput?.addEventListener('input', updateRuns);
+
+  runnerOverlay.querySelector('.js-runner-start').addEventListener('click', function() {
+    var selectedOptions = {
+      delayMs: normalizeRunnerDelayInput(delayInput?.value),
+      iterations: normalizeRunnerIterationsInput(iterationInput?.value),
+      stopOnFailure: runnerOverlay.querySelector('.js-runner-stop-on-failure')?.checked === true,
+    };
+    this.disabled = true;
+    vscode.postMessage({
+      type: 'startCollectionRun',
+      delayMs: selectedOptions.delayMs,
+      iterations: selectedOptions.iterations,
+      stopOnFailure: selectedOptions.stopOnFailure,
+    });
+  });
+
+  runnerOverlay.querySelector('.js-runner-close').addEventListener('click', function() {
+    if (runnerOverlay) { runnerOverlay.remove(); runnerOverlay = null; }
+  });
+}
+
+function showRunner(msg) {
+  runnerResults = [];
+  runnerStatusState = null;
+  var total = msg.total || 0;
+  var totalRuns = msg.totalRuns || total;
   
   if (runnerOverlay) runnerOverlay.remove();
   runnerOverlay = document.createElement('div');
   runnerOverlay.className = 'runner-overlay';
   runnerOverlay.innerHTML =
     '<div class="runner-header">' +
-      '<h3>' + escapeHtml(tf('webview.runTitle', { name: name })) + '</h3>' +
+      '<h3>' + escapeHtml(tf('webview.runTitle', { name: msg.name })) + '</h3>' +
       '<button class="btn btn-s js-runner-stop" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runStop')) + '</button>' +
       '<button class="btn btn-s js-runner-rerun hidden" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runRerunFailed')) + '</button>' +
       '<button class="btn btn-s js-runner-close hidden" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runClose')) + '</button>' +
     '</div>' +
     '<div class="runner-progress">' +
-      '<span class="js-runner-counter">0/' + total + '</span>' +
+      '<span class="js-runner-counter">0/' + totalRuns + '</span>' +
       '<div class="runner-bar"><div class="runner-bar-fill js-runner-bar" style="width:0%"></div></div>' +
       '<span class="spinner js-runner-spinner"></span>' +
     '</div>' +
     '<div class="runner-summary">' +
       '<span>' + escapeHtml(tr('webview.runTotal')) + ': <b>' + total + '</b></span>' +
+      '<span>' + escapeHtml(tr('webview.runRuns')) + ': <b>' + totalRuns + '</b></span>' +
+      '<span>' + escapeHtml(tr('webview.runIteration')) + ': <b class="js-runner-iteration">1/' + (msg.iterations || 1) + '</b></span>' +
       '<span class="pass">' + escapeHtml(tr('webview.runPassed')) + ': <b class="js-runner-pass">0</b></span>' +
       '<span class="fail">' + escapeHtml(tr('webview.runFailed')) + ': <b class="js-runner-fail">0</b></span>' +
+      '<span class="skip">' + escapeHtml(tr('webview.runSkipped')) + ': <b class="js-runner-skip">0</b></span>' +
       '<span class="js-runner-time"></span>' +
     '</div>' +
     '<div class="runner-live-status">' +
@@ -7031,9 +7132,10 @@ function showRunner(name, total) {
     var failedIndices = [];
     runnerResults.forEach(function(result, index) {
       if (result?.failed) {
-        failedIndices.push(index);
+        failedIndices.push(Number.isInteger(result.requestIndex) ? result.requestIndex : index);
       }
     });
+    failedIndices = Array.from(new Set(failedIndices));
     if (!failedIndices.length) return;
     this.disabled = true;
     vscode.postMessage({ type: 'rerunFailedCollection', failedIndices: failedIndices });
@@ -7074,18 +7176,28 @@ function updateRunnerStatus(msg) {
   var titleEl = runnerOverlay.querySelector('.js-runner-live-title');
   var copyEl = runnerOverlay.querySelector('.js-runner-live-copy');
   if (titleEl) {
-    titleEl.textContent = msg.phase === 'retry' ? tr('webview.runRetrying') : tr('webview.runSending');
+    titleEl.textContent = msg.phase === 'retry'
+      ? tr('webview.runRetrying')
+      : msg.phase === 'delay'
+        ? tr('webview.runWaiting')
+        : tr('webview.runSending');
   }
   if (copyEl) {
     var attemptLabel = tf('webview.runAttempt', {
       current: msg.attempt || 1,
       total: msg.totalAttempts || 1,
     });
+    var iterationLabel = tf('webview.runIterationStatus', {
+      current: msg.iteration || 1,
+      total: msg.totalIterations || 1,
+    });
     var prefix = (msg.method || '') + ' ' + (msg.name || '');
     if (msg.phase === 'retry') {
-      copyEl.textContent = prefix + ' · ' + attemptLabel + ' · ' + tf('webview.runRetryDelay', { count: msg.retryDelayMs || 0 });
+      copyEl.textContent = iterationLabel + ' · ' + prefix + ' · ' + attemptLabel + ' · ' + tf('webview.runRetryDelay', { count: msg.retryDelayMs || 0 });
+    } else if (msg.phase === 'delay') {
+      copyEl.textContent = iterationLabel + ' · ' + prefix + ' · ' + tf('webview.runDelayStatus', { count: msg.delayMs || 0 });
     } else {
-      copyEl.textContent = prefix + ' · ' + attemptLabel;
+      copyEl.textContent = iterationLabel + ' · ' + prefix + ' · ' + attemptLabel;
     }
   }
   runnerOverlay.querySelectorAll('.runner-row').forEach(function(row) {
@@ -7103,24 +7215,29 @@ function updateRunnerRow(msg) {
   var row = document.createElement('div');
   row.className = 'runner-row method-' + msg.method + ' ' + cls;
   row.dataset.idx = msg.index;
+  row.dataset.requestIndex = msg.requestIndex;
   row.innerHTML =
     '<span class="rr-idx">' + (msg.index + 1) + '</span>' +
     '<span class="method-badge method-' + msg.method + '">' + msg.method + '</span>' +
-    '<span class="rr-name">' + escapeHtml(msg.name) + '</span>' +
+    '<span class="rr-name">' + escapeHtml(tf('webview.runRowName', { iteration: msg.iteration || 1, name: msg.name })) + '</span>' +
     '<span class="rr-status">' + statusStr + '</span>' +
     '<span class="rr-time">' + (msg.time ? msg.time + 'ms' : '-') + '</span>' +
     '<span class="rr-icon">' + icon + '</span>';
   list.appendChild(row);
 
   
-  runnerResults[msg.index] = { error: msg.error, response: msg.response, failed: !isPassed };
+  runnerResults[msg.index] = { error: msg.error, response: msg.response, failed: !isPassed, requestIndex: msg.requestIndex };
 
   
-  var pct = Math.round(((msg.index + 1) / msg.total) * 100);
-  runnerOverlay.querySelector('.js-runner-counter').textContent = (msg.index + 1) + '/' + msg.total;
+  var totalRuns = msg.totalRuns || msg.total;
+  var pct = Math.round(((msg.index + 1) / totalRuns) * 100);
+  runnerOverlay.querySelector('.js-runner-counter').textContent = (msg.index + 1) + '/' + totalRuns;
   runnerOverlay.querySelector('.js-runner-bar').style.width = pct + '%';
+  var iterationEl = runnerOverlay.querySelector('.js-runner-iteration');
+  if (iterationEl) iterationEl.textContent = (msg.iteration || 1) + '/' + (msg.totalIterations || 1);
   runnerOverlay.querySelector('.js-runner-pass').textContent = msg.passed;
   runnerOverlay.querySelector('.js-runner-fail').textContent = msg.failed;
+  runnerOverlay.querySelector('.js-runner-skip').textContent = msg.skipped || 0;
   runnerOverlay.querySelectorAll('.runner-row').forEach(function(existingRow) {
     existingRow.classList.toggle('active', Number(existingRow.dataset.idx) === Number(msg.index));
   });
@@ -7147,9 +7264,17 @@ function finishRunner(msg) {
   var liveTitle = runnerOverlay.querySelector('.js-runner-live-title');
   var liveCopy = runnerOverlay.querySelector('.js-runner-live-copy');
   if (liveTitle) liveTitle.textContent = tr('webview.runStatus');
-  if (liveCopy) liveCopy.textContent = msg.stopped ? tr('webview.runStopping') : '';
+  if (liveCopy) {
+    liveCopy.textContent = msg.stopped
+      ? tr('webview.runStopping')
+      : msg.stoppedOnFailure
+        ? tf('webview.runStoppedOnFailure', { count: msg.skipped || 0 })
+        : '';
+  }
   
   runnerOverlay.querySelector('.js-runner-time').textContent = tr('webview.runTime') + ': ' + msg.time + 'ms';
+  var skipEl = runnerOverlay.querySelector('.js-runner-skip');
+  if (skipEl) skipEl.textContent = msg.skipped || 0;
   
   if (!msg.stopped) {
     runnerOverlay.querySelector('.js-runner-bar').style.width = '100%';

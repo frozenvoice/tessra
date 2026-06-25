@@ -98,7 +98,7 @@ tessra/
 15. `tessra.displayLanguage` 설정 기반 UI 언어 선택 (Tessra 패널/알림/인앱 가이드 대상, 기본 영어, 현재 `en`/`ko`/`ja`, 설정/명령 레이블은 VS Code locale 유지)
 16. `tessra.requestPanelTheme` 설정과 Command Palette 기반 요청 패널 테마 프리셋 선택 (`default`, `minimal-cool`, `product`, `bold-color`)
 17. `tessra.workspaceProfile` 설정 기반 워크스페이스 로컬 저장 프로필 분리와 현재 프로필 표시 (`default`는 메인 작업용, 사용자 지정 프로필은 프로젝트/실험 분리용)
-18. 컬렉션 러너 실패 요청만 재실행, 요청별 history 저장 설정을 따른 실행 결과 저장
+18. 컬렉션 러너 delay / iterations / stop-on-failure 옵션, 실패 요청만 재실행, 요청별 history 저장 설정을 따른 실행 결과 저장, active request / retry delay / runner delay 중단
 19. WebSocket `ws://` / `wss://` 연결과 `{{variable}}` 치환 후 URL 기준 모드 감지, 텍스트 메시지 전송, frame/message size limit, 선택형 protocol-level ping keepalive, 수신/전송/close 진단 로그, binary frame base64 표시
 20. gzip / deflate / Brotli 응답 자동 해제와 cURL import warning / edge flag 보강
 

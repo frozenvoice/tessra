@@ -1155,10 +1155,11 @@ describe('RequestPanel Webview', () => {
   });
 
   it('cancels collection retry delays when stop is requested', () => {
-    assert.match(collectionRunnerSource, /private async waitForCollectionRetryDelay\(ms: number\): Promise<void>/);
+    assert.match(collectionRunnerSource, /private async waitForCollectionRetryDelay\(ms: number, runId: number\): Promise<void>/);
     assert.match(collectionRunnerSource, /this\.currentCollectionDelayCancel = cancel;/);
-    assert.match(collectionRunnerSource, /await this\.waitForCollectionRetryDelay\(settings\.retryDelayMs\);/);
-    assert.match(collectionRunnerSource, /stop\(\): void \{[\s\S]*this\.currentCollectionRequest\?\.abort\(\);[\s\S]*this\.currentCollectionDelayCancel\?\.\(\);[\s\S]*this\.currentCollectionDelayCancel = null;/);
+    assert.match(collectionRunnerSource, /await this\.waitForCollectionRetryDelay\(settings\.retryDelayMs, input\.runId\);/);
+    assert.match(collectionRunnerSource, /private isRunStopped\(runId: number\): boolean/);
+    assert.match(collectionRunnerSource, /stop\(\): void \{[\s\S]*this\.stoppedRunIds\.add\(this\.activeRunId\);[\s\S]*this\.currentCollectionRequest\?\.abort\(\);[\s\S]*this\.currentCollectionDelayCancel\?\.\(\);[\s\S]*this\.currentCollectionDelayCancel = null;/);
     assert.match(source, /case MessageType\.StopCollectionRun:[\s\S]*this\.collectionRunner\.stop\(\);/);
   });
 
@@ -1644,12 +1645,25 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /class="runner-live-status"/);
     assert.match(script, /tr\('webview\.runSending'\)/);
     assert.match(script, /tr\('webview\.runRetrying'\)/);
+    assert.match(script, /tr\('webview\.runWaiting'\)/);
+    assert.match(script, /tf\('webview\.runIterationStatus'/);
   });
 
   it('persists collection runner results to history when enabled', () => {
     assert.match(collectionRunnerSource, /let historyRequest: Request \| null = null;/);
     assert.match(collectionRunnerSource, /historyRequest = createHistoryRequestSnapshot\(/);
-    assert.match(collectionRunnerSource, /if \(!this\.collectionRunAbort && settings\.saveToHistory && historyRequest\) \{/);
+    assert.match(collectionRunnerSource, /if \(!this\.isRunStopped\(input\.runId\) && settings\.saveToHistory && historyRequest\) \{/);
     assert.match(collectionRunnerSource, /response \? \{ status: response\.status, statusText: response\.statusText, time: response\.time \} : null/);
+  });
+
+  it('renders collection runner options before starting a run', () => {
+    assert.match(source, /private pendingCollectionRun: \{ name: string; items: CollectionItem\[\] \} \| null = null;/);
+    assert.match(source, /type: MessageType\.ConfigureCollectionRun/);
+    assert.match(source, /case MessageType\.StartCollectionRun:/);
+    assert.match(script, /function showRunnerSetup\(msg\)/);
+    assert.match(script, /type: 'startCollectionRun'/);
+    assert.match(script, /tr\('webview\.runDelayMs'\)/);
+    assert.match(script, /tr\('webview\.runIterations'\)/);
+    assert.match(script, /tr\('webview\.runStopOnFailure'\)/);
   });
 });

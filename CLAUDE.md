@@ -49,6 +49,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - Drag & Drop 정렬
 - method / host / type / status / pinned 토큰 필터
 - Run All Requests
+- 컬렉션 러너 delay / iterations / stop-on-failure 옵션
 - 컬렉션 러너에서 실패한 요청만 재실행
 - 컬렉션 러너 실행 결과는 각 요청의 history 저장 설정이 켜져 있으면 history에 저장
 - History pin / filter / 날짜 그룹화 / prune, 보존 개수 설정 진입점

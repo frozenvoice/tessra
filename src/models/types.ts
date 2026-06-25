@@ -219,6 +219,7 @@ export enum MessageType {
   SaveTabState = 'saveTabState',
   CompareResponses = 'compareResponses',
   StopCollectionRun = 'stopCollectionRun',
+  StartCollectionRun = 'startCollectionRun',
   RerunFailedCollection = 'rerunFailedCollection',
   PickFile = 'pickFile',
   GenerateCode = 'generateCode',
@@ -253,6 +254,7 @@ export enum MessageType {
   RunCollectionStart = 'runCollectionStart',
   RunCollectionProgress = 'runCollectionProgress',
   RunCollectionDone = 'runCollectionDone',
+  ConfigureCollectionRun = 'configureCollectionRun',
 }
 
 export interface SendRequestMessage extends RequestSettings {
@@ -380,6 +382,13 @@ export interface CompareResponsesMessage {
 
 export interface StopCollectionRunMessage {
   type: MessageType.StopCollectionRun;
+}
+
+export interface StartCollectionRunMessage {
+  type: MessageType.StartCollectionRun;
+  delayMs?: number;
+  iterations?: number;
+  stopOnFailure?: boolean;
 }
 
 export interface RerunFailedCollectionMessage {
@@ -571,6 +580,17 @@ export interface WebSocketDataMessage {
   timestamp: number;
 }
 
+export interface ConfigureCollectionRunMessage {
+  type: MessageType.ConfigureCollectionRun;
+  name: string;
+  total: number;
+  options?: {
+    delayMs?: number;
+    iterations?: number;
+    stopOnFailure?: boolean;
+  };
+}
+
 export type IncomingWebviewMessage =
   | SendRequestMessage
   | SaveRequestMessage
@@ -584,6 +604,7 @@ export type IncomingWebviewMessage =
   | SaveTabStateMessage
   | CompareResponsesMessage
   | StopCollectionRunMessage
+  | StartCollectionRunMessage
   | RerunFailedCollectionMessage
   | PickFileMessage
   | GenerateCodeMessage
@@ -611,6 +632,7 @@ export type OutgoingWebviewMessage =
   | PickFileResultMessage
   | FlushTabStateMessage
   | WebSocketStatusMessage
-  | WebSocketDataMessage;
+  | WebSocketDataMessage
+  | ConfigureCollectionRunMessage;
 
 export type WebviewMessage = IncomingWebviewMessage | OutgoingWebviewMessage;
