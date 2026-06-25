@@ -41,6 +41,7 @@ export const DEFAULT_WS_KEEPALIVE_MESSAGE = 'ping';
 export const DEFAULT_MAX_RESPONSE_SIZE_KB = 10 * 1024;
 
 const UNRESOLVED_VAR_PATTERN = /\{\{([^}]+)\}\}/g;
+const CIRCULAR_VAR_PREFIX = 'circular:';
 
 export function normalizeBodyType(bodyType: string | undefined): RequestBodyType {
   switch (bodyType) {
@@ -236,15 +237,19 @@ export function createScriptableRequest(input: {
 
 export function findPayloadUnresolvedVariables(
   formData: FormDataField[],
-  binaryFilePath: string
+  binaryFilePath: string,
+  vars: KeyValue[] = []
 ): string[] {
   const names = new Set<string>();
   for (const field of formData) {
     if (field.enabled === false) { continue; }
     collectUnresolvedVariableNames(names, field.key);
     collectUnresolvedVariableNames(names, field.value);
+    collectCircularVariableNames(names, field.key, vars);
+    collectCircularVariableNames(names, field.value, vars);
   }
   collectUnresolvedVariableNames(names, binaryFilePath);
+  collectCircularVariableNames(names, binaryFilePath, vars);
   return [...names];
 }
 
@@ -261,23 +266,37 @@ export function findUnresolvedVariables(
   collectUnresolvedFromKeyValues(names, headers);
   collectUnresolvedFromKeyValues(names, params);
   collectUnresolvedVariableNames(names, body);
+  collectCircularVariableNames(names, url, vars);
+  collectCircularFromKeyValues(names, headers, vars);
+  collectCircularFromKeyValues(names, params, vars);
+  collectCircularVariableNames(names, body, vars);
 
   switch (auth.type) {
     case 'basic':
       if (auth.basic) {
-        collectUnresolvedVariableNames(names, VariableService.resolve(auth.basic.username, vars));
-        collectUnresolvedVariableNames(names, VariableService.resolve(auth.basic.password, vars));
+        const username = VariableService.resolve(auth.basic.username, vars);
+        const password = VariableService.resolve(auth.basic.password, vars);
+        collectUnresolvedVariableNames(names, username);
+        collectUnresolvedVariableNames(names, password);
+        collectCircularVariableNames(names, username, vars);
+        collectCircularVariableNames(names, password, vars);
       }
       break;
     case 'bearer':
       if (auth.bearer) {
-        collectUnresolvedVariableNames(names, VariableService.resolve(auth.bearer.token, vars));
+        const token = VariableService.resolve(auth.bearer.token, vars);
+        collectUnresolvedVariableNames(names, token);
+        collectCircularVariableNames(names, token, vars);
       }
       break;
     case 'apikey':
       if (auth.apikey) {
-        collectUnresolvedVariableNames(names, VariableService.resolve(auth.apikey.key, vars));
-        collectUnresolvedVariableNames(names, VariableService.resolve(auth.apikey.value, vars));
+        const key = VariableService.resolve(auth.apikey.key, vars);
+        const value = VariableService.resolve(auth.apikey.value, vars);
+        collectUnresolvedVariableNames(names, key);
+        collectUnresolvedVariableNames(names, value);
+        collectCircularVariableNames(names, key, vars);
+        collectCircularVariableNames(names, value, vars);
       }
       break;
   }
@@ -286,7 +305,21 @@ export function findUnresolvedVariables(
 }
 
 export function createUnresolvedVariableError(names: string[]): string {
-  return `Unresolved environment variables: ${names.map((name) => `{{${name}}}`).join(', ')}`;
+  const circular = [...new Set(names
+    .filter((name) => name.startsWith(CIRCULAR_VAR_PREFIX))
+    .map((name) => name.slice(CIRCULAR_VAR_PREFIX.length)))];
+  const circularSet = new Set(circular);
+  const unresolved = [...new Set(names
+    .filter((name) => !name.startsWith(CIRCULAR_VAR_PREFIX))
+    .filter((name) => !circularSet.has(name)))];
+  const parts: string[] = [];
+  if (unresolved.length > 0) {
+    parts.push(`Unresolved environment variables: ${unresolved.map((name) => `{{${name}}}`).join(', ')}`);
+  }
+  if (circular.length > 0) {
+    parts.push(`Circular environment variable references: ${circular.map((name) => `{{${name}}}`).join(', ')}`);
+  }
+  return parts.join('; ');
 }
 
 export function createHistoryRequestSnapshot(
@@ -339,10 +372,25 @@ function collectUnresolvedFromKeyValues(target: Set<string>, items: KeyValue[]):
   }
 }
 
+function collectCircularFromKeyValues(target: Set<string>, items: KeyValue[], vars: KeyValue[]): void {
+  for (const item of items) {
+    if (item.enabled === false) { continue; }
+    collectCircularVariableNames(target, item.key, vars);
+    collectCircularVariableNames(target, item.value, vars);
+  }
+}
+
 function collectUnresolvedVariableNames(target: Set<string>, text: string): void {
   if (!text) { return; }
   for (const match of text.matchAll(UNRESOLVED_VAR_PATTERN)) {
     const name = match[1]?.trim();
     if (name) { target.add(name); }
+  }
+}
+
+function collectCircularVariableNames(target: Set<string>, text: string, vars: KeyValue[]): void {
+  if (!text || vars.length === 0) { return; }
+  for (const name of VariableService.findCircularReferences(text, vars)) {
+    target.add(`${CIRCULAR_VAR_PREFIX}${name}`);
   }
 }

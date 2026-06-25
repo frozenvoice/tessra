@@ -4,10 +4,14 @@ import { KeyValue } from '../../models/types';
 
 describe('RequestExportService', () => {
   const vars: KeyValue[] = [
-    { key: 'baseUrl', value: 'https://api.example.com', enabled: true },
+    { key: 'host', value: 'api.example.com', enabled: true },
+    { key: 'baseUrl', value: 'https://{{host}}', enabled: true },
     { key: 'token', value: 'abc123', enabled: true },
+    { key: 'authHeader', value: 'Bearer {{token}}', enabled: true },
     { key: 'user', value: 'demo-user', enabled: true },
+    { key: 'queryUser', value: '{{user}}', enabled: true },
     { key: 'password', value: 'secret', enabled: true },
+    { key: 'secretPassword', value: '{{password}}', enabled: true },
     { key: 'uploadPath', value: 'C:/tmp/file.bin', enabled: true },
   ];
 
@@ -15,8 +19,8 @@ describe('RequestExportService', () => {
     const exported = RequestExportService.resolve({
       method: 'POST',
       url: '{{baseUrl}}/items',
-      headers: [{ key: 'Authorization', value: 'Bearer {{token}}', enabled: true }],
-      params: [{ key: 'env', value: '{{user}}', enabled: true }],
+      headers: [{ key: 'Authorization', value: '{{authHeader}}', enabled: true }],
+      params: [{ key: 'env', value: '{{queryUser}}', enabled: true }],
       body: '{"token":"{{token}}"}',
       bodyType: 'json',
       formData: [
@@ -27,8 +31,8 @@ describe('RequestExportService', () => {
       auth: {
         type: 'basic',
         basic: {
-          username: '{{user}}',
-          password: '{{password}}',
+          username: '{{queryUser}}',
+          password: '{{secretPassword}}',
         },
       },
     }, vars);

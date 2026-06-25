@@ -80,6 +80,7 @@ function createHost() {
     getActiveVariables: () => [],
     getDefaultHeaders: () => [],
     getAllowInsecureCertificates: () => false,
+    getScriptTimeoutMs: () => 3000,
     saveActiveEnvironmentVariables: () => undefined,
     saveToHistory: () => undefined,
     refreshHistory: () => undefined,

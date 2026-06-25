@@ -3,6 +3,7 @@
   "description": "VS Code 向けのシンプルなオフライン優先 API テストツールです。ログイン、クラウド、制限はありません。",
   "configuration.historyMaxItems.description": "保持するピン留めされていない履歴項目の最大数です。ピン留めされた項目は保持されるため、履歴全体の件数がこの上限を超える場合があります。",
   "configuration.allowInsecureCertificates.description": "自己署名証明書を使う HTTPS リクエストでのみ、HTTPS 証明書の検証を無効にします。必要な場合だけ使用してください。",
+  "configuration.scriptTimeoutMs.description": "pre-request と test script の実行を Tessra が停止するまでの最大時間（ミリ秒）です。値は 100〜30000ms に制限されます。",
   "configuration.displayLanguage.description": "Tessra のパネル、プロンプト、通知、アプリ内ガイドで使用する表示言語です。一致するガイドファイルがある場合だけローカライズされたガイドを使用し、ない場合は英語に戻ります。VS Code の設定ラベルとコマンド名は引き続き VS Code の locale に従います。",
   "configuration.requestPanelTheme.description": "Tessra リクエストパネルで使用するビジュアルプリセットです。デフォルト、ミニマルクール、よりプロダクト感のある見た目、または大胆なカラーから選択できます。",
   "configuration.workspaceProfile.description": "コレクション、履歴、環境、デフォルトヘッダー、保存済みタブに使うワークスペースローカルの保存プロファイルです。プロジェクトや作業ごとに Tessra データを分けたい場合はプロファイルを切り替えてください。",

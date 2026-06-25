@@ -105,6 +105,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - Environment CRUD
 - 활성 환경 전환
 - `{{variable}}` 치환
+- 중첩된 `{{variable}}`도 재귀적으로 치환하고, 미해결/순환 참조는 전송 전에 알려줌
 - URL / Headers / Body / Auth / Scripts / 기타 편집 가능한 텍스트 입력에서 변수 자동완성
 - URL / Headers / Params / Body / Auth / 파일 경로까지 치환
 - Environments 제목 영역의 `Import Environment`로 Postman Environment JSON 가져오기
@@ -148,6 +149,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - Test script
 - `pm.test`, `pm.expect`, `pm.environment`
 - import로 들어온 스크립트는 요청 탭에서 명시적으로 신뢰 처리하기 전까지 비활성화 유지
+- `tessra.scriptTimeoutMs` 설정으로 script 실행 제한 시간을 조정 가능
 - script logs / test 결과 표시
 - pass / fail / log 요약 배지와 첫 실패 강조
 - 1번 요청 응답값을 2번 요청으로 넘길 수 있는 접이식 stepper 도움말과 예제 삽입 버튼
@@ -165,6 +167,7 @@ pm.environment.set("sessionKey", String(body.key));
 - 흔한 축약 flag를 처리하고 지원하지 않거나 잘못된 옵션은 경고로 알려주는 cURL import
 - Copy as cURL
 - OpenAPI import
+- `/users/{userId}` 같은 OpenAPI path parameter는 `/users/{{userId}}` 형태의 Tessra placeholder로 가져오기
 - Tessra JSON collection import
 - 컬렉션, 환경, 기본 헤더, 변수, 활성 환경 상태를 묶은 Tessra 워크스페이스 백업 export / import
 - Postman collection import / export
@@ -224,6 +227,13 @@ VS Code 안에서 사용자 가이드를 보려면 `Tessra: Open Guide`를 실�
 - 기본값: `false`
 - 명시적으로 켠 경우에만 HTTPS 인증서 검증 비활성화
 - 자체 서명 인증서를 쓰는 로컬 개발 환경용
+
+### `tessra.scriptTimeoutMs`
+- 타입: `number`
+- 기본값: `3000`
+- 최소값: `100`
+- 최대값: `30000`
+- pre-request/test script와 collection runner 내부 script 실행에 적용되는 제한 시간
 
 ### `tessra.displayLanguage`
 - 타입: `string`

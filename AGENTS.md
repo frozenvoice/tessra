@@ -84,16 +84,16 @@ tessra/
 1. 멀티 탭 요청 편집기
 2. HTTP 요청 전송, 취소, 응답 표시
 3. Collections / folders / requests CRUD와 실행
-4. Environments CRUD와 `{{variable}}` 치환, Postman Environment JSON import 진입점
+4. Environments CRUD와 재귀적 `{{variable}}` 치환, Postman Environment JSON import 진입점
 5. History 저장, pin, filter, 날짜 그룹화, 자동 정리와 보존 개수 설정 진입점
 6. 인증: Basic, Bearer, API Key
 7. Body 타입: JSON, XML, form-urlencoded, form-data, binary, raw
-8. Pre-request / Test scripts (`pm`, `env`, `test`, `expect`, `assert` 내장 지원, 접이식 stepper 도움말, 인앱 예제 힌트 포함, import된 스크립트는 명시적으로 신뢰 처리하기 전까지 기본 비활성화)
-9. OpenAPI / Postman collection/environment import/export, Tessra workspace backup export/import
+8. Pre-request / Test scripts (`pm`, `env`, `test`, `expect`, `assert` 내장 지원, 설정 가능한 script timeout, 접이식 stepper 도움말, 인앱 예제 힌트 포함, import된 스크립트는 명시적으로 신뢰 처리하기 전까지 기본 비활성화)
+9. OpenAPI path parameter placeholder 변환, OpenAPI / Postman collection/environment import/export, Tessra workspace backup export/import
 10. cURL import / copy as cURL
 11. 코드 생성: `fetch`, `axios`, `Java HttpURLConnection`
 12. 응답 비교: `Raw`, `Normalized`, `Pretty`, ignore headers / ignore JSON paths
-13. 요청별 Settings 탭: timeout, redirects, TLS override, 안전 기본값이 있는 max response size, retries, stop after headers, save to history, skip default headers, disable scripts
+13. 요청별 Settings 탭: timeout, redirects, TLS override, 안전 기본값이 있는 max response size, retries, stop after headers, save to history, skip default headers, disable scripts, 전역 script timeout 설정
 14. HTML preview, JSON tree, XML format options, 응답 시간/요청·수신 시각 메타데이터, richer empty states, 요청 변경 요약, 변수 사용처, 변수 자동완성, 기본 접힘 환경 변수 편집 영역, 활성 요청 편집 탭 재클릭 접기/펼치기, 응답 빠른 복사, 고급 필터 UX, 상단 상태 배지 linked focus/highlight
 15. `tessra.displayLanguage` 설정 기반 UI 언어 선택 (Tessra 패널/알림/인앱 가이드 대상, 기본 영어, 현재 `en`/`ko`/`ja`, 설정/명령 레이블은 VS Code locale 유지)
 16. `tessra.requestPanelTheme` 설정과 Command Palette 기반 요청 패널 테마 프리셋 선택 (`default`, `minimal-cool`, `product`, `bold-color`)

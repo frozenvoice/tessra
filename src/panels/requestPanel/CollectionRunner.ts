@@ -37,6 +37,7 @@ export interface CollectionRunnerHost {
   getActiveVariables(): KeyValue[];
   getDefaultHeaders(): KeyValue[];
   getAllowInsecureCertificates(): boolean;
+  getScriptTimeoutMs(): number;
   saveActiveEnvironmentVariables(variables: KeyValue[]): void;
   saveToHistory(
     request: Request,
@@ -174,7 +175,7 @@ export class CollectionRunner {
           throw new Error(LocalizationService.t('panel.importedScriptsBlocked'));
         }
         if (!settings.disableScripts) {
-          const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars);
+          const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars, this.host.getScriptTimeoutMs());
           requestState = preRequestResult.request;
           vars = preRequestResult.envVariables;
           this.host.saveActiveEnvironmentVariables(vars);
@@ -214,7 +215,7 @@ export class CollectionRunner {
           requestState.auth,
           vars
         );
-        unresolvedVariables.push(...findPayloadUnresolvedVariables(resolvedFormData, resolvedBinaryFilePath));
+        unresolvedVariables.push(...findPayloadUnresolvedVariables(resolvedFormData, resolvedBinaryFilePath, vars));
         if (unresolvedVariables.length > 0) {
           throw new Error(createUnresolvedVariableError(unresolvedVariables));
         }
@@ -336,7 +337,7 @@ export class CollectionRunner {
         time = response.time;
 
         if (!settings.disableScripts) {
-          const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars);
+          const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars, this.host.getScriptTimeoutMs());
           vars = testResult.envVariables;
           this.host.saveActiveEnvironmentVariables(vars);
           const failedTests = testResult.result.tests.filter((test) => !test.passed).length;

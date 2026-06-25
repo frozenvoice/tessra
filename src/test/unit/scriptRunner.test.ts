@@ -58,4 +58,26 @@ describe('ScriptRunner', () => {
     assert.ok(result.result.tests.every((test) => test.passed));
     assert.strictEqual(result.result.logs[0].message, 'running tests');
   });
+
+  it('script timeout 값을 설정값 범위로 정규화한다', () => {
+    assert.strictEqual(ScriptRunner.normalizeTimeoutMs(undefined), 3000);
+    assert.strictEqual(ScriptRunner.normalizeTimeoutMs(50), 100);
+    assert.strictEqual(ScriptRunner.normalizeTimeoutMs(5000), 5000);
+    assert.strictEqual(ScriptRunner.normalizeTimeoutMs(60000), 30000);
+  });
+
+  it('설정된 timeout으로 오래 실행되는 script를 중단한다', () => {
+    assert.throws(
+      () => ScriptRunner.runPreRequest(
+        {
+          preRequest: 'while (true) {}',
+          test: '',
+        },
+        request,
+        [],
+        100
+      ),
+      /Script execution timed out after 100 ms/
+    );
+  });
 });

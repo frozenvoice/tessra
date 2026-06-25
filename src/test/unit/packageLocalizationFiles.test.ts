@@ -30,6 +30,9 @@ describe('package localization files', () => {
     assert.strictEqual(properties['tessra.historyMaxItems'].default, 500);
     assert.strictEqual(properties['tessra.historyMaxItems'].minimum, 50);
     assert.strictEqual(properties['tessra.historyMaxItems'].maximum, 5000);
+    assert.strictEqual(properties['tessra.scriptTimeoutMs'].default, 3000);
+    assert.strictEqual(properties['tessra.scriptTimeoutMs'].minimum, 100);
+    assert.strictEqual(properties['tessra.scriptTimeoutMs'].maximum, 30000);
     const legacyDisplayLanguageKey = ['a' + 'rc', 'client'].join('-') + '.displayLanguage';
     assert.strictEqual(properties[legacyDisplayLanguageKey], undefined);
     assert.deepStrictEqual(properties['tessra.displayLanguage'].enumItemLabels, [
@@ -69,6 +72,7 @@ describe('package localization files', () => {
     assert.strictEqual(en['command.openHistorySettings'], 'Tessra: Open History Settings');
     assert.match(en['configuration.historyMaxItems.description'], /non-pinned history entries/);
     assert.match(en['configuration.historyMaxItems.description'], /Pinned entries are preserved/);
+    assert.match(en['configuration.scriptTimeoutMs.description'], /pre-request and test scripts/);
   });
 
   it('contributes import and export commands from the expected palette and tree menus', () => {
@@ -130,6 +134,8 @@ describe('package localization files', () => {
     assert.strictEqual(ja.displayName, 'Tessra - API Client');
     assert.match(ko['configuration.displayLanguage.description'], /Tessra/);
     assert.match(ja['configuration.displayLanguage.description'], /Tessra/);
+    assert.match(ko['configuration.scriptTimeoutMs.description'], /pre-request/);
+    assert.match(ja['configuration.scriptTimeoutMs.description'], /pre-request/);
     assert.match(ko['command.changeDisplayLanguage'], /^Tessra:/);
     assert.match(ko['command.importData'], /^Tessra:/);
     assert.match(ko['command.importCollection'], /^Tessra:/);

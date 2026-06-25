@@ -104,6 +104,7 @@ Group request history by date and run collections with status summaries.
 - Environment CRUD
 - Active environment switching
 - `{{variable}}` resolution
+- Nested `{{variables}}` resolve recursively, with unresolved and circular references reported before send
 - Variable autocomplete in URL, headers, body, auth, scripts, and editable text inputs
 - Variable resolution for URL, headers, params, body, auth, and file paths
 - `Import Environment` from the Environments title bar for Postman Environment JSON files
@@ -147,6 +148,7 @@ Group request history by date and run collections with status summaries.
 - Test scripts
 - `pm.test`, `pm.expect`, `pm.environment`
 - Imported scripts stay disabled until you explicitly trust them in the request tab
+- Script execution timeout is configurable with `tessra.scriptTimeoutMs`
 - Script logs and test results
 - Pass/fail/log summary badges and first-failure highlighting
 - Collapsible in-app script helper stepper plus insertable examples for chaining request 1 response values into request 2
@@ -164,6 +166,7 @@ Then use `{{sessionKey}}` in request 2.
 - cURL import handles common compact flags and warns about unsupported or malformed options
 - Copy as cURL
 - OpenAPI import
+- OpenAPI path parameters such as `/users/{userId}` import as Tessra placeholders like `/users/{{userId}}`
 - Tessra JSON collection import
 - Tessra workspace backup export / import for collections, environments, default headers, variables, and active environment state
 - Postman collection import / export
@@ -223,6 +226,13 @@ Run `Tessra: Open Guide` to open the user guide inside VS Code.
 - Default: `false`
 - Disables HTTPS certificate validation only when explicitly enabled
 - Intended for self-signed local or internal environments
+
+### `tessra.scriptTimeoutMs`
+- Type: `number`
+- Default: `3000`
+- Minimum: `100`
+- Maximum: `30000`
+- Timeout used for pre-request and test scripts, including collection runner executions
 
 ### `tessra.displayLanguage`
 - Type: `string`

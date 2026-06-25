@@ -38,10 +38,24 @@ interface ScriptRunState {
 
 // pre-request/test 스크립트 실행기
 export class ScriptRunner {
+  static readonly DEFAULT_TIMEOUT_MS = 3000;
+  static readonly MIN_TIMEOUT_MS = 100;
+  static readonly MAX_TIMEOUT_MS = 30000;
+
+  static normalizeTimeoutMs(value: unknown): number {
+    const numeric = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(numeric)) { return ScriptRunner.DEFAULT_TIMEOUT_MS; }
+    return Math.min(
+      ScriptRunner.MAX_TIMEOUT_MS,
+      Math.max(ScriptRunner.MIN_TIMEOUT_MS, Math.floor(numeric))
+    );
+  }
+
   static runPreRequest(
     scripts: RequestScripts,
     request: ScriptableRequest,
-    envVariables: KeyValue[]
+    envVariables: KeyValue[],
+    timeoutMs = ScriptRunner.DEFAULT_TIMEOUT_MS
   ): { request: ScriptableRequest; envVariables: KeyValue[]; result: ScriptExecutionResult } {
     const script = scripts.preRequest?.trim();
     const clonedRequest = this.cloneRequest(request);
@@ -57,7 +71,7 @@ export class ScriptRunner {
       env,
       response: undefined,
       state,
-    });
+    }, timeoutMs);
 
     return { request: clonedRequest, envVariables: env.toList(), result: state };
   }
@@ -66,7 +80,8 @@ export class ScriptRunner {
     scripts: RequestScripts,
     request: ScriptableRequest,
     response: Response,
-    envVariables: KeyValue[]
+    envVariables: KeyValue[],
+    timeoutMs = ScriptRunner.DEFAULT_TIMEOUT_MS
   ): { envVariables: KeyValue[]; result: ScriptExecutionResult } {
     const script = scripts.test?.trim();
     const env = this.createEnvStore(envVariables);
@@ -81,7 +96,7 @@ export class ScriptRunner {
       env,
       response,
       state,
-    });
+    }, timeoutMs);
 
     return { envVariables: env.toList(), result: state };
   }
@@ -93,15 +108,20 @@ export class ScriptRunner {
       env: ReturnType<typeof ScriptRunner.createEnvStore>;
       response?: Response;
       state: ScriptRunState;
-    }
+    },
+    timeoutMs: number
   ): void {
     const sandbox = this.createSandbox(contextData);
     const context = vm.createContext(sandbox);
+    const normalizedTimeoutMs = ScriptRunner.normalizeTimeoutMs(timeoutMs);
 
     try {
-      new vm.Script(source).runInContext(context, { timeout: 1000 });
+      new vm.Script(source).runInContext(context, { timeout: normalizedTimeoutMs });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
+      if (/Script execution timed out/i.test(message)) {
+        throw new Error(`Script execution timed out after ${normalizedTimeoutMs} ms`);
+      }
       throw new Error(`Script execution failed: ${message}`);
     }
   }

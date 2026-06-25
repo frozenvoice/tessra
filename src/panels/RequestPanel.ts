@@ -22,6 +22,7 @@ import { CodegenService } from '../services/CodegenService';
 import { ResponseCompareService } from '../services/ResponseCompareService';
 import { LocalizationService } from '../services/LocalizationService';
 import { RequestExportService } from '../services/RequestExportService';
+import { ScriptRunner } from '../services/ScriptRunner';
 import { RequestExecutor } from './requestPanel/RequestExecutor';
 import { CollectionRunner } from './requestPanel/CollectionRunner';
 import { WebSocketManager } from './requestPanel/WebSocketManager';
@@ -73,6 +74,7 @@ export class RequestPanel {
       getActiveVariables: () => RequestPanel.environmentProvider.getActiveVariables(),
       getDefaultHeaders: () => RequestPanel.storage.getDefaultHeaders(),
       getAllowInsecureCertificates: () => this.getAllowInsecureCertificates(),
+      getScriptTimeoutMs: () => this.getScriptTimeoutMs(),
       saveActiveEnvironmentVariables: (variables: KeyValue[]) => this.saveActiveEnvironmentVariables(variables),
       saveToHistory: (
         request: Request,
@@ -128,6 +130,12 @@ export class RequestPanel {
 
   private getAllowInsecureCertificates(): boolean {
     return vscode.workspace.getConfiguration('tessra').get<boolean>('allowInsecureCertificates', false);
+  }
+
+  private getScriptTimeoutMs(): number {
+    return ScriptRunner.normalizeTimeoutMs(
+      vscode.workspace.getConfiguration('tessra').get<number>('scriptTimeoutMs', ScriptRunner.DEFAULT_TIMEOUT_MS)
+    );
   }
 
   private static createNonce(): string {

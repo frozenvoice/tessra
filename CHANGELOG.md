@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.6
+
+- Added recursive variable resolution for nested variables across request values.
+- Improved OpenAPI import so path parameters are converted into Tessra variable placeholders.
+- Added configurable script timeout settings for pre-request and test scripts.
+
 ## 1.0.5
 
 - Improved cURL import compatibility for compact short options such as `-XPOST` and bundled flags such as `-skL`.

@@ -2506,10 +2506,20 @@ function hasTemplateVariables(text) {
 
 function resolveTemplateVariables(text) {
   if (!text) return text;
-  return String(text).replace(/\\{\\{([^}]+)\\}\\}/g, function(match, name) {
-    var key = String(name || '').trim();
-    return Object.prototype.hasOwnProperty.call(activeVarValues, key) ? String(activeVarValues[key] ?? '') : match;
-  });
+  var resolved = String(text);
+  for (var depth = 0; depth < 10; depth++) {
+    var changed = false;
+    resolved = resolved.replace(/\\{\\{([^}]+)\\}\\}/g, function(match, name) {
+      var key = String(name || '').trim();
+      if (!Object.prototype.hasOwnProperty.call(activeVarValues, key)) return match;
+      var value = String(activeVarValues[key] ?? '');
+      if (value === match) return match;
+      changed = true;
+      return value;
+    });
+    if (!changed) break;
+  }
+  return resolved;
 }
 
 function getUrlModeInfo(rawUrl) {

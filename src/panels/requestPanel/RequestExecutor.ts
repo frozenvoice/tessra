@@ -37,6 +37,7 @@ export interface RequestExecutorHost {
   getActiveVariables(): KeyValue[];
   getDefaultHeaders(): KeyValue[];
   getAllowInsecureCertificates(): boolean;
+  getScriptTimeoutMs(): number;
   saveActiveEnvironmentVariables(variables: KeyValue[]): void;
   saveToHistory(
     request: Request,
@@ -92,7 +93,7 @@ export class RequestExecutor {
 
     if (!settings.disableScripts) {
       try {
-        const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars);
+        const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars, this.host.getScriptTimeoutMs());
         requestState = preRequestResult.request;
         vars = preRequestResult.envVariables;
         this.host.saveActiveEnvironmentVariables(vars);
@@ -137,7 +138,7 @@ export class RequestExecutor {
       requestState.auth,
       vars
     );
-    unresolvedVariables.push(...findPayloadUnresolvedVariables(resolvedFormData, resolvedBinaryFilePath));
+    unresolvedVariables.push(...findPayloadUnresolvedVariables(resolvedFormData, resolvedBinaryFilePath, vars));
     if (unresolvedVariables.length > 0) {
       this.postTimedResponseError(tabId, createUnresolvedVariableError(unresolvedVariables), requestStartedAt);
       return;
@@ -255,7 +256,7 @@ export class RequestExecutor {
       let scriptResults: ScriptExecutionResult | undefined;
       if (!settings.disableScripts) {
         try {
-          const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars);
+          const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars, this.host.getScriptTimeoutMs());
           vars = testResult.envVariables;
           this.host.saveActiveEnvironmentVariables(vars);
           scriptResults = testResult.result;

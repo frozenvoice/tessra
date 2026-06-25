@@ -641,6 +641,8 @@ describe('RequestPanel Webview', () => {
       activeVarValues: {
         wsBaseUrl: 'wss://ws.ifelse.io',
         wsHost: 'wss://ws.ifelse.io',
+        nestedWsHost: 'ws.ifelse.io',
+        nestedWsBase: 'wss://{{nestedWsHost}}',
         baseUrl: 'https://jsonplaceholder.typicode.com',
       },
       tabs: [],
@@ -653,6 +655,7 @@ describe('RequestPanel Webview', () => {
     assert.strictEqual(context.normalizeRequestType?.('http', 'ws://localhost:8080/socket'), 'websocket');
     assert.strictEqual(context.normalizeRequestType?.('http', '{{wsBaseUrl}}'), 'websocket');
     assert.strictEqual(context.normalizeRequestType?.('http', '{{wsHost}}/socket'), 'websocket');
+    assert.strictEqual(context.normalizeRequestType?.('http', '{{nestedWsBase}}/socket'), 'websocket');
     assert.strictEqual(context.normalizeRequestType?.('websocket', '{{baseUrl}}/users'), 'http');
     assert.strictEqual(context.normalizeRequestType?.('websocket', '{{missingWsUrl}}'), 'http');
     assert.strictEqual(context.normalizeRequestType?.('websocket', 'wss://{{missingWsHost}}/socket'), 'http');

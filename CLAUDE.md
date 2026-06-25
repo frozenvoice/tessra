@@ -39,7 +39,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 ### 환경 변수
 - Environment CRUD
 - 활성 환경 전환
-- `{{variable}}` 치환
+- 재귀적 `{{variable}}` 치환
 - URL / Headers / Params / Body / Auth / 파일 경로 치환
 - Environments 제목 영역의 `Import Environment`로 Postman Environment JSON 가져오기
 
@@ -79,6 +79,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - Pre-request script
 - Test script
 - `pm.test`, `pm.expect`, `pm.environment`
+- `tessra.scriptTimeoutMs` 기반 실행 제한 시간
 - import로 들어온 스크립트는 요청 탭에서 신뢰 처리하기 전까지 기본 비활성화
 - 로그와 테스트 결과 표시
 - 응답값을 환경 변수로 저장해 다음 요청에 넘기는 접이식 stepper 도움말과 삽입 버튼
@@ -86,7 +87,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 ### Import / Export
 - warning을 포함한 cURL import
 - Copy as cURL
-- OpenAPI import
+- OpenAPI import와 path parameter placeholder 변환
 - Tessra JSON collection import
 - Tessra workspace backup export / import
 - Postman collection import / export
@@ -139,7 +140,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ### OpenAPI import 사용
 - Command Palette에서 `Tessra: Import OpenAPI` 실행
-- OpenAPI JSON 파일을 선택하면 paths, methods, base URL 예시를 컬렉션과 환경으로 변환
+- OpenAPI JSON 파일을 선택하면 paths, methods, base URL 예시를 컬렉션과 환경으로 변환하고, `/users/{userId}` 같은 path parameter는 `/users/{{userId}}` 형태로 가져온다
 
 ## 현재 구조 메모
 - 요청 패널 오케스트레이션은 `src/panels/RequestPanel.ts`, HTML/webview 문자열은 `src/panels/requestPanel/requestPanelHtml.ts`에 있다

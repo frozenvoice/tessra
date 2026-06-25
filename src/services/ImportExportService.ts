@@ -288,9 +288,17 @@ export class ImportExportService {
   }
 
   private static buildOpenApiRequestUrl(routePath: string, baseUrl: string): string {
-    const normalizedPath = routePath.startsWith('/') ? routePath : `/${routePath}`;
+    const templatedPath = this.convertOpenApiPathParameters(routePath);
+    const normalizedPath = templatedPath.startsWith('/') ? templatedPath : `/${templatedPath}`;
     if (!baseUrl) { return normalizedPath; }
     return `{{baseUrl}}${normalizedPath}`;
+  }
+
+  private static convertOpenApiPathParameters(routePath: string): string {
+    return routePath.replace(/\{([^}/]+)\}/g, (_match, name: string) => {
+      const trimmed = name.trim();
+      return trimmed ? `{{${trimmed}}}` : _match;
+    });
   }
 
   private static mergeOpenApiParameters(document: PostmanValue, ...sources: unknown[][]): PostmanValue[] {

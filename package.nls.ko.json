@@ -3,6 +3,7 @@
   "description": "VS Code용 간결한 오프라인 우선 API 테스트 도구입니다. 로그인, 클라우드, 제한이 없습니다.",
   "configuration.historyMaxItems.description": "보관할 non-pinned 히스토리 항목의 최대 수입니다. pinned 항목은 유지되므로 전체 히스토리 개수가 이 제한을 초과할 수 있습니다.",
   "configuration.allowInsecureCertificates.description": "자체 서명 인증서를 사용하는 HTTPS 요청에서만 HTTPS 인증서 검증을 비활성화합니다. 꼭 필요한 경우에만 사용하세요.",
+  "configuration.scriptTimeoutMs.description": "pre-request와 test script 실행을 중단하기 전까지 허용할 최대 시간(ms)입니다. 값은 100~30000ms 범위로 제한됩니다.",
   "configuration.displayLanguage.description": "Tessra 패널, 프롬프트, 알림, 인앱 가이드에 사용할 표시 언어입니다. 일치하는 가이드 파일이 있을 때만 현지화된 가이드를 사용하며, 없으면 영어로 표시됩니다. VS Code 설정 레이블과 명령 제목은 계속 VS Code locale을 따릅니다.",
   "configuration.requestPanelTheme.description": "Tessra 요청 패널에 사용할 시각 프리셋입니다. 기본, 미니멀 쿨, 더 프로덕트 감성, 조금 더 대담한 컬러 중에서 선택할 수 있습니다.",
   "configuration.workspaceProfile.description": "컬렉션, 히스토리, 환경, 기본 헤더, 저장된 탭에 사용할 워크스페이스 로컬 저장 프로필입니다. 프로젝트나 작업 흐름별로 Tessra 데이터를 분리하려면 프로필을 전환하세요.",

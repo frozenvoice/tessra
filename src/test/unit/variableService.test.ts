@@ -56,6 +56,41 @@ describe('VariableService', () => {
       const result = VariableService.resolve('{{token}}-{{token}}', vars);
       assert.strictEqual(result, 'abc123-abc123');
     });
+
+    it('중첩 변수 값을 재귀적으로 치환', () => {
+      const nested: KeyValue[] = [
+        { key: 'host', value: 'api.example.com', enabled: true },
+        { key: 'baseUrl', value: 'https://{{host}}', enabled: true },
+        { key: 'endpoint', value: '{{baseUrl}}/users', enabled: true },
+      ];
+      assert.strictEqual(VariableService.resolve('{{endpoint}}', nested), 'https://api.example.com/users');
+    });
+
+    it('여러 단계 변수 체인을 해석', () => {
+      const nested: KeyValue[] = [
+        { key: 'a', value: '{{b}}', enabled: true },
+        { key: 'b', value: '{{c}}', enabled: true },
+        { key: 'c', value: 'done', enabled: true },
+      ];
+      assert.strictEqual(VariableService.resolve('{{a}}', nested), 'done');
+    });
+
+    it('순환 참조는 무한 루프 없이 토큰을 남기고 진단을 제공', () => {
+      const circular: KeyValue[] = [
+        { key: 'a', value: '{{b}}', enabled: true },
+        { key: 'b', value: '{{a}}', enabled: true },
+      ];
+      assert.strictEqual(VariableService.resolve('{{a}}', circular), '{{a}}');
+      assert.deepStrictEqual(VariableService.findCircularReferences('{{a}}', circular).sort(), ['a', 'b']);
+    });
+
+    it('존재하지 않는 중첩 변수는 unresolved 상태를 유지', () => {
+      const nested: KeyValue[] = [
+        { key: 'missing', value: '{{notFound}}', enabled: true },
+      ];
+      assert.strictEqual(VariableService.resolve('{{missing}}', nested), '{{notFound}}');
+      assert.deepStrictEqual(VariableService.findCircularReferences('{{missing}}', nested), []);
+    });
   });
 
   describe('resolveKeyValues', () => {
@@ -69,6 +104,19 @@ describe('VariableService', () => {
       assert.strictEqual(result[0].value, 'Bearer abc123');
       assert.strictEqual(result[1].key, 'https://api.example.com');
       assert.strictEqual(result[1].value, '8080');
+    });
+
+    it('key와 value의 중첩 변수도 재귀적으로 치환', () => {
+      const nested: KeyValue[] = [
+        { key: 'token', value: 'abc', enabled: true },
+        { key: 'authHeader', value: 'Bearer {{token}}', enabled: true },
+        { key: 'headerName', value: 'Authorization', enabled: true },
+      ];
+      const result = VariableService.resolveKeyValues([
+        { key: '{{headerName}}', value: '{{authHeader}}', enabled: true },
+      ], nested);
+      assert.strictEqual(result[0].key, 'Authorization');
+      assert.strictEqual(result[0].value, 'Bearer abc');
     });
 
     it('enabled 상태 보존', () => {
