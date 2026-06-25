@@ -161,7 +161,7 @@ pm.environment.set("sessionKey", String(body.key));
 Then use `{{sessionKey}}` in request 2.
 
 ### Import / Export
-- cURL import with warnings for unsupported or malformed flags
+- cURL import handles common compact flags and warns about unsupported or malformed options
 - Copy as cURL
 - OpenAPI import
 - Tessra JSON collection import

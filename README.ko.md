@@ -162,7 +162,7 @@ pm.environment.set("sessionKey", String(body.key));
 그다음 2번 요청에서 `{{sessionKey}}`를 사용하면 됩니다.
 
 ### Import / Export
-- 지원하지 않거나 형식이 잘못된 flag를 경고하는 cURL import
+- 흔한 축약 flag를 처리하고 지원하지 않거나 잘못된 옵션은 경고로 알려주는 cURL import
 - Copy as cURL
 - OpenAPI import
 - Tessra JSON collection import

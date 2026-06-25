@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5
+
+- Improved cURL import compatibility for compact short options such as `-XPOST` and bundled flags such as `-skL`.
+- Fixed cURL import handling for hyphen-prefixed data values such as `-d '-1'`.
+- Improved cURL import warnings for malformed or partially ignored options.
+
 ## 1.0.4
 
 - Fixed HTTP Stop behavior so in-flight requests are actually canceled and late canceled responses cannot overwrite newer runs.

@@ -16,6 +16,31 @@ interface OptionToken {
 }
 
 const VALID_METHODS = new Set<HttpMethod>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+const VALUE_REQUIRED_SHORT_FLAGS = new Set(['-X', '-H', '-d', '-b', '-u', '-A', '-e']);
+const BOOLEAN_SHORT_FLAGS = new Set(['-G', '-k', '-L', '-s', '-S', '-v', '-i']);
+const KNOWN_LONG_FLAGS = new Set([
+  '--request',
+  '--header',
+  '--data',
+  '--data-ascii',
+  '--data-raw',
+  '--data-binary',
+  '--data-urlencode',
+  '--get',
+  '--url',
+  '--cookie',
+  '--user',
+  '--compressed',
+  '--location',
+  '--insecure',
+  '--user-agent',
+  '--referer',
+  '--referrer',
+  '--silent',
+  '--show-error',
+  '--verbose',
+  '--include',
+]);
 
 export class CurlService {
   static parse(curl: string): Request {
@@ -26,8 +51,8 @@ export class CurlService {
     const normalized = CurlService.normalizeCurl(curl);
     const withoutCmd = normalized.replace(/^curl(?:\.exe)?\s+/i, '');
     const tokenized = CurlService.tokenize(withoutCmd);
-    const tokens = tokenized.tokens;
     const warnings = [...tokenized.warnings];
+    const tokens = CurlService.expandCompactShortOptions(tokenized.tokens, warnings);
 
     let method: HttpMethod = 'GET';
     let url = '';
@@ -46,11 +71,11 @@ export class CurlService {
       const option = CurlService.splitOptionToken(tokens[index]);
       const tok = option.flag;
 
-      const readValue = (flag: string): string | undefined => {
+      const readValue = (flag: string, kind: 'method' | 'header' | 'generic' = 'generic'): string | undefined => {
         if (option.inlineValue !== undefined) { return option.inlineValue; }
         const next = tokens[index + 1];
-        if (next === undefined || CurlService.looksLikeFlag(next)) {
-          warnings.push(`Missing value for ${flag}.`);
+        if (next === undefined || CurlService.shouldTreatAsMissingValue(kind, next)) {
+          warnings.push(`Missing value for cURL option: ${flag}`);
           return undefined;
         }
         index++;
@@ -60,7 +85,7 @@ export class CurlService {
       switch (tok) {
         case '-X':
         case '--request': {
-          const value = readValue(tok);
+          const value = readValue(tok, 'method');
           if (!value) { break; }
           const normalizedMethod = value.toUpperCase();
           if (VALID_METHODS.has(normalizedMethod as HttpMethod)) {
@@ -73,7 +98,7 @@ export class CurlService {
         }
         case '-H':
         case '--header': {
-          const value = readValue(tok);
+          const value = readValue(tok, 'header');
           if (!value) { break; }
           CurlService.addHeader(headers, value, warnings);
           break;
@@ -156,11 +181,13 @@ export class CurlService {
         }
         case '-s':
         case '--silent':
+        case '-S':
+        case '--show-error':
         case '-v':
         case '--verbose':
         case '-i':
         case '--include':
-          warnings.push(`cURL flag ${tok} does not affect the imported request and was ignored.`);
+          warnings.push(`Ignored cURL flag with no request effect in Tessra: ${tok}`);
           break;
         default:
           if (tok.startsWith('-')) {
@@ -376,19 +403,127 @@ export class CurlService {
     return { flag: token };
   }
 
-  private static looksLikeFlag(value: string): boolean {
-    return /^-{1,2}[A-Za-z][A-Za-z0-9-]*($|=)/.test(value);
+  private static expandCompactShortOptions(tokens: string[], warnings: string[]): string[] {
+    const expanded: string[] = [];
+    for (let index = 0; index < tokens.length; index++) {
+      const token = tokens[index];
+      const previousValueKind = index > 0 ? CurlService.valueKindForOptionToken(tokens[index - 1]) : undefined;
+      if (previousValueKind && !CurlService.shouldTreatAsMissingValue(previousValueKind, token)) {
+        expanded.push(token);
+        continue;
+      }
+      expanded.push(...CurlService.expandCompactShortOption(token, warnings));
+    }
+    return expanded;
+  }
+
+  private static expandCompactShortOption(token: string, warnings: string[]): string[] {
+    if (!token.startsWith('-') || token.startsWith('--') || token.length <= 2) {
+      return [token];
+    }
+
+    const out: string[] = [];
+    for (let index = 1; index < token.length; index++) {
+      const flag = `-${token[index]}`;
+      if (VALUE_REQUIRED_SHORT_FLAGS.has(flag)) {
+        out.push(flag);
+        const value = token.slice(index + 1);
+        if (value) { out.push(value); }
+        return out;
+      }
+      if (BOOLEAN_SHORT_FLAGS.has(flag)) {
+        out.push(flag);
+        continue;
+      }
+      if (out.length === 0) {
+        return [token];
+      }
+      warnings.push(`Unsupported cURL flag ignored: ${flag}`);
+    }
+
+    return out.length > 0 ? out : [token];
+  }
+
+  private static shouldTreatAsMissingValue(kind: 'method' | 'header' | 'generic', next: string): boolean {
+    if ((kind === 'method' || kind === 'header') && CurlService.looksLikeUrl(next)) {
+      return true;
+    }
+
+    // Hyphen-prefixed payloads such as -1 are valid cURL values. Only tokens
+    // that clearly look like cURL options interrupt value reading.
+    if (CurlService.isExactKnownShortFlag(next) || CurlService.isLongOptionLike(next)) {
+      return true;
+    }
+    if (CurlService.isBooleanShortBundle(next)) {
+      return true;
+    }
+    return kind !== 'generic' && CurlService.isCompactValueShortOption(next);
+  }
+
+  private static valueKindForOptionToken(token: string): 'method' | 'header' | 'generic' | undefined {
+    const option = CurlService.splitOptionToken(token);
+    if (option.inlineValue !== undefined) { return undefined; }
+    switch (option.flag) {
+      case '-X':
+      case '--request':
+        return 'method';
+      case '-H':
+      case '--header':
+        return 'header';
+      case '-d':
+      case '--data':
+      case '--data-ascii':
+      case '--data-raw':
+      case '--data-binary':
+      case '--data-urlencode':
+      case '-b':
+      case '--cookie':
+      case '-u':
+      case '--user':
+      case '-A':
+      case '--user-agent':
+      case '-e':
+      case '--referer':
+      case '--referrer':
+      case '--url':
+        return 'generic';
+      default:
+        return undefined;
+    }
+  }
+
+  private static looksLikeUrl(value: string): boolean {
+    return /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
+  }
+
+  private static isExactKnownShortFlag(value: string): boolean {
+    return VALUE_REQUIRED_SHORT_FLAGS.has(value) || BOOLEAN_SHORT_FLAGS.has(value);
+  }
+
+  private static isLongOptionLike(value: string): boolean {
+    if (!/^--[A-Za-z][A-Za-z0-9-]*(=|$)/.test(value)) { return false; }
+    const name = value.includes('=') ? value.slice(0, value.indexOf('=')) : value;
+    return KNOWN_LONG_FLAGS.has(name) || value.startsWith('--');
+  }
+
+  private static isBooleanShortBundle(value: string): boolean {
+    return /^-[A-Za-z]{2,}$/.test(value)
+      && value.slice(1).split('').every((char) => BOOLEAN_SHORT_FLAGS.has(`-${char}`));
+  }
+
+  private static isCompactValueShortOption(value: string): boolean {
+    return /^-[A-Za-z].+/.test(value) && VALUE_REQUIRED_SHORT_FLAGS.has(value.slice(0, 2));
   }
 
   private static addHeader(headers: KeyValue[], raw: string, warnings: string[]): void {
     const colonIdx = raw.indexOf(':');
     if (colonIdx <= 0) {
-      warnings.push(`Malformed header ignored: ${raw}. Expected "Name: value".`);
+      warnings.push(`Invalid header format: ${raw}. Expected "Name: value".`);
       return;
     }
     const key = raw.substring(0, colonIdx).trim();
     if (!key) {
-      warnings.push(`Malformed header ignored: ${raw}. Header name is empty.`);
+      warnings.push(`Invalid header format: ${raw}. Header name is empty.`);
       return;
     }
     headers.push({

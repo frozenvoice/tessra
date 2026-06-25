@@ -179,8 +179,8 @@ describe('CurlService', () => {
     it('reports missing and malformed header warnings without failing import', () => {
       const result = CurlService.parseWithWarnings("curl 'https://api.example.com' -H -X -H 'Authorization'");
       assert.strictEqual(result.request.url, 'https://api.example.com');
-      assert.ok(result.warnings.some((warning) => warning.includes('Missing value for -H')));
-      assert.ok(result.warnings.some((warning) => warning.includes('Malformed header ignored')));
+      assert.ok(result.warnings.some((warning) => warning.includes('Missing value for cURL option: -H')));
+      assert.ok(result.warnings.some((warning) => warning.includes('Invalid header format: Authorization')));
     });
 
     it('reports unsupported flags as warnings', () => {
@@ -193,6 +193,101 @@ describe('CurlService', () => {
         () => CurlService.parse("curl 'https://api.example.com"),
         /unmatched quote/
       );
+    });
+
+    it('imports compact -X methods without splitting them as flag bundles', () => {
+      const post = CurlService.parseWithWarnings('curl -XPOST https://example.com/users');
+      const put = CurlService.parseWithWarnings('curl -XPUT https://example.com/users/1');
+      const deleteReq = CurlService.parseWithWarnings('curl -XDELETE https://example.com/users/1');
+      const patch = CurlService.parseWithWarnings('curl -XPATCH https://example.com/users/1');
+
+      assert.strictEqual(post.request.method, 'POST');
+      assert.strictEqual(post.request.url, 'https://example.com/users');
+      assert.strictEqual(put.request.method, 'PUT');
+      assert.strictEqual(deleteReq.request.method, 'DELETE');
+      assert.strictEqual(patch.request.method, 'PATCH');
+      assert.deepStrictEqual(post.warnings, []);
+    });
+
+    it('imports short boolean flag bundles without failing the request', () => {
+      const result = CurlService.parseWithWarnings('curl -skL https://example.com');
+      assert.strictEqual(result.request.url, 'https://example.com');
+      assert.strictEqual(result.request.tlsValidation, 'insecure');
+      assert.strictEqual(result.request.followRedirects, true);
+      assert.ok(result.warnings.some((warning) =>
+        warning.includes('Ignored cURL flag with no request effect in Tessra: -s')
+      ));
+    });
+
+    it('imports -sS as ignored no-effect flags without losing the URL', () => {
+      const result = CurlService.parseWithWarnings('curl -sS https://example.com');
+      assert.strictEqual(result.request.url, 'https://example.com');
+      assert.ok(result.warnings.some((warning) => warning.includes(': -s')));
+      assert.ok(result.warnings.some((warning) => warning.includes(': -S')));
+    });
+
+    it('keeps hyphen-prefixed data values as request bodies', () => {
+      const shortData = CurlService.parseWithWarnings("curl -d '-1' https://example.com");
+      const longData = CurlService.parseWithWarnings("curl --data '-1' https://example.com");
+      const rawData = CurlService.parseWithWarnings("curl --data-raw '-1' https://example.com");
+      const binaryData = CurlService.parseWithWarnings("curl --data-binary '-1' https://example.com");
+
+      assert.strictEqual(shortData.request.body, '-1');
+      assert.strictEqual(longData.request.body, '-1');
+      assert.strictEqual(rawData.request.body, '-1');
+      assert.strictEqual(binaryData.request.body, '-1');
+      assert.strictEqual(binaryData.request.bodyType, 'raw');
+      assert.deepStrictEqual(shortData.warnings, []);
+    });
+
+    it('imports compact header and user-agent options', () => {
+      const header = CurlService.parseWithWarnings("curl -H'Accept: application/json' https://example.com");
+      const userAgent = CurlService.parseWithWarnings("curl -A'Mozilla/5.0' https://example.com");
+
+      assert.strictEqual(header.request.headers.find((h) => h.key === 'Accept')?.value, 'application/json');
+      assert.strictEqual(userAgent.request.headers.find((h) => h.key === 'User-Agent')?.value, 'Mozilla/5.0');
+    });
+
+    it('imports compact auth, referer, and data options', () => {
+      const auth = CurlService.parseWithWarnings('curl -uuser:pass https://example.com');
+      const referer = CurlService.parseWithWarnings('curl -ehttps://ref.example https://example.com');
+      const data = CurlService.parseWithWarnings('curl -dfoo=bar https://example.com');
+
+      assert.strictEqual(auth.request.auth.type, 'basic');
+      assert.strictEqual(auth.request.auth.basic?.username, 'user');
+      assert.strictEqual(auth.request.auth.basic?.password, 'pass');
+      assert.strictEqual(referer.request.headers.find((h) => h.key === 'Referer')?.value, 'https://ref.example');
+      assert.strictEqual(data.request.body, 'foo=bar');
+    });
+
+    it('imports inline long data options', () => {
+      const raw = CurlService.parseWithWarnings('curl --data-raw=foo=bar https://example.com');
+      const binary = CurlService.parseWithWarnings('curl --data-binary=@payload.json https://example.com');
+
+      assert.strictEqual(raw.request.body, 'foo=bar');
+      assert.strictEqual(binary.request.body, '@payload.json');
+      assert.strictEqual(binary.request.bodyType, 'raw');
+    });
+
+    it('keeps hyphen-prefixed header values and auth values', () => {
+      const header = CurlService.parseWithWarnings("curl -H 'X-Test: -1' https://example.com");
+      const auth = CurlService.parseWithWarnings("curl -u '-user:pass' https://example.com");
+
+      assert.strictEqual(header.request.headers.find((h) => h.key === 'X-Test')?.value, '-1');
+      assert.strictEqual(auth.request.auth.type, 'basic');
+      assert.strictEqual(auth.request.auth.basic?.username, '-user');
+      assert.strictEqual(auth.request.auth.basic?.password, 'pass');
+    });
+
+    it('does not consume URL-like values as missing -X or -H values', () => {
+      const method = CurlService.parseWithWarnings('curl -X https://example.com');
+      const header = CurlService.parseWithWarnings('curl -H https://example.com');
+
+      assert.strictEqual(method.request.url, 'https://example.com');
+      assert.strictEqual(method.request.method, 'GET');
+      assert.ok(method.warnings.some((warning) => warning.includes('Missing value for cURL option: -X')));
+      assert.strictEqual(header.request.url, 'https://example.com');
+      assert.ok(header.warnings.some((warning) => warning.includes('Missing value for cURL option: -H')));
     });
   });
 
