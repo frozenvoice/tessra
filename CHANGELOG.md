@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.8
+
+- Fixed Body editor undo/redo behavior so edits can be reverted after sending requests or switching tabs.
+- Improved keyboard handling for Body editor undo/redo shortcuts.
+- Added regression coverage for Body editor state preservation.
+
 ## 1.0.7
 
 - Added Collection Runner options for request delay, iterations, and stop-on-failure behavior.

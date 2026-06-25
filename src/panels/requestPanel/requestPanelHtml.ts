@@ -1645,11 +1645,14 @@ const MAX_WS_KEEPALIVE_INTERVAL_SECONDS = 300;
 const DEFAULT_WS_KEEPALIVE_MESSAGE = 'ping';
 const DEFAULT_MAX_RESPONSE_SIZE_KB = 10240;
 const REQUEST_EDITOR_TABS = ['params', 'headers', 'body', 'auth', 'scripts', 'settings'];
+const BODY_UNDO_MAX_ENTRIES = 100;
+const BODY_UNDO_COALESCE_MS = 700;
 var pinnedResponses = [];
 var lastResponse = null;
 var compareSettings = normalizeCompareSettings();
 var activeFormatMenuState = null;
 var splitDragState = null;
+var bodyUndoApplying = false;
 
 function closeActiveFormatMenu() {
   if (!activeFormatMenuState) return;
@@ -2961,6 +2964,7 @@ document.addEventListener('keydown', (e) => {
   const isPrimaryModifier = e.ctrlKey || e.metaKey;
   const digitMatch = /^Digit([1-6])$/.exec(e.code || '');
 
+  if (isEditableTarget(e.target) && isBodyUndoRedoShortcut(e)) return;
   if (isPrimaryModifier && e.key.toLowerCase() === 't') { e.preventDefault(); createTab(); return; }
   if (isPrimaryModifier && e.key.toLowerCase() === 'w' && activeTabId) { e.preventDefault(); closeTab(activeTabId); return; }
   if (isPrimaryModifier && e.key === 'Enter') { e.preventDefault(); handlePrimaryAction(); return; }
@@ -3187,6 +3191,163 @@ function markDirty() {
   if (tab.dirty !== wasDirty) renderTabBar();
 }
 
+function isEditableTarget(target) {
+  if (!target || typeof target.closest !== 'function') return false;
+  return !!target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]');
+}
+
+function isBodyUndoRedoShortcut(event) {
+  if (!event || event.altKey) return false;
+  var isPrimaryModifier = event.ctrlKey || event.metaKey;
+  if (!isPrimaryModifier) return false;
+  var key = String(event.key || '').toLowerCase();
+  return key === 'z' || key === 'y';
+}
+
+function isBodyRedoShortcut(event) {
+  var key = String(event.key || '').toLowerCase();
+  return (key === 'y' && !event.shiftKey) || (key === 'z' && event.shiftKey);
+}
+
+function createBodyUndoSnapshot(value, textarea) {
+  var text = String(value || '');
+  var fallbackOffset = text.length;
+  var selectionStart = typeof textarea?.selectionStart === 'number' ? textarea.selectionStart : fallbackOffset;
+  var selectionEnd = typeof textarea?.selectionEnd === 'number' ? textarea.selectionEnd : selectionStart;
+  return {
+    value: text,
+    selectionStart: Math.min(selectionStart, text.length),
+    selectionEnd: Math.min(selectionEnd, text.length),
+  };
+}
+
+function resetBodyUndoState(tab, value, textarea) {
+  if (!tab) return null;
+  var snapshot = createBodyUndoSnapshot(value, textarea);
+  tab._bodyUndoState = {
+    undo: [],
+    redo: [],
+    lastValue: snapshot.value,
+    lastSelectionStart: snapshot.selectionStart,
+    lastSelectionEnd: snapshot.selectionEnd,
+    lastRecordedAt: 0,
+    lastInputType: '',
+  };
+  return tab._bodyUndoState;
+}
+
+function ensureBodyUndoState(tab, textarea) {
+  if (!tab) return null;
+  var value = textarea ? textarea.value : (tab.body || '');
+  if (!tab._bodyUndoState) {
+    return resetBodyUndoState(tab, value, textarea);
+  }
+  if (!bodyUndoApplying && tab._bodyUndoState.lastValue !== String(value || '')) {
+    return resetBodyUndoState(tab, value, textarea);
+  }
+  return tab._bodyUndoState;
+}
+
+function trimBodyUndoStack(stack) {
+  while (stack.length > BODY_UNDO_MAX_ENTRIES) {
+    stack.shift();
+  }
+}
+
+function pushBodyUndoSnapshot(stack, snapshot) {
+  if (!stack || !snapshot) return;
+  var previous = stack[stack.length - 1];
+  if (previous && previous.value === snapshot.value) return;
+  stack.push(snapshot);
+  trimBodyUndoStack(stack);
+}
+
+function rememberBodyEditorSelection(tab, textarea) {
+  var state = ensureBodyUndoState(tab, textarea);
+  if (!state || !textarea) return;
+  state.lastSelectionStart = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : state.lastValue.length;
+  state.lastSelectionEnd = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : state.lastSelectionStart;
+}
+
+function normalizeBodyUndoInputType(event) {
+  var inputType = String(event?.inputType || '');
+  if (inputType.indexOf('delete') === 0 || inputType.indexOf('insertText') === 0) return 'typing';
+  if (inputType.indexOf('history') === 0) return 'history';
+  return inputType || 'input';
+}
+
+function recordBodyEditorInput(tab, textarea, event) {
+  if (bodyUndoApplying || !tab || !textarea) return;
+  var state = tab._bodyUndoState || resetBodyUndoState(tab, textarea.value, textarea);
+  if (!state) return;
+  var previousValue = state.lastValue;
+  var nextValue = textarea.value;
+  if (previousValue === nextValue) {
+    rememberBodyEditorSelection(tab, textarea);
+    return;
+  }
+  var now = Date.now();
+  var inputType = normalizeBodyUndoInputType(event);
+  var shouldCoalesce = inputType === 'typing'
+    && state.lastInputType === 'typing'
+    && state.undo.length > 0
+    && now - state.lastRecordedAt <= BODY_UNDO_COALESCE_MS;
+  if (!shouldCoalesce) {
+    pushBodyUndoSnapshot(state.undo, {
+      value: previousValue,
+      selectionStart: state.lastSelectionStart,
+      selectionEnd: state.lastSelectionEnd,
+    });
+  }
+  state.redo = [];
+  state.lastValue = nextValue;
+  state.lastRecordedAt = now;
+  state.lastInputType = inputType;
+  rememberBodyEditorSelection(tab, textarea);
+}
+
+function applyBodyEditorUndoSnapshot(tab, textarea, snapshot) {
+  if (!tab || !textarea || !snapshot) return;
+  bodyUndoApplying = true;
+  textarea.value = snapshot.value;
+  tab.body = snapshot.value;
+  var state = ensureBodyUndoState(tab, textarea) || resetBodyUndoState(tab, snapshot.value, textarea);
+  if (state) {
+    state.lastValue = snapshot.value;
+    state.lastSelectionStart = snapshot.selectionStart;
+    state.lastSelectionEnd = snapshot.selectionEnd;
+    state.lastRecordedAt = Date.now();
+    state.lastInputType = 'history';
+  }
+  try {
+    textarea.selectionStart = snapshot.selectionStart;
+    textarea.selectionEnd = snapshot.selectionEnd;
+  } catch {}
+  if (typeof textarea._tessraAutoGrow === 'function') {
+    textarea._tessraAutoGrow();
+  }
+  bodyUndoApplying = false;
+  markDirty();
+  refreshDraftInsights(mainContent);
+  debouncePersist();
+}
+
+function handleBodyEditorUndoRedoShortcut(tab, textarea, event) {
+  if (!isBodyUndoRedoShortcut(event) || !tab || !textarea) return false;
+  var state = ensureBodyUndoState(tab, textarea);
+  if (!state) return false;
+  var isRedo = isBodyRedoShortcut(event);
+  var sourceStack = isRedo ? state.redo : state.undo;
+  var targetStack = isRedo ? state.undo : state.redo;
+  if (!sourceStack.length) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  pushBodyUndoSnapshot(targetStack, createBodyUndoSnapshot(textarea.value, textarea));
+  var nextSnapshot = sourceStack.pop();
+  applyBodyEditorUndoSnapshot(tab, textarea, nextSnapshot);
+  return true;
+}
+
   function createTab(data) {
     const id = 'tab_' + (++tabIdCounter);
     const incomingName = data?.name;
@@ -3241,6 +3402,7 @@ function markDirty() {
     durationMs: normalizeDurationMs(data?.durationMs),
   }, data);
   syncRequestTypeFromUrl(tab);
+  resetBodyUndoState(tab, tab.body);
   
   if (data?.requestId) {
     tab._snapshot = snapshotTab(tab);
@@ -4302,6 +4464,7 @@ function loadSampleRequestIntoActiveTab() {
     requestEndedAt: null,
     durationMs: null,
   });
+  resetBodyUndoState(tab, tab.body);
   renderTabBar();
   renderContent();
   debouncePersist();
@@ -5891,6 +6054,11 @@ function bindContentEvents() {
     if (formDataPanel) formDataPanel.classList.toggle('hidden', bodyType !== 'formdata');
     if (binaryPanel) binaryPanel.classList.toggle('hidden', bodyType !== 'binary');
     if (!wsBody) syncAutoContentType(mc, bodyType);
+    if (activeTab) {
+      activeTab.bodyType = normalizeBodyType(bodyType);
+      activeTab.body = textarea?.value || '';
+      resetBodyUndoState(activeTab, activeTab.body, textarea);
+    }
     markDirty();
     refreshDraftInsights(mc);
   });
@@ -5919,15 +6087,28 @@ function bindContentEvents() {
   // === textarea auto grow ===
   var bodyTa = mc.querySelector('.js-body');
   if (bodyTa) {
+    var bodyTab = tabs.find(t => t.id === activeTabId);
+    ensureBodyUndoState(bodyTab, bodyTa);
     function autoGrow() {
       bodyTa.style.height = 'auto';
       var h = Math.max(100, Math.min(400, bodyTa.scrollHeight));
       bodyTa.style.height = h + 'px';
     }
-    bodyTa.addEventListener('input', function() { autoGrow(); markDirty(); refreshDraftInsights(mc); });
+    bodyTa._tessraAutoGrow = autoGrow;
+    bodyTa.addEventListener('input', function(event) {
+      recordBodyEditorInput(bodyTab, bodyTa, event);
+      autoGrow();
+      markDirty();
+      refreshDraftInsights(mc);
+    });
     bodyTa.addEventListener('keydown', function(e) {
+      if (handleBodyEditorUndoRedoShortcut(bodyTab, bodyTa, e)) return;
       if (e.key === 'Enter') { setTimeout(autoGrow, 0); }
     });
+    bodyTa.addEventListener('keyup', function() { rememberBodyEditorSelection(bodyTab, bodyTa); });
+    bodyTa.addEventListener('mouseup', function() { rememberBodyEditorSelection(bodyTab, bodyTa); });
+    bodyTa.addEventListener('select', function() { rememberBodyEditorSelection(bodyTab, bodyTa); });
+    bodyTa.addEventListener('focus', function() { rememberBodyEditorSelection(bodyTab, bodyTa); });
     autoGrow();
   }
 

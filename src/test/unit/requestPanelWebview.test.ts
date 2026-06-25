@@ -956,6 +956,129 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /\['resBody', 'resCookies', 'resHeaders', 'resTests', 'resPreview'\]/);
   });
 
+  it('keeps Body editor undo and redo available after webview rerenders', () => {
+    assert.match(script, /const BODY_UNDO_MAX_ENTRIES = 100;/);
+    assert.match(script, /const BODY_UNDO_COALESCE_MS = 700;/);
+    assert.match(script, /function resetBodyUndoState\(tab, value, textarea\)/);
+    assert.match(script, /function recordBodyEditorInput\(tab, textarea, event\)/);
+    assert.match(script, /function handleBodyEditorUndoRedoShortcut\(tab, textarea, event\)/);
+    assert.match(script, /if \(isEditableTarget\(e\.target\) && isBodyUndoRedoShortcut\(e\)\) return;/);
+    assert.match(script, /resetBodyUndoState\(tab, tab\.body\);/);
+    assert.match(script, /resetBodyUndoState\(activeTab, activeTab\.body, textarea\);/);
+    assert.match(script, /resetBodyUndoState\(tab, tab\.body\);[\s\S]*renderTabBar\(\);[\s\S]*renderContent\(\);[\s\S]*debouncePersist\(\);/);
+    assert.match(script, /recordBodyEditorInput\(bodyTab, bodyTa, event\);/);
+    assert.match(script, /if \(handleBodyEditorUndoRedoShortcut\(bodyTab, bodyTa, e\)\) return;/);
+    assert.match(script, /bodyTa\._tessraAutoGrow = autoGrow;/);
+  });
+
+  it('applies Body editor undo and redo snapshots across a remounted textarea', () => {
+    const undoScript = extractScriptSegment(
+      script,
+      'function isEditableTarget',
+      '  function createTab'
+    );
+    let now = 1000;
+    let markDirtyCalls = 0;
+    let refreshCalls = 0;
+    let persistCalls = 0;
+    let autoGrowCalls = 0;
+    const context: Record<string, unknown> = {
+      BODY_UNDO_MAX_ENTRIES: 100,
+      BODY_UNDO_COALESCE_MS: 700,
+      bodyUndoApplying: false,
+      Date: { now: () => now },
+      Math,
+      String,
+      mainContent: {},
+      markDirty: () => { markDirtyCalls += 1; },
+      refreshDraftInsights: () => { refreshCalls += 1; },
+      debouncePersist: () => { persistCalls += 1; },
+    };
+
+    vm.createContext(context);
+    vm.runInContext(undoScript, context);
+
+    const tab: { body: string; _bodyUndoState?: { undo: unknown[]; redo: unknown[]; lastValue: string } } = {
+      body: '{"name":"before"}',
+    };
+    const initialTextarea = {
+      value: tab.body,
+      selectionStart: tab.body.length,
+      selectionEnd: tab.body.length,
+      _tessraAutoGrow: () => { autoGrowCalls += 1; },
+    };
+
+    (context.resetBodyUndoState as (tab: unknown, value: string, textarea: unknown) => void)(tab, tab.body, initialTextarea);
+    initialTextarea.value = '{"name":"after"}';
+    initialTextarea.selectionStart = initialTextarea.value.length;
+    initialTextarea.selectionEnd = initialTextarea.value.length;
+    now += 100;
+    (context.recordBodyEditorInput as (tab: unknown, textarea: unknown, event: unknown) => void)(
+      tab,
+      initialTextarea,
+      { inputType: 'insertText' }
+    );
+    tab.body = initialTextarea.value;
+
+    assert.strictEqual(tab._bodyUndoState?.undo.length, 1, 'first edit should store the previous body snapshot');
+    assert.strictEqual(tab._bodyUndoState?.lastValue, '{"name":"after"}');
+
+    const remountedTextarea = {
+      value: tab.body,
+      selectionStart: tab.body.length,
+      selectionEnd: tab.body.length,
+      _tessraAutoGrow: () => { autoGrowCalls += 1; },
+    };
+    let prevented = 0;
+    let stopped = 0;
+    const undoEvent = {
+      key: 'z',
+      ctrlKey: true,
+      metaKey: false,
+      shiftKey: false,
+      altKey: false,
+      preventDefault: () => { prevented += 1; },
+      stopPropagation: () => { stopped += 1; },
+    };
+
+    const handledUndo = (context.handleBodyEditorUndoRedoShortcut as (tab: unknown, textarea: unknown, event: unknown) => boolean)(
+      tab,
+      remountedTextarea,
+      undoEvent
+    );
+
+    assert.strictEqual(handledUndo, true);
+    assert.strictEqual(prevented, 1);
+    assert.strictEqual(stopped, 1);
+    assert.strictEqual(remountedTextarea.value, '{"name":"before"}');
+    assert.strictEqual(tab.body, '{"name":"before"}');
+    assert.strictEqual(tab._bodyUndoState?.redo.length, 1, 'undo should preserve the current body for redo');
+
+    const redoEvent = {
+      key: 'y',
+      ctrlKey: true,
+      metaKey: false,
+      shiftKey: false,
+      altKey: false,
+      preventDefault: () => { prevented += 1; },
+      stopPropagation: () => { stopped += 1; },
+    };
+
+    const handledRedo = (context.handleBodyEditorUndoRedoShortcut as (tab: unknown, textarea: unknown, event: unknown) => boolean)(
+      tab,
+      remountedTextarea,
+      redoEvent
+    );
+
+    assert.strictEqual(handledRedo, true);
+    assert.strictEqual(remountedTextarea.value, '{"name":"after"}');
+    assert.strictEqual(tab.body, '{"name":"after"}');
+    assert.strictEqual(markDirtyCalls, 2, 'undo and redo should both sync dirty state');
+    assert.strictEqual(refreshCalls, 2, 'undo and redo should both refresh body-dependent insights');
+    assert.strictEqual(persistCalls, 2, 'undo and redo should both persist tab state');
+    assert.strictEqual(autoGrowCalls, 2, 'undo and redo should both refresh textarea sizing');
+  });
+
   it('renders request tabs and utility controls with accessible semantics', () => {
     assert.ok(
       html.includes('<div class="tab-bar" id="tabBar" role="tablist" aria-label="Request tabs">'),

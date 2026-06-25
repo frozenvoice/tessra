@@ -15,6 +15,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
 - 멀티 탭 요청 편집기
 - 활성 요청 편집 탭 재클릭으로 해당 본문 접기 / 다시 펼치기
+- 요청 전송이나 요청 편집 탭 전환 후에도 Body 편집 undo/redo 상태 유지
 - URL 입력창 `Enter` 전송
 - `Ctrl+Enter` / `Cmd+Enter` 전송
 - 진행 중 요청 취소

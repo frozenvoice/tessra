@@ -46,6 +46,7 @@ Group request history by date and run collections with status summaries.
 - HTTP methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
 - Multi-tab request editor with pinned tabs
 - Re-click the active request editor tab to collapse or restore its body while keeping the tab bar visible
+- Improved Body editor undo/redo behavior after sending requests or switching request editor tabs
 - `Enter` in the URL field sends the request
 - `Ctrl+Enter` / `Cmd+Enter` also sends the request
 - Cancel in-flight requests without discarding the last good response
