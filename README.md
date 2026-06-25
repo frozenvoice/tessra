@@ -179,6 +179,8 @@ Then use `{{sessionKey}}` in request 2.
 
 Use `Tessra: Export Workspace Backup` and `Tessra: Import Workspace Backup` from the Command Palette to move a Tessra workspace to another machine. A workspace backup includes collections, environments, the active environment, workspace default headers, and workspace variables.
 
+Workspace variables are preserved in Tessra backups, but request variable resolution is driven by the active environment.
+
 Import replaces data in the current active profile with the backup contents; it is not a merge import. Before restoring, Tessra automatically writes a pre-import backup under `globalStorage/backups/tessra-preimport-YYYYMMDD-HHmmss.tessra-backup.json`.
 
 Workspace Backup / Restore v1 does not include request history or open tabs / tab state. Backup files may contain secrets such as tokens, API keys, Authorization headers, and environment values. Store them securely and avoid uploading them to public repositories, shared folders, or issue attachments.

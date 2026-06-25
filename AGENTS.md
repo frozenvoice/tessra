@@ -108,10 +108,12 @@ tessra/
 
 ## 빌드 & 테스트
 ```bash
+npm run typecheck
+npm run ci
 npm run build
 npm run watch
 npm test
-npx vsce package
+npm run package
 ```
 
 수동 검증은 VS Code에서 `F5`로 Extension Development Host를 띄운 뒤 `docs/manual-e2e-checklist.md` 기준으로 수행한다.

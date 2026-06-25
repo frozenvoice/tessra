@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.9
+
+- Fixed duplicate Webview event listener registration during repeated request panel renders.
+- Added CI/typecheck workflow for build and test validation.
+- Updated manual E2E checklist for recent backup, runner, variable, script, cURL, and Body editor workflows.
+- Clarified workspace variable backup behavior in documentation.
+
 ## 1.0.8
 
 - Fixed Body editor undo/redo behavior so edits can be reverted after sending requests or switching tabs.

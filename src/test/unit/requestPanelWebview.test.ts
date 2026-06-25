@@ -971,6 +971,60 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /bodyTa\._tessraAutoGrow = autoGrow;/);
   });
 
+  it('binds delegated mainContent events only once across repeated renders', () => {
+    assert.match(script, /var contentDelegatedEventsBound = false;/);
+    assert.match(script, /function bindContentDelegatedEventsOnce\(\)/);
+    assert.match(script, /if \(contentDelegatedEventsBound\) return;/);
+    assert.match(script, /contentDelegatedEventsBound = true;/);
+    assert.match(script, /function bindContentEvents\(\) \{[\s\S]*bindContentDelegatedEventsOnce\(\);/);
+
+    const bindDelegatedScript = extractScriptSegment(
+      script,
+      'function bindContentDelegatedEventsOnce',
+      'function bindContentEvents'
+    );
+    const registrations: Array<{ type: string; options: unknown }> = [];
+    const context: Record<string, unknown> = {
+      contentDelegatedEventsBound: false,
+      mainContent: {
+        addEventListener: (type: string, _handler: unknown, options?: unknown) => {
+          registrations.push({ type, options });
+        },
+      },
+    };
+
+    vm.createContext(context);
+    vm.runInContext(bindDelegatedScript, context);
+
+    (context.bindContentDelegatedEventsOnce as () => void)();
+    (context.bindContentDelegatedEventsOnce as () => void)();
+
+    const types = registrations.map((entry) => entry.type);
+    assert.deepStrictEqual(types, [
+      'keydown',
+      'focusin',
+      'focusout',
+      'click',
+      'input',
+      'click',
+      'click',
+      'click',
+    ]);
+    assert.strictEqual(registrations.length, 8, 'delegated listener registration should not repeat');
+    assert.strictEqual(registrations[0].options, true, 'autocomplete keydown should remain capture-phase');
+
+    const bindContentSegment = extractScriptSegment(
+      script,
+      'function bindContentEvents',
+      '  mc.querySelector(\'.js-method\')'
+    );
+    assert.doesNotMatch(
+      bindContentSegment,
+      /mc\.addEventListener/,
+      'render-scoped bindContentEvents should not attach delegated listeners to mainContent'
+    );
+  });
+
   it('applies Body editor undo and redo snapshots across a remounted textarea', () => {
     const undoScript = extractScriptSegment(
       script,

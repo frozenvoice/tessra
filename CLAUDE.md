@@ -163,10 +163,12 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 빌드 / 테스트
 ```bash
+npm run typecheck
+npm run ci
 npm run build
 npm run watch
 npm test
-npx vsce package
+npm run package
 ```
 
 ## 작업 원칙 메모

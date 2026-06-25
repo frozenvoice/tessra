@@ -19,6 +19,8 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 - Cancel a slow request and confirm the active tab and history state remain consistent.
 - Verify request settings: timeout, redirects, TLS validation override, max response size, retry count, retry delay, stop after headers, save to history, skip default headers, and disable scripts.
 - Verify body types: JSON, XML, form-urlencoded, form-data text fields, form-data files, binary file, and raw text.
+- Edit a JSON Body, send the request, return to Body, confirm `Ctrl+Z` restores the previous edit, and confirm `Ctrl+Y` or `Ctrl+Shift+Z` reapplies it.
+- Switch from Body to another request editor tab and back, then confirm Body undo/redo still works for the same request.
 - Verify auth modes: none, Basic, Bearer, API Key header, and API Key query.
 
 ## Variables And Scripts
@@ -27,9 +29,12 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 - Confirm the request panel environment editor renders collapsed by default, shows the active environment name plus variable count, expands/collapses from the header, and shows `Environment: None` when no environment is active.
 - Confirm requests still resolve environment variables while the editor is collapsed, and after editing variables while expanded.
 - Resolve `{{variable}}` values across URL, params, headers, body, auth, and scripts.
+- Confirm nested variables such as `host -> baseUrl -> apiUrl` resolve recursively.
+- Confirm circular references and unresolved nested variables are reported before send.
 - Confirm unresolved variables are surfaced before send.
 - Confirm variable preview and autocomplete work from text inputs and textareas.
 - Run pre-request and test scripts using `pm`, `env`, `test`, `expect`, and `assert`.
+- Set `tessra.scriptTimeoutMs`, then confirm long-running pre-request and test scripts time out clearly in single-request and collection-runner flows.
 - Import a request with scripts and confirm scripts stay disabled until explicitly trusted.
 - Toggle per-request script disabling and confirm scripts are skipped.
 
@@ -37,7 +42,10 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 
 - Create collections, folders, and requests from the sidebar and request panel.
 - Save new requests, update existing requests, and Save As from an existing request.
-- Run a collection, stop a run, and rerun failed requests only.
+- Run a collection with default continue-on-failure behavior, then run with stop-on-failure enabled.
+- Confirm Collection Runner options for delay between requests and multiple iterations, including summary counts for total runs, passed, failed, skipped, stopped, and duration.
+- Stop a collection run during an active request and during an inter-request delay.
+- Rerun failed requests only.
 - Confirm runner results save to history only when each request has Save to history enabled.
 - Pin, unpin, delete, and filter history using `status:`, `method:`, `host:`, and `pinned:` tokens.
 - Confirm History groups entries under Pinned, Today, Yesterday, This Week, and Older; empty groups stay hidden, group rows do not reopen requests, and leaf rows still reopen requests.
@@ -64,6 +72,8 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 - Try invalid JSON, a Postman Environment without `name`, and one without `values`; confirm each shows an error and does not overwrite existing environments.
 - Export Postman environments.
 - Import cURL and copy requests as cURL.
+- Confirm cURL import handles compact flags such as `-XPOST`, bundled no-effect flags such as `-skL`, hyphen-prefixed data such as `-d '-1'`, and malformed header warnings without losing the request.
+- Import OpenAPI paths such as `/users/{userId}` and confirm they become `/users/{{userId}}`.
 - Generate code for `fetch`, `axios`, and `Java HttpURLConnection`.
 
 ## Workspace Backup / Restore
@@ -73,12 +83,14 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 - Set an active environment.
 - Save at least one workspace default header.
 - Run `Tessra: Export Workspace Backup`.
-- Confirm the backup JSON includes `collections`, `environments`, and `defaultHeaders`.
+- Confirm the backup JSON includes `collections`, `environments`, `activeEnvironmentId`, `defaultHeaders`, and workspace `variables`.
 - Change some existing workspace data.
 - Run `Tessra: Import Workspace Backup`.
 - Confirm the replace warning appears before import.
 - Confirm collections, environments, active environment, and default headers are restored after import.
 - Confirm a pre-import backup is created under `globalStorage/backups`.
+- Confirm request history and open tabs / tab state are not restored by Workspace Backup / Restore v1.
+- Confirm backup files are treated as secret-bearing artifacts before sharing or attaching them anywhere.
 - Try importing a backup with an invalid `app` or unsupported `schemaVersion` and confirm Tessra shows an error without replacing existing data.
 
 ## WebSocket
@@ -91,6 +103,7 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 - Keep WebSocket keepalive off by default, then enable it with a short interval and confirm periodic app-level ping messages appear while connected.
 - Disconnect, close the tab, and reconnect with keepalive enabled to confirm only one interval is active and `Keepalive stopped` is logged during cleanup.
 - Confirm binary frames render as base64 with byte counts.
+- Confirm large incoming frames/messages are rejected at the configured WebSocket size limits.
 - Disconnect manually and close an active WebSocket tab.
 
 ## Localization And Themes
@@ -102,5 +115,8 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 ## Final Checks
 
 - Run `npm test`.
+- Run `npm run typecheck`.
+- Run `npm run ci`.
 - Run `npm run build`.
+- Run `git diff --check`.
 - Review `README.md`, `README.ko.md`, `AGENTS.md`, and `CLAUDE.md` whenever a user-visible behavior or setting changed.

@@ -1653,6 +1653,7 @@ var compareSettings = normalizeCompareSettings();
 var activeFormatMenuState = null;
 var splitDragState = null;
 var bodyUndoApplying = false;
+var contentDelegatedEventsBound = false;
 
 function closeActiveFormatMenu() {
   if (!activeFormatMenuState) return;
@@ -5443,17 +5444,18 @@ function renderContent() {
   }
 }
 
-function bindContentEvents() {
-  const mc = mainContent;
+function bindContentDelegatedEventsOnce() {
+  if (contentDelegatedEventsBound) return;
+  contentDelegatedEventsBound = true;
 
-  mc.addEventListener('keydown', function(e) {
+  mainContent.addEventListener('keydown', function(e) {
     handleVariableAutocompleteKeydown(e);
   }, true);
-  mc.addEventListener('focusin', function(e) {
+  mainContent.addEventListener('focusin', function(e) {
     if (!isVariableAutocompleteField(e.target)) return;
     syncVariableAutocomplete(e.target);
   });
-  mc.addEventListener('focusout', function(e) {
+  mainContent.addEventListener('focusout', function(e) {
     if (!isVariableAutocompleteField(e.target)) return;
     setTimeout(function() {
       if (isVariableAutocompleteField(document.activeElement)) {
@@ -5463,15 +5465,71 @@ function bindContentEvents() {
       hideVariableAutocomplete();
     }, 0);
   });
-  mc.addEventListener('click', function(e) {
+  mainContent.addEventListener('click', function(e) {
     if (!isVariableAutocompleteField(e.target)) return;
     syncVariableAutocomplete(e.target);
   });
-  mc.addEventListener('input', function(e) {
+  mainContent.addEventListener('input', function(e) {
     if (!isVariableAutocompleteField(e.target)) return;
     syncVariablePreviewHints(mainContent);
     syncVariableAutocomplete(e.target);
   });
+  mainContent.addEventListener('click', function(e) {
+    if (!e.target.closest('.js-open-default-headers')) return;
+    vscode.postMessage({ type: 'openDefaultHeaders' });
+  });
+  mainContent.addEventListener('click', function(e) {
+    var actionEl = e.target.closest('.request-status-chip.clickable, .preflight-pill.clickable, .js-preflight-action, .request-change-chip.clickable');
+    if (!actionEl) return;
+    var action = actionEl.dataset.action;
+    var meta = actionEl.dataset.meta;
+    if (action === 'open-default-headers') {
+      vscode.postMessage({ type: 'openDefaultHeaders' });
+      return;
+    }
+    if (action === 'switch-environment') {
+      vscode.postMessage({ type: 'switchEnvironment' });
+      return;
+    }
+    if (action === 'change-workspace-profile') {
+      vscode.postMessage({ type: 'changeWorkspaceProfile' });
+      return;
+    }
+    if (action === 'switch-tab' && meta) {
+      switchRequestEditorTabAndRevealInContent(mainContent, meta);
+    }
+  });
+  mainContent.addEventListener('click', function(e) {
+    var actionEl = e.target.closest('.js-empty-action');
+    if (!actionEl) return;
+    var action = actionEl.dataset.action;
+    if (action === 'new-tab') {
+      createTab();
+      return;
+    }
+    if (action === 'sample-request') {
+      loadSampleRequestIntoActiveTab();
+      return;
+    }
+    if (action === 'focus-url') {
+      var urlInput = mainContent.querySelector('.js-url');
+      urlInput?.focus();
+      urlInput?.select?.();
+      return;
+    }
+    if (action === 'switch-environment') {
+      vscode.postMessage({ type: 'switchEnvironment' });
+      return;
+    }
+    if (action === 'open-guide') {
+      vscode.postMessage({ type: 'openGuide' });
+    }
+  });
+}
+
+function bindContentEvents() {
+  const mc = mainContent;
+  bindContentDelegatedEventsOnce();
 
   
   mc.querySelector('.js-method')?.addEventListener('change', (e) => {
@@ -5541,57 +5599,6 @@ function bindContentEvents() {
 
   mc.querySelector('.js-open-default-headers-top')?.addEventListener('click', function() {
     vscode.postMessage({ type: 'openDefaultHeaders' });
-  });
-  mc.addEventListener('click', function(e) {
-    if (!e.target.closest('.js-open-default-headers')) return;
-    vscode.postMessage({ type: 'openDefaultHeaders' });
-  });
-  mc.addEventListener('click', function(e) {
-    var actionEl = e.target.closest('.request-status-chip.clickable, .preflight-pill.clickable, .js-preflight-action, .request-change-chip.clickable');
-    if (!actionEl) return;
-    var action = actionEl.dataset.action;
-    var meta = actionEl.dataset.meta;
-    if (action === 'open-default-headers') {
-      vscode.postMessage({ type: 'openDefaultHeaders' });
-      return;
-    }
-    if (action === 'switch-environment') {
-      vscode.postMessage({ type: 'switchEnvironment' });
-      return;
-    }
-    if (action === 'change-workspace-profile') {
-      vscode.postMessage({ type: 'changeWorkspaceProfile' });
-      return;
-    }
-    if (action === 'switch-tab' && meta) {
-      switchRequestEditorTabAndRevealInContent(mc, meta);
-    }
-  });
-  mc.addEventListener('click', function(e) {
-    var actionEl = e.target.closest('.js-empty-action');
-    if (!actionEl) return;
-    var action = actionEl.dataset.action;
-    if (action === 'new-tab') {
-      createTab();
-      return;
-    }
-    if (action === 'sample-request') {
-      loadSampleRequestIntoActiveTab();
-      return;
-    }
-    if (action === 'focus-url') {
-      var urlInput = mc.querySelector('.js-url');
-      urlInput?.focus();
-      urlInput?.select?.();
-      return;
-    }
-    if (action === 'switch-environment') {
-      vscode.postMessage({ type: 'switchEnvironment' });
-      return;
-    }
-    if (action === 'open-guide') {
-      vscode.postMessage({ type: 'openGuide' });
-    }
   });
 
   
