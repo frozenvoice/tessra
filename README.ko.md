@@ -164,8 +164,17 @@ pm.environment.set("sessionKey", String(body.key));
 - Copy as cURL
 - OpenAPI import
 - Tessra JSON collection import
+- 컬렉션, 환경, 기본 헤더, 변수, 활성 환경 상태를 묶은 Tessra 워크스페이스 백업 export / import
 - Postman collection import / export
 - Postman environment import / export
+
+#### Workspace Backup / Restore
+
+Command Palette에서 `Tessra: Export Workspace Backup`과 `Tessra: Import Workspace Backup`을 실행해 Tessra 워크스페이스를 다른 PC로 옮길 수 있습니다. 워크스페이스 백업에는 컬렉션, 환경, 활성 환경, 워크스페이스 기본 헤더, 워크스페이스 변수가 포함됩니다.
+
+가져오기는 현재 활성 프로필의 데이터를 백업 내용으로 교체합니다. merge import가 아닙니다. 복원하기 전 기존 데이터는 `globalStorage/backups/tessra-preimport-YYYYMMDD-HHmmss.tessra-backup.json` 위치에 자동으로 사전 백업됩니다.
+
+Workspace Backup / Restore v1에는 요청 히스토리와 열린 탭 / 탭 상태가 포함되지 않습니다. 백업 파일에는 토큰, API 키, Authorization 헤더, 환경 값 같은 민감정보가 들어갈 수 있으니 안전한 위치에 보관하고 public repo, 공유 폴더, 이슈 첨부파일 등에 올리지 마세요.
 
 ### 코드 생성
 - `fetch`

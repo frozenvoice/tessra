@@ -86,6 +86,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - Copy as cURL
 - OpenAPI import
 - Tessra JSON collection import
+- Tessra workspace backup export / import
 - Postman collection import / export
 - Postman environment import / export
 

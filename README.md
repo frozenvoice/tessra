@@ -163,8 +163,17 @@ Then use `{{sessionKey}}` in request 2.
 - Copy as cURL
 - OpenAPI import
 - Tessra JSON collection import
+- Tessra workspace backup export / import for collections, environments, default headers, variables, and active environment state
 - Postman collection import / export
 - Postman environment import / export
+
+#### Workspace Backup / Restore
+
+Use `Tessra: Export Workspace Backup` and `Tessra: Import Workspace Backup` from the Command Palette to move a Tessra workspace to another machine. A workspace backup includes collections, environments, the active environment, workspace default headers, and workspace variables.
+
+Import replaces data in the current active profile with the backup contents; it is not a merge import. Before restoring, Tessra automatically writes a pre-import backup under `globalStorage/backups/tessra-preimport-YYYYMMDD-HHmmss.tessra-backup.json`.
+
+Workspace Backup / Restore v1 does not include request history or open tabs / tab state. Backup files may contain secrets such as tokens, API keys, Authorization headers, and environment values. Store them securely and avoid uploading them to public repositories, shared folders, or issue attachments.
 
 ### Code generation
 - `fetch`

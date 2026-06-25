@@ -66,6 +66,21 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 - Import cURL and copy requests as cURL.
 - Generate code for `fetch`, `axios`, and `Java HttpURLConnection`.
 
+## Workspace Backup / Restore
+
+- Create at least one collection.
+- Create at least one environment.
+- Set an active environment.
+- Save at least one workspace default header.
+- Run `Tessra: Export Workspace Backup`.
+- Confirm the backup JSON includes `collections`, `environments`, and `defaultHeaders`.
+- Change some existing workspace data.
+- Run `Tessra: Import Workspace Backup`.
+- Confirm the replace warning appears before import.
+- Confirm collections, environments, active environment, and default headers are restored after import.
+- Confirm a pre-import backup is created under `globalStorage/backups`.
+- Try importing a backup with an invalid `app` or unsupported `schemaVersion` and confirm Tessra shows an error without replacing existing data.
+
 ## WebSocket
 
 - Connect to `ws://` and `wss://` endpoints. Prefer `wss://ws.ifelse.io` for public echo smoke tests.

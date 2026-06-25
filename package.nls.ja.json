@@ -44,6 +44,8 @@
   "command.importCollection": "Tessra: コレクションをインポート",
   "command.importOpenApi": "Tessra: OpenAPI をインポート",
   "command.importEnvironment": "Import Environment",
+  "command.exportWorkspaceBackup": "Tessra: ワークスペースバックアップを書き出す",
+  "command.importWorkspaceBackup": "Tessra: ワークスペースバックアップを読み込む",
   "command.exportPostmanCollection": "Postman コレクションとしてエクスポート",
   "command.exportPostmanEnvironment": "Postman 環境としてエクスポート",
   "command.collapseAll": "すべて折りたたむ",

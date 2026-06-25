@@ -2,7 +2,7 @@
   "name": "tessra",
   "displayName": "Tessra - API Client",
   "description": "A streamlined, offline-first API testing tool for VS Code. No login, no cloud, no limits.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "frozenvoice",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -222,6 +222,16 @@
         "command": "tessra.importEnvironment",
         "title": "%command.importEnvironment%",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "tessra.exportWorkspaceBackup",
+        "title": "%command.exportWorkspaceBackup%",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "tessra.importWorkspaceBackup",
+        "title": "%command.importWorkspaceBackup%",
+        "icon": "$(cloud-upload)"
       },
       {
         "command": "tessra.exportPostmanCollection",

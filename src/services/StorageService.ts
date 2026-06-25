@@ -1,14 +1,45 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Collection, HistoryEntry, Environment, KeyValue, TabState, CompareSettings, StoredTabState } from '../models/types';
+import { Collection, CollectionItem, HistoryEntry, Environment, KeyValue, Request, TabState, CompareSettings, StoredTabState } from '../models/types';
 import { LocalizationService } from './LocalizationService';
+
+export interface WorkspaceBackupData {
+  collections: Collection[];
+  environments: Environment[];
+  activeEnvironmentId: string | null;
+  defaultHeaders: KeyValue[];
+  variables: KeyValue[];
+  tabState: StoredTabState | null;
+  history: HistoryEntry[] | null;
+}
+
+export interface WorkspaceBackup {
+  app: 'tessra';
+  schemaVersion: 1;
+  exportedAt: string;
+  tessraVersion?: string;
+  profile: {
+    name: string;
+  };
+  data: WorkspaceBackupData;
+}
+
+export interface WorkspaceBackupImportResult {
+  collections: number;
+  environments: number;
+  activeEnvironmentRestored: boolean;
+  preImportBackupPath: string;
+}
 
 // globalStorage 경로에 JSON 파일로 데이터 영속화
 export class StorageService {
   private static readonly DEFAULT_PROFILE_NAME = 'default';
   private static readonly PROFILE_ROOT_DIR = 'profiles';
   private static readonly PROFILE_META_FILE = 'profile.json';
+  private static readonly WORKSPACE_BACKUP_SCHEMA_VERSION = 1;
+  private static readonly WORKSPACE_BACKUP_APP = 'tessra';
+  private static readonly WORKSPACE_BACKUP_DIR = 'backups';
   private static readonly LEGACY_STORAGE_DIR_CANDIDATES = ['arc.arc-client', 'arc-client'];
   private static readonly STORAGE_DATA_INDICATOR_FILES = [
     'collections.json',
@@ -266,6 +297,12 @@ export class StorageService {
       }
     }
 
+    this.writeJsonFile(filePath, data);
+  }
+
+  private writeJsonFile(filePath: string, data: unknown): void {
+    const dirPath = path.dirname(filePath);
+    this.ensureDir(dirPath);
     const tempPath = path.join(
       dirPath,
       `.${path.basename(filePath)}.${process.pid}.${Date.now().toString(36)}.tmp`
@@ -283,6 +320,171 @@ export class StorageService {
       }
       throw err;
     }
+  }
+
+  private formatBackupTimestamp(date = new Date()): string {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return [
+      date.getFullYear(),
+      pad(date.getMonth() + 1),
+      pad(date.getDate()),
+      '-',
+      pad(date.getHours()),
+      pad(date.getMinutes()),
+      pad(date.getSeconds()),
+    ].join('');
+  }
+
+  private createPreImportBackup(tessraVersion?: string): string {
+    const backup = this.exportWorkspaceBackup(tessraVersion);
+    const backupDir = path.join(this.rootStoragePath, StorageService.WORKSPACE_BACKUP_DIR);
+    const timestamp = this.formatBackupTimestamp();
+    let backupPath = path.join(backupDir, `tessra-preimport-${timestamp}.tessra-backup.json`);
+    let index = 1;
+    while (fs.existsSync(backupPath)) {
+      backupPath = path.join(backupDir, `tessra-preimport-${timestamp}-${index}.tessra-backup.json`);
+      index++;
+    }
+    this.writeJsonFile(backupPath, backup);
+    return backupPath;
+  }
+
+  private asObject(value: unknown, label: string): Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error(`${label} must be an object.`);
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private asArray<T>(value: unknown, label: string): T[] {
+    if (!Array.isArray(value)) {
+      throw new Error(`${label} must be an array.`);
+    }
+    return value as T[];
+  }
+
+  private asString(value: unknown, label: string): string {
+    if (typeof value !== 'string') {
+      throw new Error(`${label} must be a string.`);
+    }
+    return value;
+  }
+
+  private normalizeStringValue(value: unknown, label: string): string {
+    if (typeof value === 'undefined' || value === null) { return ''; }
+    if (typeof value === 'string') { return value; }
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+      return String(value);
+    }
+    throw new Error(`${label} must be a string-compatible value.`);
+  }
+
+  private normalizeEnabled(value: unknown): boolean {
+    return typeof value === 'boolean' ? value : true;
+  }
+
+  private normalizeKeyValue(value: unknown, label: string): KeyValue {
+    const item = this.asObject(value, label);
+    const key = typeof item.key === 'string'
+      ? item.key
+      : typeof item.name === 'string'
+        ? item.name
+        : null;
+    if (key === null) {
+      throw new Error(`${label}.key or ${label}.name must be a string.`);
+    }
+    return {
+      ...item,
+      key,
+      value: this.normalizeStringValue(item.value, `${label}.value`),
+      enabled: this.normalizeEnabled(item.enabled),
+    } as KeyValue;
+  }
+
+  private normalizeKeyValueArray(value: unknown, label: string): KeyValue[] {
+    return this.asArray<unknown>(value, label).map((item, index) =>
+      this.normalizeKeyValue(item, `${label}[${index}]`)
+    );
+  }
+
+  private normalizeOptionalKeyValueArray(value: unknown, label: string): KeyValue[] {
+    if (typeof value === 'undefined') { return []; }
+    return this.normalizeKeyValueArray(value, label);
+  }
+
+  private normalizeCollectionArray(value: unknown, label: string): Collection[] {
+    return this.asArray<unknown>(value, label).map((item, index) => {
+      const collection = this.asObject(item, `${label}[${index}]`);
+      return {
+        ...collection,
+        id: this.asString(collection.id, `${label}[${index}].id`),
+        name: this.asString(collection.name, `${label}[${index}].name`),
+        items: this.normalizeCollectionItems(collection.items, `${label}[${index}].items`),
+      } as Collection;
+    });
+  }
+
+  private normalizeCollectionItems(value: unknown, label: string): CollectionItem[] {
+    if (!Array.isArray(value)) { return []; }
+    return value.map((item, index) => this.normalizeCollectionItem(item, `${label}[${index}]`));
+  }
+
+  private normalizeCollectionItem(value: unknown, label: string): CollectionItem {
+    const item = this.asObject(value, label);
+    const type = item.type;
+    if (type !== 'request' && type !== 'folder') {
+      throw new Error(`${label}.type must be "request" or "folder".`);
+    }
+
+    if (type === 'folder') {
+      return {
+        ...item,
+        id: this.asString(item.id, `${label}.id`),
+        type,
+        name: this.asString(item.name, `${label}.name`),
+        children: this.normalizeCollectionItems(item.children, `${label}.children`),
+      } as CollectionItem;
+    }
+
+    return {
+      ...item,
+      id: this.asString(item.id, `${label}.id`),
+      type,
+      name: this.asString(item.name, `${label}.name`),
+      request: this.normalizeCollectionRequest(item.request, `${label}.request`),
+    } as CollectionItem;
+  }
+
+  private normalizeCollectionRequest(value: unknown, label: string): Request {
+    const request = this.asObject(value, label);
+    const auth = request.auth && typeof request.auth === 'object' && !Array.isArray(request.auth)
+      ? request.auth
+      : { type: 'none' };
+
+    return {
+      ...request,
+      id: this.asString(request.id, `${label}.id`),
+      name: this.asString(request.name, `${label}.name`),
+      method: this.asString(request.method, `${label}.method`) as Request['method'],
+      url: this.asString(request.url, `${label}.url`),
+      headers: this.normalizeOptionalKeyValueArray(request.headers, `${label}.headers`),
+      params: this.normalizeOptionalKeyValueArray(request.params, `${label}.params`),
+      body: this.normalizeStringValue(request.body, `${label}.body`),
+      bodyType: typeof request.bodyType === 'string' ? request.bodyType as Request['bodyType'] : 'none',
+      auth: auth as Request['auth'],
+    } as Request;
+  }
+
+  private normalizeEnvironmentArray(value: unknown, label: string): Environment[] {
+    return this.asArray<unknown>(value, label).map((item, index) => {
+      const environment = this.asObject(item, `${label}[${index}]`);
+      return {
+        ...environment,
+        id: this.asString(environment.id, `${label}[${index}].id`),
+        name: this.asString(environment.name, `${label}[${index}].name`),
+        variables: this.normalizeOptionalKeyValueArray(environment.variables, `${label}[${index}].variables`),
+      } as Environment;
+    });
   }
 
   // === 컬렉션 ===
@@ -383,6 +585,110 @@ export class StorageService {
 
   saveDefaultHeaders(headers: KeyValue[]): void {
     this.writeJson(this.resolveFilePath('default-headers.json'), headers);
+  }
+
+  getVariables(): KeyValue[] {
+    return this.readJson<KeyValue[]>(this.resolveFilePath('variables.json'), []);
+  }
+
+  saveVariables(variables: KeyValue[]): void {
+    this.writeJson(this.resolveFilePath('variables.json'), variables);
+  }
+
+  exportWorkspaceBackup(tessraVersion?: string): WorkspaceBackup {
+    return {
+      app: StorageService.WORKSPACE_BACKUP_APP,
+      schemaVersion: StorageService.WORKSPACE_BACKUP_SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      tessraVersion,
+      profile: {
+        name: this.getWorkspaceProfileName(),
+      },
+      data: {
+        collections: this.getCollections(),
+        environments: this.getEnvironments(),
+        activeEnvironmentId: this.getActiveEnvironmentId(),
+        defaultHeaders: this.getDefaultHeaders(),
+        variables: this.getVariables(),
+        tabState: null,
+        history: null,
+      },
+    };
+  }
+
+  validateWorkspaceBackup(value: unknown): WorkspaceBackup {
+    const root = this.asObject(value, 'Backup');
+    if (root.app !== StorageService.WORKSPACE_BACKUP_APP) {
+      throw new Error(LocalizationService.t('error.workspaceBackupInvalidApp'));
+    }
+    if (root.schemaVersion !== StorageService.WORKSPACE_BACKUP_SCHEMA_VERSION) {
+      throw new Error(LocalizationService.t('error.workspaceBackupUnsupportedSchemaVersion', {
+        version: String(root.schemaVersion),
+      }));
+    }
+    const exportedAt = root.exportedAt;
+    if (typeof exportedAt !== 'string' || !exportedAt.trim()) {
+      throw new Error('Backup exportedAt must be a string.');
+    }
+
+    const profile = this.asObject(root.profile, 'Backup profile');
+    const profileName = profile.name;
+    if (typeof profileName !== 'string' || !profileName.trim()) {
+      throw new Error('Backup profile.name must be a string.');
+    }
+
+    const data = this.asObject(root.data, 'Backup data');
+    const activeEnvironmentId = data.activeEnvironmentId;
+    if (activeEnvironmentId !== null && typeof activeEnvironmentId !== 'string') {
+      throw new Error('Backup data.activeEnvironmentId must be a string or null.');
+    }
+
+    const history = data.history === null || typeof data.history === 'undefined'
+      ? null
+      : this.asArray<HistoryEntry>(data.history, 'Backup data.history');
+    const tabState = data.tabState === null || typeof data.tabState === 'undefined'
+      ? null
+      : data.tabState as StoredTabState;
+
+    return {
+      app: StorageService.WORKSPACE_BACKUP_APP,
+      schemaVersion: StorageService.WORKSPACE_BACKUP_SCHEMA_VERSION,
+      exportedAt,
+      tessraVersion: typeof root.tessraVersion === 'string' ? root.tessraVersion : undefined,
+      profile: {
+        name: profileName.trim(),
+      },
+      data: {
+        collections: this.normalizeCollectionArray(data.collections, 'Backup data.collections'),
+        environments: this.normalizeEnvironmentArray(data.environments, 'Backup data.environments'),
+        activeEnvironmentId,
+        defaultHeaders: this.normalizeKeyValueArray(data.defaultHeaders, 'Backup data.defaultHeaders'),
+        variables: this.normalizeKeyValueArray(data.variables, 'Backup data.variables'),
+        tabState,
+        history,
+      },
+    };
+  }
+
+  importWorkspaceBackup(value: unknown, tessraVersion?: string): WorkspaceBackupImportResult {
+    const backup = this.validateWorkspaceBackup(value);
+    const preImportBackupPath = this.createPreImportBackup(tessraVersion);
+    const importedActiveEnvironmentId = backup.data.activeEnvironmentId;
+    const activeEnvironmentRestored = typeof importedActiveEnvironmentId === 'string'
+      && backup.data.environments.some((environment) => environment.id === importedActiveEnvironmentId);
+
+    this.saveCollections(backup.data.collections);
+    this.saveEnvironments(backup.data.environments);
+    this.saveDefaultHeaders(backup.data.defaultHeaders);
+    this.saveVariables(backup.data.variables);
+    this.saveActiveEnvironmentId(activeEnvironmentRestored ? importedActiveEnvironmentId : null);
+
+    return {
+      collections: backup.data.collections.length,
+      environments: backup.data.environments.length,
+      activeEnvironmentRestored,
+      preImportBackupPath,
+    };
   }
 
   // === 탭 상태 ===

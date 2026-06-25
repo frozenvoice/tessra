@@ -61,6 +61,8 @@ describe('package localization files', () => {
     assert.strictEqual(en['command.changeWorkspaceProfile'], 'Tessra: Change Workspace Profile');
     assert.strictEqual(en['command.importCollection'], 'Tessra: Import Collection');
     assert.strictEqual(en['command.importEnvironment'], 'Import Environment');
+    assert.strictEqual(en['command.exportWorkspaceBackup'], 'Tessra: Export Workspace Backup');
+    assert.strictEqual(en['command.importWorkspaceBackup'], 'Tessra: Import Workspace Backup');
     assert.strictEqual(en['command.openHistorySettings'], 'Tessra: Open History Settings');
     assert.match(en['configuration.historyMaxItems.description'], /non-pinned history entries/);
     assert.match(en['configuration.historyMaxItems.description'], /Pinned entries are preserved/);
@@ -76,6 +78,8 @@ describe('package localization files', () => {
     }>;
 
     assert.ok(commands.some((command) => command.command === 'tessra.importEnvironment'));
+    assert.ok(commands.some((command) => command.command === 'tessra.exportWorkspaceBackup'));
+    assert.ok(commands.some((command) => command.command === 'tessra.importWorkspaceBackup'));
     assert.ok(commands.some((command) => command.command === 'tessra.openHistorySettings'));
     assert.ok(titleMenus.some((item) =>
       item.command === 'tessra.importEnvironment'
@@ -99,8 +103,12 @@ describe('package localization files', () => {
     assert.match(ja['configuration.displayLanguage.description'], /Tessra/);
     assert.match(ko['command.changeDisplayLanguage'], /^Tessra:/);
     assert.match(ko['command.importCollection'], /^Tessra:/);
+    assert.match(ko['command.exportWorkspaceBackup'], /^Tessra:/);
+    assert.match(ko['command.importWorkspaceBackup'], /^Tessra:/);
     assert.strictEqual(ko['command.importEnvironment'], 'Import Environment');
     assert.match(ja['command.changeRequestPanelTheme'], /^Tessra:/);
+    assert.match(ja['command.exportWorkspaceBackup'], /^Tessra:/);
+    assert.match(ja['command.importWorkspaceBackup'], /^Tessra:/);
     assert.strictEqual(ja['command.importEnvironment'], 'Import Environment');
     assert.match(ko['command.openHistorySettings'], /^Tessra:/);
     assert.match(ja['command.openHistorySettings'], /^Tessra:/);

@@ -158,6 +158,28 @@ export function activate(context: vscode.ExtensionContext) {
     RequestPanel.currentPanel?.updateActiveEnv(environmentProvider.getActiveEnvironmentName());
   }
 
+  function getTessraVersion(): string | undefined {
+    const packageJson = context.extension.packageJSON as { version?: unknown };
+    return typeof packageJson.version === 'string' ? packageJson.version : undefined;
+  }
+
+  function formatBackupFileTimestamp(date = new Date()): string {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return [
+      date.getFullYear(),
+      pad(date.getMonth() + 1),
+      pad(date.getDate()),
+      '-',
+      pad(date.getHours()),
+      pad(date.getMinutes()),
+      pad(date.getSeconds()),
+    ].join('');
+  }
+
+  function getWorkspaceBackupDefaultName(): string {
+    return `tessra-backup-${formatBackupFileTimestamp()}.tessra-backup.json`;
+  }
+
   async function importStructuredDocuments(
     uris: readonly vscode.Uri[],
     options: { openApiOnly?: boolean } = {}
@@ -378,6 +400,76 @@ export function activate(context: vscode.ExtensionContext) {
       });
       if (!uris || uris.length === 0) { return; }
       await importEnvironmentDocuments(uris);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('tessra.exportWorkspaceBackup', async () => {
+      const uri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file(getWorkspaceBackupDefaultName()),
+        filters: { 'JSON Files': ['json'] },
+      });
+      if (!uri) { return; }
+
+      try {
+        const backup = storage.exportWorkspaceBackup(getTessraVersion());
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(backup, null, 2), 'utf-8'));
+        vscode.window.showInformationMessage(t('info.exportedWorkspaceBackup', { path: uri.fsPath }));
+        vscode.window.showWarningMessage(t('warn.workspaceBackupSecrets'));
+      } catch (err: unknown) {
+        vscode.window.showErrorMessage(t('error.exportWorkspaceBackupFailed', {
+          message: err instanceof Error ? err.message : String(err),
+        }));
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('tessra.importWorkspaceBackup', async () => {
+      const uris = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        filters: { 'JSON Files': ['json'] },
+        openLabel: t('action.import'),
+      });
+      const uri = uris?.[0];
+      if (!uri) { return; }
+
+      let backup: unknown;
+      try {
+        const raw = await vscode.workspace.fs.readFile(uri);
+        backup = JSON.parse(Buffer.from(raw).toString('utf-8'));
+        backup = storage.validateWorkspaceBackup(backup);
+      } catch (err: unknown) {
+        vscode.window.showErrorMessage(t('error.workspaceBackupInvalid', {
+          message: err instanceof Error ? err.message : String(err),
+        }));
+        return;
+      }
+
+      const confirm = await vscode.window.showWarningMessage(
+        t('warn.workspaceBackupImportConfirm'),
+        { modal: true },
+        t('action.import')
+      );
+      if (confirm !== t('action.import')) { return; }
+
+      try {
+        await RequestPanel.flushCurrentPanelState();
+        const result = storage.importWorkspaceBackup(backup, getTessraVersion());
+        refreshWorkspaceScopedState({ reloadPanel: true });
+        vscode.window.showInformationMessage(t('info.importedWorkspaceBackup', {
+          collections: result.collections,
+          environments: result.environments,
+          active: result.activeEnvironmentRestored
+            ? t('workspaceBackup.activeRestored')
+            : t('workspaceBackup.activeCleared'),
+          backup: result.preImportBackupPath,
+        }));
+      } catch (err: unknown) {
+        vscode.window.showErrorMessage(t('error.importWorkspaceBackupFailed', {
+          message: err instanceof Error ? err.message : String(err),
+        }));
+      }
     })
   );
 

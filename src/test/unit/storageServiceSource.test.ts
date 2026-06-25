@@ -43,6 +43,7 @@ describe('storage service source', () => {
     assert.match(source, /this\.resolveFilePath\('history\.json'\)/);
     assert.match(source, /this\.resolveFilePath\('environments\.json'\)/);
     assert.match(source, /this\.resolveFilePath\('tab-state\.json'\)/);
+    assert.match(source, /this\.resolveFilePath\('variables\.json'\)/);
   });
 
   it('migrates legacy Arc Client storage only when Tessra storage is empty', () => {
@@ -67,9 +68,28 @@ describe('storage service source', () => {
     assert.match(source, /private backupCorruptJson\(filePath: string\): string \| null/);
     assert.match(source, /fs\.copyFileSync\(filePath, backupPath, fs\.constants\.COPYFILE_EXCL\)/);
     assert.match(source, /warn\.storageJsonCorrupt/);
+    assert.match(source, /private writeJsonFile\(filePath: string, data: unknown\): void/);
     assert.match(source, /const tempPath = path\.join\(/);
     assert.match(source, /fs\.writeFileSync\(tempPath,/);
     assert.match(source, /fs\.renameSync\(tempPath, filePath\)/);
+  });
+
+  it('supports Tessra workspace backup export and replace import', () => {
+    assert.match(source, /interface WorkspaceBackupData/);
+    assert.match(source, /WORKSPACE_BACKUP_SCHEMA_VERSION = 1/);
+    assert.match(source, /WORKSPACE_BACKUP_APP = 'tessra'/);
+    assert.match(source, /WORKSPACE_BACKUP_DIR = 'backups'/);
+    assert.match(source, /getVariables\(\): KeyValue\[\]/);
+    assert.match(source, /saveVariables\(variables: KeyValue\[\]\): void/);
+    assert.match(source, /exportWorkspaceBackup\(tessraVersion\?: string\): WorkspaceBackup/);
+    assert.match(source, /validateWorkspaceBackup\(value: unknown\): WorkspaceBackup/);
+    assert.match(source, /normalizeCollectionArray\(value: unknown, label: string\): Collection\[\]/);
+    assert.match(source, /normalizeEnvironmentArray\(value: unknown, label: string\): Environment\[\]/);
+    assert.match(source, /normalizeKeyValueArray\(value: unknown, label: string\): KeyValue\[\]/);
+    assert.match(source, /importWorkspaceBackup\(value: unknown, tessraVersion\?: string\): WorkspaceBackupImportResult/);
+    assert.match(source, /createPreImportBackup\(tessraVersion\?: string\): string/);
+    assert.match(source, /tessra-preimport-\$\{timestamp\}/);
+    assert.match(source, /this\.saveActiveEnvironmentId\(activeEnvironmentRestored \? importedActiveEnvironmentId : null\)/);
   });
 
   it('keeps history pruning count-based with a 500 item default fallback', () => {

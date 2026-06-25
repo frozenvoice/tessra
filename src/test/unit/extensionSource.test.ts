@@ -51,6 +51,19 @@ describe('extension source', () => {
     assert.match(source, /update\(\s*'workspaceProfile'/);
   });
 
+  it('registers workspace backup export and import commands with validation and refresh', () => {
+    assert.match(source, /registerCommand\('tessra\.exportWorkspaceBackup'/);
+    assert.match(source, /storage\.exportWorkspaceBackup\(getTessraVersion\(\)\)/);
+    assert.match(source, /getWorkspaceBackupDefaultName\(\)/);
+    assert.match(source, /warn\.workspaceBackupSecrets/);
+    assert.match(source, /registerCommand\('tessra\.importWorkspaceBackup'/);
+    assert.match(source, /storage\.validateWorkspaceBackup\(backup\)/);
+    assert.match(source, /warn\.workspaceBackupImportConfirm/);
+    assert.match(source, /storage\.importWorkspaceBackup\(backup, getTessraVersion\(\)\)/);
+    assert.match(source, /refreshWorkspaceScopedState\(\{ reloadPanel: true \}\)/);
+    assert.match(source, /info\.importedWorkspaceBackup/);
+  });
+
   it('opens the Tessra history retention setting from a dedicated command', () => {
     assert.match(source, /registerCommand\('tessra\.openHistorySettings'/);
     assert.match(source, /executeCommand\('workbench\.action\.openSettings', 'tessra\.historyMaxItems'\)/);

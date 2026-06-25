@@ -44,6 +44,8 @@
   "command.importCollection": "Tessra: 컬렉션 가져오기",
   "command.importOpenApi": "Tessra: OpenAPI 가져오기",
   "command.importEnvironment": "Import Environment",
+  "command.exportWorkspaceBackup": "Tessra: 워크스페이스 백업 내보내기",
+  "command.importWorkspaceBackup": "Tessra: 워크스페이스 백업 가져오기",
   "command.exportPostmanCollection": "Postman 컬렉션으로 내보내기",
   "command.exportPostmanEnvironment": "Postman 환경으로 내보내기",
   "command.collapseAll": "모두 접기",

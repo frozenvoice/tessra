@@ -44,6 +44,8 @@
   "command.importCollection": "Tessra: Import Collection",
   "command.importOpenApi": "Tessra: Import OpenAPI",
   "command.importEnvironment": "Import Environment",
+  "command.exportWorkspaceBackup": "Tessra: Export Workspace Backup",
+  "command.importWorkspaceBackup": "Tessra: Import Workspace Backup",
   "command.exportPostmanCollection": "Export as Postman Collection",
   "command.exportPostmanEnvironment": "Export as Postman Environment",
   "command.collapseAll": "Collapse All",
