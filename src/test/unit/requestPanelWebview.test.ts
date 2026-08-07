@@ -11,7 +11,9 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.unsavedChanges': 'Unsaved changes',
   'webview.autoSaved': 'Auto-saved',
   'webview.addVariable': '+ Add Variable',
-  'webview.defaultHeaders': 'Default Headers',
+  'webview.defaultHeaders': 'Default headers',
+  'webview.editEnvironmentVariables': 'Edit variables',
+  'webview.emptyActionGuide': 'Open Guide',
   'webview.defaultHeadersApplied': 'Workspace default headers active: {count}',
   'webview.defaultHeadersAppliedNote': 'Applied before request-specific headers unless the same key is already set in this tab.',
   'webview.defaultHeadersOverridden': 'Request-specific headers override {count} workspace default header(s).',
@@ -88,12 +90,23 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.endedAt': 'Ended',
   'webview.empty.hero.title': 'Ready to ship requests',
   'webview.followRedirects': 'Follow redirects',
-  'webview.followRedirectsStatus': 'Redirects on',
+  'webview.followRedirectsStatus': 'Redirects',
   'webview.stopAfterHeaders': 'Stop after headers',
   'webview.stopAfterHeadersStatus': 'Headers only',
   'webview.saveToHistory': 'Save to history',
+  'webview.saveToHistoryOnStatus': 'History on',
+  'webview.saveToHistoryOffStatus': 'History off',
   'webview.skipDefaultHeaders': 'Skip default headers',
+  'webview.skipDefaultHeadersStatus': 'Defaults skipped',
   'webview.disableScripts': 'Disable scripts',
+  'webview.disableScriptsStatus': 'Scripts off',
+  'webview.scriptsPresentStatus': 'Scripts',
+  'webview.stripScriptsCount': 'Scripts {count}',
+  'webview.stripDefaultsCount': 'Defaults {count}',
+  'webview.stripVarsCount': 'Vars {count}',
+  'webview.tlsInsecureStatus': 'TLS insecure',
+  'webview.defaultHeadersStatus': 'Default headers: {count}',
+  'webview.noEnvironment': 'No environment',
   'webview.importedScriptsTrustPrompt': 'Imported scripts are disabled by default for safety.',
   'webview.previewOfflineTitle': 'Offline HTML Preview',
   'webview.previewOfflineCopy': 'This preview stays local. External scripts, styles, images, and other linked assets are blocked, so dynamic pages may only show static HTML.',
@@ -133,6 +146,7 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.runRerunFailed': 'Rerun Failed',
   'webview.preRequestPlaceholder': 'env.set("token", "123");',
   'webview.scriptHelpTitle': 'Script helpers',
+  'webview.scriptHelpOneLiner': 'Environment → Pre-request → Send → Tests',
   'webview.scriptHelpRuntimeTitle': 'Built-ins',
   'webview.scriptHelpRuntimeCopy': 'pm, env, test(), expect(), and assert() are available without importing anything.',
   'webview.scriptHelpStepperTitle': 'Follow the 4-step request flow',
@@ -231,6 +245,7 @@ function renderHtml(template: string): string {
     'csp',
     'nonce',
     'hljsUri',
+    'bodyConversionUri',
     'displayLanguage',
     'requestPanelTheme',
     'localizedStrings',
@@ -241,6 +256,7 @@ function renderHtml(template: string): string {
     csp: string,
     nonce: string,
     hljsUri: string,
+    bodyConversionUri: string,
     displayLanguage: string,
     requestPanelTheme: string,
     localizedStrings: string,
@@ -252,6 +268,7 @@ function renderHtml(template: string): string {
     'default-src none',
     'test-nonce',
     'hljs.js',
+    'bodyConversion.js',
     'en',
     'default',
     JSON.stringify(TEST_STRINGS).replace(/</g, '\\u003c'),
@@ -608,7 +625,10 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /if \(msg\.type === 'websocketMessage'\)/);
     assert.match(script, /requestType: normalizeRequestType\(t\.requestType, t\.url\)/);
     assert.match(script, /requestType: msg\.requestType/);
-    assert.match(htmlSource, /\.ws-console\{display:flex;flex-direction:column;gap:10px;/);
+    assert.match(htmlSource, /\.ws-console\{display:flex;flex-direction:column;gap:8px;/);
+    assert.match(htmlSource, /\.ws-summary\{[^}]*border-radius:0;background:transparent/);
+    assert.match(htmlSource, /\.ws-status-dot\{[^}]*box-shadow:none/);
+    assert.doesNotMatch(htmlSource, /\.ws-status-label\{[^}]*text-transform:uppercase/);
     assert.match(source, /new WebSocketManager\(new WebSocketService\(\)/);
     assert.match(source, /case MessageType\.WebSocketConnect:/);
     assert.match(source, /case MessageType\.WebSocketDisconnect:/);
@@ -832,6 +852,7 @@ describe('RequestPanel Webview', () => {
       hideVariablePreviewPopover: () => undefined,
       getRequestStageInfo: () => ({ tone: 'ready', label: TEST_STRINGS['webview.websocket'], detail: '' }),
       normalizeRequestEditorTab: (value: string) => value || 'params',
+      renderStatusStrip: () => '<div class="status-strip js-status-strip"></div>',
       renderToplineStatusChips: () => '',
       renderRequestPreflight: () => '',
       renderVariableUsage: () => '',
@@ -845,6 +866,8 @@ describe('RequestPanel Webview', () => {
       bodyTypeLabel: (value: string) => value,
       renderFormDataSummary: () => '',
       formDataRowsHtml: () => '',
+      shouldEnableBodySyntaxHighlight: (bodyType: string, isWebSocket: boolean) => !isWebSocket && (bodyType === 'json' || bodyType === 'xml'),
+      shouldEnableBodyJsonHighlight: (bodyType: string, isWebSocket: boolean) => !isWebSocket && (bodyType === 'json' || bodyType === 'xml'),
       bindContentEvents: () => undefined,
       syncPreviewFrame: () => undefined,
       isRequestEditorCollapsed: () => false,
@@ -863,6 +886,8 @@ describe('RequestPanel Webview', () => {
     assert.match(mainContent.innerHTML, /Connect/);
     assert.match(mainContent.innerHTML, /WebSocket/);
     assert.match(mainContent.innerHTML, /js-ws-keepalive-interval[^>]+min="5"[^>]+max="300"[^>]+value="30"/);
+    assert.match(mainContent.innerHTML, /js-body-editor/);
+    assert.doesNotMatch(mainContent.innerHTML, /is-syntax-highlight|is-json-highlight/, 'WebSocket Body composer must not enable syntax overlay');
   });
 
   it('formats WebSocket close diagnostics for the message log', () => {
@@ -962,9 +987,10 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function resetBodyUndoState\(tab, value, textarea\)/);
     assert.match(script, /function recordBodyEditorInput\(tab, textarea, event\)/);
     assert.match(script, /function handleBodyEditorUndoRedoShortcut\(tab, textarea, event\)/);
+    assert.match(script, /function captureBodyConversionUndoSnapshot\(tab, textarea\)/);
     assert.match(script, /if \(isEditableTarget\(e\.target\) && isBodyUndoRedoShortcut\(e\)\) return;/);
     assert.match(script, /resetBodyUndoState\(tab, tab\.body\);/);
-    assert.match(script, /resetBodyUndoState\(activeTab, activeTab\.body, textarea\);/);
+    assert.match(script, /resetBodyUndoState\(tab, tab\.body \|\| '', textarea\);/);
     assert.match(script, /resetBodyUndoState\(tab, tab\.body\);[\s\S]*renderTabBar\(\);[\s\S]*renderContent\(\);[\s\S]*debouncePersist\(\);/);
     assert.match(script, /recordBodyEditorInput\(bodyTab, bodyTa, event\);/);
     assert.match(script, /if \(handleBodyEditorUndoRedoShortcut\(bodyTab, bodyTa, e\)\) return;/);
@@ -1047,6 +1073,7 @@ describe('RequestPanel Webview', () => {
       markDirty: () => { markDirtyCalls += 1; },
       refreshDraftInsights: () => { refreshCalls += 1; },
       debouncePersist: () => { persistCalls += 1; },
+      normalizeBodyType: (bodyType: string) => bodyType || 'none',
     };
 
     vm.createContext(context);
@@ -1133,6 +1160,206 @@ describe('RequestPanel Webview', () => {
     assert.strictEqual(autoGrowCalls, 2, 'undo and redo should both refresh textarea sizing');
   });
 
+  it('mirrors JSON/XML Body syntax highlighting behind the real textarea', () => {
+    assert.match(
+      script,
+      /class="body-editor js-body-editor/,
+      'body markup should wrap textarea in a relative editor shell'
+    );
+    assert.match(
+      script,
+      /class="body-highlight js-body-highlight" aria-hidden="true"/,
+      'highlight overlay should be aria-hidden for assistive tech'
+    );
+    assert.match(script, /shouldEnableBodySyntaxHighlight\(tab\.bodyType, isWs\)/);
+    assert.match(script, /BODY_JSON_HIGHLIGHT_MAX_CHARS = 120000/);
+    assert.match(script, /BODY_JSON_HIGHLIGHT_DEBOUNCE_MS = 80/);
+    assert.match(script, /bodyTa\.addEventListener\('scroll'/);
+    assert.match(script, /_tessraRefreshBodyHighlight/);
+    assert.match(
+      html,
+      /\.body-editor\.is-syntax-highlight \.js-body\{[^}]*color:transparent/,
+      'syntax highlight mode should make textarea text transparent so the overlay shows tokens'
+    );
+    assert.match(
+      html,
+      /\.body-highlight\{[^}]*pointer-events:none/,
+      'overlay must not intercept pointer input'
+    );
+    assert.match(html, /bodyConversion\.js/, 'Body conversion helper script should load in the webview');
+    assert.match(html, /body-convert-dialog/, 'conversion confirm dialog styles should stay VS Code-native compact');
+
+    const highlightScript = extractScriptSegment(
+      script,
+      'function shouldEnableBodySyntaxHighlight',
+      'function syncBodyTypeUiFromTab'
+    );
+    const context: Record<string, unknown> = {
+      BODY_JSON_HIGHLIGHT_MAX_CHARS: 120000,
+      normalizeBodyType: (bodyType: string) => {
+        const valid = ['none', 'json', 'xml', 'form', 'formdata', 'binary', 'raw'];
+        return valid.includes(bodyType) ? bodyType : (bodyType === 'text' ? 'raw' : 'none');
+      },
+      escapeHtml: (value: string) => String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;'),
+      hljs: {
+        highlight: (code: string, opts: { language: string }) => ({
+          value: `<span class="hljs-attr">${opts.language}</span> :: ${code.length}`,
+        }),
+      },
+    };
+    vm.createContext(context);
+    vm.runInContext(highlightScript, context);
+
+    const shouldEnable = context.shouldEnableBodySyntaxHighlight as (bodyType: string, isWebSocket: boolean) => boolean;
+    assert.strictEqual(shouldEnable('json', false), true, 'HTTP JSON body should enable overlay');
+    assert.strictEqual(shouldEnable('xml', false), true, 'HTTP XML body should enable overlay');
+    assert.strictEqual(shouldEnable('json', true), false, 'WebSocket composer should stay plain');
+    assert.strictEqual(shouldEnable('raw', false), false, 'raw body types should disable overlay');
+
+    const highlight = context.highlightBodySource as (source: string, language: string) => string;
+    const highlighted = highlight('{"k":"v"}', 'json');
+    assert.ok(highlighted.includes('hljs-attr'), 'valid JSON should use highlight.js tokens');
+    assert.ok(highlighted.includes('json'), 'JSON language should be passed to hljs');
+
+    const xmlHighlighted = highlight('<root/>', 'xml');
+    assert.ok(xmlHighlighted.includes('xml'), 'XML language should refresh overlay language immediately');
+
+    const plainLarge = highlight('x'.repeat(120001), 'json');
+    assert.strictEqual(plainLarge.includes('hljs-'), false, 'over-threshold bodies should skip tokenization');
+    assert.ok(plainLarge.startsWith('x'), 'over-threshold bodies still render escaped plain text');
+
+    const withTrailingNewline = highlight('{\n}\n', 'json');
+    assert.ok(withTrailingNewline.endsWith('<br>'), 'trailing newline should preserve an extra overlay line');
+
+    const textarea = { scrollTop: 42, scrollLeft: 7 };
+    const overlay = { scrollTop: 0, scrollLeft: 0 };
+    (context.syncBodyHighlightScroll as (textarea: unknown, highlightEl: unknown) => void)(textarea, overlay);
+    assert.strictEqual(overlay.scrollTop, 42, 'overlay scrollTop should mirror textarea');
+    assert.strictEqual(overlay.scrollLeft, 7, 'overlay scrollLeft should mirror textarea');
+
+    context.hljs = {
+      highlight: () => {
+        throw new Error('bad json');
+      },
+    };
+    const degraded = highlight('{ partial', 'json');
+    assert.strictEqual(degraded.includes('hljs-'), false, 'highlight failures should degrade to escaped plain text');
+    assert.ok(degraded.includes('{ partial'), 'partial JSON must remain editable/visible via plain overlay');
+  });
+
+  it('offers Body type conversion confirm without auto-converting on select', () => {
+    assert.match(script, /function handleBodyTypeSelectChange\(mc, selectEl\)/);
+    assert.match(script, /function showBodyTypeConversionConfirm\(options\)/);
+    assert.match(script, /function applyBodyTypeChange\(mc, tab, nextType, mode\)/);
+    assert.match(script, /handleBodyTypeSelectChange\(mc, e\.target\)/);
+    assert.match(script, /data-action="convert"/);
+    assert.match(script, /data-action="keep"/);
+    assert.match(script, /webview\.bodyConvertKeep/);
+    assert.match(script, /captureBodyConversionUndoSnapshot/);
+    assert.match(script, /api\.convert\(/);
+    assert.doesNotMatch(
+      script,
+      /mc\.querySelector\('\.js-body-type'\)\?\.addEventListener\('change', \(e\) => \{\s*const bodyType = e\.target\.value/,
+      'legacy auto type-change handler without confirm must not remain'
+    );
+  });
+
+  it('restores body type and content together for conversion undo/redo', () => {
+    const undoScript = extractScriptSegment(
+      script,
+      'function isEditableTarget',
+      '  function createTab'
+    );
+    let markDirtyCalls = 0;
+    const selectState = { value: 'xml' };
+    const context: Record<string, unknown> = {
+      BODY_UNDO_MAX_ENTRIES: 100,
+      BODY_UNDO_COALESCE_MS: 700,
+      bodyUndoApplying: false,
+      Date: { now: () => 1000 },
+      Math,
+      String,
+      JSON,
+      mainContent: {
+        querySelector: (sel: string) => {
+          if (sel === '.js-body-type') return selectState;
+          if (sel === '.js-body') return null;
+          if (sel === '.js-body-editor') return { style: {}, classList: { toggle() {}, remove() {} }, setAttribute() {}, removeAttribute() {} };
+          if (sel === '.js-formdata-panel') return { classList: { toggle() {} } };
+          if (sel === '.js-binary-panel') return { classList: { toggle() {} } };
+          if (sel === '.js-formdata-rows') return { innerHTML: '' };
+          if (sel === '.js-binary-path') return { value: '' };
+          return null;
+        },
+      },
+      markDirty: () => { markDirtyCalls += 1; },
+      refreshDraftInsights: () => undefined,
+      debouncePersist: () => undefined,
+      isWebSocketTab: () => false,
+      syncAutoContentType: () => undefined,
+      formDataRowsHtml: () => '',
+      refreshFormDataSummary: () => undefined,
+      normalizeBodyType: (bodyType: string) => bodyType,
+    };
+
+    vm.createContext(context);
+    vm.runInContext(undoScript, context);
+
+    const tab: {
+      body: string;
+      bodyType: string;
+      formData: unknown[];
+      binaryFilePath: string;
+      _bodyUndoState?: { undo: Array<{ conversion?: boolean; bodyType?: string; value: string }>; redo: unknown[]; lastValue: string };
+    } = {
+      body: '<root><a>1</a></root>',
+      bodyType: 'xml',
+      formData: [],
+      binaryFilePath: '',
+    };
+    const textarea = {
+      value: tab.body,
+      selectionStart: tab.body.length,
+      selectionEnd: tab.body.length,
+      _tessraAutoGrow: () => undefined,
+      _tessraRefreshBodyHighlight: () => undefined,
+    };
+
+    (context.resetBodyUndoState as (tab: unknown, value: string, textarea: unknown) => void)(tab, tab.body, textarea);
+    const before = (context.captureBodyConversionUndoSnapshot as (tab: unknown, textarea: unknown) => unknown)(tab, textarea);
+    tab.body = '{"a":1}';
+    tab.bodyType = 'json';
+    textarea.value = tab.body;
+    selectState.value = 'json';
+    const state = tab._bodyUndoState!;
+    (context.pushBodyUndoSnapshot as (stack: unknown, snapshot: unknown) => void)(state.undo, before);
+    state.lastValue = tab.body;
+
+    const undoEvent = {
+      key: 'z',
+      ctrlKey: true,
+      metaKey: false,
+      shiftKey: false,
+      altKey: false,
+      preventDefault: () => undefined,
+      stopPropagation: () => undefined,
+    };
+    const handled = (context.handleBodyEditorUndoRedoShortcut as (tab: unknown, textarea: unknown, event: unknown) => boolean)(
+      tab,
+      textarea,
+      undoEvent
+    );
+    assert.strictEqual(handled, true);
+    assert.strictEqual(tab.bodyType, 'xml');
+    assert.strictEqual(tab.body, '<root><a>1</a></root>');
+    assert.strictEqual(selectState.value, 'xml');
+    assert.ok(markDirtyCalls >= 1);
+  });
+
   it('renders request tabs and utility controls with accessible semantics', () => {
     assert.ok(
       html.includes('<div class="tab-bar" id="tabBar" role="tablist" aria-label="Request tabs">'),
@@ -1202,10 +1429,24 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /updateStaticLocalizedText\(\);[\s\S]*renderTabBar\(\);[\s\S]*renderContent\(\);/);
   });
 
-  it('ships distinct visual signatures for the request panel theme presets', () => {
-    assert.match(htmlSource, /body\[data-panel-theme="minimal-cool"\] \.tab\.active\{[\s\S]*box-shadow:inset 0 -2px 0 rgba\(125,200,255,.9\);/);
-    assert.match(htmlSource, /body\[data-panel-theme="product"\] \.settings-group-title,\s*body\[data-panel-theme="product"\] \.script-helper-label,/);
-    assert.match(htmlSource, /body\[data-panel-theme="bold-color"\] \.status-2xx\{[\s\S]*linear-gradient\(135deg,#133a22,#1f7a34\)/);
+  it('ships token-only color skins for the request panel theme presets', () => {
+    assert.match(htmlSource, /\/\* Theme presets: CSS custom properties only/);
+    assert.match(htmlSource, /body\[data-panel-theme="minimal-cool"\]\{[\s\S]*--tessra-accent:#7dc8ff;[\s\S]*--tessra-method-get:#5bbf6a;/);
+    assert.match(htmlSource, /body\[data-panel-theme="product"\]\{[\s\S]*--tessra-tone-info:#9fd3ff;[\s\S]*--tessra-label-accent:#9fd3ff;/);
+    assert.match(htmlSource, /\.req-tab\.active\{opacity:1;background:transparent;border-bottom:3px solid var\(--vscode-focusBorder\);box-shadow:none\}/);
+    assert.doesNotMatch(htmlSource, /\.req-tab\.active\{[^}]*linear-gradient/);
+    assert.match(htmlSource, /@media \(prefers-reduced-motion: reduce\)/);
+    assert.match(htmlSource, /\.runner-bar-fill\{[^}]*transform:scaleX\(0\);[^}]*transition:transform/);
+    assert.doesNotMatch(htmlSource, /\.runner-bar-fill\{[^}]*transition:width/);
+    assert.match(htmlSource, /\.default-headers-summary:focus-visible/);
+    assert.match(htmlSource, /\.status-strip-link:focus-visible/);
+    assert.match(htmlSource, /--tessra-json-key:var\(--vscode-debugTokenExpression-name\)/);
+    assert.match(htmlSource, /body\[data-panel-theme="bold-color"\]\{[\s\S]*--tessra-status-2xx:#7ff09f;[\s\S]*--tessra-json-key:var\(--vscode-debugTokenExpression-name\);/);
+    assert.match(htmlSource, /\.tab\.active\{opacity:1;background:transparent;box-shadow:inset 0 -2px 0 var\(--tessra-accent/);
+    assert.doesNotMatch(htmlSource, /body\[data-panel-theme="minimal-cool"\] \.tab\.active\{/);
+    assert.doesNotMatch(htmlSource, /body\[data-panel-theme="product"\] \.settings-group-title/);
+    assert.doesNotMatch(htmlSource, /body\[data-panel-theme="bold-color"\] \.status-2xx\{/);
+    assert.doesNotMatch(htmlSource, /body\[data-panel-theme="[^"]+"\][^{]*\{[^}]*(padding|margin|border-radius|box-shadow|linear-gradient|glow):/);
   });
 
   it('preserves auto-generated tab names across restore so localization can update them after restart', () => {
@@ -1393,35 +1634,43 @@ describe('RequestPanel Webview', () => {
     assert.doesNotMatch(settingsSegment, /renderContent\(\);/);
   });
 
-  it('renders the upgraded workspace UI affordances', () => {
-    assert.ok(html.includes('Ready to ship requests'), 'empty state hero should be rendered');
-    assert.ok(html.includes('settings-grid'), 'settings layout should use cards');
-    assert.ok(html.includes('script-card'), 'scripts tab should use cards');
-    assert.ok(html.includes('script-helper-grid'), 'scripts tab should render helper cards');
+  it('renders Quiet Instrument request panel chrome affordances', () => {
+    assert.ok(html.includes('settings-grid'), 'settings layout should remain available');
+    assert.ok(html.includes('script-card'), 'scripts tab should keep field groups');
+    assert.ok(html.includes('script-help-line'), 'scripts tab should render a compact one-line helper');
     assert.ok(html.includes('btn-keyhint'), 'send button should show the Enter key hint');
-    assert.ok(html.includes('url-primary-group'), 'url bar should isolate the primary request controls');
-    assert.ok(html.includes('url-hero-actions'), 'url bar should elevate the primary action');
-    assert.ok(html.includes('url-secondary-group'), 'url bar should tuck secondary actions into a separate cluster');
-    assert.ok(html.includes('url-secondary-btn'), 'url bar secondary actions should use compact button styling');
-    assert.ok(html.includes('action-label'), 'compact action buttons should keep a label span for responsive compression');
+    assert.ok(html.includes('url-primary-group'), 'url bar should isolate Method/URL primary controls');
+    assert.ok(html.includes('url-hero-actions'), 'url bar should keep the primary Send/Stop action');
+    assert.ok(html.includes('js-request-more-btn'), 'infrequent request actions should live in overflow');
+    assert.ok(html.includes('js-request-more-menu'), 'request overflow menu should be present');
+    assert.ok(html.includes('action-label'), 'overflow actions should keep label spans');
     assert.ok(html.includes('res-response-shell'), 'response area should use a dedicated flex shell');
     assert.ok(html.includes('res-empty-shell'), 'response empty states should render inside a scrollable shell');
-    assert.ok(html.includes('response-summary-card'), 'response summary should render as a product-style card');
+    assert.ok(html.includes('response-summary-card'), 'response summary remains the success primary');
     assert.ok(html.includes('response-stat-inline'), 'response summary should expose inline response stats');
     assert.ok(html.includes('response-action-cluster'), 'response actions should render in a dedicated cluster');
-    assert.ok(html.includes('request-info-row'), 'preflight pills and variable usage should share a single row');
-    assert.ok(html.includes('actions-more-menu'), 'less-used response actions should collapse into a more menu');
-    assert.ok(html.includes('empty-state-head'), 'empty state should render a dedicated hero head');
-    assert.ok(html.includes('empty-state-card-index'), 'empty state cards should show playful indices');
+    assert.ok(html.includes('js-status-strip'), 'meta should use one quiet status strip');
+    assert.ok(html.includes('status-strip-line'), 'status strip should expose a one-line default');
+    assert.ok(html.includes('actions-more-menu'), 'infrequent response actions should collapse into a more menu');
     assert.ok(html.includes('divider-grip'), 'split divider should expose an affordance grip');
+    assert.ok(html.includes('default-headers-oneline'), 'default headers should be a one-liner');
+    assert.doesNotMatch(script, /request-info-row">'\s*\+\s*preflightHtml/);
     assert.match(script, /function getRequestStageInfo\(tab\)/);
-    assert.match(script, /function renderEmptyState\(kicker, title, copy, cards, actions, badge\)/);
+    assert.match(script, /function renderEmptyState\(title, copy, actions\)/);
+    assert.doesNotMatch(script, /empty-state-card/);
+    assert.doesNotMatch(script, /empty-state-orbit/);
+    assert.doesNotMatch(script, /empty-state-kicker/);
+    assert.doesNotMatch(htmlSource, /\.ws-status-label\{[^}]*text-transform:uppercase/);
+    assert.doesNotMatch(htmlSource, /\.settings-card:hover\{[^}]*box-shadow:[^;]*22px/);
+    assert.doesNotMatch(htmlSource, /\.settings-toggle::before\{content:""/);
+    assert.match(script, /function renderStatusStrip\(tab\)/);
     assert.match(script, /function renderResponseStat\(label, value, tone, detail\)/);
     assert.match(script, /function buildCompareChipMarkup\(currentSignature\)/);
     assert.match(script, /function scriptTemplateSource\(name\)/);
     assert.match(script, /function insertScriptTemplate\(mc, targetName, templateName\)/);
     assert.match(script, /var secondary = '';/);
     assert.doesNotMatch(script, /var secondary = tr\('webview\.stage\.ready\.detail'\);/);
+    assert.doesNotMatch(script, /secondary = tab\.response\.status \+ ' ' \+ \(tab\.response\.statusText \|\| ''\);/);
     assert.match(script, /row\.className = 'runner-row method-' \+ msg\.method \+ ' ' \+ cls;/);
   });
 
@@ -1453,11 +1702,15 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function applyManualRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, requestedHeight, tab, rememberManualHeight\)/);
     assert.match(script, /function shouldPreferResponseLayout\(tab\)/);
     assert.match(script, /function applyAdaptiveRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, tab\)/);
+    assert.match(script, /function hasUserLockedSplitRatio\(reqArea, tab\)/);
+    assert.match(script, /function syncResponseEmphasisClass\(splitEl, tab\)/);
+    assert.match(script, /is-response-emphasis/);
     assert.match(script, /function getCollapsedRequestAreaHeight\(splitEl\)/);
     assert.match(script, /function applyStoredRequestAreaHeight\(reqArea, splitEl, dividerEl, progressEl, tab\)/);
     assert.match(script, /tab\.requestSplitHeightPx = clampedHeight;/);
     assert.match(script, /debouncePersist\(\);/);
     assert.match(script, /requestMinPanel = isRequestEditorCollapsed\(tab\) \? getCollapsedRequestAreaHeight\(splitEl\) : minPanel/);
+    assert.match(script, /hasUserLockedSplitRatio\(reqArea, tab\) && !isRequestEditorCollapsed\(tab\)/);
     assert.match(script, /reqArea\.dataset\.manualHeight === '1' && !isRequestEditorCollapsed\(activeTab\)/);
     assert.match(script, /var targetRatio = panelSpace < 420 \? 0\.34 : panelSpace < 560 \? 0\.38 : 0\.42;/);
     assert.match(script, /window\.addEventListener\('resize', function\(\) \{/);
@@ -1470,8 +1723,8 @@ describe('RequestPanel Webview', () => {
     assert.match(htmlSource, /\.res-area\{flex:1 1 0;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:0 10px\}/);
     assert.match(htmlSource, /\.res-empty-shell\{flex:1;min-height:0;overflow:auto;padding:8px 0 12px\}/);
     assert.match(htmlSource, /\.var-usage\{display:flex;align-items:center;gap:6px;padding:0;flex-wrap:wrap\}/);
-    assert.match(htmlSource, /\.json-body\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;border:1px solid rgba\(255,255,255,.08\);font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;white-space:pre-wrap;word-break:break-word;overflow:auto;flex:1;min-height:0;line-height:1\.3;/);
-    assert.match(htmlSource, /\.json-tree\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;border:1px solid rgba\(255,255,255,.08\);font-family:var\(--vscode-editor-font-family,monospace\);font-size:13px;overflow:auto;flex:1;min-height:0;line-height:1\.3;user-select:text;/);
+    assert.match(htmlSource, /\.json-body\{background:var\(--vscode-editor-background\);padding:8px 10px;border-radius:2px;/);
+    assert.match(htmlSource, /\.json-tree\{background:var\(--vscode-editor-background\);padding:8px 10px;border-radius:2px;/);
   });
 
   it('allows a much smaller request split minimum while the active editor tab is collapsed', () => {
@@ -1600,7 +1853,8 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function revealDefaultHeadersEditor\(\)/);
     assert.match(script, /function getOverriddenDefaultHeaders\(tab\)/);
     assert.match(script, /function renderDefaultHeaderKeyGroup\(labelKey, headers, chipClass\)/);
-    assert.match(script, /js-open-default-headers-top/);
+    assert.match(script, /js-default-headers-toggle/);
+    assert.match(script, /default-headers-oneline/);
     assert.match(script, /js-default-headers-banner-wrap/);
     assert.match(script, /vscode\.postMessage\(\{ type: 'openDefaultHeaders' \}\)/);
     assert.match(script, /workspaceDefaultHeaders = msg\.headers \|\| \[\];/);
@@ -1631,29 +1885,232 @@ describe('RequestPanel Webview', () => {
 
   it('shows the current environment with a localized label instead of raw template syntax', () => {
     assert.match(script, /function renderEnvironmentIndicator\(envName\)/);
+    assert.match(script, /function renderStatusStrip\(tab\)/);
+    assert.match(script, /function buildStatusStripSegments\(tab\)/);
+    assert.match(script, /function refreshStatusStrip\(mc\)/);
     assert.match(script, /function renderToplineStatusChips\(tab\)/);
     assert.match(script, /function refreshToplineStatusChips\(mc\)/);
-    assert.match(script, /class="request-status-chips js-topline-status-chips"/);
+    assert.match(script, /class="status-strip js-status-strip"/);
+    assert.match(script, /class="request-status-chips js-topline-status-chips/);
     assert.match(script, /tr\('webview\.noEnvironment'\)/);
-    assert.match(script, /tfCount\('webview\.defaultHeadersStatus', appliedDefaultHeaders\.length\)/);
+    assert.match(script, /tfCount\('webview\.stripDefaultsCount', appliedDefaultHeaders\.length\)/);
     assert.match(script, /tr\('webview\.disableScriptsStatus'\)/);
+    assert.match(script, /tr\('webview\.scriptsPresentStatus'\)/);
     assert.match(script, /tr\('webview\.followRedirectsStatus'\)/);
     assert.match(script, /tr\('webview\.stopAfterHeadersStatus'\)/);
-    assert.match(script, /tr\('webview\.saveToHistoryOffStatus'\)/);
+    assert.match(script, /'webview\.saveToHistoryOnStatus'/);
+    assert.match(script, /'webview\.saveToHistoryOffStatus'/);
+    assert.match(script, /tr\('webview\.tlsInsecureStatus'\)/);
     assert.match(script, /tr\('webview\.environment'\)/);
     assert.doesNotMatch(script, /<span class="var-name">\{\{env\}\}<\/span>/);
   });
 
-  it('renders the environment editor as a collapsed summary with accessible toggle handling', () => {
-    assert.match(html, /<div id="envEditor" class="env-editor collapsed">/);
-    assert.match(html, /id="envEditorToggle" role="button" tabindex="0" aria-expanded="false" aria-controls="envEditorBody"/);
-    assert.match(html, /class="env-editor-caret" aria-hidden="true"/);
+  it('keeps execution-affecting request settings on the status strip and demotes profile to disclosure', () => {
+    const stripSegmentsFn = extractScriptSegment(
+      script,
+      'function buildStatusStripSegments(tab)',
+      'function renderStatusStripExpandDetails(tab)'
+    );
+    assert.match(stripSegmentsFn, /var hasScripts = hasExecutableScripts\(tab\?\.scripts\);/);
+    assert.match(stripSegmentsFn, /var scriptsOff = !!\(tab\?\.disableScripts \|\| \(hasScripts && tab\?\.scriptsTrusted === false\)\);/);
+    assert.match(stripSegmentsFn, /tr\('webview\.scriptsPresentStatus'\)/);
+    assert.match(stripSegmentsFn, /var historyOn = tab\?\.saveToHistory !== false;/);
+    assert.match(stripSegmentsFn, /historyOn \? 'webview\.saveToHistoryOnStatus' : 'webview\.saveToHistoryOffStatus'/);
+    assert.match(stripSegmentsFn, /normalizeTlsValidation\(tab\?\.tlsValidation\) === 'insecure'/);
+    assert.match(stripSegmentsFn, /tr\('webview\.tlsInsecureStatus'\)/);
+    assert.match(stripSegmentsFn, /tab\?\.followRedirects/);
+    assert.match(stripSegmentsFn, /tr\('webview\.followRedirectsStatus'\)/);
+    assert.match(stripSegmentsFn, /tab\?\.stopAfterHeaders/);
+    assert.match(stripSegmentsFn, /tr\('webview\.stopAfterHeadersStatus'\)/);
+    assert.match(stripSegmentsFn, /tab\?\.skipDefaultHeaders/);
+    assert.match(stripSegmentsFn, /tr\('webview\.skipDefaultHeadersStatus'\)/);
+    assert.match(stripSegmentsFn, /Profile stays in expand disclosure/);
+    assert.doesNotMatch(stripSegmentsFn, /renderProfileIndicator/);
+    assert.doesNotMatch(stripSegmentsFn, /change-workspace-profile/);
+    assert.match(script, /data-action="change-workspace-profile"/);
+  });
+
+  it('gives status strip segments Quiet Instrument discoverability cues (not flat gray, not pill wall)', () => {
+    assert.match(htmlSource, /\.status-strip-seg\.is-env\{/);
+    assert.match(htmlSource, /\.status-strip-seg\.is-on\{/);
+    assert.match(htmlSource, /\.status-strip-seg\.is-off\{/);
+    assert.match(htmlSource, /\.status-strip-seg\.is-warn\{/);
+    assert.match(htmlSource, /\.status-strip-cue\{/);
+    assert.match(htmlSource, /\.status-strip-num\{/);
+    assert.match(htmlSource, /--strip-env-bg:/);
+    assert.match(htmlSource, /--strip-active-cue:/);
+    assert.match(htmlSource, /\.status-strip-seg\.is-on \.status-strip-cue\{[^}]*color:var\(--strip-active-cue/);
+    assert.match(htmlSource, /\.status-strip-seg\.is-info \.status-strip-num\{/);
+    assert.match(htmlSource, /@container status-strip \(max-width: 480px\)/);
+    assert.match(htmlSource, /@container status-strip \(max-width: 360px\)/);
+    assert.match(htmlSource, /\.status-strip-seg\[data-priority="low"\]\{display:none\}/);
+    assert.match(htmlSource, /\.status-strip-seg\[data-priority="medium"\]\{display:none\}/);
+    assert.doesNotMatch(htmlSource, /\.status-strip-seg[^{]*\{[^}]*border-radius:\s*999px/);
+    assert.doesNotMatch(htmlSource, /\.status-strip[^{]*\{[^}]*linear-gradient/);
+    assert.doesNotMatch(htmlSource, /\.status-strip-seg[^{]*\{[^}]*box-shadow:/);
+    assert.doesNotMatch(htmlSource, /\.status-strip-seg\.is-on[^{]*\{[^}]*#4[Ee][Cc]94[Ee]/);
+    assert.match(script, /function buildStatusStripSegments\(tab\)/);
+    assert.match(script, /function renderStatusStripLabelHtml\(label, count\)/);
+    assert.match(script, /cue: 'on-dot'/);
+    assert.match(script, /'on-check'/);
+    assert.match(script, /cue: 'warn'/);
+    assert.match(script, /'off'/);
+    assert.match(script, /priority: 'critical'/);
+    assert.match(script, /priority: 'low'/);
+    assert.match(script, /status-strip-sep[\s\S]*?│/);
+  });
+
+  it('renders concrete status strip HTML for discoverability cases', () => {
+    const stripHelpers = extractScriptSegment(
+      script,
+      'function countExecutableScripts(scripts)',
+      'function renderStatusStripExpandDetails(tab)'
+    );
+    const harness = `
+      var currentEnvName = 'staging';
+      var STRINGS = ${JSON.stringify({
+        'webview.noEnvironment': 'No environment',
+        'webview.summaryEnvironment': 'Environment: {name}',
+        'webview.disableScriptsStatus': 'Scripts off',
+        'webview.scriptsPresentStatus': 'Scripts',
+        'webview.stripScriptsCount': 'Scripts {count}',
+        'webview.summaryScriptsOn': 'Scripts enabled',
+        'webview.saveToHistoryOnStatus': 'History on',
+        'webview.saveToHistoryOffStatus': 'History off',
+        'webview.summaryHistoryOn': 'History on',
+        'webview.summaryHistoryOff': 'History off',
+        'webview.skipDefaultHeadersStatus': 'Defaults skipped',
+        'webview.stripDefaultsCount': 'Defaults {count}',
+        'webview.defaultHeaders': 'Default headers',
+        'webview.tlsInsecureStatus': 'TLS insecure',
+        'webview.followRedirectsStatus': 'Redirects',
+        'webview.stopAfterHeadersStatus': 'Headers only',
+        'webview.stripVarsCount': 'Vars {count}',
+        'webview.more': 'More',
+      })};
+      function tr(key) { return Object.prototype.hasOwnProperty.call(STRINGS, key) ? STRINGS[key] : key; }
+      function tf(key, params) {
+        return tr(key).replace(/{([A-Za-z0-9_]+)}/g, function(_, name) {
+          return Object.prototype.hasOwnProperty.call(params || {}, name) ? String(params[name]) : '{' + name + '}';
+        });
+      }
+      function tfCount(key, count) { return tf(key, { count: String(count) }); }
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+      function escapeAttr(s) { return escapeHtml(s); }
+      function normalizeTlsValidation(value) {
+        return value === 'insecure' ? 'insecure' : (value === 'strict' ? 'strict' : 'default');
+      }
+      function hasExecutableScripts(scripts) {
+        return !!(scripts && ((scripts.preRequest || '').trim() || (scripts.test || '').trim()));
+      }
+      function collectVariableUsage(tab) { return tab && tab.__usage ? tab.__usage : []; }
+      function getUnresolvedDraftVariableNames(tab) { return tab && tab.__unresolved ? tab.__unresolved : []; }
+      function getAppliedDefaultHeaders(tab) { return tab && tab.__appliedDefaults ? tab.__appliedDefaults : []; }
+      ${stripHelpers}
+      function renderStatusStripExpandDetails() { return ''; }
+      function renderStatusStrip(tab) {
+        var segments = buildStatusStripSegments(tab);
+        var sep = '<span class="status-strip-sep" aria-hidden="true">│</span>';
+        return '<div class="status-strip js-status-strip">' +
+          '<div class="status-strip-segments">' + segments.join(sep) + '</div></div>';
+      }
+    `;
+    const context: Record<string, unknown> = {};
+    vm.createContext(context);
+    vm.runInContext(harness, context);
+    const renderStatusStrip = context.renderStatusStrip as (tab: Record<string, unknown>) => string;
+
+    // 1) Scripts present + History on + Defaults 2
+    const case1 = renderStatusStrip({
+      scripts: { preRequest: 'env.set("a","1")', test: 'pm.test("ok", function(){})' },
+      saveToHistory: true,
+      __appliedDefaults: [{ key: 'X-A' }, { key: 'X-B' }],
+    });
+    assert.match(case1, /status-strip-seg is-env/);
+    assert.match(case1, /status-strip-seg is-on[\s\S]*?●[\s\S]*?Scripts 2/);
+    assert.match(case1, /status-strip-seg is-on[\s\S]*?✓[\s\S]*?History on/);
+    assert.match(case1, /status-strip-seg is-info[\s\S]*?Defaults <span class="status-strip-num">2<\/span>/);
+    assert.doesNotMatch(case1, /border-radius:\s*999px/);
+
+    // 2) Scripts disabled + History on
+    const case2 = renderStatusStrip({
+      scripts: { preRequest: 'x', test: '' },
+      disableScripts: true,
+      saveToHistory: true,
+    });
+    assert.match(case2, /status-strip-seg is-warn[\s\S]*?⚠[\s\S]*?Scripts off/);
+    assert.match(case2, /status-strip-seg is-on[\s\S]*?✓[\s\S]*?History on/);
+
+    // 3) History off
+    const case3 = renderStatusStrip({ saveToHistory: false });
+    assert.match(case3, /status-strip-seg is-off[\s\S]*?○[\s\S]*?History off/);
+    assert.doesNotMatch(case3, /History on/);
+
+    // 4) Defaults skipped
+    const case4 = renderStatusStrip({ skipDefaultHeaders: true, saveToHistory: true });
+    assert.match(case4, /status-strip-seg is-warn[\s\S]*?⚠[\s\S]*?Defaults skipped/);
+
+    // 5) TLS insecure
+    const case5 = renderStatusStrip({ tlsValidation: 'insecure', saveToHistory: true });
+    assert.match(case5, /status-strip-seg is-warn[\s\S]*?⚠[\s\S]*?TLS insecure/);
+    assert.match(case5, /data-priority="critical"/);
+
+    // 6) Variables in use
+    const case6 = renderStatusStrip({
+      saveToHistory: true,
+      __usage: [{ name: 'baseUrl' }, { name: 'token' }, { name: 'tenant' }],
+    });
+    assert.match(case6, /status-strip-seg is-info[\s\S]*?Vars <span class="status-strip-num">3<\/span>/);
+    assert.match(case6, /data-priority="low"/);
+
+    // 7) Multiple simultaneous
+    const case7 = renderStatusStrip({
+      scripts: { preRequest: 'x', test: 'y' },
+      disableScripts: true,
+      saveToHistory: false,
+      skipDefaultHeaders: true,
+      tlsValidation: 'insecure',
+      followRedirects: true,
+      stopAfterHeaders: true,
+      __usage: [{ name: 'host' }],
+    });
+    assert.match(case7, /Scripts off/);
+    assert.match(case7, /History off/);
+    assert.match(case7, /Defaults skipped/);
+    assert.match(case7, /TLS insecure/);
+    assert.match(case7, /Redirects/);
+    assert.match(case7, /Headers only/);
+    assert.match(case7, /Vars <span class="status-strip-num">1<\/span>/);
+    assert.match(case7, /status-strip-sep[\s\S]*?│/);
+
+    // 8) Narrow-width strategy: priority attrs + container collapse CSS; env + critical before low-priority vars
+    assert.match(case7, /data-priority="critical"/);
+    assert.match(case7, /data-priority="high"/);
+    assert.match(case7, /data-priority="medium"/);
+    assert.match(case7, /data-priority="low"/);
+    assert.match(htmlSource, /@container status-strip \(max-width: 480px\)[\s\S]*?data-priority="low"[\s\S]*?display:none/);
+    const envFirst = case7.indexOf('is-env');
+    const tlsIdx = case7.indexOf('TLS insecure');
+    const varsIdx = case7.indexOf('status-strip-num">1');
+    assert.ok(envFirst >= 0 && envFirst < tlsIdx && tlsIdx < varsIdx, 'env and risk should precede low-priority vars');
+  });
+
+  it('keeps the environment editor on-demand and surfaces status only in the strip', () => {
+    assert.match(html, /<div id="envEditor" class="env-editor hidden">/);
+    assert.doesNotMatch(html, /id="envEditorToggle"/);
+    assert.doesNotMatch(html, /class="env-badge/);
     assert.match(html, /id="envEditorName">None<\/span>/);
     assert.match(html, /id="envEditorVarCount"/);
     assert.match(html, /id="envEditorBody"/);
-    assert.match(script, /function toggleEnvironmentEditor\(\)/);
-    assert.match(script, /envEditorToggle\?\.addEventListener\('keydown'/);
+    assert.match(script, /function revealEnvironmentEditor\(\)/);
+    assert.match(script, /function hideEnvironmentEditor\(\)/);
+    assert.match(script, /data-action="edit-environment"/);
+    assert.match(script, /tr\('webview\.editEnvironmentVariables'\)/);
     assert.match(script, /setEnvironmentEditorData\(msg\.envId \|\| null, msg\.envName \|\| null, msg\.variables \|\| \[\]\)/);
+    assert.match(script, /revealEnvironmentEditor\(\);/);
     assert.match(source, /variables,\s*profileName: RequestPanel\.storage\.getWorkspaceProfileName\(\)/);
     assert.ok(
       script.indexOf('const envEditorName = document.getElementById') < script.lastIndexOf('updateStaticLocalizedText();'),
@@ -1682,7 +2139,7 @@ describe('RequestPanel Webview', () => {
 
   it('renders preflight, masking, and bulk paste request helpers', () => {
     assert.match(script, /function renderRequestPreflight\(tab\)/);
-    assert.match(script, /class="js-request-preflight-wrap"/);
+    assert.match(script, /js-request-preflight-wrap/);
     assert.match(script, /tfCount\('webview\.unresolvedVariablesCount', unresolved\.length\)/);
     assert.match(script, /function isSensitiveKeyName\(value\)/);
     assert.match(script, /class="kv-reveal/);
@@ -1786,33 +2243,30 @@ describe('RequestPanel Webview', () => {
     );
   });
 
-  it('renders collapsible script helpers with a stepper layout', () => {
-    assert.match(script, /function renderScriptHelpStep\(index, titleKey, copyKey\)/);
-    assert.match(script, /function renderScriptHelpers\(tab\)/);
-    assert.match(script, /class="script-helper-shell/);
-    assert.match(script, /class="script-helper-stepper"/);
-    assert.match(script, /var helperLeadCopy = collapsed \? tr\('webview\.scriptHelpCollapsedCopy'\) : tr\('webview\.scriptHelpRuntimeWhen'\);/);
-    assert.match(script, /\(collapsed\s*\?\s*'<div class="script-helper-collapsed">'/);
-    assert.match(script, /class="script-helper-card tinted"/);
-    assert.match(script, /class="script-helper-columns flow"/);
-    assert.match(script, /tr\('webview\.scriptHelpQuickInsertTitle'\)/);
+  it('renders a compact script help one-liner with Guide link and Quiet Instrument chrome', () => {
+    assert.match(script, /function renderScriptHelpers\(_tab\)/);
+    assert.match(script, /class="script-help-line"/);
+    assert.match(script, /tr\('webview\.scriptHelpOneLiner'\)/);
+    assert.match(script, /js-open-script-guide/);
+    assert.match(script, /tr\('webview\.emptyActionGuide'\)/);
+    assert.match(script, /type: 'openGuide'/);
+    assert.doesNotMatch(script, /class="script-helper-shell/);
+    assert.doesNotMatch(script, /class="script-helper-stepper"/);
+    assert.doesNotMatch(script, /class="script-helper-card/);
+    assert.doesNotMatch(htmlSource, /\.default-headers-banner-title\{[^}]*text-transform:uppercase/);
     assert.match(script, /data-template="testCaptureValue"/);
-    assert.match(script, /js-toggle-script-help/);
-    assert.match(script, /const activeTab = tabs\.find\(t => t\.id === activeTabId\);/);
-    assert.match(script, /activeTab\.scriptHelpCollapsed = activeTab\.scriptHelpCollapsed !== true/);
     assert.match(htmlSource, /\.req-area\{flex:1 1 0;min-height:0;overflow:hidden;padding:2px 8px;display:flex;flex-direction:column\}/);
     assert.match(htmlSource, /\.url-primary-group\{display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 auto\}/);
     assert.match(htmlSource, /\.url-hero-actions\{display:flex;align-items:stretch;justify-content:flex-end;flex:0 0 auto\}/);
-    assert.match(htmlSource, /\.url-secondary-btn\{min-height:28px;padding:0 8px;border-radius:6px;gap:6px;font-size:13px;/);
-    assert.match(htmlSource, /\.response-summary-card\{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:2px 0;border:none;background:transparent;box-shadow:none;border-radius:0;flex-wrap:nowrap;min-width:0\}/);
+    assert.match(htmlSource, /\.status-strip\{display:flex;flex-direction:column;/);
+    assert.match(htmlSource, /\.response-summary-card\{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:2px 0;[\s\S]*flex-wrap:nowrap;min-width:0\}/);
     assert.match(htmlSource, /\.response-stat-inline\{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;font-size:13px;font-weight:700;/);
-    assert.match(htmlSource, /\.response-action-cluster\{display:flex;align-items:center;justify-content:flex-end;gap:3px;flex-wrap:nowrap;flex:0 0 auto\}/);
+    assert.match(htmlSource, /\.response-action-cluster\{display:flex;align-items:center;justify-content:flex-end;gap:4px;flex-wrap:nowrap;flex:0 0 auto\}/);
     assert.match(htmlSource, /\.actions-more-menu\{display:none;position:absolute;/);
-    assert.match(htmlSource, /\.divider-grip\{position:relative;z-index:1;display:inline-flex;align-items:center;gap:4px;padding:1px 8px;/);
-    assert.match(htmlSource, /\.json-body\{background:linear-gradient\(180deg,rgba\(255,255,255,.05\),rgba\(255,255,255,.018\)\);padding:14px 16px;border-radius:18px;/);
+    assert.match(htmlSource, /\.divider-grip\{position:relative;z-index:1;display:inline-flex;align-items:center;gap:3px;padding:1px 6px;/);
+    assert.match(htmlSource, /\.json-body\{background:var\(--vscode-editor-background\);padding:8px 10px;border-radius:2px;/);
     assert.match(htmlSource, /\.runner-row\.method-GET::before\{background:linear-gradient\(180deg,rgba\(78,201,78,.8\),rgba\(78,201,78,.18\)\)\}/);
-    assert.match(htmlSource, /\.env-editor\.linked-focus-active\{border-color:rgba\(87,166,255,.26\)\}/);
-    assert.match(htmlSource, /\.script-helper-shell\.collapsed\{gap:10px\}/);
+    assert.match(htmlSource, /\.env-editor\.linked-focus-active\{border-color:var\(--vscode-focusBorder\)\}/);
     assert.match(htmlSource, /@media \(max-height: 820px\)\{/);
   });
 

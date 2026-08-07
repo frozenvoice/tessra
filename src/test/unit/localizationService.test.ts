@@ -27,6 +27,15 @@ describe('LocalizationService source', () => {
     );
   });
 
+  it('keeps body conversion confirm copy translated for every supported language', () => {
+    assert.match(source, /'webview\.bodyConvertTitle': 'Convert current \{from\} body to \{to\}\?'/);
+    assert.match(source, /'webview\.bodyConvertKeep': 'Keep text'/);
+    assert.match(source, /'webview\.bodyConvertTitle': '현재 \{from\} 바디를 \{to\}\(으\)로 변환할까요\?'/);
+    assert.match(source, /'webview\.bodyConvertKeep': '텍스트 유지'/);
+    assert.match(source, /'webview\.bodyConvertTitle': '現在の \{from\} ボディを \{to\} に変換しますか？'/);
+    assert.match(source, /'webview\.bodyConvertKeep': 'テキストを維持'/);
+  });
+
   it('keeps dirty-close and file-picker strings translated for every supported language', () => {
     assert.match(source, /'panel\.selectFile': 'Select File'/);
     assert.match(source, /'panel\.selectFile': '파일 선택'/);
@@ -61,7 +70,13 @@ describe('LocalizationService source', () => {
     const emptyMatches = source.match(/'webview\.defaultHeadersEmptyState':/g) ?? [];
     const noEnvironmentMatches = source.match(/'webview\.noEnvironment':/g) ?? [];
     const disableScriptsStatusMatches = source.match(/'webview\.disableScriptsStatus':/g) ?? [];
+    const scriptsPresentStatusMatches = source.match(/'webview\.scriptsPresentStatus':/g) ?? [];
+    const historyOnStatusMatches = source.match(/'webview\.saveToHistoryOnStatus':/g) ?? [];
     const historyOffStatusMatches = source.match(/'webview\.saveToHistoryOffStatus':/g) ?? [];
+    const stripScriptsCountMatches = source.match(/'webview\.stripScriptsCount':/g) ?? [];
+    const stripDefaultsCountMatches = source.match(/'webview\.stripDefaultsCount':/g) ?? [];
+    const stripVarsCountMatches = source.match(/'webview\.stripVarsCount':/g) ?? [];
+    const tlsInsecureStatusMatches = source.match(/'webview\.tlsInsecureStatus':/g) ?? [];
     const manageMatches = source.match(/'webview\.manage':/g) ?? [];
 
     assert.strictEqual(appliedMatches.length, 3);
@@ -74,7 +89,13 @@ describe('LocalizationService source', () => {
     assert.strictEqual(emptyMatches.length, 3);
     assert.strictEqual(noEnvironmentMatches.length, 3);
     assert.strictEqual(disableScriptsStatusMatches.length, 3);
+    assert.strictEqual(scriptsPresentStatusMatches.length, 3);
+    assert.strictEqual(historyOnStatusMatches.length, 3);
     assert.strictEqual(historyOffStatusMatches.length, 3);
+    assert.strictEqual(stripScriptsCountMatches.length, 3);
+    assert.strictEqual(stripDefaultsCountMatches.length, 3);
+    assert.strictEqual(stripVarsCountMatches.length, 3);
+    assert.strictEqual(tlsInsecureStatusMatches.length, 3);
     assert.strictEqual(manageMatches.length, 3);
   });
 
@@ -186,6 +207,8 @@ describe('LocalizationService source', () => {
       'webview.variableAutocompleteTitle',
       'webview.variableAutocompleteEmpty',
       'webview.scriptHelpTitle',
+      'webview.scriptHelpOneLiner',
+      'webview.editEnvironmentVariables',
       'webview.scriptHelpRuntimeTitle',
       'webview.scriptHelpRuntimeCopy',
       'webview.scriptHelpStepperTitle',

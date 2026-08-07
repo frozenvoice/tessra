@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-07T05:21:00.000Z",
+  "title": "Design System: Tessra",
+  "extensions": {
+    "colorMeta": {
+      "vscode-button": {
+        "role": "primary",
+        "displayName": "Host Action Blue",
+        "canonical": "var(--vscode-button-background)",
+        "tonalRamp": []
+      },
+      "method-get": {
+        "role": "secondary",
+        "displayName": "Method GET",
+        "canonical": "#4EC94E",
+        "tonalRamp": ["#1a4d1a", "#2a6b2a", "#3a893a", "#4EC94E", "#6fd46f", "#93e493", "#b8f0b8", "#ddf8dd"]
+      },
+      "status-success": {
+        "role": "semantic",
+        "displayName": "Response Success",
+        "canonical": "#4EC94E",
+        "tonalRamp": ["#1a4d1a", "#2a6b2a", "#3a893a", "#4EC94E", "#6fd46f", "#93e493", "#b8f0b8", "#ddf8dd"]
+      },
+      "vscode-bg-editor": {
+        "role": "neutral",
+        "displayName": "Editor Surface",
+        "canonical": "var(--vscode-editor-background)",
+        "tonalRamp": []
+      },
+      "vscode-border": {
+        "role": "neutral",
+        "displayName": "Panel Divider",
+        "canonical": "var(--vscode-panel-border)",
+        "tonalRamp": []
+      }
+    },
+    "typographyMeta": {
+      "ui": { "displayName": "UI", "purpose": "Chrome, controls, kv labels." },
+      "editor": { "displayName": "Editor Mono", "purpose": "URL, bodies, header values, code." },
+      "label": { "displayName": "Label", "purpose": "Status strip and quiet meta segments." },
+      "title": { "displayName": "Title", "purpose": "Tab names and response summary primary." }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "ease-state",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "150–250ms state transitions only; no bounce."
+      }
+    ],
+    "breakpoints": [
+      { "name": "narrow-panel", "value": "480px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Send",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Flat host-token Send/Connect; never success-green takeover.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Send</button>",
+      "css": ".ds-btn-primary{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:3px;padding:4px 12px;min-height:28px;font:600 13px var(--vscode-font-family);cursor:pointer}.ds-btn-primary:hover{background:var(--vscode-button-hoverBackground)}.ds-btn-primary:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}"
+    },
+    {
+      "name": "Status Strip",
+      "kind": "custom",
+      "refersTo": "status-strip",
+      "description": "One quiet meta row with progressive disclosure.",
+      "html": "<div class=\"ds-status-strip\" role=\"status\"><span>Env: staging</span><span class=\"ds-sep\">·</span><span>Vars ok</span><span class=\"ds-sep\">·</span><span>Defaults 2</span><span class=\"ds-sep\">·</span><span>Preflight</span></div>",
+      "css": ".ds-status-strip{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:22px;padding:2px 8px;font:600 11px/1.2 var(--vscode-font-family);color:var(--vscode-descriptionForeground);border-bottom:1px solid var(--vscode-panel-border);background:var(--vscode-editor-background)}.ds-status-strip .ds-sep{opacity:.45}.ds-status-strip:focus-within{color:var(--vscode-foreground)}"
+    },
+    {
+      "name": "Method Badge",
+      "kind": "chip",
+      "refersTo": "method-badge",
+      "description": "Compact method identity; small radius, not pill spam.",
+      "html": "<span class=\"ds-method-badge ds-method-get\">GET</span>",
+      "css": ".ds-method-badge{display:inline-flex;align-items:center;min-height:24px;padding:2px 6px;border-radius:2px;border:1px solid transparent;font:700 11px/1 var(--vscode-font-family);letter-spacing:.02em}.ds-method-get{color:#4EC94E;background:rgba(78,201,78,.12);border-color:rgba(78,201,78,.22)}"
+    },
+    {
+      "name": "URL Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Primary compose field; editor mono.",
+      "html": "<input class=\"ds-input-url\" type=\"text\" value=\"{{baseUrl}}/users\" />",
+      "css": ".ds-input-url{width:100%;min-height:28px;padding:4px 8px;border:1px solid var(--vscode-input-border,transparent);border-radius:2px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);font:13px/1.4 var(--vscode-editor-font-family,Consolas,monospace)}.ds-input-url:focus{outline:1px solid var(--vscode-focusBorder);outline-offset:-1px}"
+    },
+    {
+      "name": "Default Headers One-liner",
+      "kind": "custom",
+      "refersTo": "status-strip",
+      "description": "HEADERS tab summary; kv-rows remain primary canvas.",
+      "html": "<div class=\"ds-defaults-line\"><span>DEFAULT HEADERS · 2 applied</span><button type=\"button\" class=\"ds-link\">Manage</button></div>",
+      "css": ".ds-defaults-line{display:flex;align-items:center;gap:8px;min-height:22px;padding:2px 0;font:600 11px var(--vscode-font-family);color:var(--vscode-descriptionForeground)}.ds-defaults-line .ds-link{margin-left:auto;background:transparent;border:none;color:var(--vscode-textLink-foreground);font:600 11px var(--vscode-font-family);cursor:pointer;padding:2px 4px;border-radius:2px}.ds-defaults-line .ds-link:focus-visible{outline:1px solid var(--vscode-focusBorder)}"
+    },
+    {
+      "name": "Response Sticky Summary",
+      "kind": "custom",
+      "refersTo": "status-strip",
+      "description": "Sole success primary after send.",
+      "html": "<div class=\"ds-res-summary\"><strong class=\"ds-ok\">200 OK</strong><span class=\"ds-sep\">·</span><span>354 ms</span><span class=\"ds-sep\">·</span><span>2.7 KB</span><span class=\"ds-sep\">·</span><span>XML</span></div>",
+      "css": ".ds-res-summary{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 8px;border-bottom:1px solid var(--vscode-panel-border);font:13px/1.3 var(--vscode-font-family);color:var(--vscode-foreground)}.ds-res-summary .ds-ok{color:#4EC94E;font-weight:600}.ds-res-summary .ds-sep{opacity:.45;color:var(--vscode-descriptionForeground)}"
+    },
+    {
+      "name": "Secondary Ghost",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Overflow and secondary actions.",
+      "html": "<button class=\"ds-btn-ghost\" type=\"button\" aria-label=\"More actions\">⋯</button>",
+      "css": ".ds-btn-ghost{min-width:28px;min-height:28px;padding:4px 8px;border:1px solid transparent;border-radius:3px;background:transparent;color:var(--vscode-foreground);font:13px var(--vscode-font-family);cursor:pointer}.ds-btn-ghost:hover{background:var(--vscode-toolbar-hoverBackground,rgba(90,93,94,.31))}.ds-btn-ghost:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Instrument",
+    "overview": "Tessra’s visual world is an Operate surface inside a VS Code Webview: a precise local API instrument that disappears into Method → URL → Send → edit → inspect. It is not a marketing dashboard, not a SaaS console, and not a clone of stock VS Code chrome. Identity lives in method color discipline, dense editor rhythm, and quiet local-first cues — never in pill walls, nested cards, glow, or bounce.\n\nThe current request panel is an anti-reference. Redesign replaces that visual grammar entirely while preserving every functional contract. Theme presets remain as color/token variation only on one shared layout. Claims stay within PRODUCT.md.",
+    "keyCharacteristics": [
+      "Strongest hierarchy always: Method → URL → Send → Request editing → Response",
+      "One quiet status strip for meta; success primary only in the response summary",
+      "Conditional response-first split after Send; request remains instantly editable",
+      "VS Code theme tokens + restrained accent; flat surfaces, thin dividers, compact toolbars",
+      "Compact editor density; progressive disclosure for defaults, variables, compare/mode",
+      "Tessra identity via method colors and quiet local cues — not dashboard spectacle"
+    ],
+    "rules": [
+      {
+        "name": "The One Success Owner Rule",
+        "body": "Success green has a single primary owner: the response sticky summary. Send stays action-blue (or Connect equivalent). Meta chips never compete as co-primary status.",
+        "section": "colors"
+      },
+      {
+        "name": "The Host Token Rule",
+        "body": "Prefer VS Code CSS variables over hard-coded greys. Tessra-specific hex is reserved for method spectrum and a minimal semantic set that must remain legible across themes.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Kicker Rule",
+        "body": "Do not use dashboard orthography (VARIABLE USAGE, wide letter-spacing, uppercase section theater). Prefer quiet labels: Env, Vars, Defaults, or inline contextual hints.",
+        "section": "typography"
+      },
+      {
+        "name": "The Primary Path Rule",
+        "body": "Meta (env, variable usage, default headers, compare, mode, profile) must never visually outrank Method → URL → Send → Request editing → Response.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Surface Rule",
+        "body": "If removing a border, shadow, background, or radius does not hurt interaction or understanding, remove it.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep Method → URL → Send → Request editing → Response as the permanent visual hierarchy.",
+      "Do use one status strip with progressive disclosure for Environment, variable resolution, default headers, and preflight.",
+      "Do put success emphasis only on the response sticky summary.",
+      "Do keep a user-adjustable request/response split with persisted ratio; emphasize response after Send without trapping request edits.",
+      "Do render DEFAULT HEADERS as a one-line summary; keep header kv-rows primary.",
+      "Do treat theme presets as token/color skins on one structure.",
+      "Do preserve all functional contracts while replacing visual grammar.",
+      "Do prefer VS Code tokens, thin dividers, compact density, and visible focus."
+    ],
+    "donts": [
+      "Don't polish the old pill/chip/card grammar — it is anti-reference.",
+      "Don't ship border-radius: 999px pill spam, nested cards, big rounded rects, shadows, glows, bounce easings, or hover translateY lift on chrome.",
+      "Don't use dashboard uppercase kickers or decorative empty-state orbits.",
+      "Don't duplicate success green on Send, Live Response, and response summary.",
+      "Don't keep Compare / Mode / infrequent actions in primary chrome.",
+      "Don't invent four preset layouts or compromise the redesign to preserve old preset looks.",
+      "Don't add airy SaaS whitespace that fights scannable editor density.",
+      "Don't invent brand claims beyond PRODUCT.md (no fake testimonials, sync features, or cloud positioning)."
+    ]
+  }
+}

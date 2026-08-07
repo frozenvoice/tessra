@@ -17,7 +17,7 @@ const extensionOptions = {
 };
 
 /** @type {import('esbuild').BuildOptions} */
-const webviewOptions = {
+const webviewHljsOptions = {
   entryPoints: ['src/webview/hljs.ts'],
   bundle: true,
   outfile: 'dist/hljs.js',
@@ -28,19 +28,33 @@ const webviewOptions = {
   minify: true,
 };
 
+/** @type {import('esbuild').BuildOptions} */
+const webviewBodyConversionOptions = {
+  entryPoints: ['src/webview/bodyConversion.ts'],
+  bundle: true,
+  outfile: 'dist/bodyConversion.js',
+  format: 'iife',
+  platform: 'browser',
+  target: 'es2020',
+  sourcemap: false,
+  minify: true,
+};
+
 async function main() {
   if (isWatch) {
-    const [extCtx, webCtx] = await Promise.all([
+    const [extCtx, hljsCtx, bodyConvCtx] = await Promise.all([
       esbuild.context(extensionOptions),
-      esbuild.context(webviewOptions),
+      esbuild.context(webviewHljsOptions),
+      esbuild.context(webviewBodyConversionOptions),
     ]);
     console.log('[esbuild] build started');
-    await Promise.all([extCtx.watch(), webCtx.watch()]);
+    await Promise.all([extCtx.watch(), hljsCtx.watch(), bodyConvCtx.watch()]);
     console.log('[esbuild] watching...');
   } else {
     await Promise.all([
       esbuild.build(extensionOptions),
-      esbuild.build(webviewOptions),
+      esbuild.build(webviewHljsOptions),
+      esbuild.build(webviewBodyConversionOptions),
     ]);
     console.log('[esbuild] build complete');
   }

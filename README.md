@@ -6,6 +6,14 @@ No login. No cloud sync. No paywalled core workflows.
 
 Tessra is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
 
+## What's new in 1.0.10
+
+- Compact, editor-native Request Panel (**Quiet Instrument**): Method → URL → Send first, quieter secondary chrome
+- Request execution status strip for environment, Vars/Defaults, Scripts/History, and risk overrides
+- JSON/XML Body syntax highlighting that keeps the lightweight textarea and undo/redo
+- Safe Body type conversion with Convert / Keep text / Cancel (supported structural pairs only)
+- Still local-first: no login, no cloud sync, no telemetry
+
 ## Screenshots
 
 ### Main workspace
@@ -50,9 +58,8 @@ Group request history by date and run collections with status summaries.
 - `Enter` in the URL field sends the request
 - `Ctrl+Enter` / `Cmd+Enter` also sends the request
 - Cancel in-flight requests without discarding the last good response
-- Request stage strip, richer empty states, status-aware response feedback, and polished response actions
-- Topline request summary chips for environment, auth, default headers, scripts, and history behavior
-- Collapsed-by-default environment variable editor with active environment name and variable count
+- Request stage feedback, richer empty states, status-aware response feedback, and polished response actions
+- Quiet status strip for environment, Vars/Defaults, Scripts/History on·off, and risk overrides; variable editor opens on demand from the strip or Environments view
 - Preflight warnings for unresolved `{{variables}}` before you send
 - Clickable status chips that jump to the relevant request area, focus it, and briefly highlight the linked card
 - Draft change chips that summarize which request sections changed before you save or send
@@ -87,13 +94,14 @@ Group request history by date and run collections with status summaries.
 
 ### Body types
 - `none`
-- `json`
-- `xml`
+- `json` (request Body syntax highlighting via a mirror overlay; textarea stays the input source)
+- `xml` (same mirror overlay with XML highlighting)
 - `form-urlencoded`
 - `form-data`
 - `binary`
 - `raw`
 - Form-data summaries, file chips, and clearer text/file row affordances
+- Safe Body type conversion when switching types with non-empty content: Convert / Keep text / Cancel (no auto-convert; nested form payloads and file form-data are rejected; Binary is never invented)
 
 ### Auth
 - No Auth
@@ -133,7 +141,7 @@ Group request history by date and run collections with status summaries.
 - Dynamic HTML pages stay in Body while `Open URL` remains available for HTTP/HTTPS resolved pages
 - Readable response durations with requested/received timestamps in the response metadata
 - Sticky response toolbar for finding text, compare, and response actions
-- Topline status chips for the active environment, workspace profile, default headers, scripts, and history behavior
+- Quiet status strip with glanceable editor indicators for the active environment, Scripts/History on·off, Defaults/Vars counts, and risk overrides (TLS insecure, defaults skipped, redirects, headers-only); workspace profile lives in strip expand disclosure
 - Find text within the response body with next/previous navigation, case-sensitive mode, and regex mode
 - JSON tree viewer
 - XML formatting with `Pretty`, `Compact`, and `Inline Children`
@@ -154,7 +162,7 @@ Group request history by date and run collections with status summaries.
 - Script execution timeout is configurable with `tessra.scriptTimeoutMs`
 - Script logs and test results
 - Pass/fail/log summary badges and first-failure highlighting
-- Collapsible in-app script helper stepper plus insertable examples for chaining request 1 response values into request 2
+- Compact Scripts one-liner (`Environment → Pre-request → Send → Tests`) with Open Guide, plus insertable examples on each script editor
 
 Example flow:
 
@@ -253,8 +261,8 @@ Run `Tessra: Open Guide` to open the user guide inside VS Code.
 - Type: `string`
 - Default: `default`
 - Supported values: `default`, `minimal-cool`, `product`, `bold-color`
-- Controls the visual preset used by the Tessra request panel webview
-- Available presets: balanced default polish, minimal cool, stronger product feel, and bolder color accents
+- Color/token skin for the Tessra request panel webview (shared Quiet Instrument layout)
+- Presets only change accent color, method color intensity, subtle surface tint, and border contrast — not spacing, radius, or component structure
 - You can also run `Tessra: Change Request Panel Theme` from the Command Palette
 
 ### `tessra.workspaceProfile`

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.10
+
+- Redesigned the Request Panel to **The Quiet Instrument**: compact editor-native hierarchy with Method → URL → Send as the primary path, overflow menus for infrequent actions, default-headers one-liner, and response-first emphasis without overwriting a user-locked split ratio.
+- Replaced the old topline chip wall with a quiet status strip that surfaces environment, Vars/Defaults counts, Scripts/History on·off cues, and risk overrides (TLS insecure, defaults skipped, redirects, headers-only); workspace profile stays in strip expand disclosure; the variable editor opens on demand.
+- Simplified Scripts help to a one-line Guide link, flattened Settings/WebSocket chrome to divider field groups, and kept Send on host action colors (no success-green takeover).
+- Hardened host-theme token usage, visible focus rings, narrow-width status-strip collapse, and `prefers-reduced-motion` animation gating.
+- Added JSON and XML Body syntax highlighting via a flat mirror/overlay behind the real Body textarea (highlight.js tokens, VS Code editor/debug token colors; WebSocket composer stays plain; large bodies fall back to plain text) while preserving lightweight editing and undo/redo.
+- Added safe Body type conversion when switching types with non-empty content: Convert / Keep text / Cancel (no auto-convert). Supported structural pairs include JSON↔XML, JSON↔form-urlencoded, JSON↔form-data (text fields), JSON/XML↔raw, and clear-to/from none. Nested JSON→form, form-data file fields, and Binary invent/convert paths are rejected; failed conversions keep the original body; Convert is an atomic undo of type + content.
+
 ## 1.0.9
 
 - Fixed duplicate Webview event listener registration during repeated request panel renders.

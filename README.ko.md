@@ -8,6 +8,14 @@ VS Code 안에서 동작하는 로컬 우선 API 클라이언트입니다.
 
 Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게 요청을 만들고 실행하려는 개발자를 위한 확장입니다. 모든 데이터는 로컬에 남고, 네트워크 호출은 사용자가 직접 보내는 API 요청에서만 발생합니다.
 
+## 1.0.10에서 달라진 점
+
+- 컴팩트한 에디터형 요청 패널(**Quiet Instrument**): Method → URL → Send 우선, 보조 크롬은 더 조용하게
+- 환경, Vars/Defaults, Scripts/History, 위험 설정을 보여주는 요청 실행 상태 스트립
+- 가벼운 textarea와 undo/redo를 유지한 JSON/XML Body 구문 강조
+- Convert / Keep text / Cancel 기반의 안전한 Body 타입 변환(지원되는 구조 변환만)
+- 로컬 우선 원칙 유지: 로그인 없음, 클라우드 동기화 없음, 텔레메트리 없음
+
 ## 스크린샷
 
 ### 메인 워크스페이스
@@ -52,9 +60,8 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - URL 입력창에서 `Enter`로 바로 전송
 - `Ctrl+Enter` / macOS에서는 `Cmd+Enter` 전송
 - 마지막 정상 응답을 유지한 채 진행 중 요청 취소
-- 요청 상태 스트립, 빈 상태 화면, 응답 상태 피드백, 정돈된 액션 버튼 UI
-- 환경, 인증, 기본 헤더, 스크립트, 히스토리 동작을 한눈에 보여주는 상단 상태 배지
-- 기본 접힘 상태로 활성 환경 이름과 변수 개수를 보여주는 환경 변수 편집 영역
+- 요청 단계 피드백, 빈 상태 화면, 응답 상태 피드백, 정돈된 액션 버튼 UI
+- 환경, Vars/Defaults, Scripts/History on·off, 위험 설정을 보여주는 Quiet 상태 스트립; 변수 편집기는 스트립 또는 Environments 뷰에서 필요할 때 연다
 - 전송 전 미해결 `{{variable}}`을 알려주는 프리플라이트 경고
 - 관련 탭으로 바로 이동하고, 연결된 카드에 포커스와 잠깐의 하이라이트를 주는 클릭형 상태 배지
 - 저장하거나 보내기 전에 어느 영역이 바뀌었는지 보여주는 요청 변경 칩
@@ -88,13 +95,14 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 
 ### Body 타입
 - `none`
-- `json`
-- `xml`
+- `json` (요청 Body는 textarea를 입력원으로 유지한 채 mirror 오버레이로 구문 강조)
+- `xml` (동일 mirror 오버레이로 XML 구문 강조)
 - `form-urlencoded`
 - `form-data`
 - `binary`
 - `raw`
 - 필드/파일 개수 요약, 파일 칩, 텍스트/파일 구분이 강화된 form-data UX
+- Body 타입이 바뀌고 내용이 비어 있지 않을 안전한 변환 확인(Convert / Keep text / Cancel). 자동 변환 없음. 중첩 form 변환·파일 form-data·Binary 파일 생성은 거절
 
 ### 인증
 - No Auth
@@ -134,7 +142,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 동적인 HTML 페이지는 Body 탭에 남고, HTTP/HTTPS 원본 페이지는 `URL 열기` 액션으로 열 수 있음
 - 읽기 좋은 응답 시간과 요청/수신 시각을 응답 메타데이터에 표시
 - 검색 / 비교 / 저장 액션이 따라오는 sticky 응답 툴바
-- 활성 환경, 현재 프로필, 기본 헤더, 스크립트, 히스토리 동작을 보여주는 상단 상태 배지
+- 활성 환경, 스크립트/히스토리 on·off, 기본헤더·변수 개수, 위험 설정(TLS 비보안, 기본헤더 건너뜀 등)을 한눈에 구분하는 상태 스트립; 워크스페이스 프로필은 스트립 확장 영역에 유지
 - 이전 / 다음 이동, 대소문자 구분, 정규식 옵션을 갖춘 응답 본문 검색
 - JSON 트리 뷰어
 - XML `Pretty`, `Compact`, `Inline Children` 포맷
@@ -155,7 +163,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - `tessra.scriptTimeoutMs` 설정으로 script 실행 제한 시간을 조정 가능
 - script logs / test 결과 표시
 - pass / fail / log 요약 배지와 첫 실패 강조
-- 1번 요청 응답값을 2번 요청으로 넘길 수 있는 접이식 stepper 도움말과 예제 삽입 버튼
+- Scripts 한 줄 흐름 안내(`환경 → 사전 요청 → 전송 → 테스트`)와 가이드 열기, 각 스크립트 편집기의 예제 삽입 버튼
 
 예시:
 
@@ -254,8 +262,8 @@ VS Code 안에서 사용자 가이드를 보려면 `Tessra: Open Guide`를 실�
 - 타입: `string`
 - 기본값: `default`
 - 지원 값: `default`, `minimal-cool`, `product`, `bold-color`
-- Tessra 요청 패널 webview에 적용할 시각 테마 프리셋을 제어
-- 프리셋: 기본, 미니멀 쿨, 더 프로덕트 감성, 조금 더 대담한 컬러
+- Tessra 요청 패널 webview의 색상/토큰 스킨 (Quiet Instrument 레이아웃 공유)
+- 프리셋은 액센트·메서드 색 강도·표면 틴트·테두리 대비만 바꾸며, 간격·radius·컴포넌트 구조는 바꾸지 않음
 - Command Palette에서 `Tessra: Change Request Panel Theme`로도 바로 변경 가능
 
 ### `tessra.workspaceProfile`

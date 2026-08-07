@@ -1,6 +1,10 @@
 .vscode/**
 .github/**
+.agents/**
 .claude/**
+.impeccable/**
+DESIGN.md
+PRODUCT.md
 src/**
 node_modules/**
 dist/test/**

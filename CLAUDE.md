@@ -24,12 +24,13 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ### Body 타입
 - `none`
-- `json`
-- `xml`
+- `json` (요청 Body mirror/overlay 구문 강조; textarea가 유일한 입력원, WebSocket composer는 plain)
+- `xml` (동일 overlay로 XML 구문 강조)
 - `form-urlencoded`
 - `form-data`
 - `binary`
 - `raw`
+- 비어 있지 않은 Body에서 타입 변경 시 Convert / Keep text / Cancel (자동 변환 없음; `BodyConversionService` 기반 구조 변환; Binary/중첩 form/file form-data는 안전하게 거절)
 
 ### 인증
 - No Auth
@@ -75,7 +76,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ### Environment UX
 - URL / Headers / Body / Auth / Scripts 등 편집 가능한 텍스트 입력에서 `{{variable}}` 자동완성
-- 요청 패널 상단 환경 변수 편집 영역은 기본 접힘 상태이며, 헤더에서 활성 환경 이름과 변수 개수를 표시
+- 활성 환경·Scripts/History on·off·Defaults/Vars·위험 설정은 상태 스트립에서 한눈에 구분되며, 환경 변수 편집기는 스트립 확장/Environments 뷰에서 필요할 때 연다
 
 ### Scripts
 - Pre-request script
@@ -84,7 +85,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - `tessra.scriptTimeoutMs` 기반 실행 제한 시간
 - import로 들어온 스크립트는 요청 탭에서 신뢰 처리하기 전까지 기본 비활성화
 - 로그와 테스트 결과 표시
-- 응답값을 환경 변수로 저장해 다음 요청에 넘기는 접이식 stepper 도움말과 삽입 버튼
+- Scripts 탭 한 줄 흐름 안내와 Guide 링크, 각 스크립트 편집기의 예제 삽입 버튼
 
 ### Import / Export
 - warning을 포함한 cURL import
@@ -130,6 +131,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 ### 요청 패널 테마
 - `tessra.requestPanelTheme` 설정으로 요청 패널 webview 테마 프리셋 전환
 - 지원 프리셋: `default`, `minimal-cool`, `product`, `bold-color`
+- 프리셋은 Quiet Instrument 레이아웃/간격/구조를 공유하며 액센트·메서드 강도·표면 틴트·테두리 대비(색상/토큰)만 변경
 - Command Palette에서 `Tessra: Change Request Panel Theme` 제공
 - 열린 요청 패널에서도 즉시 테마가 반영되도록 유지
 
@@ -137,7 +139,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - `tessra.workspaceProfile` 설정으로 로컬 저장 프로필 전환
 - collections / history / environments / default headers / saved tabs를 프로필별로 분리
 - Command Palette에서 `Tessra: Change Workspace Profile` 제공
-- 요청 패널 상단 상태 배지에 현재 프로필 표시
+- 요청 패널 상태 스트립 확장 영역에 현재 프로필 표시
 - `default`는 메인 작업용으로 두고, 다른 프로젝트나 import 실험이 기존 작업과 섞이면 안 될 때 새 프로필을 만드는 방향을 권장
 
 ### OpenAPI import 사용
@@ -148,6 +150,8 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - 요청 패널 오케스트레이션은 `src/panels/RequestPanel.ts`, HTML/webview 문자열은 `src/panels/requestPanel/requestPanelHtml.ts`에 있다
 - HTTP 실행은 `src/panels/requestPanel/RequestExecutor.ts`, 컬렉션 러너는 `src/panels/requestPanel/CollectionRunner.ts`, WebSocket 세션 관리는 `src/panels/requestPanel/WebSocketManager.ts`가 담당한다
 - highlight.js 관련 리소스는 `src/webview/hljs.ts`에서 관리한다
+- Body 타입 변환은 `src/services/BodyConversionService.ts`, webview 노출은 `src/webview/bodyConversion.ts` (`dist/bodyConversion.js`)
+- 요청 패널 시각 계약은 `DESIGN.md` Quiet Instrument; 제품 범위는 `PRODUCT.md`
 - HTTP 요청 실행은 `src/services/HttpService.ts`
 - WebSocket 프레임/handshake 처리는 Node.js 내장 `net` / `tls` 기반 `src/services/WebSocketService.ts`에서 담당한다
 - storage는 `src/services/StorageService.ts`
@@ -159,7 +163,8 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 품질 기준
 - 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다
-- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다
+- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 1.0.10 smoke 포함)
+- Quiet Instrument 계약: pill wall / soft-card / Send success-green 재도입 금지
 
 ## 빌드 / 테스트
 ```bash

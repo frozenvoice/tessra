@@ -2,6 +2,25 @@
 
 Use this checklist in the VS Code Extension Development Host after `npm run build` or `npm run watch`.
 
+## 1.0.10 Smoke (~10–15 min)
+
+Quiet Instrument layout and Body workflows. Run this pass before Marketplace publish.
+
+- Confirm Method → URL → Send reads as the primary path; infrequent actions sit in overflow; no pill-wall meta chrome.
+- Confirm the status strip shows environment, Vars/Defaults, Scripts/History cues, and risk overrides; expand disclosure for workspace profile / details.
+- Toggle environment (or none); confirm strip updates and `{{variable}}` resolution still works.
+- Toggle Scripts present/off and History on/off; confirm strip cues update.
+- Confirm Defaults count / Defaults skipped appear correctly; enable TLS insecure and confirm a warning segment.
+- Send a request and Stop an in-flight request; confirm response sticky summary owns success/error emphasis (Send stays host action color).
+- Confirm JSON Body mirror overlay highlights while typing; switch to XML and confirm overlay language switches; switch to raw and confirm overlay is off.
+- With non-empty JSON, change type to XML → Convert; confirm result. Undo restores previous type + content together.
+- Cancel and Keep text paths: Cancel keeps prior type; Keep text changes type without structural rewrite.
+- Force an invalid convert (e.g. nested JSON → form-urlencoded); confirm failure toast and original body preserved.
+- Narrow the panel; confirm status-strip priority collapse and primary path remain usable.
+- Spot-check light and dark host themes; confirm focus-visible rings on strip links/primary controls.
+- With OS reduced-motion (or equivalent), confirm celebration/loading animations are muted.
+- Smoke Collection Runner start/stop, WebSocket connect/send/disconnect, and workspace Backup export validation (schemaVersion 1).
+
 ## Setup
 
 - Launch the Extension Development Host with `F5`.
@@ -19,6 +38,8 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 - Cancel a slow request and confirm the active tab and history state remain consistent.
 - Verify request settings: timeout, redirects, TLS validation override, max response size, retry count, retry delay, stop after headers, save to history, skip default headers, and disable scripts.
 - Verify body types: JSON, XML, form-urlencoded, form-data text fields, form-data files, binary file, and raw text.
+- Confirm changing Body type with non-empty content shows Convert / Keep text / Cancel (no auto-convert); empty body changes type immediately; Convert failure keeps the original body; Ctrl+Z after Convert restores previous type and content together.
+- Confirm JSON Body shows syntax highlighting in the mirror overlay while the real textarea remains editable; switch to XML and confirm the overlay refreshes to XML highlighting; switch to raw and confirm the overlay is off; WebSocket Body composer stays plain.
 - Edit a JSON Body, send the request, return to Body, confirm `Ctrl+Z` restores the previous edit, and confirm `Ctrl+Y` or `Ctrl+Shift+Z` reapplies it.
 - Switch from Body to another request editor tab and back, then confirm Body undo/redo still works for the same request.
 - Verify auth modes: none, Basic, Bearer, API Key header, and API Key query.
@@ -26,8 +47,8 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 ## Variables And Scripts
 
 - Create, edit, switch, and delete environments.
-- Confirm the request panel environment editor renders collapsed by default, shows the active environment name plus variable count, expands/collapses from the header, and shows `Environment: None` when no environment is active.
-- Confirm requests still resolve environment variables while the editor is collapsed, and after editing variables while expanded.
+- Confirm the request panel status strip shows the active environment and variable count; the variable editor opens on demand from the strip or Environments view (not a permanent collapsed card above the compose path).
+- Confirm requests still resolve environment variables while the editor is closed, and after editing variables while open.
 - Resolve `{{variable}}` values across URL, params, headers, body, auth, and scripts.
 - Confirm nested variables such as `host -> baseUrl -> apiUrl` resolve recursively.
 - Confirm circular references and unresolved nested variables are reported before send.
@@ -109,7 +130,7 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 ## Localization And Themes
 
 - Switch `tessra.displayLanguage` between `en`, `ko`, and `ja`; confirm panel labels, prompts, notifications, and the in-app guide update without losing request state.
-- Switch `tessra.requestPanelTheme` across `default`, `minimal-cool`, `product`, and `bold-color`.
+- Switch `tessra.requestPanelTheme` across `default`, `minimal-cool`, `product`, and `bold-color`; confirm layout/spacing/status-strip structure stay identical and only accent/method/surface/border tokens change.
 - Confirm dense layouts remain usable at narrow panel widths and short panel heights.
 
 ## Final Checks

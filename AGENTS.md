@@ -31,6 +31,7 @@ Tessra는 VS Code 안에서 동작하는 offline-first API 클라이언트 확�
 - Webview에서 외부 리소스 로딩 금지
 - 아이콘은 VS Code 내장 codicon 또는 인라인 SVG 사용
 - 코드 주석과 커밋 메시지는 한국어를 기본으로 한다
+- 요청 패널 시각 계약은 `DESIGN.md` Quiet Instrument를 따른다 (pill wall / soft-card / Send success-green 재도입 금지)
 
 ## 현재 프로젝트 구조
 ```text
@@ -57,6 +58,7 @@ tessra/
 │   │   └── HistoryTreeProvider.ts
 │   ├── services/
 │   │   ├── AuthService.ts
+│   │   ├── BodyConversionService.ts
 │   │   ├── CodegenService.ts
 │   │   ├── CurlService.ts
 │   │   ├── HttpService.ts
@@ -70,10 +72,13 @@ tessra/
 │   ├── test/
 │   │   └── unit/
 │   └── webview/
-│       └── hljs.ts
+│       ├── hljs.ts
+│       └── bodyConversion.ts
 ├── package.json
 ├── README.md
 ├── README.ko.md
+├── DESIGN.md
+├── PRODUCT.md
 ├── AGENTS.md
 └── CLAUDE.md
 ```
@@ -87,16 +92,17 @@ tessra/
 4. Environments CRUD와 재귀적 `{{variable}}` 치환, Postman Environment JSON import 진입점
 5. History 저장, pin, filter, 날짜 그룹화, 자동 정리와 보존 개수 설정 진입점
 6. 인증: Basic, Bearer, API Key
-7. Body 타입: JSON, XML, form-urlencoded, form-data, binary, raw
-8. Pre-request / Test scripts (`pm`, `env`, `test`, `expect`, `assert` 내장 지원, 설정 가능한 script timeout, 접이식 stepper 도움말, 인앱 예제 힌트 포함, import된 스크립트는 명시적으로 신뢰 처리하기 전까지 기본 비활성화)
+7. Body 타입: JSON(요청 Body mirror 오버레이 구문 강조, textarea 입력원 유지), XML(동일 오버레이 XML 강조), form-urlencoded, form-data, binary, raw
+7a. Body 타입 변경 시 비어 있지 않은 바디에 대해 Convert / Keep text / Cancel 확인(자동 변환 없음). 변환은 원자적 undo(타입+내용). 중첩 JSON→form 거절, form-data file→JSON 거절, Binary 자동 변환 없음
+8. Pre-request / Test scripts (`pm`, `env`, `test`, `expect`, `assert` 내장 지원, 설정 가능한 script timeout, Scripts 한 줄 도움말 + Guide 링크, 편집기별 예제 삽입, import된 스크립트는 명시적으로 신뢰 처리하기 전까지 기본 비활성화)
 9. OpenAPI path parameter placeholder 변환, OpenAPI / Postman collection/environment import/export, Tessra workspace backup export/import
 10. cURL import / copy as cURL
 11. 코드 생성: `fetch`, `axios`, `Java HttpURLConnection`
 12. 응답 비교: `Raw`, `Normalized`, `Pretty`, ignore headers / ignore JSON paths
 13. 요청별 Settings 탭: timeout, redirects, TLS override, 안전 기본값이 있는 max response size, retries, stop after headers, save to history, skip default headers, disable scripts, 전역 script timeout 설정
-14. HTML preview, JSON tree, XML format options, 응답 시간/요청·수신 시각 메타데이터, richer empty states, 요청 변경 요약, 변수 사용처, 변수 자동완성, 기본 접힘 환경 변수 편집 영역, 활성 요청 편집 탭 재클릭 접기/펼치기, Body editor undo/redo 안정화, 응답 빠른 복사, 고급 필터 UX, 상단 상태 배지 linked focus/highlight
+14. HTML preview, JSON tree, XML format options, 응답 시간/요청·수신 시각 메타데이터, richer empty states, 요청 변경 요약, 변수 사용처, 변수 자동완성, Quiet Instrument 상태 스트립(환경 accent, Scripts/History on·off cue, Defaults/Vars, 위험 설정 경고)과 on-demand 변수 편집기, 활성 요청 편집 탭 재클릭 접기/펼치기, Body editor undo/redo 안정화, 응답 빠른 복사, 고급 필터 UX, 상단 상태 배지 linked focus/highlight
 15. `tessra.displayLanguage` 설정 기반 UI 언어 선택 (Tessra 패널/알림/인앱 가이드 대상, 기본 영어, 현재 `en`/`ko`/`ja`, 설정/명령 레이블은 VS Code locale 유지)
-16. `tessra.requestPanelTheme` 설정과 Command Palette 기반 요청 패널 테마 프리셋 선택 (`default`, `minimal-cool`, `product`, `bold-color`)
+16. `tessra.requestPanelTheme` 설정과 Command Palette 기반 요청 패널 테마 프리셋 선택 (`default`, `minimal-cool`, `product`, `bold-color` — Quiet Instrument 공유 레이아웃 위 색상/토큰 스킨만)
 17. `tessra.workspaceProfile` 설정 기반 워크스페이스 로컬 저장 프로필 분리와 현재 프로필 표시 (`default`는 메인 작업용, 사용자 지정 프로필은 프로젝트/실험 분리용)
 18. 컬렉션 러너 delay / iterations / stop-on-failure 옵션, 실패 요청만 재실행, 요청별 history 저장 설정을 따른 실행 결과 저장, active request / retry delay / runner delay 중단
 19. WebSocket `ws://` / `wss://` 연결과 `{{variable}}` 치환 후 URL 기준 모드 감지, 텍스트 메시지 전송, frame/message size limit, 선택형 protocol-level ping keepalive, 수신/전송/close 진단 로그, binary frame base64 표시
@@ -105,6 +111,7 @@ tessra/
 ### 현재 품질 기준
 1. 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴가 키보드 접근과 명확한 포커스 상태를 유지해야 한다.
 2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다.
+3. 요청 패널 시각 계약은 `DESIGN.md` Quiet Instrument를 따른다 (pill wall / soft-card / Send success-green 재도입 금지).
 
 ## 빌드 & 테스트
 ```bash
@@ -116,7 +123,7 @@ npm test
 npm run package
 ```
 
-수동 검증은 VS Code에서 `F5`로 Extension Development Host를 띄운 뒤 `docs/manual-e2e-checklist.md` 기준으로 수행한다.
+수동 검증은 VS Code에서 `F5`로 Extension Development Host를 띄운 뒤 `docs/manual-e2e-checklist.md` 기준으로 수행한다. 릴리스 전에는 같은 문서의 1.0.10 smoke도 확인한다.
 
 ## 저장 데이터
 모든 데이터는 VS Code `globalStorage` 아래 JSON 파일로 저장된다. 기본 프로필은 루트에 저장되고, 사용자 지정 프로필은 `profiles/<profile-name>/` 아래 같은 파일 구조로 분리된다.

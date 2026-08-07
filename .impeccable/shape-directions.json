@@ -1,0 +1,65 @@
+{
+  "title": "Tessra Request Panel — redesign world",
+  "question": "현재 UI는 anti-reference입니다. critique의 P0–P2를 한 시각 체계로 푸는 redesign 방향을 고르세요. 기능·데이터·메시지 계약은 변하지 않습니다.",
+  "steer": true,
+  "reroll": true,
+  "canon": true,
+  "options": [
+    {
+      "id": "repl-console",
+      "label": "REPL Command Strip",
+      "kicker": "ASSIGNED",
+      "lineage": "Terminal multiplexer / developer REPL prompt line",
+      "thesis": "요청 작성은 한 줄의 명령이고, 응답 Body는 스크롤백이다.",
+      "palette": ["#1e1e1e", "#252526", "#cccccc", "#007acc", "#4ec9b0", "#ce9178"],
+      "materials": ["flat panel", "status bar", "monospace prompt", "no cards", "hairline rules"],
+      "viewport": "Top: thin status strip (env · profile · defaults as text, expand on click). Hero: Method | URL | Send as one command row. Below: request tabs as simple underlines. Split: response Body owns the canvas; status/time/size as one sticky line. Meta (variables, compare, mode) behind › expand or overflow.",
+      "case": "Audience + clarity both win: API workers already think in prompt→output. Method→URL→Send→Body is the only loud band.",
+      "risk": "메타를 너무 숨기면 환경 전환 발견성이 떨어질 수 있음 — status strip은 항상 1줄은 남긴다.",
+      "body": "VS Code 토큰 밀도. pill/card/shadow/bounce 금지. 성공 green은 응답 sticky 한곳. DEFAULT HEADERS는 HEADERS 안 nested card가 아니라 status strip의 Defaults › 또는 Headers 탭 한 줄 summary."
+    },
+    {
+      "id": "teletext-reveal",
+      "label": "Teletext Reveal Grid",
+      "kicker": "CHALLENGER",
+      "lineage": "Broadcast teletext magazine · fused for Operate",
+      "thesis": "메타는 숨김 페이지이고, REVEAL로만 펼친다. Body 격자가 항상 보인다.",
+      "palette": ["#000000", "#ffffff", "#ffff00", "#00ffff", "#ff0000", "#0000ff"],
+      "materials": ["cell grid", "double-height headers", "REVEAL toggles", "flat black ground", "no radius"],
+      "viewport": "Rigid dense rows: METHOD URL [SEND]. Response Body fills a character-grid-like code pane. Status digits in a header corner. Env/defaults/compare sit as held 'pages' behind REVEAL — one click peels them open as block rows, never as pills.",
+      "case": "Clarity: progressive disclosure is literal. Audience: retro signal may feel gimmicky inside VS Code unless teletext color is translated to VS Code tokens (yellow=headline, cyan=live figures, red=alert only).",
+      "risk": "원색 teletext를 그대로 쓰면 VS Code native가 깨짐 — 문법은 유지하고 팔레트는 토큰으로 번역해야 함.",
+      "board": ".impeccable/quality-bar/teletext-board.webp",
+      "hero": ".impeccable/quality-bar/teletext-hero.webp",
+      "body": "Fuse: teletext supplies REVEAL topology + rigid density; Tessra supplies API facts. No mosaic decoration for its own sake."
+    },
+    {
+      "id": "airport-bands",
+      "label": "Concourse Decision Bands",
+      "kicker": "CHALLENGER",
+      "lineage": "Airport terminal wayfinding · fused for Operate",
+      "thesis": "매 시점 하나의 결정 밴드만 크게: 지금은 Send, 그다음은 Body.",
+      "palette": ["#1e1e1e", "#ffcc00", "#111111", "#ffffff", "#007acc"],
+      "materials": ["overhead bands", "one message per line", "monumental primary", "pictogram squares", "split-flap updates"],
+      "viewport": "A single primary band: GET · {{baseUrl}}/sitemap.xml · SEND. Secondary band (smaller): Env · Defaults · Profile as wayfinding text, not chips. After send, the monumental number becomes 200 and the Body pane is the concourse ahead. Compare lives at a junction overflow, not on the main band.",
+      "case": "Clarity excellent for hierarchy. Audience: strong for task focus; yellow band must stay restrained (one band accent) or it becomes dashboard again.",
+      "risk": "Schiphol yellow를 넓게 쓰면 critique가 금지한 장식 경쟁으로 회귀.",
+      "board": ".impeccable/quality-bar/airport-board.webp",
+      "hero": ".impeccable/quality-bar/airport-hero.webp",
+      "body": "Fuse: wayfinding supplies one-decision-per-band + progressive junctions; Tessra keeps method colors as small pictogram squares, not pill clusters."
+    }
+  ],
+  "canonCard": {
+    "id": "canon",
+    "label": "VS Code API client, played straight",
+    "kicker": "CANON",
+    "lineage": "Thunder Client / Insomnia / Bruno craft level — category standard",
+    "thesis": "익숙한 API 클라이언트 문법을 VS Code 토큰으로 정직하게 실행한다.",
+    "palette": ["#1e1e1e", "#2d2d2d", "#cccccc", "#0e639c", "#89d185"],
+    "materials": ["flat toolbar", "underline tabs", "simple split", "status bar", "no spectacle"],
+    "viewport": "Method · URL · Send toolbar. Tabs underline. Response Body dominant after send. Meta in a quiet status bar. No nested cards, no pill walls.",
+    "case": "Safer path if Tessra should sit next to Thunder Client without a distinctive world.",
+    "risk": "정체성 신호가 약해질 수 있음 — method color + local-first cues만으로 차별화.",
+    "body": "Standing exit. Not recommended by the roll; available if you want the familiar competitor craft bar."
+  }
+}
