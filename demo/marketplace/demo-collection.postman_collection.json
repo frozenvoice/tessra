@@ -86,7 +86,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Hello from Tessra\",\n  \"body\": \"This request is used for marketplace screenshots.\",\n  \"userId\": 1,\n  \"tags\": [\"demo\", \"marketplace\", \"tessra\"]\n}",
+              "raw": "{\n  \"title\": \"Tessra demo\",\n  \"body\": \"Local-first API testing\",\n  \"userId\": 1\n}",
               "options": {
                 "raw": {
                   "language": "json"

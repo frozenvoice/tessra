@@ -11,6 +11,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 ## 1.0.10에서 달라진 점
 
 - 컴팩트한 에디터형 요청 패널(**Quiet Instrument**): Method → URL → Send 우선, 보조 크롬은 더 조용하게
+- Response 요약에 Pin / Compare를 항상 노출하고, Copy / Save / Mode / metadata는 `⋯`에 유지
 - 환경(`N vars`), Defaults, 요청 `Used N`, Scripts/History, 위험 설정을 보여주는 요청 실행 상태 스트립 (Env에 Tessra 시그니처 액센트 + 작은 테서랙트 마크; Env 클릭으로 변수 편집)
 - 가벼운 textarea와 undo/redo를 유지한 JSON/XML Body 구문 강조
 - Convert / Keep text / Cancel 기반의 안전한 Body 타입 변환(지원되는 구조 변환만)
@@ -141,7 +142,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - Body / Headers / Cookies / Tests 탭과, 의미 있는 정적 HTML이 있을 때만 표시되는 Preview 탭
 - 동적인 HTML 페이지는 Body 탭에 남고, HTTP/HTTPS 원본 페이지는 `URL 열기` 액션으로 열 수 있음
 - 읽기 좋은 응답 시간과 요청/수신 시각을 응답 메타데이터에 표시
-- 검색 / 비교 / 저장 액션이 따라오는 sticky 응답 툴바
+- Pin / Compare를 항상 노출하는 sticky 응답 요약과 `⋯`의 복사·저장·Mode 유틸
 - 활성 환경(`N vars`), 스크립트/히스토리 on·off, 기본헤더·요청 `Used N`, 위험 설정(TLS 비보안, 기본헤더 건너뜀 등)을 한눈에 구분하는 상태 스트립; Environment 세그먼트로 변수 편집기 토글; 워크스페이스 프로필은 스트립 확장 영역에 유지
 - 이전 / 다음 이동, 대소문자 구분, 정규식 옵션을 갖춘 응답 본문 검색
 - JSON 트리 뷰어
@@ -151,7 +152,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - resolved URL, status line, raw headers, body를 바로 복사하는 빠른 액션
 - 응답 본문 저장
 - `Raw`, `Normalized`, `Pretty` 모드 응답 비교
-- 현재 비교 모드, 메타데이터 요약 사용 여부, pin 준비 상태를 보여주는 비교 상태 배지
+- 비교 활성/비기본 Mode·Metadata를 작은 문맥 텍스트로 표시 (칩 월 없음)
 - ignore headers / ignore JSON paths 기반 비교 설정
 - 본문 줄 수와 changed / left-only / right-only 개수를 요약하는 비교 요약
 

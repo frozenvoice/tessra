@@ -3,6 +3,7 @@
 ## 1.0.10
 
 - Redesigned the Request Panel to **The Quiet Instrument**: compact editor-native hierarchy with Method → URL → Send as the primary path, overflow menus for infrequent actions, default-headers one-liner, and response-first emphasis without overwriting a user-locked split ratio.
+- Kept Response Pin / Compare as always-visible compact ghost actions on the sticky summary (Copy / Save / Mode / metadata stay in `⋯`; compact contextual cues for mode/metadata when relevant).
 - Replaced the old topline chip wall with a quiet status strip that surfaces environment (`N vars` with Tessra signature accent + tiny tesseract mark), Defaults, request `Used N`, Scripts/History on·off cues, and risk overrides (TLS insecure, defaults skipped, redirects, headers-only); Environment opens the variable editor; `Used N` / Vars toggles Variable Usage in strip disclosure; workspace profile stays in strip expand.
 - Simplified Scripts help to a one-line Guide link, flattened Settings/WebSocket chrome to divider field groups, and kept Send on host action colors (no success-green takeover).
 - Hardened host-theme token usage, visible focus rings, narrow-width status-strip collapse, and `prefers-reduced-motion` animation gating.

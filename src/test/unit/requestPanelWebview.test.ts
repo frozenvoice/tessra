@@ -134,6 +134,8 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.xpathHint': 'Click a line to copy XPath',
   'webview.copyPathShort': 'PATH',
   'webview.includeMetadata': 'Include metadata summary',
+  'webview.metadata': 'Metadata',
+  'webview.compareNeedsPin': 'Pin a response first',
   'webview.foldUnchanged': 'Fold unchanged sections',
   'webview.compareFoldUnchanged': 'Compare: fold unchanged sections',
   'webview.copyJsonPathValue': 'Copy JSONPath: {path}',
@@ -1377,7 +1379,8 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /if \(e\.key === 'Enter' \|\| e\.key === ' '\)/);
     assert.match(script, /class="actions-more-menu js-actions-more-menu" id="responseActionsMoreMenu" role="menu"/);
     assert.match(script, /aria-haspopup="menu" aria-expanded="false" aria-controls="responseActionsMoreMenu"/);
-    assert.match(script, /moreBtn\.setAttribute\('aria-expanded', 'true'\)/);
+    assert.match(script, /function bindActionsMoreMenu\(button, menu\)/);
+    assert.match(script, /button\.setAttribute\('aria-expanded', 'true'\)/);
     assert.match(script, /activeFormatMenuState\.button\.setAttribute\('aria-expanded', 'false'\)/);
     assert.match(script, /role="menuitem"/);
     assert.match(script, /class="rm" type="button" title="' \+ escapeAttr\(tr\('webview\.remove'\)\)/);
@@ -1882,6 +1885,265 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /js-empty-action/);
     assert.match(script, /dirty-dot" title="' \+ escapeAttr\(renderRequestDirtyTitle\(tab\)\)/);
     assert.strictEqual(script.includes('requestDiffHtml +'), false, 'request change summary should not reserve its own layout row');
+  });
+
+  it('keeps Pin/Compare on Response primary toolbar and utilities in overflow', () => {
+    const responseCluster = extractScriptSegment(
+      script,
+      '\'<div class="response-action-cluster">\' +',
+      '\'<div class="response-context-row">\' +'
+    );
+    const menuStart = responseCluster.indexOf('js-actions-more-menu');
+    assert.ok(menuStart >= 0, 'Response summary must render an overflow menu');
+    const beforeMenu = responseCluster.slice(0, menuStart);
+    const menuBody = responseCluster.slice(menuStart);
+
+    // 1–3: Pin / Compare / More always visible on primary toolbar.
+    assert.match(beforeMenu, /pin-response-btn js-pin-response/);
+    assert.match(beforeMenu, /compare-btn js-compare-responses/);
+    assert.match(beforeMenu, /js-actions-more-btn/);
+    assert.match(beforeMenu, /compareQuietHtml/);
+    assert.doesNotMatch(beforeMenu, /js-copy-response"/);
+    assert.doesNotMatch(beforeMenu, /js-save-response/);
+
+    // Pin/Compare must not be overflow-only (prefer primary-only, no menuitem duplicates).
+    assert.doesNotMatch(menuBody, /js-pin-response/);
+    assert.doesNotMatch(menuBody, /js-compare-responses/);
+
+    // 4–10: Copy / Save / Mode / metadata utilities stay in ⋯.
+    const requiredOverflowItems = [
+      { cls: 'js-copy-response', menuitemRe: /js-copy-response"(?!-)[\s\S]{0,160}?role="menuitem"/ },
+      { cls: 'js-copy-response-url', menuitemRe: /js-copy-response-url"[\s\S]{0,160}?role="menuitem"/ },
+      { cls: 'js-save-response', menuitemRe: /js-save-response"[\s\S]{0,160}?role="menuitem"/ },
+      { cls: 'js-copy-response-status', menuitemRe: /js-copy-response-status"[\s\S]{0,160}?role="menuitem"/ },
+      { cls: 'js-copy-response-headers', menuitemRe: /js-copy-response-headers"[\s\S]{0,160}?role="menuitem"/ },
+      { cls: 'js-compare-last', menuitemRe: /js-compare-last"[\s\S]{0,200}?role="menuitem"/ },
+      { cls: 'js-compare-settings', menuitemRe: /js-compare-settings"[\s\S]{0,160}?role="menuitem"/ },
+    ];
+    for (const item of requiredOverflowItems) {
+      assert.ok(menuBody.includes(item.cls), `Response overflow must list ${item.cls}`);
+      assert.match(menuBody, item.menuitemRe, `${item.cls} must be a menuitem`);
+    }
+    assert.match(menuBody, /!lastResponse \? ' disabled'/);
+    assert.match(menuBody, /tr\('webview\.mode'\)[\s\S]*compareModeShort\(compareSettings\.mode\)/);
+    assert.match(beforeMenu, /compareReady \? '' : ' disabled'/);
+    assert.match(script, /const compareTitle = compareReady/);
+    assert.match(script, /tr\('webview\.compareNeedsPin'\)/);
+
+    // 11–14: Click handlers + pin/compare state wiring.
+    assert.match(script, /bindActionsMoreMenu\(mc\.querySelector\('\.js-actions-more-btn'\), mc\.querySelector\('\.js-actions-more-menu'\)\)/);
+    assert.match(script, /mc\.querySelector\('\.js-pin-response'\)\?\.addEventListener\('click'/);
+    assert.match(script, /mc\.querySelector\('\.js-compare-responses'\)\?\.addEventListener\('click'/);
+    assert.match(script, /mc\.querySelector\('\.js-compare-last'\)\?\.addEventListener\('click'/);
+    assert.match(script, /mc\.querySelector\('\.js-compare-settings'\)\?\.addEventListener\('click'/);
+    assert.match(script, /mc\.querySelector\('\.js-copy-response'\)\?\.addEventListener\('click'/);
+    assert.match(script, /mc\.querySelector\('\.js-save-response'\)\?\.addEventListener\('click'/);
+    assert.match(script, /type: 'copyResponseBody'/);
+    assert.match(script, /type: 'saveResponseBody'/);
+    assert.match(script, /type: 'compareResponses'/);
+    assert.match(script, /showCompareSettings\(\)/);
+    assert.match(script, /js-compare-metadata/);
+    assert.match(script, /includeMetadataSummary/);
+    assert.match(script, /data-mode="raw"/);
+    assert.match(script, /data-mode="normalized"/);
+    assert.match(script, /data-mode="pretty"/);
+    assert.match(script, /pinBtn\.classList\.toggle\('pinned', currentPinned\)/);
+    assert.match(script, /cmpBtn\.disabled = true/);
+    assert.match(script, /cmpBtn\.disabled = false/);
+    assert.match(script, /tr\('webview\.compareNeedsPin'\)/);
+
+    // 15: Mode/metadata contextual cue sync (compact text, not chip wall).
+    assert.match(script, /function buildCompareContextCueText\(\)/);
+    assert.match(script, /compare-active-indicator js-compare-chip-row/);
+    assert.match(script, /js-compare-chip-row visually-hidden/);
+    assert.match(script, /const compareQuietHtml = compareCueText/);
+    assert.match(script, /tr\('webview\.metadata'\)/);
+
+    // Body toolbar / tabs remain reachable outside overflow.
+    assert.match(script, /js-res-body-toolbar/);
+    assert.match(script, /data-mode="tree"/);
+    assert.match(script, /js-fmt-btn/);
+    assert.match(script, /js-response-search/);
+    assert.match(script, /data-tab="resCookies"/);
+    assert.match(script, /data-tab="resHeaders"/);
+    assert.match(script, /data-tab="resTests"/);
+    assert.match(script, /data-tab="resPreview"/);
+    assert.match(script, /xpathHint|webview\.xpathHint/);
+  });
+
+  it('fails if Pin/Compare regress to Response overflow-only discoverability', () => {
+    const responseCluster = extractScriptSegment(
+      script,
+      '\'<div class="response-action-cluster">\' +',
+      '\'<div class="response-context-row">\' +'
+    );
+    const menuStart = responseCluster.indexOf('js-actions-more-menu');
+    assert.ok(menuStart >= 0, 'Response overflow menu must exist');
+    const primaryToolbar = responseCluster.slice(0, menuStart);
+    const overflowMenu = responseCluster.slice(menuStart);
+
+    // Primary workflow: Pin/Compare must live in the response-action-cluster primary strip.
+    assert.match(primaryToolbar, /class="pin-response-btn js-pin-response"/);
+    assert.match(primaryToolbar, /class="compare-btn js-compare-responses/);
+    assert.match(primaryToolbar, /js-actions-more-btn/);
+    // Overflow must not be the only path (and preferably must not duplicate them).
+    assert.doesNotMatch(overflowMenu, /js-pin-response/);
+    assert.doesNotMatch(overflowMenu, /js-compare-responses/);
+
+    // Other primary workflow actions must also remain discoverable outside overflow-only paths.
+    assert.match(script, /url-hero-actions/);
+    assert.match(script, /class="btn-send/);
+    assert.match(script, /class="btn-stop/);
+    assert.match(script, /js-body-type/);
+    assert.match(script, /data-action="edit-environment"/);
+    assert.match(script, /data-action="reveal-variable-usage"/);
+    assert.match(script, /class="js-body-type body-type-select"/);
+  });
+
+  it('keeps Response overflow keyboard access and quiet compare indicator updates', () => {
+    assert.match(script, /function bindActionsMoreMenu\(button, menu\)/);
+    assert.match(script, /function handleActionsMenuKeydown\(event\)/);
+    assert.match(script, /function getOpenActionsMenuItems\(menu\)/);
+    assert.match(script, /function focusActionsMenuItem\(menu, index\)/);
+    assert.match(script, /function syncCompareContextIndicator\(mc, currentSignature\)/);
+    assert.match(script, /document\.addEventListener\('keydown', function\(e\) \{\s*handleActionsMenuKeydown\(e\);\s*\}\)/);
+    assert.match(script, /if \(e\.key !== 'ArrowDown'\) return;/);
+    assert.match(script, /event\.key === 'Escape'/);
+    assert.match(script, /event\.key === 'ArrowUp'/);
+    assert.match(script, /event\.key === 'Home'/);
+    assert.match(script, /event\.key === 'End'/);
+
+    assert.match(script, /function buildCompareContextCueText\(\)/);
+    const syncScript = extractScriptSegment(
+      script,
+      'function syncCompareContextIndicator(mc, currentSignature) {',
+      'function updatePinCompareButtons(mc) {'
+    );
+    assert.match(syncScript, /compare-active-indicator js-compare-chip-row/);
+    assert.match(syncScript, /js-compare-chip-row visually-hidden/);
+    assert.match(syncScript, /chipRow\.textContent = cueText/);
+    assert.match(syncScript, /chipRow\.innerHTML = buildCompareChipMarkup\(currentSignature/);
+
+    const updateScript = extractScriptSegment(
+      script,
+      'function updatePinCompareButtons(mc) {',
+      'var pinSvg ='
+    );
+    assert.match(updateScript, /syncCompareContextIndicator\(mc,/);
+    assert.match(updateScript, /span class="action-label"/);
+    assert.match(updateScript, /cmpBtn\.disabled = true/);
+    assert.match(updateScript, /cmpBtn\.disabled = false/);
+    assert.match(updateScript, /tr\('webview\.compareNeedsPin'\)/);
+    assert.match(updateScript, /compareLastBtn\.disabled = !lastResponse/);
+
+    const keyboardHarness = [
+      'var activeFormatMenuState = null;',
+      extractScriptSegment(script, 'function closeActiveFormatMenu() {', 'function releaseSplitDrag() {'),
+      'var pinnedResponses = [];',
+      'var lastResponse = null;',
+      'var compareSettings = { mode: "normalized", includeMetadataSummary: true };',
+      'function compareModeShort(mode) { return mode === "normalized" ? "Normalized" : mode; }',
+      'function tr(key) { return key === "webview.metadata" ? "Metadata" : key === "webview.compare" ? "Compare" : key; }',
+      'function buildCompareChipMarkup() { return "<span class=\\"compare-chip mode\\">Mode</span>"; }',
+      extractScriptSegment(script, 'function buildCompareContextCueText() {', 'function updatePinCompareButtons(mc) {'),
+    ].join('\n');
+
+    class MenuItem {
+      public disabled = false;
+      public focusCalls = 0;
+      constructor(public role = 'menuitem') {}
+      getAttribute(name: string) {
+        if (name === 'aria-disabled') return 'false';
+        return null;
+      }
+      focus() { this.focusCalls += 1; }
+    }
+
+    const items = [new MenuItem(), new MenuItem(), new MenuItem()];
+    items[1].disabled = true;
+    const menu = {
+      classList: new FakeClassList(['open']),
+      isConnected: true,
+      contains(node: unknown) { return items.includes(node as MenuItem) || node === menu; },
+      querySelectorAll(selector: string) {
+        assert.strictEqual(selector, '[role="menuitem"]');
+        return items;
+      },
+    };
+    const button = {
+      focusCalls: 0,
+      isConnected: true,
+      attributes: {} as Record<string, string>,
+      focus() { this.focusCalls += 1; },
+      contains() { return false; },
+      setAttribute(name: string, value: string) { this.attributes[name] = value; },
+    };
+    const chip = {
+      className: '',
+      textContent: '',
+      innerHTML: '',
+    };
+    const mc = {
+      querySelector(selector: string) {
+        if (selector === '.js-compare-chip-row') return chip;
+        return null;
+      },
+    };
+
+    const context: Record<string, unknown> = {
+      activeFormatMenuState: { button, menu },
+      pinnedResponses: [{ signature: 'a' }, { signature: 'b' }],
+      lastResponse: { signature: 'last' },
+      compareSettings: { mode: 'normalized', includeMetadataSummary: true },
+      Array,
+    };
+    vm.createContext(context);
+    vm.runInContext(keyboardHarness, context);
+    // Re-seed after harness local `var activeFormatMenuState = null` initialization.
+    context.activeFormatMenuState = { button, menu };
+    context.pinnedResponses = [{ signature: 'a' }, { signature: 'b' }];
+    context.lastResponse = { signature: 'last' };
+    context.compareSettings = { mode: 'normalized', includeMetadataSummary: true };
+
+    const focusItem = context.focusActionsMenuItem as (menu: unknown, index: number) => void;
+    focusItem(menu, 0);
+    assert.strictEqual(items[0].focusCalls, 1);
+    focusItem(menu, 1);
+    assert.strictEqual(items[2].focusCalls, 1, 'disabled menuitem should be skipped by focusing enabled items cyclically');
+
+    const handleKey = context.handleActionsMenuKeydown as (event: { key: string; target: unknown; preventDefault: () => void }) => boolean;
+    let prevented = 0;
+    const escapeEvent = {
+      key: 'Escape',
+      target: items[0],
+      preventDefault() { prevented += 1; },
+    };
+    assert.strictEqual(handleKey(escapeEvent), true);
+    assert.strictEqual(prevented, 1);
+    assert.strictEqual(context.activeFormatMenuState, null);
+    assert.strictEqual(button.focusCalls, 1);
+    assert.strictEqual(button.attributes['aria-expanded'], 'false');
+
+    const sync = context.syncCompareContextIndicator as (mc: unknown, signature: string) => void;
+    context.pinnedResponses = [{ signature: 'a' }, { signature: 'b' }];
+    context.lastResponse = { signature: 'last' };
+    sync(mc, 'a');
+    assert.strictEqual(chip.className, 'compare-active-indicator js-compare-chip-row');
+    assert.strictEqual(chip.textContent, 'Normalized · Metadata');
+    assert.ok(!String(chip.innerHTML).includes('compare-chip'), 'active compare cue must not rebuild pill chips');
+
+    context.pinnedResponses = [];
+    context.lastResponse = null;
+    context.compareSettings = { mode: 'normalized', includeMetadataSummary: true };
+    sync(mc, '');
+    assert.strictEqual(chip.className, 'js-compare-chip-row visually-hidden');
+    assert.match(String(chip.innerHTML), /compare-chip/);
+
+    // Non-default mode shows compact cue even without an active compare baseline.
+    context.compareSettings = { mode: 'raw', includeMetadataSummary: false };
+    sync(mc, '');
+    assert.strictEqual(chip.className, 'compare-active-indicator js-compare-chip-row');
+    assert.strictEqual(chip.textContent, 'raw');
   });
 
   it('shows the current environment with a localized label instead of raw template syntax', () => {

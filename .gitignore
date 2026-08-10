@@ -3,6 +3,9 @@ dist/
 *.vsix
 .claude/settings.local.json
 
+# Local staging (marketplace screenshots, scratch exports — do not commit)
+tmp/
+
 # Impeccable skill vendor clones (not Tessra product; prior releases excluded these trees)
 .agents/skills/impeccable/
 .github/skills/impeccable/

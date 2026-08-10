@@ -179,7 +179,7 @@ Operate topology for the request panel (and sibling dense tools):
 4. **Request editor** — PARAMS / HEADERS / BODY / AUTH / SCRIPTS / SETTINGS + canvas. HEADERS: default-headers one-liner above kv-rows.
 5. **Adaptive split** — user-resizable; ratio persists. Compose-focused while editing; response emphasized after Send; return request space instantly when editing again. Request must not fold into a painful Body/Header → resend path.
 6. **Response sticky summary** — sole success primary (`status · time · size · type` + resolved URL as secondary text, not a pill button).
-7. **Response tabs + body** — Body-first; Compare / Mode / metadata in overflow or contextual menus.
+7. **Response tabs + body** — Body-first; Pin / Compare always visible on the sticky summary as compact ghost icons; Mode / metadata in overflow or compact contextual text.
 
 **Density:** Compact, scannable editor density — not airy SaaS whitespace. Prefer `{spacing.xs}`–`{spacing.md}` inside tool rows; avoid 12–20px card padding stacks.
 
@@ -243,7 +243,7 @@ Operate topology for the request panel (and sibling dense tools):
 ### Response sticky summary
 - Sole owner of success/error emphasis after a completed request.
 - Resolved URL: selectable secondary text, not a large rounded “button” chip.
-- Compare / Mode / include-metadata: overflow or contextual — appear emphasized only when compare is active.
+- Pin / Compare: always-visible compact ghost icons on the summary (no pill wall). Mode / include-metadata stay in `⋯`; non-default mode or active compare may show compact contextual text (e.g. `Normalized`, `Metadata`).
 
 ### Cards / containers
 - **Default: no cards.** Sections use spacing + dividers.
@@ -272,7 +272,7 @@ Operate topology for the request panel (and sibling dense tools):
 - **Don't** ship `border-radius: 999px` pill spam, nested cards, big rounded rects, shadows, glows, bounce easings, or hover `translateY` lift on chrome.
 - **Don't** use dashboard uppercase kickers or decorative empty-state orbits.
 - **Don't** duplicate success green on Send, Live Response, and response summary.
-- **Don't** keep Compare / Mode / infrequent actions in primary chrome.
+- **Don't** bury Pin / Compare as overflow-only; Mode and other infrequent utilities stay in `⋯`.
 - **Don't** invent four preset layouts or compromise Quiet Instrument to preserve old preset looks.
 - **Don't** add airy SaaS whitespace that fights scannable editor density.
 - **Don't** invent brand claims beyond PRODUCT.md (no fake testimonials, sync features, or cloud positioning).

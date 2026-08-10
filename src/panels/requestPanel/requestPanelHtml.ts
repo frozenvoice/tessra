@@ -1155,6 +1155,94 @@ function closeActiveFormatMenu() {
   activeFormatMenuState = null;
 }
 
+function getOpenActionsMenuItems(menu) {
+  if (!menu) return [];
+  return Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]')).filter(function(item) {
+    return !item.disabled && item.getAttribute('aria-disabled') !== 'true';
+  });
+}
+
+function focusActionsMenuItem(menu, index) {
+  var items = getOpenActionsMenuItems(menu);
+  if (!items.length) return;
+  var next = items[(index % items.length + items.length) % items.length];
+  if (next && typeof next.focus === 'function') next.focus();
+}
+
+function handleActionsMenuKeydown(event) {
+  if (!activeFormatMenuState || !activeFormatMenuState.menu) return false;
+  var menu = activeFormatMenuState.menu;
+  var button = activeFormatMenuState.button;
+  if (!menu.classList || !menu.classList.contains('open')) return false;
+  var target = event.target;
+  var inMenu = !!(menu.contains && menu.contains(target))
+    || target === button
+    || !!(button && button.contains && button.contains(target));
+  if (!inMenu) return false;
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeActiveFormatMenu();
+    if (button && typeof button.focus === 'function') button.focus();
+    return true;
+  }
+
+  var items = getOpenActionsMenuItems(menu);
+  if (!items.length) return false;
+  var currentIndex = items.indexOf(target);
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    focusActionsMenuItem(menu, currentIndex < 0 ? 0 : currentIndex + 1);
+    return true;
+  }
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    focusActionsMenuItem(menu, currentIndex < 0 ? items.length - 1 : currentIndex - 1);
+    return true;
+  }
+  if (event.key === 'Home') {
+    event.preventDefault();
+    focusActionsMenuItem(menu, 0);
+    return true;
+  }
+  if (event.key === 'End') {
+    event.preventDefault();
+    focusActionsMenuItem(menu, items.length - 1);
+    return true;
+  }
+  return false;
+}
+
+function bindActionsMoreMenu(button, menu) {
+  if (!button || !menu) return;
+  button.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (activeFormatMenuState && activeFormatMenuState.menu === menu) {
+      closeActiveFormatMenu();
+      return;
+    }
+    closeActiveFormatMenu();
+    menu.classList.add('open');
+    button.setAttribute('aria-expanded', 'true');
+    activeFormatMenuState = { button: button, menu: menu };
+  });
+  button.addEventListener('keydown', function(e) {
+    if (e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    if (!menu.classList.contains('open')) {
+      button.click();
+    }
+    focusActionsMenuItem(menu, 0);
+  });
+  menu.addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (btn && !btn.disabled) {
+      setTimeout(closeActiveFormatMenu, 0);
+    }
+  });
+}
+
 function releaseSplitDrag() {
   if (!splitDragState) return;
   if (splitDragState.divider) splitDragState.divider.classList.remove('active');
@@ -1295,6 +1383,10 @@ document.addEventListener('click', function(e) {
     return;
   }
   closeActiveFormatMenu();
+});
+
+document.addEventListener('keydown', function(e) {
+  handleActionsMenuKeydown(e);
 });
 
 document.addEventListener('mousemove', function(e) {
@@ -2146,45 +2238,79 @@ function buildCompareChipMarkup(currentSignature) {
     }).join('');
 }
 
+function buildCompareContextCueText() {
+  var compareActive = pinnedResponses.length >= 2 || !!lastResponse;
+  var nonDefaultMode = compareSettings.mode !== 'normalized';
+  var parts = [];
+  if (compareActive || nonDefaultMode) {
+    parts.push(compareModeShort(compareSettings.mode));
+  }
+  // Compact Metadata cue only when compare context or non-default mode is already visible.
+  if (compareSettings.includeMetadataSummary && (compareActive || nonDefaultMode)) {
+    parts.push(tr('webview.metadata'));
+  }
+  return parts.join(' · ');
+}
+
+function syncCompareContextIndicator(mc, currentSignature) {
+  var chipRow = mc.querySelector('.js-compare-chip-row');
+  if (!chipRow) return;
+  var cueText = buildCompareContextCueText();
+  if (cueText) {
+    // Quiet Instrument: compact text only — never rebuild the old chip/pill wall here.
+    chipRow.className = 'compare-active-indicator js-compare-chip-row';
+    chipRow.textContent = cueText;
+    return;
+  }
+  chipRow.className = 'js-compare-chip-row visually-hidden';
+  chipRow.innerHTML = buildCompareChipMarkup(currentSignature || '');
+}
+
 function updatePinCompareButtons(mc) {
   var activeSnapshot = getActiveResponseSnapshot();
   var currentPinned = activeSnapshot
     ? pinnedResponses.some(function(pin) { return pin.signature === activeSnapshot.signature; })
     : false;
+  var pinCountSuffix = pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '';
+  var compareReady = pinnedResponses.length >= 2;
 
   var pinBtn = mc.querySelector('.js-pin-response');
   if (pinBtn) {
     pinBtn.classList.toggle('pinned', currentPinned);
-    pinBtn.innerHTML = pinSvg + ' ' + escapeHtml(currentPinned ? tr('webview.unpin') : tr('webview.pin')) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '');
+    pinBtn.disabled = false;
+    var pinLabel = (currentPinned ? tr('webview.unpin') : tr('webview.pin')) + pinCountSuffix;
+    pinBtn.innerHTML = pinSvg + '<span class="action-label">' + escapeHtml(pinLabel) + '</span>';
+    pinBtn.title = tr('webview.pinResponse') + pinCountSuffix;
+    pinBtn.setAttribute('aria-label', pinLabel);
   }
 
   var cmpBtn = mc.querySelector('.js-compare-responses');
   if (cmpBtn) {
-    if (pinnedResponses.length >= 2) {
+    if (compareReady) {
       cmpBtn.disabled = false;
       cmpBtn.classList.add('ready');
+      cmpBtn.title = tr('webview.comparePinned') + ' ' + compareModeShort(compareSettings.mode) + pinCountSuffix;
     } else {
       cmpBtn.disabled = true;
       cmpBtn.classList.remove('ready');
+      cmpBtn.title = tr('webview.compareNeedsPin');
     }
-    cmpBtn.innerHTML = diffSvg + ' ' + escapeHtml(tr('webview.compare')) + ' ' + escapeHtml(compareModeShort(compareSettings.mode)) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '');
+    cmpBtn.innerHTML = diffSvg + '<span class="action-label">' + escapeHtml(tr('webview.compare')) + '</span>';
+    cmpBtn.setAttribute('aria-label', tr('webview.compare'));
   }
 
   var compareLastBtn = mc.querySelector('.js-compare-last');
   if (compareLastBtn) {
     compareLastBtn.disabled = !lastResponse;
-    compareLastBtn.textContent = tr('webview.last');
+    compareLastBtn.innerHTML = '<span class="action-label">' + escapeHtml(tr('webview.last')) + '</span>';
   }
 
   var settingsBtn = mc.querySelector('.js-compare-settings');
   if (settingsBtn) {
-    settingsBtn.textContent = tr('webview.mode') + ': ' + compareModeShort(compareSettings.mode);
+    settingsBtn.innerHTML = '<span class="action-label">' + escapeHtml(tr('webview.mode') + ': ' + compareModeShort(compareSettings.mode)) + '</span>';
   }
 
-  var chipRow = mc.querySelector('.js-compare-chip-row');
-  if (chipRow) {
-    chipRow.innerHTML = buildCompareChipMarkup(activeSnapshot ? activeSnapshot.signature : '');
-  }
+  syncCompareContextIndicator(mc, activeSnapshot ? activeSnapshot.signature : '');
 }
 var pinSvg = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1C8.55228 1 9 1.44772 9 2V7.586L12.707 3.879C13.098 3.488 13.731 3.488 14.121 3.879C14.512 4.269 14.512 4.902 14.121 5.293L9 10.414V14C9 14.5523 8.55228 15 8 15C7.44772 15 7 14.5523 7 14V10.414L1.879 5.293C1.488 4.902 1.488 4.269 1.879 3.879C2.269 3.488 2.902 3.488 3.293 3.879L7 7.586V2C7 1.44772 7.44772 1 8 1Z"/></svg>';
 var diffSvg = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 4h5v1H2V4zm0 3h5v1H2V7zm0 3h5v1H2v-1zm9-6h5v1h-5V4zm0 3h5v1h-5V7zm0 3h5v1h-5v-1zM8 1v14l-1-1V2l1-1z"/></svg>';
@@ -5251,10 +5377,15 @@ function renderContent() {
       ? '<div class="resolved-url js-resolved-url" title="' + escapeAttr(tr('webview.clickToCopy') + ': ' + tab.resolvedUrl) + '">' + escapeHtml(tab.resolvedUrl) + '</div>'
       : '';
     const responseToneClass = 'response-tone-' + sc + 'xx';
-    const compareActive = pinnedResponses.length >= 2 || !!lastResponse;
-    const compareQuietHtml = compareActive
-      ? '<span class="compare-active-indicator js-compare-chip-row">' + escapeHtml(tr('webview.compare') + ' · ' + compareModeShort(compareSettings.mode)) + '</span>'
+    const compareCueText = buildCompareContextCueText();
+    const compareQuietHtml = compareCueText
+      ? '<span class="compare-active-indicator js-compare-chip-row">' + escapeHtml(compareCueText) + '</span>'
       : '<span class="js-compare-chip-row visually-hidden">' + buildCompareChipMarkup(currentSignature) + '</span>';
+    const pinCountSuffix = pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '';
+    const compareReady = pinnedResponses.length >= 2;
+    const compareTitle = compareReady
+      ? tr('webview.comparePinned') + ' ' + compareModeShort(compareSettings.mode) + pinCountSuffix
+      : tr('webview.compareNeedsPin');
     const responseFormatValue = (lang === 'text' ? 'TEXT' : lang.toUpperCase());
     const statusText = r.statusText ? ' ' + r.statusText : '';
     const sepHtml = '<span class="stat-sep">\u00B7</span>';
@@ -5300,14 +5431,14 @@ function renderContent() {
         responseStatsHtml +
         '<div class="response-action-cluster">' +
           compareQuietHtml +
+          '<button class="pin-response-btn js-pin-response" type="button" title="' + escapeAttr(tr('webview.pinResponse') + pinCountSuffix) + '" aria-label="' + escapeAttr(tr('webview.pin') + pinCountSuffix) + '">' + pinSvg + '<span class="action-label">' + escapeHtml(tr('webview.pin') + pinCountSuffix) + '</span></button>' +
+          '<button class="compare-btn js-compare-responses' + (compareReady ? ' ready' : '') + '" type="button" title="' + escapeAttr(compareTitle) + '" aria-label="' + escapeAttr(tr('webview.compare')) + '"' + (compareReady ? '' : ' disabled') + '>' + diffSvg + '<span class="action-label">' + escapeHtml(tr('webview.compare')) + '</span></button>' +
           '<div class="actions-more-wrap">' +
             '<button class="res-action-btn js-actions-more-btn" type="button" title="' + escapeAttr(tr('webview.more') || 'More') + '" aria-label="' + escapeAttr(tr('webview.more') || 'More') + '" aria-haspopup="menu" aria-expanded="false" aria-controls="responseActionsMoreMenu"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="13" cy="8" r="1.4"/></svg></button>' +
             '<div class="actions-more-menu js-actions-more-menu" id="responseActionsMoreMenu" role="menu">' +
               '<button class="res-action-btn js-copy-response" type="button" role="menuitem" title="' + escapeAttr(tr('webview.copyResponse')) + '"><span class="action-label">' + escapeHtml(tr('webview.copy')) + '</span></button>' +
               ((tab.resolvedUrl || tab.url) ? '<button class="res-action-btn js-copy-response-url" type="button" role="menuitem" title="' + escapeAttr(tr('webview.copyUrl')) + '"><span class="action-label">' + escapeHtml(tr('webview.copyUrl')) + '</span></button>' : '') +
               '<button class="res-action-btn js-save-response" type="button" role="menuitem" title="' + escapeAttr(tr('webview.saveResponse')) + '"><span class="action-label">' + escapeHtml(tr('webview.save')) + '</span></button>' +
-              '<button class="pin-response-btn js-pin-response" type="button" role="menuitem" title="' + escapeAttr(tr('webview.pinResponse') + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '')) + '">' + pinSvg + '<span class="action-label">' + escapeHtml(tr('webview.pin')) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</span></button>' +
-              '<button class="compare-btn js-compare-responses' + (pinnedResponses.length >= 2 ? ' ready' : '') + '" type="button" role="menuitem" title="' + escapeAttr(tr('webview.comparePinned') + ' ' + compareModeShort(compareSettings.mode) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '')) + '"' + (pinnedResponses.length < 2 ? ' disabled' : '') + '>' + diffSvg + '<span class="action-label">' + escapeHtml(tr('webview.compare')) + ' ' + compareModeShort(compareSettings.mode) + (pinnedResponses.length > 0 ? ' (' + pinnedResponses.length + '/2)' : '') + '</span></button>' +
               '<button class="res-action-btn js-copy-response-status" type="button" role="menuitem" title="' + escapeAttr(tr('webview.copyStatus')) + '"><span class="action-label">' + escapeHtml(tr('webview.copyStatus')) + '</span></button>' +
               '<button class="res-action-btn js-copy-response-headers" type="button" role="menuitem" title="' + escapeAttr(tr('webview.copyHeadersRaw')) + '"><span class="action-label">' + escapeHtml(tr('webview.copyHeadersRaw')) + '</span></button>' +
               ((lang === 'html' && (tab.resolvedUrl || tab.url))
@@ -5807,27 +5938,7 @@ function bindContentEvents() {
     vscode.postMessage({ type: 'openDefaultHeaders' });
   });
 
-  const requestMoreBtn = mc.querySelector('.js-request-more-btn');
-  const requestMoreMenu = mc.querySelector('.js-request-more-menu');
-  if (requestMoreBtn && requestMoreMenu) {
-    requestMoreBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      if (activeFormatMenuState && activeFormatMenuState.menu === requestMoreMenu) {
-        closeActiveFormatMenu();
-        return;
-      }
-      closeActiveFormatMenu();
-      requestMoreMenu.classList.add('open');
-      requestMoreBtn.setAttribute('aria-expanded', 'true');
-      activeFormatMenuState = { button: requestMoreBtn, menu: requestMoreMenu };
-    });
-    requestMoreMenu.addEventListener('click', function(e) {
-      const btn = e.target.closest('button');
-      if (btn && !btn.disabled) {
-        setTimeout(closeActiveFormatMenu, 0);
-      }
-    });
-  }
+  bindActionsMoreMenu(mc.querySelector('.js-request-more-btn'), mc.querySelector('.js-request-more-menu'));
 
   mc.querySelector('.js-save')?.addEventListener('click', function() {
     saveActiveTabState();
@@ -5905,29 +6016,8 @@ function bindContentEvents() {
     showBtnFeedback(this, tr('webview.copied'), 1200);
   });
 
-  // Actions more menu toggle
-  const moreBtn = mc.querySelector('.js-actions-more-btn');
-  const moreMenu = mc.querySelector('.js-actions-more-menu');
-  if (moreBtn && moreMenu) {
-    moreBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      if (activeFormatMenuState && activeFormatMenuState.menu === moreMenu) {
-        closeActiveFormatMenu();
-        return;
-      }
-      closeActiveFormatMenu();
-      moreMenu.classList.add('open');
-      moreBtn.setAttribute('aria-expanded', 'true');
-      activeFormatMenuState = { button: moreBtn, menu: moreMenu };
-    });
-    moreMenu.addEventListener('click', function(e) {
-      // Close menu after an item is clicked (but let the click bubble to the button's own handler)
-      const btn = e.target.closest('button');
-      if (btn && !btn.disabled) {
-        setTimeout(closeActiveFormatMenu, 0);
-      }
-    });
-  }
+  // Response overflow: Mode / copy / save utilities. Pin/Compare stay on the primary toolbar.
+  bindActionsMoreMenu(mc.querySelector('.js-actions-more-btn'), mc.querySelector('.js-actions-more-menu'));
 
   
   mc.querySelector('.js-resolved-url')?.addEventListener('click', (e) => {

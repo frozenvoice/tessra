@@ -9,6 +9,7 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 ## What's new in 1.0.10
 
 - Compact, editor-native Request Panel (**Quiet Instrument**): Method → URL → Send first, quieter secondary chrome
+- Response summary keeps Pin / Compare always visible; Copy / Save / Mode / metadata stay in `⋯`
 - Request execution status strip for environment (`N vars`), Defaults, request `Used N`, Scripts/History, and risk overrides (Tessra signature accent + tiny tesseract mark on Env; click Env to edit variables)
 - JSON/XML Body syntax highlighting that keeps the lightweight textarea and undo/redo
 - Safe Body type conversion with Convert / Keep text / Cancel (supported structural pairs only)
@@ -150,7 +151,7 @@ Group request history by date and run collections with status summaries.
 - Quick copy actions for resolved URL, status line, raw headers, and response body
 - Save response body to file
 - Response compare with `Raw`, `Normalized`, and `Pretty` modes
-- Compare state chips that surface the active mode, metadata summary usage, and pinned response readiness
+- Response summary Pin / Compare ghost actions, with compact contextual mode/metadata cues (no chip wall)
 - Compare settings with ignored headers and ignored JSON paths
 - Compare summaries with body line counts and changed / left-only / right-only totals
 
