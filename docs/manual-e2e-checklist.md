@@ -2,9 +2,18 @@
 
 Use this checklist in the VS Code Extension Development Host after `npm run build` or `npm run watch`.
 
+## 1.0.11 Smoke (~10–15 min)
+
+Guide currency, URL/Params serialization, and Pin/Compare discoverability. Run this pass before Marketplace publish.
+
+- Open `Tessra: Open Guide` in English, Korean, and Japanese; confirm status strip / Pin+Compare+`⋯` / Body conversion / Workspace Backup / WebSocket wording matches the live panel (no topline chip-wall language).
+- With a URL that already has `?a=1` and a Params row `a=1`, Send once and confirm the final request URL does not duplicate `a`.
+- Confirm Response sticky summary still shows Pin / Compare; Copy / Save / Mode / metadata remain under `⋯`.
+- Spot-check Quiet Instrument primary path (Method → URL → Send), status strip Env/`Used N`, one Body Convert/Keep/Cancel path, and Workspace Backup export validation (`schemaVersion` 1).
+
 ## 1.0.10 Smoke (~10–15 min)
 
-Quiet Instrument layout and Body workflows. Run this pass before Marketplace publish.
+Quiet Instrument layout and Body workflows. Keep as a deeper regression pass when touching request-panel chrome.
 
 - Confirm Method → URL → Send reads as the primary path; infrequent actions sit in overflow; no pill-wall meta chrome.
 - Confirm the status strip shows environment (`N vars`), Defaults, request `Used N`, Scripts/History cues, and risk overrides; Env shows Tessra accent + tiny tesseract mark; click Environment to toggle the variable editor; click `Used N` / Vars to toggle Variable Usage in strip disclosure; expand disclosure for workspace profile / details.

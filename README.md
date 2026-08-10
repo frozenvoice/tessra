@@ -6,13 +6,12 @@ No login. No cloud sync. No paywalled core workflows.
 
 Tessra is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
 
-## What's new in 1.0.10
+## What's new in 1.0.11
 
-- Compact, editor-native Request Panel (**Quiet Instrument**): Method → URL → Send first, quieter secondary chrome
-- Response summary keeps Pin / Compare always visible; Copy / Save / Mode / metadata stay in `⋯`
-- Request execution status strip for environment (`N vars`), Defaults, request `Used N`, Scripts/History, and risk overrides (Tessra signature accent + tiny tesseract mark on Env; click Env to edit variables)
-- JSON/XML Body syntax highlighting that keeps the lightweight textarea and undo/redo
-- Safe Body type conversion with Convert / Keep text / Cancel (supported structural pairs only)
+- In-app Guide updated for the current Request Panel: status strip, Pin/Compare + `⋯`, Body conversion, Workspace Backup/Restore, WebSocket, runner options, shortcuts, and local storage
+- Fixed URL/Params double serialization that could duplicate query keys
+- Restored Response Pin / Compare on the sticky summary (Copy / Save / Mode / metadata stay in `⋯`)
+- Cleaner VSIX packaging (staging folders such as `tmp/` excluded)
 - Still local-first: no login, no cloud sync, no telemetry
 
 ## Screenshots

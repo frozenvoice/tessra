@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.11
+
+- Updated the in-app Guide (`GUIDE.md` / `GUIDE.ko.md` / `GUIDE.ja.md`) for the current Request Panel UI: status strip, Pin/Compare + `⋯` overflow, Body conversion, Workspace Backup/Restore, WebSocket, runner options, shortcuts, and local storage files.
+- Added Guide content-parity checks so English/Korean/Japanese stay aligned and pre-redesign chip/toolbar wording does not return.
+- Fixed URL/Params double serialization that could duplicate query keys when building the final request URL.
+- Restored Response Pin / Compare discoverability on the sticky response summary (utilities remain in `⋯`).
+- Excluded `tmp/` and other staging artifacts from VSIX packaging.
+
 ## 1.0.10
 
 - Redesigned the Request Panel to **The Quiet Instrument**: compact editor-native hierarchy with Method → URL → Send as the primary path, overflow menus for infrequent actions, default-headers one-liner, and response-first emphasis without overwriting a user-locked split ratio.

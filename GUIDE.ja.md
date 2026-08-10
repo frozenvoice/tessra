@@ -9,8 +9,8 @@ Tessra は VS Code 向けのローカル優先 REST API クライアントです
 1. Activity Bar から Tessra を開きます。
 2. `Tessra: New Request` を実行するか、`+` をクリックします。
 3. HTTP メソッドを選び、URL を入力します。
-4. params、headers、body、auth、scripts、request settings を入力します。
-5. `Send` をクリックするか、URL 入力欄で `Enter` を押します。
+4. リクエストタブで params、headers、body、auth、scripts、settings を入力します。
+5. `Send` をクリックするか、URL 入力欄で `Enter` / `Ctrl+Enter`（macOS では `Cmd+Enter`）を押します。
 
 環境変数の使用例:
 
@@ -23,75 +23,126 @@ Body: {"env":"{{envName}}"}
 ## リクエスト作成
 
 - メソッド: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
-- Body タイプ: `json`, `xml`, `form-urlencoded`, `form-data`, `binary`, `raw`
-- 認証: No Auth, Basic, Bearer Token, API Key
+- リクエストタブ: `Params`, `Headers`, `Body`, `Auth`, `Scripts`, `Settings`
 - ピン留めタブ付きのマルチタブ編集
-- URL 入力欄で `Enter` を押すと、アクティブなリクエストを送信します。
-- 上部のサマリーチップには、現在の環境、認証方式、デフォルトヘッダーの使用、スクリプト、履歴動作が表示されます。
+- URL 入力欄の `Enter`、または `Ctrl+Enter` / `Cmd+Enter` でアクティブなリクエストを送信します。
+- URL 下の status strip には、アクティブ Environment（`N 変数`）、Scripts、History on/off、Defaults、risk override、リクエストの `使用 N` が表示されます。
+- Environment セグメントをクリックすると変数を編集できます。アクティブ環境がない場合は環境を選べます。
+- `使用 N`（または未解決 Vars）をクリックすると、現在のリクエストでの変数使用箇所を確認できます。
+- status strip を展開すると、workspace profile、環境切り替え、Default Headers、追加詳細を確認できます。
 - 機密性のある認証値は、表示操作をするまでマスクされます。
 - ヘッダーやクエリパラメータを 1 行ずつ追加せず、一括貼り付けできます。
-- 送信前に未解決の `{{variables}}` がある場合、Tessra が警告します。
+- 送信前に未解決または循環する `{{variables}}` がある場合、Tessra が警告します。
+
+## Body
+
+- Body タイプ: `none`, `json`, `xml`, `form-urlencoded`, `form-data`, `binary`, `raw`
+- JSON/XML Body は textarea 編集を維持したまま syntax highlighting を提供します。
+- Body の undo/redo は Send 後やリクエストタブ切り替え後も動作します。
+- 空でない Body を対応する形式間で切り替えるとき、Tessra が安全な変換を提案できます。`変換` / `テキストを維持` / キャンセルから選べます。
+- 未対応または曖昧な変換（入れ子構造、file form-data、Binary の自動生成）は拒否され、元の Body が維持されます。
 
 ## レスポンスワークスペース
 
-- タブ: `Body`, `Headers`, `Cookies`, `Tests`、意味のある静的 HTML がある場合の `Preview`
-- 動的 HTML ページは `Body` に残し、HTTP/HTTPS として解決されたページは `Open URL` で開けます。
-- レスポンスメタデータには、読みやすい duration とリクエスト/受信時刻が表示されます。
-- 固定レスポンスツールバーから検索、比較、コピー、保存アクションを使えます。
+- レスポンス要約には status、duration、size、content type、resolved URL が表示されます。
+- タブ: `Body`, `Cookies`, `Headers`, `Tests`、意味のある静的 HTML がある場合の `Preview`
+- 動的 HTML は `Body` に残り、HTTP/HTTPS として解決されたページは `Open URL` で開けます。
+- `Pin` と `Compare` はレスポンス要約に常に表示されます。
+- Copy、Copy URL、Save、Copy Status、Copy Headers などのユーティリティは `⋯` メニューにあります。
 - レスポンス本文検索は、次/前への移動、大文字小文字の区別、正規表現モードに対応します。
-- JSON tree viewer
-- XML format: `Pretty`, `Compact`, `Inline Children`
-- レスポンス本文の保存またはコピー
-- `Raw`, `Normalized`, `Pretty` モードでレスポンスを比較
-- 比較状態チップには、現在のモード、メタデータ要約の使用、ピン留めレスポンスの準備状態が表示されます。
+- JSON は Tree と Raw ビューをサポートします。
+- XML format: `Pretty`, `Compact`, `Inline Children`、および XPath helper
+- Content-Type ベースの syntax highlighting
+- gzip、deflate、Brotli レスポンスの自動デコード
+- Compare は `Raw`、`Normalized`、`Pretty` モードをサポートし、metadata summary を含められます。
 
-## コレクション、履歴、環境
+## コレクション、ランナー、履歴
 
 - コレクション、フォルダー、保存済みリクエストを作成
-- Drag and drop でリクエストを整理
-- コレクション全体を実行
-- コレクション実行では、アクティブなリクエスト、現在の試行回数、リトライのカウントダウンを表示
-- 実行済みスナップショットと timing metadata を履歴に保存
-- アクティブ環境の切り替えと、リクエスト全体での `{{variables}}` 解決
+- Drag and drop で項目を整理
+- Run All Requests では delay、iterations、stop-on-failure を使えます。
+- ランナーはアクティブなリクエスト、進捗、passed / failed / skipped の要約を表示します。
+- Stop でアクティブなリクエスト、retry 待機、リクエスト間 delay をキャンセルできます。
+- ランナー要約から失敗したリクエストだけを再実行できます。
+- 各リクエストの Save to history が有効なときだけ、ランナー結果が履歴に保存されます。
+- 履歴はグループ化、フィルタ、pin、`tessra.historyMaxItems` による保持（ピン留め項目は維持）をサポートします。
+
+## 環境と変数
+
+- Environment の CRUD とアクティブ環境の切り替え
+- リクエストの `{{variable}}` 解決はアクティブ environment を基準にします。
+- 入れ子の `{{variables}}` は再帰的に解決され、未解決/循環参照は送信前に報告されます。
+- URL、headers、body、auth、scripts などの入力欄で変数 autocomplete を使えます。
+- Environment の `N 変数` はアクティブ環境の変数数、リクエストの `使用 N` は現在のリクエストが使う変数数です。
+- workspace variables はバックアップに保持できますが、リクエスト解決は引き続きアクティブ environment に従います。
 
 ## ワークスペースプロファイル
 
 - `default` は普段の Tessra 作業に使うメインのローカル保存領域です。
-- 別のプロジェクト、インポートした spec、実験を現在のコレクションや履歴と混ぜたくないときは、別のプロファイルを作成します。
-- プロファイルは collections、history、environments、default headers、saved tabs を分離します。
-- 実用的な目安:
-  - 異なるプロジェクトや作業フローはプロファイルで分けます。
-  - 同じプロジェクト内の `local`, `staging`, `prod` は環境で分けます。
+- 別のプロジェクト、インポートした spec、実験を混ぜたくないときは別のプロファイルを作成します。
+- プロファイルは collections、history、environments、default headers、workspace variables、saved tabs を分離します。
+- 異なるプロジェクト/作業フローはプロファイルで、同じプロジェクト内の `local` / `staging` / `prod` は environment で分けます。
 - `Tessra: Change Workspace Profile` でプロファイルを切り替えたり作成したりできます。
-- リクエストヘッダーには現在のプロファイルが表示され、`default` プロファイルチップに hover すると意味が表示されます。
+- 現在のプロファイルは status strip を展開した詳細から確認できます。
+
+## ワークスペースバックアップ / 復元
+
+- `Tessra: Export Workspace Backup` と `Tessra: Import Workspace Backup` を使います。
+- バックアップには collections、environments、active environment、default headers、workspace variables が含まれます。
+- history と open tabs / tab state は含まれません。
+- import は現在のプロファイルのデータを置き換えます。merge ではありません。
+- import 前に Tessra が pre-import backup を自動作成します。
+- バックアップファイルには token、API key などの機密情報が含まれることがあるため、安全に保管してください。
+
+## WebSocket
+
+- `ws://` または `wss://` URL（原文、または `{{variable}}` 解決後）を入力すると WebSocket モードに切り替わります。
+- 主アクションで Connect / Disconnect を使います。
+- Body タブが出ていくテキストメッセージの作成欄です。
+- inbound / outbound / close の診断は WebSocket message log に表示されます。
+- inbound binary frame は base64 で表示されます。
+- frame/message size limit で過大なペイロードを防ぎます。
+- Settings の optional ping keepalive はデフォルトで off です。
 
 ## Scripts
 
-- Pre-request script
-- Test script
-- `pm.test`, `pm.expect`, `pm.environment`
-- script logs と test 結果の表示
+- Pre-request script は送信前、Test script はレスポンス後に実行されます。
+- 流れ: Environment → Pre-request → Send → Tests
+- 対応 API: `pm.test`、`pm.expect`、`pm.environment`
+- Scripts タブから例の挿入と Open Guide を使えます。
+- インポートしたスクリプトは、リクエストタブで信頼するまで無効です。
+- スクリプト timeout は `tessra.scriptTimeoutMs` で設定します。
+- script logs と pass/fail 結果はレスポンスの Tests タブに表示されます。
 
 ## リクエスト別 Settings
 
 - Timeout
-- Follow redirects
-- Save to history
-- リクエストツールバーまたは Headers タブのバナーから `Default Headers` を開く
-- TLS override
-- 最大レスポンスサイズ
+- Max response size
 - Retry count と retry delay
+- TLS: `Default`, `Strict`, `Insecure`
+- Follow redirects
 - Stop after headers
+- Save to history
 - Skip default headers
 - Disable scripts
-- 安全性や動作を変える設定は視覚的に強調されます。
-- レスポンスに意味のある静的 HTML が含まれる場合、Preview を自動的に開きます。
+- Default Headers は Headers タブのバナー、または status strip 詳細から開けます。
+- 安全性や動作を変える非デフォルト設定は status strip の警告/表示として現れます。
 
-## 表示言語
+## Import / Export
 
-- `Tessra: Change Display Language` で `English`, `Korean`, `Japanese` を切り替えられます。
-- Tessra はパネル、プロンプト、通知、アプリ内ガイドに独自の表示言語設定を使います。
-- VS Code Settings のラベルと Command Palette のタイトルは引き続き VS Code locale に従います。
+- cURL import と Copy as cURL
+- OpenAPI import。`{userId}` のような path parameter は `{{userId}}` として取り込まれます。
+- Tessra collection import
+- Postman collection / environment の import・export
+- Tessra Workspace Backup の export・import
+
+## 表示言語とテーマ
+
+- `Tessra: Change Display Language` で `English`、`Korean`、`Japanese` を切り替えます。
+- Tessra のパネル、プロンプト、通知、このガイドはその設定に従います。
+- VS Code Settings のラベルと Command Palette のタイトルは VS Code locale に従います。
+- `Tessra: Change Request Panel Theme` で color/token skin（`default`、`minimal-cool`、`product`、`bold-color`）を切り替えます。
+- テーマ preset は accent と surface token だけを変え、パネルレイアウトは変えません。
 
 ## キーボードショートカット
 
@@ -99,18 +150,26 @@ Body: {"env":"{{envName}}"}
 - `Ctrl+W`: 現在のタブを閉じる
 - `Enter`: URL 入力欄から送信
 - `Ctrl+Enter`: リクエスト送信
+- `Ctrl+S`: 現在のリクエストを保存
+- `Ctrl+Shift+S`: Save As
+- `Ctrl+F`: レスポンス検索にフォーカス
+- `Alt+1` … `Alt+6`: リクエストタブ切り替え
+- `Alt+Shift+1` … `Alt+Shift+5`: レスポンスタブ切り替え
 
 macOS では `Ctrl` の代わりに `Cmd` を使用します。
 
 ## ローカル保存
 
-すべての Tessra データは VS Code `globalStorage` 配下の JSON ファイルにローカル保存されます。
+すべての Tessra データは VS Code `globalStorage` 配下の JSON ファイルにローカル保存されます。default プロファイルはルートに、他のプロファイルは `profiles/<name>/` に同じファイルを置きます。
 
 - `collections.json`
 - `history.json`
 - `environments.json`
 - `active-environment.json`
 - `default-headers.json`
+- `variables.json`
 - `tab-state.json`
 
-Tessra は、ユーザーが明示的に API リクエストを送信したときだけネットワークを使用します。
+JSON を解析できない場合、Tessra は横に `.corrupt-*` バックアップを残して警告し、そのファイルはデフォルト値で動作します。
+
+Tessra は、ユーザーが明示的にリクエストを送信するか WebSocket を接続したときだけネットワークを使用します。
