@@ -1,4 +1,5 @@
 import { Request, KeyValue, AuthConfig, HttpMethod, RequestBodyType } from '../models/types';
+import { buildUrl, coalesceQueryParams } from '../panels/requestPanel/requestUtils';
 
 export interface CurlParseResult {
   request: Request;
@@ -328,19 +329,7 @@ export class CurlService {
       }
     }
     if (activeParams.length > 0) {
-      try {
-        const urlObj = new URL(fullUrl);
-        for (const param of activeParams) {
-          urlObj.searchParams.append(param.key, param.value);
-        }
-        fullUrl = urlObj.toString();
-      } catch {
-        const sep = fullUrl.includes('?') ? '&' : '?';
-        const qs = activeParams
-          .map((param) => `${encodeURIComponent(param.key)}=${encodeURIComponent(param.value)}`)
-          .join('&');
-        fullUrl = fullUrl + sep + qs;
-      }
+      fullUrl = buildUrl(fullUrl, coalesceQueryParams(fullUrl, activeParams));
     }
 
     if (req.method && req.method !== 'GET') {

@@ -226,7 +226,8 @@ export function createScriptableRequest(input: {
     method: input.method,
     url: input.url,
     headers: cloneKeyValues(input.headers),
-    params: cloneKeyValues(input.params),
+    // Params는 disable 시 URL에서 제거해야 하므로 enabled=false 행을 유지한다.
+    params: cloneAllKeyValues(input.params),
     body: input.body,
     bodyType: input.bodyType,
     formData: cloneFormDataFields(input.formData ?? []),
@@ -350,18 +351,133 @@ export function createHistoryRequestSnapshot(
   };
 }
 
-export function buildUrl(baseUrl: string, params: KeyValue[]): string {
-  const active = params.filter((p) => p.enabled && p.key);
-  if (active.length === 0) { return baseUrl; }
-  try {
-    const url = new URL(baseUrl);
-    for (const p of active) { url.searchParams.append(p.key, p.value); }
-    return url.toString();
-  } catch {
-    const sep = baseUrl.includes('?') ? '&' : '?';
-    const qs = active.map((p) => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`).join('&');
-    return baseUrl + sep + qs;
+export type UrlQueryPair = { key: string; value: string };
+
+export type UrlParts = {
+  base: string;
+  query: string;
+  fragment: string;
+  pairs: UrlQueryPair[];
+};
+
+/** URL을 base / query / fragment로 분리한다. `{{var}}`가 포함된 URL도 허용한다. */
+export function splitUrlParts(rawUrl: string): UrlParts {
+  const raw = String(rawUrl ?? '');
+  let working = raw;
+  let fragment = '';
+  const hashIndex = working.indexOf('#');
+  if (hashIndex >= 0) {
+    fragment = working.slice(hashIndex);
+    working = working.slice(0, hashIndex);
   }
+
+  let base = working;
+  let query = '';
+  const questionIndex = working.indexOf('?');
+  if (questionIndex >= 0) {
+    base = working.slice(0, questionIndex);
+    query = working.slice(questionIndex + 1);
+  }
+
+  return {
+    base,
+    query,
+    fragment,
+    pairs: parseQueryString(query),
+  };
+}
+
+/** application/x-www-form-urlencoded 스타일 쿼리 문자열을 순서 보존으로 파싱한다. */
+export function parseQueryString(query: string): UrlQueryPair[] {
+  if (!query) { return []; }
+  return query
+    .split('&')
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const eqIndex = part.indexOf('=');
+      if (eqIndex < 0) {
+        return { key: decodeQueryComponent(part), value: '' };
+      }
+      return {
+        key: decodeQueryComponent(part.slice(0, eqIndex)),
+        value: decodeQueryComponent(part.slice(eqIndex + 1)),
+      };
+    })
+    .filter((pair) => pair.key.length > 0);
+}
+
+/**
+ * Params 탭이 비어 있으면 URL 쿼리를 시드하고,
+ * Params에 키가 있으면(비활성 포함) Params를 쿼리의 단일 소스로 쓴다.
+ * 의도적 중복 키는 그대로 유지한다.
+ */
+export function coalesceQueryParams(url: string, params: KeyValue[]): KeyValue[] {
+  const structured = (params ?? [])
+    .filter((param) => !!param.key)
+    .map((param) => ({
+      key: param.key,
+      value: param.value ?? '',
+      enabled: param.enabled !== false,
+    }));
+
+  if (structured.length > 0) {
+    return structured;
+  }
+
+  return splitUrlParts(url).pairs.map((pair) => ({
+    key: pair.key,
+    value: pair.value,
+    enabled: true,
+  }));
+}
+
+/**
+ * 최종 요청 URL을 만든다.
+ * - Params에 keyed row가 있으면 URL 쿼리를 제거하고 enabled Params만 직렬화한다.
+ * - Params가 비어 있으면 원본 URL(쿼리 포함)을 유지한다.
+ * - 같은 키 중복은 dedupe하지 않는다.
+ * - fragment는 보존한다.
+ */
+export function buildUrl(baseUrl: string, params: KeyValue[]): string {
+  const parts = splitUrlParts(baseUrl);
+  const structured = (params ?? []).filter((param) => !!param.key);
+  const active = structured.filter((param) => param.enabled !== false);
+
+  if (structured.length === 0) {
+    return baseUrl;
+  }
+
+  if (active.length === 0) {
+    return parts.base + parts.fragment;
+  }
+
+  const query = active
+    .map((param) => `${encodeQueryComponent(param.key)}=${encodeQueryComponent(param.value ?? '')}`)
+    .join('&');
+  return `${parts.base}?${query}${parts.fragment}`;
+}
+
+/** enabled 여부와 관계없이 key가 있는 KV를 복제한다 (Params disable 의미 보존용). */
+export function cloneAllKeyValues(items: KeyValue[]): KeyValue[] {
+  return items
+    .filter((item) => !!item.key)
+    .map((item) => ({
+      key: item.key,
+      value: item.value ?? '',
+      enabled: item.enabled !== false,
+    }));
+}
+
+function decodeQueryComponent(value: string): string {
+  try {
+    return decodeURIComponent(String(value ?? '').replace(/\+/g, ' '));
+  } catch {
+    return String(value ?? '').replace(/\+/g, ' ');
+  }
+}
+
+function encodeQueryComponent(value: string): string {
+  return encodeURIComponent(String(value ?? ''));
 }
 
 function collectUnresolvedFromKeyValues(target: Set<string>, items: KeyValue[]): void {

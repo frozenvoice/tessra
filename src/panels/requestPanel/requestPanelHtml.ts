@@ -4105,6 +4105,7 @@ function applyBulkEditor(mc, target) {
   rows.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
   input.value = '';
   toggleBulkEditor(mc, target, false);
+  if (target === 'params') syncUrlFromParamsEditor(mc);
   markDirty();
   refreshDraftInsights(mc);
 }
@@ -5884,6 +5885,7 @@ function bindContentEvents() {
         activeTab.url = e.target.value;
         syncRequestTypeFromUrl(activeTab);
       }
+      syncParamsFromUrlInput(mc);
       checkUnresolvedVars();
       markDirty();
       activeTab = tabs.find(t => t.id === activeTabId);
@@ -6310,13 +6312,21 @@ function bindContentEvents() {
   }
 
   
-  bindKvRow(mc.querySelector('.js-param-rows'));
+  bindKvRow(mc.querySelector('.js-param-rows'), {
+    onChange: function() {
+      syncUrlFromParamsEditor(mc);
+      markDirty();
+      refreshDraftInsights(mc);
+    }
+  });
   bindKvRow(mc.querySelector('.js-header-rows'));
+  healParamsMirrorFromUrl(mc);
 
   mc.querySelector('.js-add-param')?.addEventListener('click', () => {
     var container = mc.querySelector('.js-param-rows');
     addKvRow(container);
     container?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+    syncUrlFromParamsEditor(mc);
     markDirty();
     refreshDraftInsights(mc);
   });
@@ -6794,7 +6804,131 @@ function bindKvRow(container, options) {
     syncKvRowSensitivity(row);
     handleChange();
   });
+  container.addEventListener('change', function(e) {
+    if (!e.target || !e.target.matches || !e.target.matches('input[type="checkbox"]')) return;
+    handleChange();
+  });
   container.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+}
+
+var syncingUrlParams = false;
+
+function decodeQueryComponentJs(value) {
+  try {
+    return decodeURIComponent(String(value || '').replace(/\\+/g, ' '));
+  } catch (err) {
+    return String(value || '').replace(/\\+/g, ' ');
+  }
+}
+
+function encodeQueryComponentPreservingTemplates(value) {
+  return String(value || '').replace(/\\{\\{[^{}]+\\}\\}|[^{}]+/g, function(part) {
+    if (part.charAt(0) === '{') return part;
+    return encodeURIComponent(part);
+  });
+}
+
+function splitUrlPartsJs(rawUrl) {
+  var raw = String(rawUrl || '');
+  var working = raw;
+  var fragment = '';
+  var hashIndex = working.indexOf('#');
+  if (hashIndex >= 0) {
+    fragment = working.substring(hashIndex);
+    working = working.substring(0, hashIndex);
+  }
+  var base = working;
+  var query = '';
+  var questionIndex = working.indexOf('?');
+  if (questionIndex >= 0) {
+    base = working.substring(0, questionIndex);
+    query = working.substring(questionIndex + 1);
+  }
+  var pairs = query.split('&').filter(function(part) { return part.length > 0; }).map(function(part) {
+    var eqIndex = part.indexOf('=');
+    if (eqIndex < 0) {
+      return { key: decodeQueryComponentJs(part), value: '' };
+    }
+    return {
+      key: decodeQueryComponentJs(part.substring(0, eqIndex)),
+      value: decodeQueryComponentJs(part.substring(eqIndex + 1))
+    };
+  }).filter(function(pair) { return !!pair.key; });
+  return { base: base, query: query, fragment: fragment, pairs: pairs };
+}
+
+function composeUrlWithParamsJs(rawUrl, params) {
+  var parts = splitUrlPartsJs(rawUrl);
+  var active = (params || []).filter(function(item) { return item && item.enabled !== false && item.key; });
+  var next = parts.base;
+  if (active.length > 0) {
+    next += '?' + active.map(function(item) {
+      return encodeQueryComponentPreservingTemplates(item.key) + '=' + encodeQueryComponentPreservingTemplates(item.value || '');
+    }).join('&');
+  }
+  return next + parts.fragment;
+}
+
+function syncParamsFromUrlInput(mc) {
+  if (syncingUrlParams || !mc) return;
+  var urlEl = mc.querySelector('.js-url');
+  var rows = mc.querySelector('.js-param-rows');
+  if (!urlEl || !rows) return;
+  var pairs = splitUrlPartsJs(urlEl.value).pairs;
+  syncingUrlParams = true;
+  try {
+    rows.innerHTML = kvRowsHtml(pairs.map(function(pair) {
+      return { key: pair.key, value: pair.value, enabled: true };
+    }));
+    rows.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+    var tab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (tab) {
+      tab.params = collectKv(rows);
+      tab.url = urlEl.value;
+    }
+  } finally {
+    syncingUrlParams = false;
+  }
+}
+
+function syncUrlFromParamsEditor(mc) {
+  if (syncingUrlParams || !mc) return;
+  var urlEl = mc.querySelector('.js-url');
+  var rows = mc.querySelector('.js-param-rows');
+  if (!urlEl || !rows) return;
+  var params = collectKv(rows);
+  var nextUrl = composeUrlWithParamsJs(urlEl.value, params);
+  if (nextUrl === urlEl.value) {
+    var tab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (tab) tab.params = params;
+    return;
+  }
+  syncingUrlParams = true;
+  try {
+    urlEl.value = nextUrl;
+    var tab = tabs.find(function(t) { return t.id === activeTabId; });
+    if (tab) {
+      tab.url = nextUrl;
+      tab.params = params;
+      syncRequestTypeFromUrl(tab);
+    }
+    checkUnresolvedVars();
+  } finally {
+    syncingUrlParams = false;
+  }
+}
+
+function healParamsMirrorFromUrl(mc) {
+  if (!mc) return;
+  var tab = tabs.find(function(t) { return t.id === activeTabId; });
+  var rows = mc.querySelector('.js-param-rows');
+  var urlEl = mc.querySelector('.js-url');
+  if (!tab || !rows || !urlEl) return;
+  var hasParams = (tab.params || []).some(function(item) { return item && item.key; });
+  var urlPairs = splitUrlPartsJs(urlEl.value || tab.url || '').pairs;
+  if (!hasParams && urlPairs.length > 0) {
+    syncParamsFromUrlInput(mc);
+  }
 }
 
 function parseBulkKeyValueText(text, target) {

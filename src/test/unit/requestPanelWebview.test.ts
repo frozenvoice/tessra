@@ -2578,6 +2578,16 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /tab\.disableScripts \? 'settings:disable-scripts' : 'scripts:pre-request'/);
   });
 
+  it('keeps URL field and Params query mirror in sync without double-serializing', () => {
+    assert.match(script, /function syncParamsFromUrlInput\(mc\)/);
+    assert.match(script, /function syncUrlFromParamsEditor\(mc\)/);
+    assert.match(script, /function healParamsMirrorFromUrl\(mc\)/);
+    assert.match(script, /function composeUrlWithParamsJs\(rawUrl, params\)/);
+    assert.match(script, /syncParamsFromUrlInput\(mc\)/);
+    assert.match(script, /syncUrlFromParamsEditor\(mc\)/);
+    assert.match(script, /healParamsMirrorFromUrl\(mc\)/);
+  });
+
   it('persists enriched response search state and supports environment-switch actions', () => {
     assert.match(script, /responseSearchQuery: typeof data\?\.responseSearchQuery === 'string'/);
     assert.match(script, /responseSearchCaseSensitive: data\?\.responseSearchCaseSensitive === true/);

@@ -65,8 +65,10 @@ class DeferredHandle implements SendHandle {
 
 class FakeHttpService {
   readonly handles: DeferredHandle[] = [];
+  readonly sent: Array<{ method: string; url: string }> = [];
 
-  send(): SendHandle {
+  send(method: string, url: string): SendHandle {
+    this.sent.push({ method, url });
     const handle = new DeferredHandle();
     this.handles.push(handle);
     return handle;
@@ -113,6 +115,66 @@ async function waitForHandle(service: FakeHttpService, index: number): Promise<D
   }
   return service.handles[index];
 }
+
+describe('RequestExecutor query URL building', () => {
+  it('does not duplicate mirrored URL query params in the HTTP request URL or resolved display', async () => {
+    const service = new FakeHttpService();
+    const { host, posted } = createHost();
+    host.getActiveVariables = () => [
+      { key: 'baseUrl', value: 'https://jsonplaceholder.typicode.com', enabled: true },
+    ];
+    const executor = new RequestExecutorCtor(service as unknown as HttpService, host);
+
+    const executePromise = executor.execute({
+      ...createMessage(),
+      url: '{{baseUrl}}/posts?userId=1',
+      params: [{ key: 'userId', value: '1', enabled: true }],
+    });
+    const handle = await waitForHandle(service, 0);
+    handle.resolve({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      body: '{}',
+      time: 1,
+      size: 2,
+    });
+    await executePromise;
+
+    assert.strictEqual(service.sent[0]?.url, 'https://jsonplaceholder.typicode.com/posts?userId=1');
+    const responseMessage = posted.find((message) => message.type === MessageType.ReceiveResponse);
+    assert.strictEqual(responseMessage?.resolvedUrl, 'https://jsonplaceholder.typicode.com/posts?userId=1');
+  });
+
+  it('removes disabled mirrored params from the actual request URL', async () => {
+    const service = new FakeHttpService();
+    const { host, posted } = createHost();
+    const executor = new RequestExecutorCtor(service as unknown as HttpService, host);
+
+    const executePromise = executor.execute({
+      ...createMessage(),
+      url: 'https://api.example.com/posts?userId=1&page=2',
+      params: [
+        { key: 'userId', value: '1', enabled: false },
+        { key: 'page', value: '2', enabled: true },
+      ],
+    });
+    const handle = await waitForHandle(service, 0);
+    handle.resolve({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      body: '{}',
+      time: 1,
+      size: 2,
+    });
+    await executePromise;
+
+    assert.strictEqual(service.sent[0]?.url, 'https://api.example.com/posts?page=2');
+    const responseMessage = posted.find((message) => message.type === MessageType.ReceiveResponse);
+    assert.strictEqual(responseMessage?.resolvedUrl, 'https://api.example.com/posts?page=2');
+  });
+});
 
 describe('RequestExecutor cancel handling', () => {
   it('aborts the active HTTP request and posts a canceled message', async () => {

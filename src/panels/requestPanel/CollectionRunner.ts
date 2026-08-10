@@ -13,8 +13,10 @@ import { ScriptRunner } from '../../services/ScriptRunner';
 import { LocalizationService } from '../../services/LocalizationService';
 import {
   buildUrl,
+  cloneAllKeyValues,
   cloneFormDataFields,
   cloneKeyValues,
+  coalesceQueryParams,
   createCancelableDelay,
   createHistoryRequestSnapshot,
   createRequestTiming,
@@ -187,7 +189,7 @@ export class CollectionRunner {
       request: {
         ...request,
         headers: cloneKeyValues(request.headers ?? []),
-        params: cloneKeyValues(request.params ?? []),
+        params: cloneAllKeyValues(request.params ?? []),
         formData: cloneFormDataFields(request.formData ?? []),
         auth: JSON.parse(JSON.stringify(request.auth ?? { type: 'none' })),
         scripts: request.scripts ? { ...request.scripts } : undefined,
@@ -380,7 +382,7 @@ export class CollectionRunner {
         (header) => header.enabled && header.key && !requestKeySet.has(header.key.toLowerCase())
       );
       const finalHeaders = [...mergedDefaults, ...resolvedHeaders];
-      const finalParams = [...resolvedParams];
+      const finalParams = coalesceQueryParams(resolvedUrl, resolvedParams);
       const unresolvedVariables = findUnresolvedVariables(
         resolvedUrl,
         finalHeaders,

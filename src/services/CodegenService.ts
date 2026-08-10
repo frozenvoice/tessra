@@ -1,4 +1,5 @@
 import { AuthConfig, CodegenTarget, FormDataField, KeyValue, RequestBodyType } from '../models/types';
+import { buildUrl, coalesceQueryParams } from '../panels/requestPanel/requestUtils';
 import { AuthService } from './AuthService';
 
 export interface CodegenRequest {
@@ -235,7 +236,7 @@ export class CodegenService {
 
     return {
       method: request.method,
-      url: this.buildUrl(request.url, params),
+      url: buildUrl(request.url, coalesceQueryParams(request.url, params)),
       headers,
       body: request.body ?? '',
       bodyType: request.bodyType,
@@ -249,23 +250,6 @@ export class CodegenService {
       acc[header.key] = header.value;
       return acc;
     }, {});
-  }
-
-  private static buildUrl(baseUrl: string, params: KeyValue[]): string {
-    if (params.length === 0) { return baseUrl; }
-    try {
-      const url = new URL(baseUrl);
-      for (const param of params) {
-        url.searchParams.append(param.key, param.value);
-      }
-      return url.toString();
-    } catch {
-      const separator = baseUrl.includes('?') ? '&' : '?';
-      const query = params
-        .map((param) => `${encodeURIComponent(param.key)}=${encodeURIComponent(param.value)}`)
-        .join('&');
-      return `${baseUrl}${separator}${query}`;
-    }
   }
 
 }

@@ -5,6 +5,7 @@ import { VariableService } from '../../services/VariableService';
 import { WebSocketConnection, WebSocketService } from '../../services/WebSocketService';
 import {
   buildUrl,
+  coalesceQueryParams,
   cloneKeyValues,
   createUnresolvedVariableError,
   findUnresolvedVariables,
@@ -66,7 +67,7 @@ export class WebSocketManager {
         (header) => header.enabled !== false && header.key && !requestKeySet.has(header.key.toLowerCase())
       );
       const finalHeaders = [...mergedDefaults, ...resolvedHeaders];
-      const finalParams = [...resolvedParams];
+      const finalParams = coalesceQueryParams(resolvedUrl, resolvedParams);
       const auth = message.auth ?? { type: 'none' as const };
       const unresolvedVariables = findUnresolvedVariables(
         resolvedUrl,

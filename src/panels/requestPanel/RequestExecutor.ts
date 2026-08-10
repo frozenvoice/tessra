@@ -15,6 +15,7 @@ import { LocalizationService } from '../../services/LocalizationService';
 import {
   buildUrl,
   cloneFormDataFields,
+  coalesceQueryParams,
   createCancelableDelay,
   createHistoryRequestSnapshot,
   createRequestTiming,
@@ -129,7 +130,7 @@ export class RequestExecutor {
       (header) => header.enabled && header.key && !requestKeySet.has(header.key.toLowerCase())
     );
     const finalHeaders = [...mergedDefaults, ...resolvedHeaders];
-    const finalParams = [...resolvedParams];
+    const finalParams = coalesceQueryParams(resolvedUrl, resolvedParams);
     const unresolvedVariables = findUnresolvedVariables(
       resolvedUrl,
       finalHeaders,

@@ -10,6 +10,7 @@ import {
   RequestBodyType,
   RequestScripts,
 } from '../models/types';
+import { buildUrl, coalesceQueryParams } from '../panels/requestPanel/requestUtils';
 
 interface PostmanAuthAttribute {
   key?: string;
@@ -1154,22 +1155,7 @@ export class ImportExportService {
   }
 
   private static exportRawUrl(baseUrl: string, params: KeyValue[]): string {
-    const activeParams = params.filter((param) => param.enabled !== false && param.key);
-    if (activeParams.length === 0) { return baseUrl; }
-
-    try {
-      const url = new URL(baseUrl);
-      for (const param of activeParams) {
-        url.searchParams.append(param.key, param.value);
-      }
-      return url.toString();
-    } catch {
-      const separator = baseUrl.includes('?') ? '&' : '?';
-      const query = activeParams
-        .map((param) => `${encodeURIComponent(param.key)}=${encodeURIComponent(param.value)}`)
-        .join('&');
-      return `${baseUrl}${separator}${query}`;
-    }
+    return buildUrl(baseUrl, coalesceQueryParams(baseUrl, params));
   }
 
   private static parseUrlEncodedBody(body: string): KeyValue[] {
