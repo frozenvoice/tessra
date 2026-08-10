@@ -4,12 +4,15 @@ import { expect } from '@playwright/test';
 const isMac = process.platform === 'darwin';
 
 export async function runCommand(page: Page, commandLabel: string): Promise<void> {
+  await page.keyboard.press('Escape').catch(() => undefined);
+  await page.locator('.monaco-workbench').click({ position: { x: 400, y: 240 }, timeout: 10000 }).catch(() => undefined);
   await page.keyboard.press(isMac ? 'Meta+Shift+P' : 'Control+Shift+P');
+  // Prefer `.input` class — a bare `input` also matches the hidden quick-input checkbox.
   const input = page.locator('.quick-input-widget .input');
-  await input.waitFor({ state: 'visible', timeout: 15000 });
+  await input.waitFor({ state: 'visible', timeout: 20000 });
   await input.fill(`> ${commandLabel}`);
   const option = page.locator('.quick-input-list .monaco-list-row').filter({ hasText: commandLabel }).first();
-  await option.waitFor({ state: 'visible', timeout: 15000 });
+  await option.waitFor({ state: 'visible', timeout: 30000 });
   await option.click();
 }
 

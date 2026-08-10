@@ -50,6 +50,7 @@ export async function launchTessraHarness(testId: string): Promise<TessraHarness
     '--disable-updates',
     '--disable-gpu',
     '--no-sandbox',
+    '--locale=en',
     '--new-window',
     '--window-size=1600,1000',
   ];
@@ -61,6 +62,8 @@ export async function launchTessraHarness(testId: string): Promise<TessraHarness
       ...process.env,
       TESSRA_E2E: '1',
       TESSRA_E2E_BASE_URL: server.baseUrl,
+      LANG: 'en_US.UTF-8',
+      LC_ALL: 'en_US.UTF-8',
     },
   });
 
@@ -68,6 +71,12 @@ export async function launchTessraHarness(testId: string): Promise<TessraHarness
   await page.waitForLoadState('domcontentloaded');
   // Wait until workbench shell is interactive.
   await page.locator('.monaco-workbench').waitFor({ state: 'visible', timeout: 60000 });
+  // Tessra activity-bar contribution proves package.json contributes finished loading
+  // (Linux CI otherwise races Command Palette before the extension host is ready).
+  await page
+    .locator('.activitybar [aria-label*="Tessra"], .activitybar .codicon[aria-label*="Tessra"], .activitybar .action-label[aria-label*="Tessra"]')
+    .first()
+    .waitFor({ state: 'visible', timeout: 90000 });
   try {
     const [width, height] = [1600, 1000];
     await page.setViewportSize({ width, height });
