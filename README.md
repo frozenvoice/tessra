@@ -9,7 +9,7 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 ## What's new in 1.0.10
 
 - Compact, editor-native Request Panel (**Quiet Instrument**): Method → URL → Send first, quieter secondary chrome
-- Request execution status strip for environment, Vars/Defaults, Scripts/History, and risk overrides
+- Request execution status strip for environment (`N vars`), Defaults, request `Used N`, Scripts/History, and risk overrides (Tessra signature accent + tiny tesseract mark on Env; click Env to edit variables)
 - JSON/XML Body syntax highlighting that keeps the lightweight textarea and undo/redo
 - Safe Body type conversion with Convert / Keep text / Cancel (supported structural pairs only)
 - Still local-first: no login, no cloud sync, no telemetry
@@ -59,11 +59,11 @@ Group request history by date and run collections with status summaries.
 - `Ctrl+Enter` / `Cmd+Enter` also sends the request
 - Cancel in-flight requests without discarding the last good response
 - Request stage feedback, richer empty states, status-aware response feedback, and polished response actions
-- Quiet status strip for environment, Vars/Defaults, Scripts/History on·off, and risk overrides; variable editor opens on demand from the strip or Environments view
+- Quiet status strip for environment (`N vars`), Defaults, request `Used N`, Scripts/History on·off, and risk overrides; click the Environment segment (or strip expand / Environments view) to open the variable editor
 - Preflight warnings for unresolved `{{variables}}` before you send
 - Clickable status chips that jump to the relevant request area, focus it, and briefly highlight the linked card
 - Draft change chips that summarize which request sections changed before you save or send
-- Variable usage cards that show where each `{{variable}}` is used across the request
+- Variable Usage disclosure (via strip `Used N` / Vars) showing where each `{{variable}}` is used across the request
 - Masked auth and sensitive key/value inputs with reveal controls
 - Bulk paste for headers and query params
 - Empty-state quick actions for a sample request, the guide, environment switching, and URL focus
@@ -141,7 +141,7 @@ Group request history by date and run collections with status summaries.
 - Dynamic HTML pages stay in Body while `Open URL` remains available for HTTP/HTTPS resolved pages
 - Readable response durations with requested/received timestamps in the response metadata
 - Sticky response toolbar for finding text, compare, and response actions
-- Quiet status strip with glanceable editor indicators for the active environment, Scripts/History on·off, Defaults/Vars counts, and risk overrides (TLS insecure, defaults skipped, redirects, headers-only); workspace profile lives in strip expand disclosure
+- Quiet status strip with glanceable editor indicators for the active environment (`N vars`), Scripts/History on·off, Defaults/`Used N` counts, and risk overrides (TLS insecure, defaults skipped, redirects, headers-only); workspace profile lives in strip expand disclosure; Environment segment toggles the inline variable editor
 - Find text within the response body with next/previous navigation, case-sensitive mode, and regex mode
 - JSON tree viewer
 - XML formatting with `Pretty`, `Compact`, and `Inline Children`

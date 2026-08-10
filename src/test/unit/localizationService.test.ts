@@ -76,6 +76,7 @@ describe('LocalizationService source', () => {
     const stripScriptsCountMatches = source.match(/'webview\.stripScriptsCount':/g) ?? [];
     const stripDefaultsCountMatches = source.match(/'webview\.stripDefaultsCount':/g) ?? [];
     const stripVarsCountMatches = source.match(/'webview\.stripVarsCount':/g) ?? [];
+    const stripUsedCountMatches = source.match(/'webview\.stripUsedCount':/g) ?? [];
     const tlsInsecureStatusMatches = source.match(/'webview\.tlsInsecureStatus':/g) ?? [];
     const manageMatches = source.match(/'webview\.manage':/g) ?? [];
 
@@ -95,6 +96,7 @@ describe('LocalizationService source', () => {
     assert.strictEqual(stripScriptsCountMatches.length, 3);
     assert.strictEqual(stripDefaultsCountMatches.length, 3);
     assert.strictEqual(stripVarsCountMatches.length, 3);
+    assert.strictEqual(stripUsedCountMatches.length, 3);
     assert.strictEqual(tlsInsecureStatusMatches.length, 3);
     assert.strictEqual(manageMatches.length, 3);
   });

@@ -15,6 +15,9 @@ colors:
   vscode-list-active: "var(--vscode-list-activeSelectionBackground)"
   vscode-error: "var(--vscode-errorForeground)"
   vscode-warning: "var(--vscode-editorWarning-foreground)"
+  brand-blue: "var(--vscode-charts-blue, #3794ff)"
+  brand-violet: "var(--vscode-charts-purple, #b180d7)"
+  brand-accent: "color-mix(blue→violet via --tessra-brand)"
   method-get: "#4EC94E"
   method-post: "#E5C07B"
   method-put: "#61AFEF"
@@ -105,7 +108,7 @@ components:
 
 **Creative North Star: "The Quiet Instrument"**
 
-Tessra’s visual world is an **Operate** surface inside a VS Code Webview: a precise local API instrument that disappears into Method → URL → Send → edit → inspect. It is not a marketing dashboard, not a SaaS console, and not a clone of stock VS Code chrome. Identity lives in method color discipline, dense editor rhythm, and quiet local-first cues — never in pill walls, nested cards, glow, or bounce.
+Tessra’s visual world is an **Operate** surface inside a VS Code Webview: a precise local API instrument that disappears into Method → URL → Send → edit → inspect. It is not a marketing dashboard, not a SaaS console, and not a clone of stock VS Code chrome. Identity lives in method color discipline, a thin Tessra signature accent (icon blue→violet), dense editor rhythm, and quiet local-first cues — never in pill walls, nested cards, glow, or bounce.
 
 **Quiet Instrument is the final request-panel contract.** The previous pill/chip/card grammar is anti-reference and must not be restored. Preserve every functional contract (features, messages, keyboard, Body undo/redo, Collection Runner, WebSocket, environments, response viewer) while keeping this visual grammar. Theme presets (`default`, `minimal-cool`, `product`, `bold-color`) remain as **color/token variation only** on one shared layout, spacing scale, and hierarchy. Do not invent layout forks to preserve old preset looks.
 
@@ -115,19 +118,23 @@ This system encodes the shipped request panel world for agents working on Tessra
 - Strongest hierarchy always: Method → URL → Send → Request editing → Response
 - One quiet status strip for meta; success primary only in the response summary
 - Conditional response-first split after Send; request remains instantly editable
-- VS Code theme tokens + restrained accent; flat surfaces, thin dividers, compact toolbars
+- VS Code theme tokens + restrained Tessra brand accent; flat surfaces, thin dividers, compact toolbars
 - Compact editor density; progressive disclosure for defaults, variables, compare/mode
-- Tessra identity via method colors and quiet local cues — not dashboard spectacle
+- Tessra identity via method colors, signature brand accent on status-strip context, and a tiny tesseract mark — not dashboard spectacle
 
 ## Colors
 
-Restrained palette anchored to **VS Code theme tokens**. Tessra does not ship a fixed marketing palette for the request panel; it inherits the host theme and adds a small semantic + method vocabulary.
+Restrained palette anchored to **VS Code theme tokens**. Tessra does not ship a fixed marketing palette for the request panel; it inherits the host theme and adds a small semantic + method + brand vocabulary.
 
 ### Primary
 - **Host Action Blue** (`var(--vscode-button-background)` / focus via `var(--vscode-focusBorder)`): Send / Connect and other primary actions. Flat fill, no gradient streak, no success-green takeover after send.
 
+### Brand signature
+- **Tessra Accent** (`--tessra-brand` / `--tessra-accent`): icon DNA blue→violet via `color-mix` of `--vscode-charts-blue` + `--vscode-charts-purple` (preset hue/chroma may shift slightly). Use only for brand/context: status-strip Environment, tiny tesseract mark, limited selected/focus cues (request-editor tab underline, runner active row, compare active, response-emphasis edge).
+- **Never** paint Send, method badges, response success/error/warning, all tabs, all borders, Settings controls, or full backgrounds with brand accent. Must stay distinct from Method PUT sky-blue and semantic green/red/amber.
+
 ### Secondary
-- **Method Spectrum** (GET `#4EC94E`, POST `#E5C07B`, PUT `#61AFEF`, PATCH `#D19A66`, DELETE `#E06C75`, HEAD/OPTIONS `#ABB2BF`, WS `#4EC9B0`): Tessra’s durable identity cue on method badges and active-tab underlines. Tint lightly; do not flood large surfaces.
+- **Method Spectrum** (GET `#4EC94E`, POST `#E5C07B`, PUT `#61AFEF`, PATCH `#D19A66`, DELETE `#E06C75`, HEAD/OPTIONS `#ABB2BF`, WS `#4EC9B0`): durable method cue on badges and active request-tab underlines. Tint lightly; do not flood large surfaces. Not the brand accent.
 
 ### Neutral
 - **Editor Surface** (`var(--vscode-editor-background)`): Primary work canvas (URL, body editors, response body).
@@ -206,10 +213,11 @@ Operate topology for the request panel (and sibling dense tools):
 - **Focus:** Visible focus ring; keyboard parity for tabs, primary actions, row delete, response menus.
 
 ### Status strip (signature)
-- **Character:** One quiet editor-native strip — not a chip wall.
+- **Character:** One quiet editor-native strip — VS Code status-line weight with a Tessra signature — not a chip wall.
+- **Brand cue:** Environment segment uses restrained brand accent + optional tiny tesseract glyph (same wireframe as Activity Bar / Marketplace icon). Scripts/History keep check/dot hierarchy; Defaults/Vars stay muted; risk stays warning/error semantic.
 - **Default:** Muted text segments separated by middots or thin rules (`Env: staging · Vars ok · Defaults 2 · Preflight`).
 - **Disclosure:** Hover/tooltip for resolution detail; expand for editable env summary / manage links.
-- **Never:** Multiple Environment appearances, Live Response co-primary, or permanent VARIABLE USAGE card.
+- **Never:** Height increase, large badges, bg on all segments, pill wall, Multiple Environment appearances, Live Response co-primary, or permanent VARIABLE USAGE card. Strip must stay weaker than the URL row.
 
 ### Method + URL row
 - Method control + URL field + Send own the first visual weight after tabs.

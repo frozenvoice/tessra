@@ -7,7 +7,7 @@ Use this checklist in the VS Code Extension Development Host after `npm run buil
 Quiet Instrument layout and Body workflows. Run this pass before Marketplace publish.
 
 - Confirm Method → URL → Send reads as the primary path; infrequent actions sit in overflow; no pill-wall meta chrome.
-- Confirm the status strip shows environment, Vars/Defaults, Scripts/History cues, and risk overrides; expand disclosure for workspace profile / details.
+- Confirm the status strip shows environment (`N vars`), Defaults, request `Used N`, Scripts/History cues, and risk overrides; Env shows Tessra accent + tiny tesseract mark; click Environment to toggle the variable editor; click `Used N` / Vars to toggle Variable Usage in strip disclosure; expand disclosure for workspace profile / details.
 - Toggle environment (or none); confirm strip updates and `{{variable}}` resolution still works.
 - Toggle Scripts present/off and History on/off; confirm strip cues update.
 - Confirm Defaults count / Defaults skipped appear correctly; enable TLS insecure and confirm a warning segment.
@@ -47,7 +47,7 @@ Quiet Instrument layout and Body workflows. Run this pass before Marketplace pub
 ## Variables And Scripts
 
 - Create, edit, switch, and delete environments.
-- Confirm the request panel status strip shows the active environment and variable count; the variable editor opens on demand from the strip or Environments view (not a permanent collapsed card above the compose path).
+- Confirm the request panel status strip shows the active environment and its defined variable count (`N vars`), separate from request `Used N`; the variable editor opens from the Environment segment (keyboard Enter/Space), strip expand, or Environments view (not a permanent collapsed card above the compose path).
 - Confirm requests still resolve environment variables while the editor is closed, and after editing variables while open.
 - Resolve `{{variable}}` values across URL, params, headers, body, auth, and scripts.
 - Confirm nested variables such as `host -> baseUrl -> apiUrl` resolve recursively.

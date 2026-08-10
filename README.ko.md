@@ -11,7 +11,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 ## 1.0.10에서 달라진 점
 
 - 컴팩트한 에디터형 요청 패널(**Quiet Instrument**): Method → URL → Send 우선, 보조 크롬은 더 조용하게
-- 환경, Vars/Defaults, Scripts/History, 위험 설정을 보여주는 요청 실행 상태 스트립
+- 환경(`N vars`), Defaults, 요청 `Used N`, Scripts/History, 위험 설정을 보여주는 요청 실행 상태 스트립 (Env에 Tessra 시그니처 액센트 + 작은 테서랙트 마크; Env 클릭으로 변수 편집)
 - 가벼운 textarea와 undo/redo를 유지한 JSON/XML Body 구문 강조
 - Convert / Keep text / Cancel 기반의 안전한 Body 타입 변환(지원되는 구조 변환만)
 - 로컬 우선 원칙 유지: 로그인 없음, 클라우드 동기화 없음, 텔레메트리 없음
@@ -61,11 +61,11 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - `Ctrl+Enter` / macOS에서는 `Cmd+Enter` 전송
 - 마지막 정상 응답을 유지한 채 진행 중 요청 취소
 - 요청 단계 피드백, 빈 상태 화면, 응답 상태 피드백, 정돈된 액션 버튼 UI
-- 환경, Vars/Defaults, Scripts/History on·off, 위험 설정을 보여주는 Quiet 상태 스트립; 변수 편집기는 스트립 또는 Environments 뷰에서 필요할 때 연다
+- 환경(`N vars`), Defaults, 요청 `Used N`, Scripts/History on·off, 위험 설정을 보여주는 Quiet 상태 스트립; Environment 세그먼트(또는 스트립 확장 / Environments 뷰)에서 변수 편집기를 연다
 - 전송 전 미해결 `{{variable}}`을 알려주는 프리플라이트 경고
 - 관련 탭으로 바로 이동하고, 연결된 카드에 포커스와 잠깐의 하이라이트를 주는 클릭형 상태 배지
 - 저장하거나 보내기 전에 어느 영역이 바뀌었는지 보여주는 요청 변경 칩
-- `{{variable}}`이 URL / 헤더 / 바디 / 인증 / 스크립트 어디에 쓰였는지 보여주는 변수 사용처 카드
+- 상태 스트립 `Used N` / Vars로 여는 Variable Usage disclosure — `{{variable}}`이 URL / 헤더 / 바디 / 인증 / 스크립트 어디에 쓰였는지 표시
 - 인증값과 민감한 key/value 입력 마스킹 및 reveal 버튼
 - 헤더 / 파라미터 일괄 붙여넣기
 - 샘플 요청 불러오기, 가이드 열기, 환경 전환, URL 포커스 같은 빈 상태 퀵 액션
@@ -142,7 +142,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 동적인 HTML 페이지는 Body 탭에 남고, HTTP/HTTPS 원본 페이지는 `URL 열기` 액션으로 열 수 있음
 - 읽기 좋은 응답 시간과 요청/수신 시각을 응답 메타데이터에 표시
 - 검색 / 비교 / 저장 액션이 따라오는 sticky 응답 툴바
-- 활성 환경, 스크립트/히스토리 on·off, 기본헤더·변수 개수, 위험 설정(TLS 비보안, 기본헤더 건너뜀 등)을 한눈에 구분하는 상태 스트립; 워크스페이스 프로필은 스트립 확장 영역에 유지
+- 활성 환경(`N vars`), 스크립트/히스토리 on·off, 기본헤더·요청 `Used N`, 위험 설정(TLS 비보안, 기본헤더 건너뜀 등)을 한눈에 구분하는 상태 스트립; Environment 세그먼트로 변수 편집기 토글; 워크스페이스 프로필은 스트립 확장 영역에 유지
 - 이전 / 다음 이동, 대소문자 구분, 정규식 옵션을 갖춘 응답 본문 검색
 - JSON 트리 뷰어
 - XML `Pretty`, `Compact`, `Inline Children` 포맷

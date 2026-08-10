@@ -114,13 +114,17 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 
 
 /* Quiet Instrument — status / URL / Send chrome */
-.status-strip{display:flex;flex-direction:column;flex-shrink:0;padding:2px 8px;border-bottom:1px solid var(--tessra-border-soft,var(--vscode-panel-border,#444));background:var(--tessra-surface-tint,var(--vscode-editor-background));min-height:22px;container-type:inline-size;container-name:status-strip;--strip-env-fg:var(--vscode-foreground);--strip-env-border:color-mix(in srgb,var(--tessra-accent,var(--vscode-focusBorder,#007acc)) 55%,transparent);--strip-env-bg:color-mix(in srgb,var(--tessra-accent,var(--vscode-focusBorder,#007acc)) 10%,transparent);--strip-active-cue:var(--tessra-tone-info,#61afef);--strip-warn:var(--vscode-editorWarning-foreground,var(--tessra-tone-warning,#d19a66));--strip-warn-border:color-mix(in srgb,var(--strip-warn) 55%,transparent);--strip-warn-bg:color-mix(in srgb,var(--strip-warn) 12%,transparent);--strip-info:var(--tessra-strip-info,var(--vscode-descriptionForeground,#8e8e8e));--strip-info-num:var(--tessra-strip-info-num,var(--vscode-foreground))}
+.status-strip{display:flex;flex-direction:column;flex-shrink:0;padding:2px 8px;border-bottom:1px solid var(--tessra-border-soft,var(--vscode-panel-border,#444));background:var(--tessra-surface-tint,var(--vscode-editor-background));min-height:22px;container-type:inline-size;container-name:status-strip;--strip-env-fg:var(--tessra-brand-fg,var(--vscode-foreground));--strip-env-border:var(--tessra-brand-border,color-mix(in srgb,var(--tessra-accent,var(--vscode-focusBorder,#007acc)) 50%,transparent));--strip-env-bg:var(--tessra-brand-soft,color-mix(in srgb,var(--tessra-accent,var(--vscode-focusBorder,#007acc)) 9%,transparent));--strip-active-cue:var(--tessra-tone-info,#61afef);--strip-warn:var(--vscode-editorWarning-foreground,var(--tessra-tone-warning,#d19a66));--strip-warn-border:color-mix(in srgb,var(--strip-warn) 55%,transparent);--strip-warn-bg:color-mix(in srgb,var(--strip-warn) 12%,transparent);--strip-info:var(--tessra-strip-info,var(--vscode-descriptionForeground,#8e8e8e));--strip-info-num:var(--tessra-strip-info-num,var(--vscode-foreground))}
 .status-strip-line{display:flex;align-items:center;gap:4px;min-height:18px;min-width:0}
 .status-strip-segments{display:flex;align-items:center;flex-wrap:nowrap;gap:0;min-width:0;flex:1;overflow:hidden;font-size:11px;font-weight:400;line-height:1.2;letter-spacing:0;color:var(--strip-info)}
 .status-strip-seg{display:inline-flex;align-items:center;gap:3px;min-width:0;max-width:220px;min-height:18px;padding:0 3px;border:1px solid transparent;border-radius:2px;background:transparent;color:inherit;font:inherit;font-weight:400;letter-spacing:0;cursor:default;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:1}
 .status-strip-seg.clickable{cursor:pointer}
 .status-strip-seg.clickable:hover{color:var(--vscode-foreground);background:var(--vscode-toolbar-hoverBackground,rgba(90,93,94,.22))}
-/* Tier 1 — Environment: soft accent chip (rect, not pill); first scan hit on strip */
+.tessra-mark{display:inline-block;flex-shrink:0;width:10px;height:10px;color:var(--tessra-brand,var(--tessra-accent,var(--vscode-focusBorder,#007acc)));opacity:.88;vertical-align:-0.05em}
+.tessra-mark--strip{width:9px;height:9px}
+.tessra-mark--empty{width:14px;height:14px;opacity:.26;margin-bottom:4px}
+.status-strip-seg.is-env .tessra-mark,.status-strip-seg.is-warn .tessra-mark{opacity:.92}
+/* Tier 1 — Environment: soft brand chip (rect, not pill); first scan hit on strip */
 .status-strip-seg.is-env{flex-shrink:0;max-width:min(40%,180px);padding:0 5px;border-radius:3px;font-weight:600;letter-spacing:.01em;color:var(--strip-env-fg);border-color:var(--strip-env-border);background:var(--strip-env-bg)}
 /* Tier 2 — Active behavior: cue + weight; muted info cue (never response success green) */
 .status-strip-seg.is-on{flex-shrink:0;font-weight:500;letter-spacing:0;color:var(--vscode-foreground)}
@@ -149,9 +153,11 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .status-strip-toggle:focus-visible{outline:1px solid var(--vscode-focusBorder)}
 .status-strip-panel{padding:4px 0 6px;border-top:1px solid var(--vscode-panel-border,#444);display:flex;flex-direction:column;gap:4px}
 .status-strip-panel.hidden{display:none}
-/* Narrow: Vars (low) → Defaults/other info (medium); Env + risk + Scripts/History stay */
+/* Narrow: Used/env-count (low) → Defaults/other info (medium); Env disclosure + risk + Scripts/History stay */
+.status-strip-env-count{font-weight:500;opacity:.85;white-space:nowrap}
 @container status-strip (max-width: 480px){
   .status-strip-seg[data-priority="low"]{display:none}
+  .status-strip-env-count{display:none}
 }
 @container status-strip (max-width: 360px){
   .status-strip-seg[data-priority="medium"]{display:none}
@@ -178,7 +184,7 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .preflight-pill.accent{color:var(--tessra-method-ws,#4ec9b0);border-color:color-mix(in srgb,var(--tessra-method-ws,#4ec9b0) 35%,transparent)}
 .request-status-chip.muted{opacity:.78}
 .linked-focus-active{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}
-.settings-toggle.linked-focus-active,.script-card.linked-focus-active,.script-help-line.linked-focus-active,.default-headers-banner.linked-focus-active,.env-editor.linked-focus-active{border-color:var(--vscode-focusBorder)}
+.settings-toggle.linked-focus-active,.script-card.linked-focus-active,.script-help-line.linked-focus-active,.default-headers-banner.linked-focus-active,.env-editor.linked-focus-active,.status-strip-detail-block.linked-focus-active{border-color:var(--vscode-focusBorder)}
 .request-status-chip .env-label{opacity:.75;margin-right:4px}
 .request-status-chip .env-name{color:var(--vscode-debugTokenExpression-name,var(--vscode-symbolIcon-variableForeground))}
 .request-preflight{display:flex;flex-direction:column;gap:4px;padding:0;flex:0 1 auto;min-width:0}
@@ -783,7 +789,14 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
   --tessra-shadow-lg:none;
   --tessra-glow-blue:transparent;
   --tessra-glow-mint:transparent;
-  --tessra-accent:var(--vscode-focusBorder,#007acc);
+  /* Tessra signature: icon blue→violet DNA, host charts blend (light/dark safe) */
+  --tessra-brand-blue:var(--vscode-charts-blue,#3794ff);
+  --tessra-brand-violet:var(--vscode-charts-purple,#b180d7);
+  --tessra-brand:color-mix(in srgb,var(--tessra-brand-violet) 46%,var(--tessra-brand-blue));
+  --tessra-brand-fg:color-mix(in srgb,var(--tessra-brand) 42%,var(--vscode-foreground));
+  --tessra-brand-soft:color-mix(in srgb,var(--tessra-brand) 9%,transparent);
+  --tessra-brand-border:color-mix(in srgb,var(--tessra-brand) 48%,transparent);
+  --tessra-accent:var(--tessra-brand);
   --tessra-label-accent:var(--vscode-descriptionForeground);
   --tessra-strip-info:var(--vscode-descriptionForeground,#8e8e8e);
   --tessra-strip-info-num:var(--vscode-foreground);
@@ -909,12 +922,18 @@ body{background:var(--tessra-surface-tint,var(--vscode-editor-background))}
 .copy-toast{border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 /* Theme presets: CSS custom properties only — shared Quiet Instrument layout/spacing/radius/chrome */
 body[data-panel-theme="minimal-cool"]{
-  --tessra-accent:#7dc8ff;
+  --tessra-brand-blue:#7dc8ff;
+  --tessra-brand-violet:#9a8cff;
+  --tessra-brand:color-mix(in srgb,var(--tessra-brand-violet) 40%,var(--tessra-brand-blue));
+  --tessra-brand-fg:color-mix(in srgb,var(--tessra-brand) 38%,var(--vscode-foreground));
+  --tessra-brand-soft:color-mix(in srgb,var(--tessra-brand) 8%,transparent);
+  --tessra-brand-border:color-mix(in srgb,var(--tessra-brand) 44%,transparent);
+  --tessra-accent:var(--tessra-brand);
   --tessra-tone-info:#7dc8ff;
-  --tessra-surface-tint:color-mix(in srgb,#7dc8ff 3%,var(--vscode-editor-background));
-  --tessra-surface-2:color-mix(in srgb,#7dc8ff 4%,transparent);
-  --tessra-border-soft:color-mix(in srgb,#7dc8ff 18%,var(--vscode-panel-border,#444));
-  --tessra-border-strong:color-mix(in srgb,#7dc8ff 28%,var(--vscode-panel-border,#555));
+  --tessra-surface-tint:color-mix(in srgb,var(--tessra-brand) 3%,var(--vscode-editor-background));
+  --tessra-surface-2:color-mix(in srgb,var(--tessra-brand) 4%,transparent);
+  --tessra-border-soft:color-mix(in srgb,var(--tessra-brand-blue) 18%,var(--vscode-panel-border,#444));
+  --tessra-border-strong:color-mix(in srgb,var(--tessra-brand-blue) 28%,var(--vscode-panel-border,#555));
   --tessra-strip-info:var(--vscode-descriptionForeground,#8e8e8e);
   --tessra-strip-info-num:var(--vscode-foreground);
   --tessra-label-accent:var(--vscode-descriptionForeground);
@@ -935,12 +954,18 @@ body[data-panel-theme="minimal-cool"]{
   --tessra-json-null:var(--vscode-debugTokenExpression-boolean);
 }
 body[data-panel-theme="product"]{
-  --tessra-accent:#75bcff;
+  --tessra-brand-blue:#75bcff;
+  --tessra-brand-violet:#a78bfa;
+  --tessra-brand:color-mix(in srgb,var(--tessra-brand-violet) 44%,var(--tessra-brand-blue));
+  --tessra-brand-fg:color-mix(in srgb,var(--tessra-brand) 40%,var(--vscode-foreground));
+  --tessra-brand-soft:color-mix(in srgb,var(--tessra-brand) 9%,transparent);
+  --tessra-brand-border:color-mix(in srgb,var(--tessra-brand) 48%,transparent);
+  --tessra-accent:var(--tessra-brand);
   --tessra-tone-info:#9fd3ff;
-  --tessra-surface-tint:color-mix(in srgb,#75bcff 2.5%,var(--vscode-editor-background));
-  --tessra-surface-2:color-mix(in srgb,#75bcff 3.5%,transparent);
-  --tessra-border-soft:color-mix(in srgb,#75bcff 22%,var(--vscode-panel-border,#444));
-  --tessra-border-strong:color-mix(in srgb,#75bcff 34%,var(--vscode-panel-border,#555));
+  --tessra-surface-tint:color-mix(in srgb,var(--tessra-brand) 2.5%,var(--vscode-editor-background));
+  --tessra-surface-2:color-mix(in srgb,var(--tessra-brand) 3.5%,transparent);
+  --tessra-border-soft:color-mix(in srgb,var(--tessra-brand-blue) 22%,var(--vscode-panel-border,#444));
+  --tessra-border-strong:color-mix(in srgb,var(--tessra-brand-blue) 34%,var(--vscode-panel-border,#555));
   --tessra-strip-info:var(--vscode-descriptionForeground,#8e8e8e);
   --tessra-strip-info-num:var(--vscode-foreground);
   --tessra-label-accent:#9fd3ff;
@@ -961,12 +986,18 @@ body[data-panel-theme="product"]{
   --tessra-json-null:var(--vscode-debugTokenExpression-boolean);
 }
 body[data-panel-theme="bold-color"]{
-  --tessra-accent:#57a6ff;
+  --tessra-brand-blue:#57a6ff;
+  --tessra-brand-violet:#9b6dff;
+  --tessra-brand:color-mix(in srgb,var(--tessra-brand-violet) 48%,var(--tessra-brand-blue));
+  --tessra-brand-fg:color-mix(in srgb,var(--tessra-brand) 45%,var(--vscode-foreground));
+  --tessra-brand-soft:color-mix(in srgb,var(--tessra-brand) 10%,transparent);
+  --tessra-brand-border:color-mix(in srgb,var(--tessra-brand) 52%,transparent);
+  --tessra-accent:var(--tessra-brand);
   --tessra-tone-info:#7fc8ff;
-  --tessra-surface-tint:color-mix(in srgb,#57a6ff 4%,var(--vscode-editor-background));
-  --tessra-surface-2:color-mix(in srgb,#57a6ff 5%,transparent);
-  --tessra-border-soft:color-mix(in srgb,#57a6ff 26%,var(--vscode-panel-border,#444));
-  --tessra-border-strong:color-mix(in srgb,#57a6ff 40%,var(--vscode-panel-border,#555));
+  --tessra-surface-tint:color-mix(in srgb,var(--tessra-brand) 4%,var(--vscode-editor-background));
+  --tessra-surface-2:color-mix(in srgb,var(--tessra-brand) 5%,transparent);
+  --tessra-border-soft:color-mix(in srgb,var(--tessra-brand-blue) 26%,var(--vscode-panel-border,#444));
+  --tessra-border-strong:color-mix(in srgb,var(--tessra-brand-blue) 40%,var(--vscode-panel-border,#555));
   --tessra-strip-info:var(--vscode-descriptionForeground,#8e8e8e);
   --tessra-strip-info-num:var(--vscode-foreground);
   --tessra-label-accent:var(--vscode-descriptionForeground);
@@ -3808,9 +3839,16 @@ function revealDefaultHeadersEditor() {
   });
 }
 
+function syncEnvironmentStripDisclosureState() {
+  var btn = mainContent?.querySelector('.status-strip-seg[data-action="edit-environment"]');
+  if (!btn) return;
+  btn.setAttribute('aria-expanded', isEnvironmentEditorOpen() ? 'true' : 'false');
+}
+
 function revealEnvironmentEditor() {
   if (!envEditor) return;
   envEditor.classList.remove('hidden');
+  syncEnvironmentStripDisclosureState();
   if (editorLinkedFocusTimer) {
     clearTimeout(editorLinkedFocusTimer);
     editorLinkedFocusTimer = null;
@@ -3834,6 +3872,18 @@ function revealEnvironmentEditor() {
       editorLinkedFocusTimer = null;
     }, 2200);
   });
+}
+
+function toggleEnvironmentEditor() {
+  if (!editingEnvId) {
+    vscode.postMessage({ type: 'switchEnvironment' });
+    return;
+  }
+  if (isEnvironmentEditorOpen()) {
+    hideEnvironmentEditor();
+    return;
+  }
+  revealEnvironmentEditor();
 }
 
 function switchRequestEditorTabAndRevealInContent(mc, meta) {
@@ -4266,8 +4316,9 @@ function loadSampleRequestIntoActiveTab() {
 }
 
 function renderEmptyState(title, copy, actions) {
-  // Quiet Instrument: 짧은 안내 + 주요 액션만 (orbit/카드/kicker 없음)
+  // Quiet Instrument: 짧은 안내 + 주요 액션만 (orbit/카드/kicker 없음); 저대비 Tessra mark 1회
   return '<div class="empty-state">' +
+    renderTessraMark('tessra-mark--empty') +
     '<div class="empty-state-title">' + escapeHtml(title) + '</div>' +
     '<div class="empty-state-copy">' + escapeHtml(copy) + '</div>' +
     ((actions && actions.length)
@@ -4381,6 +4432,13 @@ function countExecutableScripts(scripts) {
   return count;
 }
 
+function renderTessraMark(extraClass) {
+  // Activity Bar / Marketplace 아이콘과 동일 테서랙트 와이어프레임 (tiny mark only)
+  return '<svg class="tessra-mark' + (extraClass ? ' ' + extraClass : '') + '" width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">' +
+    '<path d="M12 2.9 19.1 7v10L12 21.1 4.9 17V7L12 2.9Zm0 0v18.2M4.9 7l7.1 4.1L19.1 7M4.9 17l7.1-4.2 7.1 4.2M4.9 7l7.1 5.8L4.9 17M19.1 7 12 12.8l7.1 4.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '</svg>';
+}
+
 function renderStatusStripCue(cue) {
   if (cue === 'on-dot') return '<span class="status-strip-cue" aria-hidden="true">●</span>';
   if (cue === 'on-check') return '<span class="status-strip-cue" aria-hidden="true">✓</span>';
@@ -4399,6 +4457,70 @@ function renderStatusStripLabelHtml(label, count) {
     escapeHtml(String(label).slice(idx + countStr.length));
 }
 
+function isEnvironmentEditorOpen() {
+  return !!(envEditor && !envEditor.classList.contains('hidden'));
+}
+
+function getStatusStripRoot() {
+  return (typeof mainContent !== 'undefined' && mainContent)
+    ? mainContent.querySelector('.js-status-strip')
+    : null;
+}
+
+function isStatusStripExpanded() {
+  return getStatusStripRoot()?.dataset?.expanded === '1';
+}
+
+function setStatusStripExpanded(open, options) {
+  var opts = options || {};
+  var host = (typeof mainContent !== 'undefined' && mainContent) ? mainContent : null;
+  var strip = host?.querySelector('.js-status-strip');
+  var panel = strip?.querySelector('.js-status-strip-panel');
+  var toggle = strip?.querySelector('.js-status-strip-toggle');
+  if (!strip || !panel || !toggle) return false;
+  strip.dataset.expanded = open ? '1' : '0';
+  panel.classList.toggle('hidden', !open);
+  toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  toggle.setAttribute('aria-label', open ? tr('webview.collapse') : tr('webview.expand'));
+  toggle.setAttribute('title', open ? tr('webview.collapse') : tr('webview.expand'));
+  // Used/Vars 세그먼트 aria-expanded 동기화
+  host.querySelectorAll('.status-strip-seg[data-action="reveal-variable-usage"]').forEach(function(btn) {
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  if (open && opts.focusSelector) {
+    var target = panel.querySelector(opts.focusSelector);
+    if (target) {
+      clearLinkedFocusInContent(host);
+      if (typeof target.scrollIntoView === 'function') {
+        try {
+          target.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        } catch (_) {
+          target.scrollIntoView();
+        }
+      }
+      queueLinkedFocusReveal(function() {
+        if (!target?.isConnected) return;
+        target.classList.add('linked-focus-active');
+        var focusable = target.querySelector('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])') || target;
+        focusLinkedTarget(focusable);
+        linkedFocusTimer = setTimeout(function() {
+          target.classList.remove('linked-focus-active');
+          linkedFocusTimer = null;
+        }, 2200);
+      });
+    }
+  }
+  return true;
+}
+
+function revealVariableUsageDisclosure() {
+  var host = (typeof mainContent !== 'undefined' && mainContent) ? mainContent : null;
+  var focusSel = host?.querySelector('.js-status-strip-unresolved')
+    ? '.js-status-strip-unresolved'
+    : '.js-status-strip-var-usage';
+  setStatusStripExpanded(true, { focusSelector: focusSel });
+}
+
 function renderStatusStripSegment(label, tone, action, meta, tooltip, options) {
   options = options || {};
   var cue = options.cue || '';
@@ -4407,30 +4529,53 @@ function renderStatusStripSegment(label, tone, action, meta, tooltip, options) {
   var attrs = action
     ? ' type="button" data-action="' + escapeAttr(action) + '"' + (meta ? ' data-meta="' + escapeAttr(meta) + '"' : '')
     : '';
+  if (options.ariaExpanded != null) {
+    attrs += ' aria-expanded="' + (options.ariaExpanded ? 'true' : 'false') + '"';
+  }
+  if (options.ariaControls) {
+    attrs += ' aria-controls="' + escapeAttr(options.ariaControls) + '"';
+  }
   var titleAttr = tooltip ? ' title="' + escapeAttr(tooltip) + '"' : '';
   var priorityAttr = ' data-priority="' + escapeAttr(priority) + '"';
   var tag = action ? 'button' : 'span';
+  var labelInner = options.labelHtml != null
+    ? options.labelHtml
+    : renderStatusStripLabelHtml(label, options.count);
   return '<' + tag + ' class="' + classes + '"' + attrs + priorityAttr + titleAttr + '>' +
+    (options.mark ? renderTessraMark('tessra-mark--strip') : '') +
     renderStatusStripCue(cue) +
-    '<span class="status-strip-label">' + renderStatusStripLabelHtml(label, options.count) + '</span>' +
+    '<span class="status-strip-label">' + labelInner + '</span>' +
   '</' + tag + '>';
 }
 
 function buildStatusStripSegments(tab) {
   var segments = [];
 
-  // 1) Environment — always first, primary context
+  // 1) Environment — always first; shows active env variable count (not request usage)
   var envLabel = currentEnvName || tr('webview.noEnvironment');
   var envTip = currentEnvName
-    ? tf('webview.summaryEnvironment', { name: currentEnvName })
+    ? tf('webview.summaryEnvironment', { name: currentEnvName }) + ' · ' + tfCount('environment.vars', envEditorVariableCount)
     : tr('webview.noEnvironment');
+  var envLabelHtml = escapeHtml(envLabel);
+  if (currentEnvName) {
+    envLabelHtml += '<span class="status-strip-env-count"> ' +
+      renderStatusStripLabelHtml(tfCount('environment.vars', envEditorVariableCount), envEditorVariableCount) +
+      '</span>';
+  }
   segments.push(renderStatusStripSegment(
     envLabel,
     currentEnvName ? 'is-env' : 'is-warn',
-    'switch-environment',
+    currentEnvName ? 'edit-environment' : 'switch-environment',
     null,
     envTip,
-    { cue: currentEnvName ? '' : 'warn', priority: 'critical' }
+    {
+      cue: currentEnvName ? '' : 'warn',
+      priority: 'critical',
+      mark: true,
+      labelHtml: envLabelHtml,
+      ariaExpanded: currentEnvName ? isEnvironmentEditorOpen() : undefined,
+      ariaControls: currentEnvName ? 'envEditor' : undefined
+    }
   ));
 
   // 2) Scripts — glanceable when present; warn when disabled/untrusted
@@ -4528,26 +4673,38 @@ function buildStatusStripSegments(tab) {
     ));
   }
 
-  // 6) Variables — only when the request actually uses them
+  // 6) Request variable usage — distinct from active env's defined var count.
+  // Click opens strip disclosure with the same {{var}} + scope list 1.0.9 showed (not a permanent card).
   var usage = collectVariableUsage(tab);
   var unresolved = getUnresolvedDraftVariableNames(tab);
   if (unresolved.length > 0) {
     segments.push(renderStatusStripSegment(
       tfCount('webview.stripVarsCount', unresolved.length),
       'is-warn',
-      null,
+      'reveal-variable-usage',
       null,
       unresolved.map(function(n) { return '{{' + n + '}}'; }).join(', '),
-      { cue: 'warn', priority: 'high', count: unresolved.length }
+      {
+        cue: 'warn',
+        priority: 'high',
+        count: unresolved.length,
+        ariaExpanded: isStatusStripExpanded(),
+        ariaControls: 'statusStripVariableUsage'
+      }
     ));
   } else if (usage.length > 0) {
     segments.push(renderStatusStripSegment(
-      tfCount('webview.stripVarsCount', usage.length),
+      tfCount('webview.stripUsedCount', usage.length),
       'is-info',
-      null,
+      'reveal-variable-usage',
       null,
       usage.map(function(u) { return '{{' + u.name + '}}'; }).join(', '),
-      { priority: 'low', count: usage.length }
+      {
+        priority: 'low',
+        count: usage.length,
+        ariaExpanded: isStatusStripExpanded(),
+        ariaControls: 'statusStripVariableUsage'
+      }
     ));
   }
 
@@ -4567,17 +4724,17 @@ function renderStatusStripExpandDetails(tab) {
     '<button type="button" class="status-strip-link" data-action="open-default-headers">' + escapeHtml(tr('webview.defaultHeaders')) + '</button>' +
   '</div>');
   if (unresolved.length > 0) {
-    parts.push('<div class="status-strip-detail-block warning">' +
+    parts.push('<div class="status-strip-detail-block warning js-status-strip-unresolved">' +
       '<div class="status-strip-detail-title">' + escapeHtml(tfCount('webview.unresolvedVariablesCount', unresolved.length)) + '</div>' +
       '<div class="status-strip-detail-copy">' + escapeHtml(unresolved.map(function(name) { return '{{' + name + '}}'; }).join(', ')) + '</div>' +
+      '<button type="button" class="status-strip-link" data-action="edit-environment">' + escapeHtml(tr('webview.editEnvironmentVariables')) + '</button>' +
+      '<button type="button" class="status-strip-link" data-action="switch-environment">' + escapeHtml(tr('webview.openEnvironmentPicker')) + '</button>' +
     '</div>');
   }
-  if (usage.length > 0) {
-    parts.push('<div class="status-strip-detail-block">' +
-      '<div class="status-strip-detail-title">' + escapeHtml(tr('webview.variableUsageTitle')) + ' · ' + escapeHtml(tfCount('webview.variableUsageCount', usage.length)) + '</div>' +
-      '<div class="status-strip-detail-copy">' + usage.map(function(item) {
-        return escapeHtml('{{' + item.name + '}}') + ' (' + escapeHtml(item.scopes.join(', ')) + ')';
-      }).join(' · ') + '</div>' +
+  // Visible variable-usage list lives in strip disclosure (Quiet Instrument); keep js-variable-usage-wrap for refresh.
+  if (usage.length > 0 || unresolved.length > 0) {
+    parts.push('<div class="status-strip-detail-block js-status-strip-var-usage" id="statusStripVariableUsage">' +
+      '<div class="js-variable-usage-wrap">' + renderVariableUsage(tab) + '</div>' +
     '</div>');
   }
   if (applied.length > 0 && !tab?.skipDefaultHeaders) {
@@ -4610,10 +4767,9 @@ function renderStatusStripExpandDetails(tab) {
       return '<button type="button" class="status-strip-link" data-action="' + escapeAttr(w.action) + '" data-meta="' + escapeAttr(w.meta) + '">' + escapeHtml(w.label) + '</button>';
     }).join('') + '</div>');
   }
-  // linked-focus 호환용 숨김 칩 훅 유지
+  // linked-focus 호환용 숨김 칩/프리플라이트 훅 유지 (변수 사용처는 위 disclosure에 노출)
   parts.push('<div class="request-status-chips js-topline-status-chips visually-hidden" aria-hidden="true">' + renderLegacyStatusChipHooks(tab) + '</div>');
   parts.push('<div class="js-request-preflight-wrap visually-hidden" aria-hidden="true">' + renderRequestPreflight(tab) + '</div>');
-  parts.push('<div class="js-variable-usage-wrap visually-hidden" aria-hidden="true"><span class="var-usage-name">{{</span></div>');
   return parts.join('');
 }
 
@@ -4685,20 +4841,12 @@ function refreshStatusStrip(mc) {
   var tab = tabs.find(function(t) { return t.id === activeTabId; });
   if (!wrap || !tab) return;
   var draftTab = buildDraftTabFromContent(mc);
-  var wasExpanded = mc.querySelector('.js-status-strip')?.dataset?.expanded === '1';
+  var wasExpanded = isStatusStripExpanded();
   wrap.innerHTML = renderStatusStrip(draftTab);
   if (wasExpanded) {
-    var strip = wrap.querySelector('.js-status-strip');
-    var panel = wrap.querySelector('.js-status-strip-panel');
-    var toggle = wrap.querySelector('.js-status-strip-toggle');
-    if (strip && panel && toggle) {
-      strip.dataset.expanded = '1';
-      panel.classList.remove('hidden');
-      toggle.setAttribute('aria-expanded', 'true');
-      toggle.setAttribute('aria-label', tr('webview.collapse'));
-      toggle.setAttribute('title', tr('webview.collapse'));
-    }
+    setStatusStripExpanded(true);
   }
+  syncEnvironmentStripDisclosureState();
 }
 
 function refreshRequestPreflight(mc) {
@@ -5510,15 +5658,7 @@ function bindContentDelegatedEventsOnce() {
   mainContent.addEventListener('click', function(e) {
     var stripToggle = e.target.closest('.js-status-strip-toggle');
     if (stripToggle) {
-      var strip = stripToggle.closest('.js-status-strip');
-      var panel = strip?.querySelector('.js-status-strip-panel');
-      if (!strip || !panel) return;
-      var open = strip.dataset.expanded !== '1';
-      strip.dataset.expanded = open ? '1' : '0';
-      panel.classList.toggle('hidden', !open);
-      stripToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-      stripToggle.setAttribute('aria-label', open ? tr('webview.collapse') : tr('webview.expand'));
-      stripToggle.setAttribute('title', open ? tr('webview.collapse') : tr('webview.expand'));
+      setStatusStripExpanded(!isStatusStripExpanded());
       return;
     }
     var dhToggle = e.target.closest('.js-default-headers-toggle');
@@ -5545,11 +5685,16 @@ function bindContentDelegatedEventsOnce() {
       return;
     }
     if (action === 'edit-environment') {
-      if (!editingEnvId) {
-        vscode.postMessage({ type: 'switchEnvironment' });
-        return;
+      toggleEnvironmentEditor();
+      return;
+    }
+    if (action === 'reveal-variable-usage') {
+      // Used N / unresolved Vars: toggle disclosure with the 1.0.9 variable-usage list
+      if (isStatusStripExpanded()) {
+        setStatusStripExpanded(false);
+      } else {
+        revealVariableUsageDisclosure();
       }
-      revealEnvironmentEditor();
       return;
     }
     if (action === 'change-workspace-profile') {
@@ -6806,6 +6951,7 @@ function refreshEnvironmentEditorSummary() {
 function refreshEnvironmentEditorCountFromRows() {
   envEditorVariableCount = collectKv(envVarRows).length;
   refreshEnvironmentEditorSummary();
+  refreshStatusStrip(mainContent);
 }
 
 function syncEnvironmentEditorControls() {
@@ -6818,6 +6964,7 @@ function hideEnvironmentEditor() {
   if (!envEditor) return;
   envEditor.classList.add('hidden');
   envEditor.classList.remove('linked-focus-active');
+  syncEnvironmentStripDisclosureState();
   refreshEnvironmentEditorLayout();
 }
 

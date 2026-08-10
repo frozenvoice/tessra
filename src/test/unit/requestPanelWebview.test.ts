@@ -104,6 +104,7 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.stripScriptsCount': 'Scripts {count}',
   'webview.stripDefaultsCount': 'Defaults {count}',
   'webview.stripVarsCount': 'Vars {count}',
+  'webview.stripUsedCount': 'Used {count}',
   'webview.tlsInsecureStatus': 'TLS insecure',
   'webview.defaultHeadersStatus': 'Default headers: {count}',
   'webview.noEnvironment': 'No environment',
@@ -1431,7 +1432,7 @@ describe('RequestPanel Webview', () => {
 
   it('ships token-only color skins for the request panel theme presets', () => {
     assert.match(htmlSource, /\/\* Theme presets: CSS custom properties only/);
-    assert.match(htmlSource, /body\[data-panel-theme="minimal-cool"\]\{[\s\S]*--tessra-accent:#7dc8ff;[\s\S]*--tessra-method-get:#5bbf6a;/);
+    assert.match(htmlSource, /body\[data-panel-theme="minimal-cool"\]\{[\s\S]*--tessra-brand-blue:#7dc8ff;[\s\S]*--tessra-accent:var\(--tessra-brand\);[\s\S]*--tessra-method-get:#5bbf6a;/);
     assert.match(htmlSource, /body\[data-panel-theme="product"\]\{[\s\S]*--tessra-tone-info:#9fd3ff;[\s\S]*--tessra-label-accent:#9fd3ff;/);
     assert.match(htmlSource, /\.req-tab\.active\{opacity:1;background:transparent;border-bottom:3px solid var\(--vscode-focusBorder\);box-shadow:none\}/);
     assert.doesNotMatch(htmlSource, /\.req-tab\.active\{[^}]*linear-gradient/);
@@ -1930,6 +1931,27 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /data-action="change-workspace-profile"/);
   });
 
+  it('ships Tessra brand signature tokens without colliding with method/status spectra', () => {
+    assert.match(htmlSource, /--tessra-brand-blue:var\(--vscode-charts-blue/);
+    assert.match(htmlSource, /--tessra-brand-violet:var\(--vscode-charts-purple/);
+    assert.match(htmlSource, /--tessra-brand:color-mix\(in srgb,var\(--tessra-brand-violet\)/);
+    assert.match(htmlSource, /--tessra-accent:var\(--tessra-brand\)/);
+    assert.match(htmlSource, /\.tessra-mark\{/);
+    assert.match(htmlSource, /\.tessra-mark--strip\{/);
+    assert.match(htmlSource, /\.tessra-mark--empty\{/);
+    assert.match(htmlSource, /--strip-env-fg:var\(--tessra-brand-fg/);
+    assert.match(htmlSource, /--strip-active-cue:var\(--tessra-tone-info/);
+    assert.match(script, /function renderTessraMark\(extraClass\)/);
+    assert.match(script, /M12 2\.9 19\.1 7v10L12 21\.1 4\.9 17V7L12 2\.9/);
+    assert.match(script, /mark: true/);
+    assert.match(script, /renderTessraMark\('tessra-mark--empty'\)/);
+    assert.match(script, /options\.mark \? renderTessraMark\('tessra-mark--strip'\)/);
+    // Brand stays off Send fill and response success owner
+    assert.doesNotMatch(htmlSource, /\.btn-send[^{]*\{[^}]*--tessra-brand/);
+    assert.doesNotMatch(htmlSource, /\.status-2xx[^{]*\{[^}]*--tessra-brand/);
+    assert.doesNotMatch(htmlSource, /\.method-GET[^{]*\{[^}]*--tessra-brand/);
+  });
+
   it('gives status strip segments Quiet Instrument discoverability cues (not flat gray, not pill wall)', () => {
     assert.match(htmlSource, /\.status-strip-seg\.is-env\{/);
     assert.match(htmlSource, /\.status-strip-seg\.is-on\{/);
@@ -1968,9 +1990,12 @@ describe('RequestPanel Webview', () => {
     );
     const harness = `
       var currentEnvName = 'staging';
+      var envEditorVariableCount = 2;
+      var envEditor = { classList: { contains: function() { return true; } } };
       var STRINGS = ${JSON.stringify({
         'webview.noEnvironment': 'No environment',
         'webview.summaryEnvironment': 'Environment: {name}',
+        'environment.vars': '{count} vars',
         'webview.disableScriptsStatus': 'Scripts off',
         'webview.scriptsPresentStatus': 'Scripts',
         'webview.stripScriptsCount': 'Scripts {count}',
@@ -1986,6 +2011,7 @@ describe('RequestPanel Webview', () => {
         'webview.followRedirectsStatus': 'Redirects',
         'webview.stopAfterHeadersStatus': 'Headers only',
         'webview.stripVarsCount': 'Vars {count}',
+        'webview.stripUsedCount': 'Used {count}',
         'webview.more': 'More',
       })};
       function tr(key) { return Object.prototype.hasOwnProperty.call(STRINGS, key) ? STRINGS[key] : key; }
@@ -2023,17 +2049,24 @@ describe('RequestPanel Webview', () => {
     vm.runInContext(harness, context);
     const renderStatusStrip = context.renderStatusStrip as (tab: Record<string, unknown>) => string;
 
-    // 1) Scripts present + History on + Defaults 2
+    // 1) Scripts present + History on + Defaults 2; env shows defined var count
     const case1 = renderStatusStrip({
       scripts: { preRequest: 'env.set("a","1")', test: 'pm.test("ok", function(){})' },
       saveToHistory: true,
       __appliedDefaults: [{ key: 'X-A' }, { key: 'X-B' }],
     });
     assert.match(case1, /status-strip-seg is-env/);
+    assert.match(case1, /tessra-mark tessra-mark--strip[\s\S]*?status-strip-label[\s\S]*?staging/);
+    assert.match(case1, /status-strip-env-count[\s\S]*?<span class="status-strip-num">2<\/span> vars/);
+    assert.match(case1, /data-action="edit-environment"/);
+    assert.match(case1, /aria-expanded="false"/);
+    assert.match(case1, /aria-controls="envEditor"/);
     assert.match(case1, /status-strip-seg is-on[\s\S]*?●[\s\S]*?Scripts 2/);
     assert.match(case1, /status-strip-seg is-on[\s\S]*?✓[\s\S]*?History on/);
     assert.match(case1, /status-strip-seg is-info[\s\S]*?Defaults <span class="status-strip-num">2<\/span>/);
     assert.doesNotMatch(case1, /border-radius:\s*999px/);
+    // Motif appears once on the strip (Env only), not on every segment
+    assert.strictEqual((case1.match(/tessra-mark--strip/g) || []).length, 1);
 
     // 2) Scripts disabled + History on
     const case2 = renderStatusStrip({
@@ -2058,13 +2091,32 @@ describe('RequestPanel Webview', () => {
     assert.match(case5, /status-strip-seg is-warn[\s\S]*?⚠[\s\S]*?TLS insecure/);
     assert.match(case5, /data-priority="critical"/);
 
-    // 6) Variables in use
+    // 6) Request usage is Used N (independent of env's 2 vars) and opens strip disclosure
     const case6 = renderStatusStrip({
+      saveToHistory: true,
+      __usage: [{ name: 'baseUrl' }],
+    });
+    assert.match(case6, /status-strip-env-count[\s\S]*?<span class="status-strip-num">2<\/span> vars/);
+    assert.match(case6, /status-strip-seg is-info[\s\S]*?Used <span class="status-strip-num">1<\/span>/);
+    assert.match(case6, /data-action="reveal-variable-usage"/);
+    assert.match(case6, /aria-controls="statusStripVariableUsage"/);
+    assert.match(case6, /data-priority="low"/);
+    assert.doesNotMatch(case6, /status-strip-seg is-info[\s\S]*?Vars <span class="status-strip-num">1<\/span>/);
+
+    // 6b) Multiple used vars still labeled Used
+    const case6b = renderStatusStrip({
       saveToHistory: true,
       __usage: [{ name: 'baseUrl' }, { name: 'token' }, { name: 'tenant' }],
     });
-    assert.match(case6, /status-strip-seg is-info[\s\S]*?Vars <span class="status-strip-num">3<\/span>/);
-    assert.match(case6, /data-priority="low"/);
+    assert.match(case6b, /Used <span class="status-strip-num">3<\/span>/);
+
+    // 6c) Unresolved Vars N is clickable into the same disclosure path
+    const case6c = renderStatusStrip({
+      saveToHistory: true,
+      __unresolved: ['missingToken'],
+      __usage: [{ name: 'missingToken' }],
+    });
+    assert.match(case6c, /data-action="reveal-variable-usage"[\s\S]*?Vars <span class="status-strip-num">1<\/span>/);
 
     // 7) Multiple simultaneous
     const case7 = renderStatusStrip({
@@ -2083,39 +2135,153 @@ describe('RequestPanel Webview', () => {
     assert.match(case7, /TLS insecure/);
     assert.match(case7, /Redirects/);
     assert.match(case7, /Headers only/);
-    assert.match(case7, /Vars <span class="status-strip-num">1<\/span>/);
+    assert.match(case7, /Used <span class="status-strip-num">1<\/span>/);
     assert.match(case7, /status-strip-sep[\s\S]*?│/);
 
-    // 8) Narrow-width strategy: priority attrs + container collapse CSS; env + critical before low-priority vars
+    // 8) Narrow-width strategy: priority attrs + container collapse CSS; env + critical before low-priority Used
     assert.match(case7, /data-priority="critical"/);
     assert.match(case7, /data-priority="high"/);
     assert.match(case7, /data-priority="medium"/);
     assert.match(case7, /data-priority="low"/);
     assert.match(htmlSource, /@container status-strip \(max-width: 480px\)[\s\S]*?data-priority="low"[\s\S]*?display:none/);
+    assert.match(htmlSource, /\.status-strip-env-count\{display:none\}/);
     const envFirst = case7.indexOf('is-env');
     const tlsIdx = case7.indexOf('TLS insecure');
-    const varsIdx = case7.indexOf('status-strip-num">1');
-    assert.ok(envFirst >= 0 && envFirst < tlsIdx && tlsIdx < varsIdx, 'env and risk should precede low-priority vars');
+    const usedIdx = case7.indexOf('status-strip-num">1');
+    assert.ok(envFirst >= 0 && envFirst < tlsIdx && tlsIdx < usedIdx, 'env and risk should precede low-priority Used');
+
+    // 9) Env expand/collapse aria when editor is open
+    vm.runInContext('envEditor = { classList: { contains: function() { return false; } } };', context);
+    const case9 = renderStatusStrip({ saveToHistory: true });
+    assert.match(case9, /data-action="edit-environment"[^>]*aria-expanded="true"/);
   });
 
-  it('keeps the environment editor on-demand and surfaces status only in the strip', () => {
+  it('keeps the environment editor on-demand and restores Environment segment disclosure', () => {
     assert.match(html, /<div id="envEditor" class="env-editor hidden">/);
     assert.doesNotMatch(html, /id="envEditorToggle"/);
     assert.doesNotMatch(html, /class="env-badge/);
     assert.match(html, /id="envEditorName">None<\/span>/);
     assert.match(html, /id="envEditorVarCount"/);
     assert.match(html, /id="envEditorBody"/);
+    assert.match(html, /id="envVarRows"/);
+    assert.match(html, /id="addEnvVarBtn"/);
     assert.match(script, /function revealEnvironmentEditor\(\)/);
     assert.match(script, /function hideEnvironmentEditor\(\)/);
+    assert.match(script, /function toggleEnvironmentEditor\(\)/);
+    assert.match(script, /function isEnvironmentEditorOpen\(\)/);
+    assert.match(script, /function syncEnvironmentStripDisclosureState\(\)/);
+    assert.match(script, /currentEnvName \? 'edit-environment' : 'switch-environment'/);
+    assert.match(script, /tfCount\('environment\.vars', envEditorVariableCount\)/);
+    assert.match(script, /tfCount\('webview\.stripUsedCount', usage\.length\)/);
     assert.match(script, /data-action="edit-environment"/);
     assert.match(script, /tr\('webview\.editEnvironmentVariables'\)/);
     assert.match(script, /setEnvironmentEditorData\(msg\.envId \|\| null, msg\.envName \|\| null, msg\.variables \|\| \[\]\)/);
     assert.match(script, /revealEnvironmentEditor\(\);/);
+    assert.match(script, /toggleEnvironmentEditor\(\)/);
     assert.match(source, /variables,\s*profileName: RequestPanel\.storage\.getWorkspaceProfileName\(\)/);
     assert.ok(
       script.indexOf('const envEditorName = document.getElementById') < script.lastIndexOf('updateStaticLocalizedText();'),
       'initial localized text refresh should run after environment editor elements are bound'
     );
+  });
+
+  it('restores Variable Usage detail via status-strip disclosure (not a permanent card)', () => {
+    assert.match(script, /data-action="reveal-variable-usage"/);
+    assert.match(script, /function revealVariableUsageDisclosure\(\)/);
+    assert.match(script, /function setStatusStripExpanded\(/);
+    assert.match(script, /ariaControls:\s*'statusStripVariableUsage'/);
+    assert.match(script, /aria-controls="/);
+    assert.match(script, /js-status-strip-var-usage/);
+    assert.match(script, /id="statusStripVariableUsage"/);
+    assert.match(script, /js-variable-usage-wrap/);
+    assert.match(script, /function renderVariableUsage\(tab\)/);
+    assert.match(script, /var-usage-name/);
+    assert.match(script, /var-usage-scope/);
+    // Permanent compose-row card is gone; disclosure + Used N is the access path
+    assert.match(script, /const requestInfoRowHtml = '';/);
+    assert.doesNotMatch(script, /js-variable-usage-wrap visually-hidden/);
+    assert.match(script, /action === 'reveal-variable-usage'/);
+    assert.match(script, /js-status-strip-unresolved/);
+
+    const expandHelpers = extractScriptSegment(
+      script,
+      'function renderStatusStripExpandDetails(tab)',
+      'function renderLegacyStatusChipHooks(tab)'
+    );
+    const expandHarness = `
+      var currentEnvName = 'staging';
+      var currentWorkspaceProfile = 'default';
+      var STRINGS = ${JSON.stringify({
+        'webview.summaryEnvironment': 'Environment: {name}',
+        'webview.noEnvironment': 'No environment',
+        'webview.editEnvironmentVariables': 'Edit variables',
+        'webview.openEnvironmentPicker': 'Switch environment',
+        'webview.defaultHeaders': 'Default headers',
+        'webview.profileDefaultTooltip': 'Default profile',
+        'webview.profileCustomTooltip': 'Custom profile',
+        'webview.variableUsageTitle': 'Variable usage',
+        'webview.variableUsageCount': '{count} variables',
+        'webview.unresolvedVariablesCount': '{count} unresolved',
+        'webview.defaultHeadersApplied': '{count} applied',
+        'webview.disableScriptsStatus': 'Scripts off',
+        'webview.scriptsPresentStatus': 'Scripts',
+        'webview.followRedirectsStatus': 'Redirects',
+        'webview.stopAfterHeadersStatus': 'Headers only',
+        'webview.saveToHistoryOffStatus': 'History off',
+        'webview.skipDefaultHeadersStatus': 'Defaults skipped',
+        'webview.tlsInsecureStatus': 'TLS insecure',
+      })};
+      function tr(key) { return Object.prototype.hasOwnProperty.call(STRINGS, key) ? STRINGS[key] : key; }
+      function tf(key, params) {
+        return tr(key).replace(/{([A-Za-z0-9_]+)}/g, function(_, name) {
+          return Object.prototype.hasOwnProperty.call(params || {}, name) ? String(params[name]) : '{' + name + '}';
+        });
+      }
+      function tfCount(key, count) { return tf(key, { count: String(count) }); }
+      function escapeHtml(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+      function escapeAttr(s) { return escapeHtml(s); }
+      function renderProfileIndicator(name) { return 'Profile: ' + name; }
+      function collectVariableUsage(tab) { return tab && tab.__usage ? tab.__usage : []; }
+      function getUnresolvedDraftVariableNames(tab) { return tab && tab.__unresolved ? tab.__unresolved : []; }
+      function getAppliedDefaultHeaders(tab) { return tab && tab.__appliedDefaults ? tab.__appliedDefaults : []; }
+      function hasExecutableScripts() { return false; }
+      function normalizeTlsValidation() { return 'default'; }
+      function renderVariableUsage(tab) {
+        var usage = collectVariableUsage(tab);
+        if (!usage.length) return '<div class="var-usage hidden"></div>';
+        return '<div class="var-usage">' + usage.map(function(item) {
+          return '<div class="var-usage-card"><span class="var-usage-name">{{' + escapeHtml(item.name) + '}}</span>' +
+            '<div class="var-usage-scopes">' + (item.scopes || []).map(function(scope) {
+              return '<span class="var-usage-scope">' + escapeHtml(scope) + '</span>';
+            }).join('') + '</div></div>';
+        }).join('') + '</div>';
+      }
+      function renderLegacyStatusChipHooks() { return ''; }
+      function renderRequestPreflight() { return ''; }
+      ${expandHelpers}
+    `;
+    const expandContext: Record<string, unknown> = {};
+    vm.createContext(expandContext);
+    vm.runInContext(expandHarness, expandContext);
+    const renderExpand = expandContext.renderStatusStripExpandDetails as (tab: Record<string, unknown>) => string;
+    const detail = renderExpand({
+      saveToHistory: true,
+      __usage: [{ name: 'baseUrl', scopes: ['URL', 'Headers'] }, { name: 'token', scopes: ['Auth'] }],
+      __unresolved: ['token'],
+    });
+    assert.match(detail, /id="statusStripVariableUsage"/);
+    assert.match(detail, /js-status-strip-var-usage/);
+    assert.match(detail, /js-variable-usage-wrap/);
+    assert.match(detail, /var-usage-name[\s\S]*?baseUrl/);
+    assert.match(detail, /var-usage-scope[\s\S]*?URL/);
+    assert.match(detail, /var-usage-name[\s\S]*?token/);
+    assert.match(detail, /js-status-strip-unresolved/);
+    assert.match(detail, /data-action="edit-environment"/);
+    assert.match(detail, /data-action="switch-environment"/);
+    assert.doesNotMatch(detail, /js-variable-usage-wrap visually-hidden/);
   });
 
   it('uses the 500 item history retention fallback for status messages', () => {
@@ -2266,7 +2432,8 @@ describe('RequestPanel Webview', () => {
     assert.match(htmlSource, /\.divider-grip\{position:relative;z-index:1;display:inline-flex;align-items:center;gap:3px;padding:1px 6px;/);
     assert.match(htmlSource, /\.json-body\{background:var\(--vscode-editor-background\);padding:8px 10px;border-radius:2px;/);
     assert.match(htmlSource, /\.runner-row\.method-GET::before\{background:linear-gradient\(180deg,rgba\(78,201,78,.8\),rgba\(78,201,78,.18\)\)\}/);
-    assert.match(htmlSource, /\.env-editor\.linked-focus-active\{border-color:var\(--vscode-focusBorder\)\}/);
+    assert.match(htmlSource, /\.env-editor\.linked-focus-active(?:,[^{]+)?\{border-color:var\(--vscode-focusBorder\)\}/);
+    assert.match(htmlSource, /\.status-strip-detail-block\.linked-focus-active/);
     assert.match(htmlSource, /@media \(max-height: 820px\)\{/);
   });
 

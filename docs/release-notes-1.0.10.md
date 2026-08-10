@@ -5,7 +5,7 @@ Release: 1.0.10
 ## Main Changes
 
 - The Request Panel follows **The Quiet Instrument**: a compact, editor-native layout with Method → URL → Send as the primary path and infrequent actions in overflow menus.
-- A quiet status strip replaces the old topline chip wall. It shows environment, Vars/Defaults, Scripts/History on·off, and risk overrides; the variable editor opens on demand from the strip or Environments view.
+- A quiet status strip replaces the old topline chip wall. It shows environment (`N vars` with Tessra signature accent + tiny tesseract mark), Defaults, request `Used N`, Scripts/History on·off, and risk overrides; Environment opens the variable editor; `Used N` / Vars toggles Variable Usage in strip disclosure.
 - Scripts, Settings, WebSocket, and Headers secondary chrome are flatter and denser (one-line Scripts Guide link; divider field groups instead of soft cards).
 - JSON and XML Body editing keep the lightweight textarea, with mirror/overlay syntax highlighting and existing undo/redo behavior preserved.
 - Changing Body type with non-empty content asks Convert / Keep text / Cancel. Supported conversions are structural only; unsafe or nested cases are rejected and the original body is kept.
@@ -14,7 +14,7 @@ Release: 1.0.10
 
 | Area | Before (1.0.9) | After (1.0.10) |
 | --- | --- | --- |
-| Request meta | Topline summary chips / collapsed env editor | One status strip; env editor on demand |
+| Request meta | Topline summary chips / collapsed env editor | One status strip (`N vars` / `Used N`, brand mark on Env); env editor + Variable Usage via disclosure |
 | Body editor | Plain textarea for JSON/XML | Same textarea + optional JSON/XML highlight overlay |
 | Body type change | Type switch without structural convert prompt | Convert / Keep text / Cancel when content is present |
 | Theme presets | Felt like separate visual skins | Shared Quiet Instrument layout; color/token skins only |
@@ -37,5 +37,5 @@ Release: 1.0.10
 
 - Marketplace screenshots linked from the README may still show the pre–Quiet Instrument request panel until assets are replaced in `frozenvoice/frozenvoice-assets`.
 - Body conversion is convenience structural mapping, not schema-aware. JSON↔XML is not a guaranteed round-trip; nested JSON cannot convert to form-urlencoded/form-data; form-data file fields and Binary invent/convert paths are blocked.
-- Residual class-name / celebration-motion residue may remain behind Quiet Instrument overrides; latest design critique reported Critical/High (P0/P1) at 0.
+- Residual class-name / celebration-motion residue may remain behind Quiet Instrument overrides.
 - This release does not add cookie jar, GraphQL mode, CLI, Git sync, Monaco Body editor, or backup schemaVersion changes.

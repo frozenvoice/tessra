@@ -65,6 +65,7 @@ Explicitly undecided / out of current product scope unless later confirmed:
 - Positioning language already in use: “local-first”, “offline-first”, “No login. No cloud sync. No paywalled core workflows.”
 - UI voice stays practical and concise; Tessra panel copy follows `tessra.displayLanguage`, while VS Code settings/command titles follow VS Code locale
 - Existing visual assets: activity bar icon `images/tessra-activitybar.svg`, Marketplace icon `images/icon.png`, remote screenshot set linked from README
+- Request-panel brand signature: thin blue→violet accent + tiny tesseract mark on Quiet Instrument status-strip context (not a redesign or marketing chrome)
 
 ## Evidence on Hand
 
