@@ -18,6 +18,9 @@ CLAUDE.md
 **/*.test.js
 **/*.test.ts
 **/*.zip
+tmp/**
+_remote-screenshot*
+marketplace-screenshots/**
 images/tessra-activityba.png
 images/icon.tmp.png
 !images/icon.png
