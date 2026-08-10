@@ -30,6 +30,8 @@ npm run test:all         # unit + stable E2E
 
 `npm run ci` stays unit/typecheck/build only. GitHub Actions runs `test:e2e:ci` in a separate job.
 
+Stable suite ignore is `STABLE_E2E_TEST_IGNORE` in `e2e/stableTestIgnore.ts` (`/[\\/]specs[\\/]runner[\\/]/`). Do **not** use a bare `**/runner/**` glob — GitHub Actions absolute paths contain `/home/runner/work/...` and that pattern would drop every stable spec (`No tests found`).
+
 ### Collection Runner E2E status
 
 Opening **Run All Requests** requires the VS Code Collections tree context menu. Under Playwright + Electron on Windows this path is intermittently broken (menu appears / click registers, but `configureCollectionRun` does not reliably reach the webview). Specs live in `e2e/specs/runner/` and can pass in isolation, but they are not yet part of the default green gate.

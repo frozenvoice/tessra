@@ -1,11 +1,12 @@
 import { defineConfig } from '@playwright/test';
 import * as path from 'path';
+import { STABLE_E2E_TEST_IGNORE } from './stableTestIgnore';
 
 const artifacts = path.join(__dirname, '.artifacts');
 
 export default defineConfig({
   testDir: path.join(__dirname, 'specs'),
-  testIgnore: ['**/runner/**'],
+  testIgnore: STABLE_E2E_TEST_IGNORE,
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
