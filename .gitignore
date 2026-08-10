@@ -2,3 +2,13 @@ node_modules/
 dist/
 *.vsix
 .claude/settings.local.json
+
+# Impeccable skill vendor clones (not Tessra product; prior releases excluded these trees)
+.agents/skills/impeccable/
+.github/skills/impeccable/
+.github/agents/impeccable-*
+
+# Impeccable session / local-only noise (design.json, critique/, surfaces/ stay tracked)
+.impeccable/questions/
+.impeccable/config.local.json
+.impeccable/critique/_tmp*
