@@ -9,6 +9,9 @@ src/**
 node_modules/**
 dist/test/**
 test/**
+e2e/**
+.vscode-test/**
+**/.artifacts/**
 tsconfig.json
 esbuild.config.js
 CLAUDE.md

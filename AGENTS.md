@@ -38,6 +38,7 @@ Tessra는 VS Code 안에서 동작하는 offline-first API 클라이언트 확�
 tessra/
 ├── docs/
 │   └── manual-e2e-checklist.md
+│   └── testing.md
 ├── src/
 │   ├── extension.ts
 │   ├── models/
@@ -104,14 +105,15 @@ tessra/
 15. `tessra.displayLanguage` 설정 기반 UI 언어 선택 (Tessra 패널/알림/인앱 가이드 대상, 기본 영어, 현재 `en`/`ko`/`ja`, 설정/명령 레이블은 VS Code locale 유지)
 16. `tessra.requestPanelTheme` 설정과 Command Palette 기반 요청 패널 테마 프리셋 선택 (`default`, `minimal-cool`, `product`, `bold-color` — Quiet Instrument 공유 레이아웃 위 색상/토큰 스킨만)
 17. `tessra.workspaceProfile` 설정 기반 워크스페이스 로컬 저장 프로필 분리와 현재 프로필 표시 (`default`는 메인 작업용, 사용자 지정 프로필은 프로젝트/실험 분리용)
-18. 컬렉션 러너 delay / iterations / stop-on-failure 옵션, 실패 요청만 재실행, 요청별 history 저장 설정을 따른 실행 결과 저장, active request / retry delay / runner delay 중단
+18. 컬렉션 러너 per-run request selection(기본 전체 선택, CollectionItem.id 기준), delay / iterations / stop-on-failure 옵션, 실패 요청만 재실행, 요청별 history 저장 설정을 따른 실행 결과 저장, active request / retry delay / runner delay 중단
 19. WebSocket `ws://` / `wss://` 연결과 `{{variable}}` 치환 후 URL 기준 모드 감지, 텍스트 메시지 전송, frame/message size limit, 선택형 protocol-level ping keepalive, 수신/전송/close 진단 로그, binary frame base64 표시
 20. gzip / deflate / Brotli 응답 자동 해제와 cURL import warning / edge flag 보강
 
 ### 현재 품질 기준
 1. 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴가 키보드 접근과 명확한 포커스 상태를 유지해야 한다.
-2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다.
+2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다. 핵심 클릭 경로는 `npm run test:e2e` UI 자동화로도 검증한다 (`docs/testing.md`).
 3. 요청 패널 시각 계약은 `DESIGN.md` Quiet Instrument를 따른다 (pill wall / soft-card / Send success-green 재도입 금지).
+4. Request Panel UI를 바꾸면 관련 `data-testid`와 `e2e/specs/*`를 함께 갱신한다. production backdoor(`window.__tessraTest` 등)는 넣지 않는다.
 
 ## 빌드 & 테스트
 ```bash
@@ -120,10 +122,11 @@ npm run ci
 npm run build
 npm run watch
 npm test
+npm run test:e2e
 npm run package
 ```
 
-수동 검증은 VS Code에서 `F5`로 Extension Development Host를 띄운 뒤 `docs/manual-e2e-checklist.md` 기준으로 수행한다. 릴리스 전에는 같은 문서의 1.0.11 smoke도 확인한다.
+단위 테스트는 `npm test`, 실제 VS Code UI E2E는 `npm run test:e2e`다. 수동 시각 QA는 `docs/manual-e2e-checklist.md`를 기준으로 수행한다. 릴리스 전에는 같은 문서의 1.0.12 smoke도 확인한다.
 
 ## 저장 데이터
 모든 데이터는 VS Code `globalStorage` 아래 JSON 파일로 저장된다. 기본 프로필은 루트에 저장되고, 사용자 지정 프로필은 `profiles/<profile-name>/` 아래 같은 파일 구조로 분리된다.

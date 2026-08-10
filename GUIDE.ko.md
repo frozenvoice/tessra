@@ -60,8 +60,10 @@ Body: {"env":"{{envName}}"}
 
 - 컬렉션, 폴더, 저장된 요청 생성
 - Drag and drop으로 항목 정리
-- Run All Requests에서 delay, iterations, stop-on-failure를 사용할 수 있습니다.
-- 러너는 활성 요청, 진행 상태, passed / failed / skipped 요약을 보여줍니다.
+- Run All Requests는 설정 화면을 열고, 기본적으로 모든 요청이 선택된 상태에서 이번 실행에서 빼둘 요청만 체크 해제할 수 있습니다.
+- 선택은 안정적인 request id를 쓰고 원본 순서를 유지하며, 다음에 Runner를 열면 다시 전체 선택으로 초기화됩니다.
+- delay, iterations, stop-on-failure는 선택된 요청에만 적용됩니다.
+- 러너는 활성 요청, 진행 상태, passed / failed / skipped 요약을 보여주며, 실행 전 제외한 요청은 skipped로 세지 않습니다.
 - Stop으로 활성 요청, retry 대기, 요청 간 delay를 취소할 수 있습니다.
 - 러너 요약에서 실패한 요청만 다시 실행할 수 있습니다.
 - 각 요청의 Save to history가 켜져 있을 때만 러너 결과가 히스토리에 저장됩니다.

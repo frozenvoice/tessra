@@ -60,8 +60,10 @@ Body: {"env":"{{envName}}"}
 
 - Create collections, folders, and saved requests
 - Drag and drop to organize items
-- Run All Requests with optional delay, iterations, and stop-on-failure
-- The runner shows the active request, progress, and passed / failed / skipped counts
+- Run All Requests opens a setup screen where every request starts selected; uncheck requests to exclude them from that run only
+- Selection uses stable request ids, keeps the original collection order, and resets to all selected the next time you open the runner
+- Optional delay, iterations, and stop-on-failure still apply to the selected requests
+- The runner shows the active request, progress, and passed / failed / skipped counts; excluded requests are not counted as skipped
 - Use Stop to cancel the active request, retry waits, and inter-request delays
 - Rerun failed requests only from the runner summary
 - Runner results are written to history only when each request has Save to history enabled

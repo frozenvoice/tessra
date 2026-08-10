@@ -27,6 +27,7 @@ import { RequestExecutor } from './requestPanel/RequestExecutor';
 import {
   CollectionRunner,
   DEFAULT_COLLECTION_RUNNER_OPTIONS,
+  flattenCollectionRunEntries,
   NormalizedCollectionRunnerOptions,
   normalizeCollectionRunnerOptions,
 } from './requestPanel/CollectionRunner';
@@ -318,8 +319,8 @@ export class RequestPanel {
 
   // 컬렉션 전체 실행 (재귀적으로 하위 폴더 포함)
   public async runCollection(name: string, items: CollectionItem[]) {
-    const total = this.countCollectionRequests(items);
-    if (total === 0) {
+    const entries = flattenCollectionRunEntries(items);
+    if (entries.length === 0) {
       vscode.window.showInformationMessage(LocalizationService.t('info.noRequestsToRun'));
       return;
     }
@@ -327,24 +328,15 @@ export class RequestPanel {
     this.postMessage({
       type: MessageType.ConfigureCollectionRun,
       name,
-      total,
+      total: entries.length,
+      requests: entries.map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        method: entry.method,
+        folderPath: entry.folderPath,
+      })),
       options: this.lastCollectionRunnerOptions,
     });
-  }
-
-  private countCollectionRequests(items: CollectionItem[]): number {
-    let total = 0;
-    const collect = (list: CollectionItem[]): void => {
-      for (const item of list) {
-        if (item.type === 'request' && item.request) {
-          total++;
-        } else if (item.type === 'folder' && item.children) {
-          collect(item.children);
-        }
-      }
-    };
-    collect(items);
-    return total;
   }
 
   private async handleMessage(message: unknown) {
@@ -482,7 +474,17 @@ export class RequestPanel {
         });
         this.lastCollectionRunnerOptions = options;
         this.pendingCollectionRun = null;
-        await this.collectionRunner.runCollection(pendingRun.name, pendingRun.items, options);
+        const selectedRequestIds = Array.isArray(message.selectedRequestIds)
+          ? message.selectedRequestIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+          : undefined;
+        if (selectedRequestIds && selectedRequestIds.length === 0) {
+          vscode.window.showInformationMessage(LocalizationService.t('info.noRequestsToRun'));
+          break;
+        }
+        await this.collectionRunner.runCollection(pendingRun.name, pendingRun.items, {
+          ...options,
+          selectedRequestIds,
+        });
         break;
       }
       case MessageType.RerunFailedCollection:

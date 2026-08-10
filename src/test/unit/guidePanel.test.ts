@@ -98,6 +98,7 @@ describe('In-app Guide content parity', () => {
       { name: 'Workspace Backup', pattern: /Workspace Backup|워크스페이스 백업|ワークスペースバックアップ/ },
       { name: 'WebSocket', pattern: /WebSocket/ },
       { name: 'Runner options', pattern: /iterations|stop-on-failure|delay/ },
+      { name: 'Runner request selection', pattern: /selected|선택|選択/ },
       { name: 'Environment / Used counts', pattern: /Used N|사용 N|使用 N|N vars|변수 N|N 変数/ },
       { name: 'status strip', pattern: /status strip/ },
       { name: 'variables.json', pattern: /variables\.json/ },

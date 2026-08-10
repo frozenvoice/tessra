@@ -1678,6 +1678,36 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /row\.className = 'runner-row method-' \+ msg\.method \+ ' ' \+ cls;/);
   });
 
+  it('keeps inert data-testid hooks for UI E2E without duplicates in static HTML shell', () => {
+    const requiredLiterals = [
+      'request-url',
+      'send-request',
+      'stop-request',
+      'status-environment',
+      'status-variable-usage',
+      'environment-disclosure',
+      'variable-usage-disclosure',
+      'request-body-editor',
+      'body-type',
+      'response-status',
+      'response-pin',
+      'response-compare',
+      'response-overflow',
+      'runner-selected-count',
+      'runner-start',
+    ];
+    for (const id of requiredLiterals) {
+      assert.ok(
+        htmlSource.includes(`"${id}"`) || htmlSource.includes(`'${id}'`),
+        `missing data-testid literal ${id}`
+      );
+    }
+    const shellHtml = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+    const staticIds = [...shellHtml.matchAll(/data-testid="([^"]+)"/g)].map((m) => m[1]);
+    assert.ok(staticIds.includes('environment-disclosure'));
+    assert.deepStrictEqual(staticIds, [...new Set(staticIds)], 'static HTML shell must not duplicate data-testid values');
+  });
+
   it('records and renders response timing metadata with readable durations', () => {
     assert.match(script, /function formatLocalTimestamp\(epochMs\)/);
     assert.match(script, /function formatLocalTime\(epochMs\)/);
@@ -2419,7 +2449,7 @@ describe('RequestPanel Webview', () => {
   });
 
   it('keeps the environment editor on-demand and restores Environment segment disclosure', () => {
-    assert.match(html, /<div id="envEditor" class="env-editor hidden">/);
+    assert.match(html, /<div id="envEditor" class="env-editor hidden" data-testid="environment-disclosure">/);
     assert.doesNotMatch(html, /id="envEditorToggle"/);
     assert.doesNotMatch(html, /class="env-badge/);
     assert.match(html, /id="envEditorName">None<\/span>/);
@@ -2730,10 +2760,28 @@ describe('RequestPanel Webview', () => {
     assert.match(source, /private pendingCollectionRun: \{ name: string; items: CollectionItem\[\] \} \| null = null;/);
     assert.match(source, /type: MessageType\.ConfigureCollectionRun/);
     assert.match(source, /case MessageType\.StartCollectionRun:/);
+    assert.match(source, /selectedRequestIds/);
+    assert.match(source, /flattenCollectionRunEntries/);
     assert.match(script, /function showRunnerSetup\(msg\)/);
+    assert.match(script, /function normalizeRunnerRequestChoices\(msg\)/);
     assert.match(script, /type: 'startCollectionRun'/);
+    assert.match(script, /selectedRequestIds:\s*selectedRequestIds/);
     assert.match(script, /tr\('webview\.runDelayMs'\)/);
     assert.match(script, /tr\('webview\.runIterations'\)/);
     assert.match(script, /tr\('webview\.runStopOnFailure'\)/);
+    assert.match(script, /tr\('webview\.runRequests'\)/);
+    assert.match(script, /tr\('webview\.runSelectAll'\)/);
+    assert.match(script, /tr\('webview\.runClearSelection'\)/);
+    assert.match(script, /tr\('webview\.runSelectAtLeastOne'\)/);
+    assert.match(script, /class="js-runner-request-check"/);
+    assert.match(script, /data-request-id=/);
+    assert.match(script, /startBtn\.disabled = noneSelected/);
+    assert.match(htmlSource, /\.runner-request-select\{/);
+    assert.match(htmlSource, /\.runner-request-list\{/);
+    assert.match(collectionRunnerSource, /export function flattenCollectionRunEntries/);
+    assert.match(collectionRunnerSource, /export function filterCollectionRunEntriesBySelection/);
+    assert.match(collectionRunnerSource, /selectedRequestIds/);
+    assert.match(collectionRunnerSource, /collectionTotal/);
+    assert.match(collectionRunnerSource, /selectedTotal/);
   });
 });

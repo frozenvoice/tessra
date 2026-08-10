@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.12
+
+- Added per-run request selection to the Collection Runner.
+- Collection runs now start with all requests selected and let you exclude individual requests before execution.
+- Added selected-request counts while preserving delay, iterations, stop-on-failure, cancellation, history, and rerun-failed behavior.
+- Excluded requests are omitted from the run (not counted as skipped) and selection is not persisted between runs.
+
 ## 1.0.11
 
 - Updated the in-app Guide (`GUIDE.md` / `GUIDE.ko.md` / `GUIDE.ja.md`) for the current Request Panel UI: status strip, Pin/Compare + `⋯` overflow, Body conversion, Workspace Backup/Restore, WebSocket, runner options, shortcuts, and local storage files.

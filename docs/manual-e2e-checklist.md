@@ -2,9 +2,41 @@
 
 Use this checklist in the VS Code Extension Development Host after `npm run build` or `npm run watch`.
 
+Automated UI coverage for core click paths lives in `npm run test:e2e` (see `docs/testing.md`). Keep this file for visual / OS / Marketplace QA that automation does not replace.
+
+## Automated (UI E2E)
+
+Covered by `e2e/specs/*` against a real VS Code Electron host + localhost fixture server:
+
+- Basic Send (`/users` JSON response)
+- URL / Params canonical serialization (single `_limit`, duplicate `tag` keys)
+- Environment disclosure (status strip → variable editor)
+- Variable Usage `Used N` disclosure
+- Body JSON→XML Convert + undo
+- Response Pin / Compare primary discoverability (+ overflow utilities smoke)
+- Send Stop / cancellation (slow endpoint)
+
+Runner selection / Clear / Select all: specs exist under `e2e/specs/runner/` (`npm run test:e2e:runner`) but are **not** in the default green gate yet — VS Code tree context-menu automation is flaky on Windows Electron (see `docs/testing.md`).
+
+## Manual remaining
+
+- Visual quality, theme skins, long-text clipping
+- Marketplace screenshots
+- Unusual OS / display scaling behavior
+- Deep Guide locale reading pass
+- WebSocket / Backup / History pin / profile switch (optional automation later)
+
+## 1.0.12 Smoke (~10 min)
+
+Collection Runner per-run request selection. Run this pass before Marketplace publish.
+
+- [Partial automation] `npm run test:e2e:runner` (flaky on Windows context menus — still confirm manually when touching Runner).
+- Spot-check Stop, Rerun Failed (failed selected only), and history only for executed selected requests.
+- Nested folders + WebSocket row labeling still worth a quick manual glance.
+
 ## 1.0.11 Smoke (~10–15 min)
 
-Guide currency, URL/Params serialization, and Pin/Compare discoverability. Run this pass before Marketplace publish.
+Guide currency, URL/Params serialization, and Pin/Compare discoverability.
 
 - Open `Tessra: Open Guide` in English, Korean, and Japanese; confirm status strip / Pin+Compare+`⋯` / Body conversion / Workspace Backup / WebSocket wording matches the live panel (no topline chip-wall language).
 - With a URL that already has `?a=1` and a Params row `a=1`, Send once and confirm the final request URL does not duplicate `a`.

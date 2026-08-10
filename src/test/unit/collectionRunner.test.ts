@@ -19,6 +19,8 @@ Module._load = function patchedLoad(request: string, parent: unknown, isMain: bo
 
 const {
   CollectionRunner,
+  filterCollectionRunEntriesBySelection,
+  flattenCollectionRunEntries,
   normalizeCollectionRunnerOptions,
 } = require('../../panels/requestPanel/CollectionRunner') as typeof import('../../panels/requestPanel/CollectionRunner');
 
@@ -81,6 +83,7 @@ class FakeHttpService {
 class FakeRunnerHost {
   messages: unknown[] = [];
   histories: unknown[] = [];
+  showInformationMessage?: (message: string) => void;
 
   constructor(private readonly scriptTimeoutMs = 100) {}
 
@@ -341,5 +344,207 @@ describe('CollectionRunner', () => {
     assert.strictEqual(http.calls.length, 2);
     assert.strictEqual(doneMessages.length, 1);
     assert.strictEqual(doneMessages[0].passed, 1);
+  });
+
+  it('flattens nested folder requests with CollectionItem ids and folder paths', () => {
+    const collection: CollectionItem[] = [
+      { id: 'root', type: 'request', name: 'Root Get', request: request('root') },
+      {
+        id: 'folder-auth',
+        type: 'folder',
+        name: 'Auth & Headers',
+        children: [
+          { id: 'basic-1', type: 'request', name: 'Basic Auth', request: request('basic-1') },
+          { id: 'basic-2', type: 'request', name: 'Basic Auth', request: request('basic-2') },
+          {
+            id: 'folder-nested',
+            type: 'folder',
+            name: 'Nested',
+            children: [
+              {
+                id: 'ws-echo',
+                type: 'request',
+                name: 'WS Echo',
+                request: request('ws-echo', { requestType: 'websocket', url: 'wss://example.com/echo' }),
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const flattened = flattenCollectionRunEntries(collection);
+    assert.deepStrictEqual(flattened.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      method: entry.method,
+      folderPath: entry.folderPath,
+    })), [
+      { id: 'root', name: 'Root Get', method: 'GET', folderPath: '' },
+      { id: 'basic-1', name: 'Basic Auth', method: 'GET', folderPath: 'Auth & Headers' },
+      { id: 'basic-2', name: 'Basic Auth', method: 'GET', folderPath: 'Auth & Headers' },
+      { id: 'ws-echo', name: 'WS Echo', method: 'WS', folderPath: 'Auth & Headers / Nested' },
+    ]);
+  });
+
+  it('filters selected requests by id while preserving flatten order', () => {
+    const collection = items(
+      request('a'),
+      request('b'),
+      request('c'),
+      request('d')
+    );
+    const flattened = flattenCollectionRunEntries(collection);
+    const selected = filterCollectionRunEntriesBySelection(flattened, ['d', 'a', 'missing', 'c']);
+    assert.deepStrictEqual(selected.map((entry) => entry.id), ['a', 'c', 'd']);
+  });
+
+  it('runs only selected requests and reports collection vs selected totals', async () => {
+    const http = new FakeHttpService();
+    const host = new FakeRunnerHost();
+    const collection = items(
+      request('a'),
+      request('b'),
+      request('c'),
+      request('d'),
+      request('e'),
+      request('f'),
+      request('g'),
+      request('h', { requestType: 'websocket', url: 'wss://example.com/echo' })
+    );
+    const before = JSON.stringify(collection);
+
+    await new CollectionRunner(http as any, host).runCollection('Selected', collection, {
+      selectedRequestIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+      iterations: 2,
+      delayMs: 0,
+    });
+
+    assert.strictEqual(JSON.stringify(collection), before, 'collection storage must not mutate');
+    assert.deepStrictEqual(http.calls.map((call) => call.url), [
+      'https://example.com/a',
+      'https://example.com/b',
+      'https://example.com/c',
+      'https://example.com/d',
+      'https://example.com/e',
+      'https://example.com/f',
+      'https://example.com/g',
+      'https://example.com/a',
+      'https://example.com/b',
+      'https://example.com/c',
+      'https://example.com/d',
+      'https://example.com/e',
+      'https://example.com/f',
+      'https://example.com/g',
+    ]);
+    assert.ok(!http.calls.some((call) => call.url.includes('/h')));
+
+    const start = latestMessage<any>(host.messages, MessageType.RunCollectionStart);
+    assert.strictEqual(start.collectionTotal, 8);
+    assert.strictEqual(start.selectedTotal, 7);
+    assert.strictEqual(start.total, 7);
+    assert.strictEqual(start.totalRuns, 14);
+
+    const done = latestMessage<any>(host.messages, MessageType.RunCollectionDone);
+    assert.strictEqual(done.collectionTotal, 8);
+    assert.strictEqual(done.selectedTotal, 7);
+    assert.strictEqual(done.total, 7);
+    assert.strictEqual(done.totalRuns, 14);
+    assert.strictEqual(done.passed, 14);
+    assert.strictEqual(done.failed, 0);
+    assert.strictEqual(done.skipped, 0);
+    assert.strictEqual(host.histories.length, 0);
+  });
+
+  it('does not count excluded requests as skipped and keeps history for executed selected requests only', async () => {
+    const http = new FakeHttpService([{ status: 500 }, { status: 200 }]);
+    const host = new FakeRunnerHost();
+    await new CollectionRunner(http as any, host).runCollection(
+      'Exclude',
+      items(
+        request('keep-fail', { saveToHistory: true }),
+        request('excluded', { saveToHistory: true }),
+        request('keep-ok', { saveToHistory: true })
+      ),
+      {
+        selectedRequestIds: ['keep-fail', 'keep-ok'],
+        stopOnFailure: true,
+      }
+    );
+
+    assert.deepStrictEqual(http.calls.map((call) => call.url), ['https://example.com/keep-fail']);
+    const done = latestMessage<any>(host.messages, MessageType.RunCollectionDone);
+    assert.strictEqual(done.collectionTotal, 3);
+    assert.strictEqual(done.selectedTotal, 2);
+    assert.strictEqual(done.failed, 1);
+    assert.strictEqual(done.skipped, 1);
+    assert.strictEqual(done.stoppedOnFailure, true);
+    assert.strictEqual(host.histories.length, 1);
+    assert.strictEqual((host.histories[0] as any).request.url, 'https://example.com/keep-fail');
+  });
+
+  it('reruns only failed selected requests and never reintroduces excluded ones', async () => {
+    const http = new FakeHttpService([
+      { status: 500 },
+      { status: 200 },
+      { status: 500 },
+      { status: 200 },
+    ]);
+    const host = new FakeRunnerHost();
+    const runner = new CollectionRunner(http as any, host);
+    await runner.runCollection(
+      'Rerun base',
+      items(request('a'), request('b'), request('c'), request('excluded')),
+      { selectedRequestIds: ['a', 'b', 'c'] }
+    );
+    assert.deepStrictEqual(http.calls.map((call) => call.url), [
+      'https://example.com/a',
+      'https://example.com/b',
+      'https://example.com/c',
+    ]);
+
+    await runner.rerunFailed([0, 2]);
+    assert.deepStrictEqual(http.calls.map((call) => call.url), [
+      'https://example.com/a',
+      'https://example.com/b',
+      'https://example.com/c',
+      'https://example.com/a',
+      'https://example.com/c',
+    ]);
+    const done = latestMessage<any>(host.messages, MessageType.RunCollectionDone);
+    assert.strictEqual(done.total, 2);
+    assert.strictEqual(done.selectedTotal, 2);
+    assert.ok(!http.calls.some((call) => call.url.includes('/excluded')));
+  });
+
+  it('combines selection with delay and stop without changing cancellation behavior', async () => {
+    const delayHttp = new FakeHttpService([{ status: 200 }, { status: 200 }]);
+    const delayHost = new FakeRunnerHost();
+    const delayRunner = new CollectionRunner(delayHttp as any, delayHost);
+    const delayRun = delayRunner.runCollection(
+      'Delay select',
+      items(request('one'), request('skip-me'), request('two')),
+      { selectedRequestIds: ['one', 'two'], delayMs: 1000 }
+    );
+    await waitForCondition(() => delayHost.messages.some((message: any) => message.phase === 'delay'));
+    delayRunner.stop();
+    await delayRun;
+    assert.strictEqual(delayHttp.calls.length, 1);
+    assert.strictEqual(latestMessage<any>(delayHost.messages, MessageType.RunCollectionDone).stopped, true);
+    assert.ok(!delayHttp.calls.some((call) => call.url.includes('/skip-me')));
+  });
+
+  it('shows information and skips execution when selection is empty', async () => {
+    const http = new FakeHttpService();
+    const host = new FakeRunnerHost();
+    let info = '';
+    host.showInformationMessage = (message: string) => { info = message; };
+    await new CollectionRunner(http as any, host).runCollection(
+      'Empty',
+      items(request('a'), request('b')),
+      { selectedRequestIds: [] }
+    );
+    assert.strictEqual(http.calls.length, 0);
+    assert.strictEqual(host.messages.length, 0);
+    assert.match(info, /no requests|실행할 요청|リクエスト/i);
   });
 });

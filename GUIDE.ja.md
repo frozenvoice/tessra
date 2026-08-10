@@ -60,8 +60,10 @@ Body: {"env":"{{envName}}"}
 
 - コレクション、フォルダー、保存済みリクエストを作成
 - Drag and drop で項目を整理
-- Run All Requests では delay、iterations、stop-on-failure を使えます。
-- ランナーはアクティブなリクエスト、進捗、passed / failed / skipped の要約を表示します。
+- Run All Requests は設定画面を開き、最初はすべてのリクエストが選択された状態です。この実行だけ外したいリクエストのチェックを外します。
+- 選択は安定した request id を使い元の順序を保ち、次に Runner を開くと再び全選択に戻ります。
+- delay、iterations、stop-on-failure は選択したリクエストにだけ適用されます。
+- ランナーはアクティブなリクエスト、進捗、passed / failed / skipped の要約を表示し、実行前に除外したリクエストは skipped に数えません。
 - Stop でアクティブなリクエスト、retry 待機、リクエスト間 delay をキャンセルできます。
 - ランナー要約から失敗したリクエストだけを再実行できます。
 - 各リクエストの Save to history が有効なときだけ、ランナー結果が履歴に保存されます。

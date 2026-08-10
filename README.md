@@ -6,12 +6,11 @@ No login. No cloud sync. No paywalled core workflows.
 
 Tessra is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
 
-## What's new in 1.0.11
+## What's new in 1.0.12
 
-- In-app Guide updated for the current Request Panel: status strip, Pin/Compare + `⋯`, Body conversion, Workspace Backup/Restore, WebSocket, runner options, shortcuts, and local storage
-- Fixed URL/Params double serialization that could duplicate query keys
-- Restored Response Pin / Compare on the sticky summary (Copy / Save / Mode / metadata stay in `⋯`)
-- Cleaner VSIX packaging (staging folders such as `tmp/` excluded)
+- Collection Runner lets you choose which requests to include before each run
+- All requests start selected; uncheck to exclude for that run only (selection is not saved)
+- Selected-request counts keep delay, iterations, stop-on-failure, Stop, history, and Rerun Failed behavior
 - Still local-first: no login, no cloud sync, no telemetry
 
 ## Screenshots
@@ -124,6 +123,7 @@ Group request history by date and run collections with status summaries.
 - Drag and drop ordering
 - Duplicate / Save As
 - Run All Requests
+- Choose which requests to include before each collection run; all requests are selected by default and the choice applies only to that run
 - Live collection runner status with active request highlighting and retry countdowns
 - Runner options for delay between requests, multiple iterations, and stop-on-failure behavior
 - Runner Stop cancels active requests, retry waits, and inter-request delays

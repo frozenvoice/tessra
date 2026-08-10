@@ -53,12 +53,27 @@ export interface CollectionRunnerOptions {
   delayMs?: number;
   iterations?: number;
   stopOnFailure?: boolean;
+  /** Per-run selection of CollectionItem.id values. Omit to run every flattened request. */
+  selectedRequestIds?: string[];
 }
 
 export interface NormalizedCollectionRunnerOptions {
   delayMs: number;
   iterations: number;
   stopOnFailure: boolean;
+}
+
+export interface CollectionRunListEntry {
+  id: string;
+  name: string;
+  method: string;
+  folderPath: string;
+  request: Request;
+}
+
+export interface CollectionRunSelectionTotals {
+  collectionTotal: number;
+  selectedTotal: number;
 }
 
 interface CollectionRequestRunResult {
@@ -96,6 +111,54 @@ function normalizeRunnerInteger(value: unknown, fallback: number, min: number, m
   return Math.min(max, Math.max(min, Math.floor(numeric)));
 }
 
+function isWebSocketCollectionRequest(request: Pick<Request, 'requestType' | 'url'>): boolean {
+  return request.requestType === 'websocket' || /^wss?:\/\//i.test(request.url || '');
+}
+
+export function getCollectionRunMethodLabel(request: Pick<Request, 'requestType' | 'method' | 'url'>): string {
+  if (isWebSocketCollectionRequest(request)) {
+    return 'WS';
+  }
+  return String(request.method || 'GET').toUpperCase();
+}
+
+/** Flatten nested folders in collection-tree order. Identity is CollectionItem.id. */
+export function flattenCollectionRunEntries(items: CollectionItem[]): CollectionRunListEntry[] {
+  const requests: CollectionRunListEntry[] = [];
+  const collect = (list: CollectionItem[], folderPath: string): void => {
+    for (const item of list) {
+      if (item.type === 'request' && item.request) {
+        requests.push({
+          id: item.id,
+          name: item.name,
+          method: getCollectionRunMethodLabel(item.request),
+          folderPath,
+          request: item.request,
+        });
+      } else if (item.type === 'folder' && item.children) {
+        const nextPath = folderPath ? `${folderPath} / ${item.name}` : item.name;
+        collect(item.children, nextPath);
+      }
+    }
+  };
+  collect(items, '');
+  return requests;
+}
+
+/** Keep original flatten order; unknown ids are ignored. */
+export function filterCollectionRunEntriesBySelection(
+  entries: CollectionRunListEntry[],
+  selectedRequestIds?: string[] | null
+): CollectionRunListEntry[] {
+  if (selectedRequestIds == null) {
+    return entries.slice();
+  }
+  const selected = new Set(
+    selectedRequestIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+  );
+  return entries.filter((entry) => selected.has(entry.id));
+}
+
 export class CollectionRunner {
   private collectionRunAbort = false;
   private activeRunId = 0;
@@ -113,13 +176,22 @@ export class CollectionRunner {
   ) {}
 
   async runCollection(name: string, items: CollectionItem[], options: CollectionRunnerOptions = {}): Promise<void> {
-    const requests = this.flattenCollectionRequests(items);
-    if (requests.length === 0) {
+    const allEntries = flattenCollectionRunEntries(items);
+    const selectedEntries = filterCollectionRunEntriesBySelection(allEntries, options.selectedRequestIds);
+    if (selectedEntries.length === 0) {
       this.host.showInformationMessage?.(LocalizationService.t('info.noRequestsToRun'));
       return;
     }
     this.lastCollectionRunBaseName = name;
-    await this.runCollectionRequests(name, requests, options);
+    await this.runCollectionRequests(
+      name,
+      selectedEntries.map((entry) => ({ name: entry.name, request: entry.request })),
+      options,
+      {
+        collectionTotal: allEntries.length,
+        selectedTotal: selectedEntries.length,
+      }
+    );
   }
 
   async rerunFailed(failedIndices: number[]): Promise<void> {
@@ -155,25 +227,11 @@ export class CollectionRunner {
     this.currentCollectionDelayCancel = null;
   }
 
-  private flattenCollectionRequests(items: CollectionItem[]): Array<{ name: string; request: Request }> {
-    const requests: { name: string; request: Request }[] = [];
-    const collect = (list: CollectionItem[]) => {
-      for (const item of list) {
-        if (item.type === 'request' && item.request) {
-          requests.push({ name: item.name, request: item.request });
-        } else if (item.type === 'folder' && item.children) {
-          collect(item.children);
-        }
-      }
-    };
-    collect(items);
-    return requests;
-  }
-
   private async runCollectionRequests(
     name: string,
     requests: Array<{ name: string; request: Request }>,
-    rawOptions: CollectionRunnerOptions = {}
+    rawOptions: CollectionRunnerOptions = {},
+    selectionTotals?: CollectionRunSelectionTotals
   ): Promise<void> {
     this.stop();
     const runId = ++this.activeRunId;
@@ -195,10 +253,14 @@ export class CollectionRunner {
         scripts: request.scripts ? { ...request.scripts } : undefined,
       },
     }));
+    const collectionTotal = selectionTotals?.collectionTotal ?? requests.length;
+    const selectedTotal = selectionTotals?.selectedTotal ?? requests.length;
     this.host.postMessage({
       type: MessageType.RunCollectionStart,
       name,
       total: requests.length,
+      collectionTotal,
+      selectedTotal,
       totalRuns: requests.length * options.iterations,
       iterations: options.iterations,
       delayMs: options.delayMs,
@@ -291,6 +353,8 @@ export class CollectionRunner {
       this.host.postMessage({
         type: MessageType.RunCollectionDone,
         total: requests.length,
+        collectionTotal,
+        selectedTotal,
         totalRuns,
         passed,
         failed,

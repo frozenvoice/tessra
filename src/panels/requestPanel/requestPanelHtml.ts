@@ -747,10 +747,29 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .runner-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:var(--vscode-editor-background);z-index:100;display:flex;flex-direction:column;overflow:hidden}
 .runner-header{padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border,#444);display:flex;align-items:center;gap:8px;flex-shrink:0}
 .runner-header h3{font-size:13px;font-weight:600;flex:1;margin:0}
-.runner-options{padding:12px;border-bottom:1px solid var(--vscode-panel-border,#444);display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:end}
+.runner-options{padding:12px;border-bottom:1px solid var(--vscode-panel-border,#444);display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:end;flex-shrink:0}
 .runner-option{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--vscode-descriptionForeground,#a6a6a6)}
 .runner-option input[type="number"]{width:100%}
 .runner-option-check{flex-direction:row;align-items:center;color:var(--vscode-foreground,#ddd);padding-bottom:4px}
+.runner-request-select{padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border,#444);display:flex;flex-direction:column;gap:6px;flex:0 1 auto;min-height:0;max-height:min(42vh,280px)}
+.runner-request-select-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.runner-request-select-title{font-size:12px;font-weight:600;color:var(--vscode-foreground)}
+.runner-request-select-count{font-size:12px;color:var(--vscode-descriptionForeground,#a6a6a6);font-variant-numeric:tabular-nums}
+.runner-request-select-actions{display:flex;align-items:center;gap:8px}
+.runner-request-select-actions button{appearance:none;border:none;background:transparent;color:var(--vscode-textLink-foreground);font:inherit;font-size:12px;padding:2px 0;cursor:pointer;border-radius:2px}
+.runner-request-select-actions button:hover{text-decoration:underline}
+.runner-request-select-actions button:focus-visible{outline:1px solid var(--vscode-focusBorder,#007acc);outline-offset:2px}
+.runner-request-list{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:1px;border:1px solid var(--vscode-panel-border,#444);border-radius:2px;padding:2px;background:transparent}
+.runner-request-row{display:flex;align-items:flex-start;gap:8px;padding:5px 6px;border-radius:2px;cursor:pointer;color:var(--vscode-foreground)}
+.runner-request-row:hover{background:var(--vscode-list-hoverBackground)}
+.runner-request-row:focus-within{outline:1px solid var(--vscode-focusBorder,#007acc);outline-offset:-1px}
+.runner-request-row input[type="checkbox"]{margin:2px 0 0;flex-shrink:0}
+.runner-request-meta{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px}
+.runner-request-line{display:flex;align-items:center;gap:8px;min-width:0}
+.runner-request-line .method-badge{min-width:48px;flex-shrink:0}
+.runner-request-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.runner-request-path{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--vscode-descriptionForeground,#a6a6a6)}
+.runner-select-hint{font-size:12px;line-height:1.4;color:var(--vscode-editorWarning-foreground,#d19a66);min-height:1.2em}
 .runner-progress{padding:4px 12px;font-size:13px;opacity:.7;flex-shrink:0;display:flex;align-items:center;gap:6px}
 .runner-bar{flex:1;height:3px;background:var(--vscode-input-background);border-radius:2px;overflow:hidden}
 .runner-bar-fill{height:100%;width:100%;transform:scaleX(0);transform-origin:left center;background:var(--vscode-progressBar-background,#0e70c0);transition:transform .2s ease-out}
@@ -1068,7 +1087,7 @@ body[data-panel-theme="bold-color"]{
 </div>
 
 
-<div id="envEditor" class="env-editor hidden">
+<div id="envEditor" class="env-editor hidden" data-testid="environment-disclosure">
   <div class="env-editor-title">
     <span id="envEditorTitle">${LocalizationService.t('webview.environment', undefined, displayLanguage)}</span>
     <span class="env-editor-name muted" id="envEditorName">${LocalizationService.t('webview.environmentNone', undefined, displayLanguage)}</span>
@@ -1076,11 +1095,11 @@ body[data-panel-theme="bold-color"]{
     <span style="flex:1"></span>
     <span class="env-dirty-dot" id="envDirtyDot" title="${LocalizationService.t('webview.unsavedChanges', undefined, displayLanguage)}"></span>
     <span class="env-autosave-indicator" id="envAutoSaved"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M6.27 10.87h.04l4.49-4.49-1.06-1.06-3.47 3.47-1.47-1.47-1.06 1.06 2.53 2.49z"/><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12z"/></svg> <span id="envAutoSavedLabel">${LocalizationService.t('webview.autoSaved', undefined, displayLanguage)}</span></span>
-    <button class="rm" id="envCloseBtn" type="button" title="${LocalizationService.t('webview.close', undefined, displayLanguage)}" aria-label="${LocalizationService.t('webview.close', undefined, displayLanguage)}" style="cursor:pointer;font-size:14px;opacity:.6">&times;</button>
+    <button class="rm" id="envCloseBtn" data-testid="environment-disclosure-close" type="button" title="${LocalizationService.t('webview.close', undefined, displayLanguage)}" aria-label="${LocalizationService.t('webview.close', undefined, displayLanguage)}" style="cursor:pointer;font-size:14px;opacity:.6">&times;</button>
   </div>
   <div class="env-editor-body" id="envEditorBody">
-    <div id="envVarRows" class="kv-section"></div>
-    <button class="add-btn" id="addEnvVarBtn" disabled>${LocalizationService.t('webview.addVariable', undefined, displayLanguage)}</button>
+    <div id="envVarRows" class="kv-section" data-testid="environment-var-rows"></div>
+    <button class="add-btn" id="addEnvVarBtn" data-testid="environment-add-variable" disabled>${LocalizationService.t('webview.addVariable', undefined, displayLanguage)}</button>
   </div>
 </div>
 
@@ -3096,10 +3115,10 @@ function showBodyTypeConversionConfirm(options) {
       '<div class="body-convert-sub">' + escapeHtml(subtitle) + '</div>' +
       '<div class="body-convert-actions">' +
         (canConvert
-          ? '<button type="button" class="dirty-btn dirty-btn-save" data-action="convert">' + escapeHtml(convertLabel) + '</button>'
+          ? '<button type="button" class="dirty-btn dirty-btn-save" data-action="convert" data-testid="body-convert-confirm">' + escapeHtml(convertLabel) + '</button>'
           : '') +
-        '<button type="button" class="dirty-btn dirty-btn-discard" data-action="keep">' + escapeHtml(tr('webview.bodyConvertKeep')) + '</button>' +
-        '<button type="button" class="dirty-btn dirty-btn-cancel" data-action="cancel">' + escapeHtml(tr('webview.cancel')) + '</button>' +
+        '<button type="button" class="dirty-btn dirty-btn-discard" data-action="keep" data-testid="body-convert-keep">' + escapeHtml(tr('webview.bodyConvertKeep')) + '</button>' +
+        '<button type="button" class="dirty-btn dirty-btn-cancel" data-action="cancel" data-testid="body-convert-cancel">' + escapeHtml(tr('webview.cancel')) + '</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(overlay);
@@ -4303,7 +4322,7 @@ function getRequestStageInfo(tab) {
 function renderPrimaryActionButton(tab) {
   if (isWebSocketTab(tab)) {
     if (tab.websocketStatus === 'connecting') {
-      return '<button class="btn-stop js-send">' +
+      return '<button class="btn-stop js-send" data-testid="stop-request">' +
         '<span class="stop-icon"></span>' +
         '<span class="btn-send-labels">' +
           '<span class="btn-send-primary">' + escapeHtml(tr('webview.disconnect')) + '</span>' +
@@ -4321,7 +4340,7 @@ function renderPrimaryActionButton(tab) {
       : '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2h10a1 1 0 011 1v6a1 1 0 01-1 1H8.5L5 13.5V10H3a1 1 0 01-1-1V3a1 1 0 011-1zm1 2v4h3v2.1L9.1 8H12V4H4z"/></svg>';
     // WS open일 때만 summary/status에서 성공을 표현 — Send/Connect 필은 액션 색 유지
     var sendTone = wsTone === 'success' ? 'ready' : (wsTone === 'error' ? 'ready' : wsTone);
-    return '<button class="btn-send state-' + sendTone + ' js-send">' +
+    return '<button class="btn-send state-' + sendTone + ' js-send" data-testid="send-request">' +
       wsIcon +
       '<span class="btn-send-labels">' +
         '<span class="btn-send-primary">' + escapeHtml(wsPrimary) + '</span>' +
@@ -4330,7 +4349,7 @@ function renderPrimaryActionButton(tab) {
     '</button>';
   }
   if (tab.loading) {
-    return '<button class="btn-stop js-send">' +
+    return '<button class="btn-stop js-send" data-testid="stop-request">' +
       '<span class="stop-icon"></span>' +
       '<span class="btn-send-labels">' +
         '<span class="btn-send-primary">' + escapeHtml(tr('webview.stop')) + '</span>' +
@@ -4363,7 +4382,7 @@ function renderPrimaryActionButton(tab) {
     keyHint = '';
   }
 
-  return '<button class="btn-send state-' + tone + ' js-send">' +
+  return '<button class="btn-send state-' + tone + ' js-send" data-testid="send-request">' +
     icon +
     '<span class="btn-send-labels">' +
       '<span class="btn-send-primary">' + escapeHtml(primary) + '</span>' +
@@ -4653,9 +4672,18 @@ function renderStatusStripSegment(label, tone, action, meta, tooltip, options) {
   var cue = options.cue || '';
   var priority = options.priority || 'medium';
   var classes = 'status-strip-seg' + (tone ? ' ' + tone : '') + (action ? ' clickable' : '');
+  var testId = '';
+  if (action === 'edit-environment' || action === 'switch-environment') {
+    testId = 'status-environment';
+  } else if (action === 'reveal-variable-usage') {
+    testId = 'status-variable-usage';
+  }
   var attrs = action
     ? ' type="button" data-action="' + escapeAttr(action) + '"' + (meta ? ' data-meta="' + escapeAttr(meta) + '"' : '')
     : '';
+  if (testId) {
+    attrs += ' data-testid="' + escapeAttr(testId) + '"';
+  }
   if (options.ariaExpanded != null) {
     attrs += ' aria-expanded="' + (options.ariaExpanded ? 'true' : 'false') + '"';
   }
@@ -4860,7 +4888,7 @@ function renderStatusStripExpandDetails(tab) {
   }
   // Visible variable-usage list lives in strip disclosure (Quiet Instrument); keep js-variable-usage-wrap for refresh.
   if (usage.length > 0 || unresolved.length > 0) {
-    parts.push('<div class="status-strip-detail-block js-status-strip-var-usage" id="statusStripVariableUsage">' +
+    parts.push('<div class="status-strip-detail-block js-status-strip-var-usage" id="statusStripVariableUsage" data-testid="variable-usage-disclosure">' +
       '<div class="js-variable-usage-wrap">' + renderVariableUsage(tab) + '</div>' +
     '</div>');
   }
@@ -5396,7 +5424,7 @@ function renderContent() {
     const responseTimingMetaHtml = buildResponseTimingMetaHtml(tab);
     const responseStatsHtml =
       '<div class="response-stat-inline" title="' + escapeAttr(String(r.status) + statusText + ' - ' + durationTitle + ' - ' + formatSize(r.size) + ' - ' + responseFormatValue) + '">' +
-        '<span class="stat-status status-' + sc + 'xx">' + escapeHtml(String(r.status) + statusText) + '</span>' +
+        '<span class="stat-status status-' + sc + 'xx" data-testid="response-status">' + escapeHtml(String(r.status) + statusText) + '</span>' +
         sepHtml +
         '<span class="stat-time" title="' + escapeAttr(durationTitle) + '">' + escapeHtml(durationText) + '</span>' +
         sepHtml +
@@ -5432,10 +5460,10 @@ function renderContent() {
         responseStatsHtml +
         '<div class="response-action-cluster">' +
           compareQuietHtml +
-          '<button class="pin-response-btn js-pin-response" type="button" title="' + escapeAttr(tr('webview.pinResponse') + pinCountSuffix) + '" aria-label="' + escapeAttr(tr('webview.pin') + pinCountSuffix) + '">' + pinSvg + '<span class="action-label">' + escapeHtml(tr('webview.pin') + pinCountSuffix) + '</span></button>' +
-          '<button class="compare-btn js-compare-responses' + (compareReady ? ' ready' : '') + '" type="button" title="' + escapeAttr(compareTitle) + '" aria-label="' + escapeAttr(tr('webview.compare')) + '"' + (compareReady ? '' : ' disabled') + '>' + diffSvg + '<span class="action-label">' + escapeHtml(tr('webview.compare')) + '</span></button>' +
+          '<button class="pin-response-btn js-pin-response" data-testid="response-pin" type="button" title="' + escapeAttr(tr('webview.pinResponse') + pinCountSuffix) + '" aria-label="' + escapeAttr(tr('webview.pin') + pinCountSuffix) + '">' + pinSvg + '<span class="action-label">' + escapeHtml(tr('webview.pin') + pinCountSuffix) + '</span></button>' +
+          '<button class="compare-btn js-compare-responses' + (compareReady ? ' ready' : '') + '" data-testid="response-compare" type="button" title="' + escapeAttr(compareTitle) + '" aria-label="' + escapeAttr(tr('webview.compare')) + '"' + (compareReady ? '' : ' disabled') + '>' + diffSvg + '<span class="action-label">' + escapeHtml(tr('webview.compare')) + '</span></button>' +
           '<div class="actions-more-wrap">' +
-            '<button class="res-action-btn js-actions-more-btn" type="button" title="' + escapeAttr(tr('webview.more') || 'More') + '" aria-label="' + escapeAttr(tr('webview.more') || 'More') + '" aria-haspopup="menu" aria-expanded="false" aria-controls="responseActionsMoreMenu"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="13" cy="8" r="1.4"/></svg></button>' +
+            '<button class="res-action-btn js-actions-more-btn" data-testid="response-overflow" type="button" title="' + escapeAttr(tr('webview.more') || 'More') + '" aria-label="' + escapeAttr(tr('webview.more') || 'More') + '" aria-haspopup="menu" aria-expanded="false" aria-controls="responseActionsMoreMenu"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="13" cy="8" r="1.4"/></svg></button>' +
             '<div class="actions-more-menu js-actions-more-menu" id="responseActionsMoreMenu" role="menu">' +
               '<button class="res-action-btn js-copy-response" type="button" role="menuitem" title="' + escapeAttr(tr('webview.copyResponse')) + '"><span class="action-label">' + escapeHtml(tr('webview.copy')) + '</span></button>' +
               ((tab.resolvedUrl || tab.url) ? '<button class="res-action-btn js-copy-response-url" type="button" role="menuitem" title="' + escapeAttr(tr('webview.copyUrl')) + '"><span class="action-label">' + escapeHtml(tr('webview.copyUrl')) + '</span></button>' : '') +
@@ -5465,8 +5493,8 @@ function renderContent() {
       '</div>' +
       toolbarHtml +
       '</div>' +
-      (lang === 'json' ? '<div class="json-tree js-res-tree js-res-body' + (showBody ? '' : ' hidden') + '"></div>' : '') +
-      '<div class="json-body js-res-raw js-res-body' + ((lang === 'json' || !showBody) ? ' hidden' : '') + '">' + rawBodyHtml + '</div>' +
+      (lang === 'json' ? '<div class="json-tree js-res-tree js-res-body' + (showBody ? '' : ' hidden') + '" data-testid="response-body-tree"></div>' : '') +
+      '<div class="json-body js-res-raw js-res-body' + ((lang === 'json' || !showBody) ? ' hidden' : '') + '" data-testid="response-body">' + rawBodyHtml + '</div>' +
       '<div class="res-headers-panel' + (showHeaders ? '' : ' hidden') + ' js-res-headers">' +
         (tab.resolvedHeaders && tab.resolvedHeaders.length
           ? '<div class="resolved-headers-section"><div class="resolved-headers-title">' + escapeHtml(tr('webview.requestHeadersResolved')) + '</div>' +
@@ -5527,13 +5555,13 @@ function renderContent() {
   mainContent.innerHTML = envLine +
     '<div class="url-bar">' +
       '<div class="url-primary-group">' +
-        '<select class="js-method">' +
+          '<select class="js-method" data-testid="request-method">' +
           ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'].map(m =>
             '<option' + (m === tab.method ? ' selected' : '') + '>' + m + '</option>'
           ).join('') +
         '</select>' +
         '<div class="url-input-wrap">' +
-          '<input class="js-url" type="text" placeholder="' + escapeAttr(tr('webview.urlPlaceholder')) + '" spellcheck="false" value="' + escapeAttr(tab.url) + '"/>' +
+          '<input class="js-url" data-testid="request-url" type="text" placeholder="' + escapeAttr(tr('webview.urlPlaceholder')) + '" spellcheck="false" value="' + escapeAttr(tab.url) + '"/>' +
           '<div class="var-overlay js-var-overlay hidden"></div>' +
         '</div>' +
       '</div>' +
@@ -5560,7 +5588,7 @@ function renderContent() {
           '<div class="tab' + (isSettingsTab ? ' active' : '') + (isSettingsTab && !requestEditorExpanded ? ' collapsed' : '') + '" data-tab="settings" role="tab" tabindex="0" aria-selected="' + (isSettingsTab ? 'true' : 'false') + '" aria-expanded="' + (showSettingsEditor ? 'true' : 'false') + '">' + escapeHtml(tr('webview.settings')) + '</div>' +
         '</div>' +
         '<div class="js-params-panel request-editor-panel kv-section' + (showParamsEditor ? '' : ' hidden') + '">' +
-          '<div class="js-param-rows">' + kvRowsHtml(tab.params) + '</div>' +
+          '<div class="js-param-rows" data-testid="request-params">' + kvRowsHtml(tab.params) + '</div>' +
           '<div class="kv-actions">' +
             '<button class="add-btn js-add-param">' + escapeHtml(tr('webview.addParam')) + '</button>' +
             '<button class="ghost-btn ripple-btn js-open-bulk-editor" type="button" data-target="params">' + escapeHtml(tr('webview.bulkPaste')) + '</button>' +
@@ -5576,7 +5604,7 @@ function renderContent() {
         '</div>' +
         '<div class="js-headers-panel request-editor-panel kv-section' + (showHeadersEditor ? '' : ' hidden') + '">' +
           '<div class="js-default-headers-banner-wrap">' + renderDefaultHeadersBanner(tab) + '</div>' +
-          '<div class="js-header-rows">' + kvRowsHtml(tab.headers) + '</div>' +
+          '<div class="js-header-rows" data-testid="request-headers">' + kvRowsHtml(tab.headers) + '</div>' +
           '<div class="kv-actions">' +
             '<button class="add-btn js-add-header">' + escapeHtml(tr('webview.addHeader')) + '</button>' +
             '<button class="ghost-btn ripple-btn js-open-bulk-editor" type="button" data-target="headers">' + escapeHtml(tr('webview.bulkPaste')) + '</button>' +
@@ -5591,7 +5619,7 @@ function renderContent() {
           '</div>' +
         '</div>' +
         '<div class="js-body-panel request-editor-panel body-section' + (showBodyEditor ? '' : ' hidden') + '">' +
-          '<select class="js-body-type body-type-select">' +
+          '<select class="js-body-type body-type-select" data-testid="body-type">' +
             ['none','json','xml','form','formdata','binary','raw'].map(function(t) {
               var label = bodyTypeLabel(t);
               return '<option value="' + t + '"' + (t === tab.bodyType ? ' selected' : '') + '>' + label + '</option>';
@@ -5599,7 +5627,7 @@ function renderContent() {
           '</select>' +
           '<div class="body-editor js-body-editor' + (shouldEnableBodySyntaxHighlight(tab.bodyType, isWs) ? ' is-syntax-highlight' : '') + '"' + (!isWs && (tab.bodyType === 'none' || tab.bodyType === 'formdata' || tab.bodyType === 'binary') ? ' style="display:none"' : '') + '>' +
             '<pre class="body-highlight js-body-highlight" aria-hidden="true"><code class="hljs js-body-highlight-code"></code></pre>' +
-            '<textarea class="js-body" spellcheck="false" placeholder="' + escapeAttr(isWs ? tr('webview.websocketMessagePlaceholder') : tr('webview.bodyPlaceholder')) + '">' + escapeHtml(tab.body) + '</textarea>' +
+            '<textarea class="js-body" data-testid="request-body-editor" spellcheck="false" placeholder="' + escapeAttr(isWs ? tr('webview.websocketMessagePlaceholder') : tr('webview.bodyPlaceholder')) + '">' + escapeHtml(tab.body) + '</textarea>' +
           '</div>' +
           '<div class="js-formdata-panel' + (tab.bodyType === 'formdata' ? '' : ' hidden') + '">' +
             '<div class="formdata-summary js-formdata-summary">' + renderFormDataSummary(tab.formData || []) + '</div>' +
@@ -7667,6 +7695,51 @@ function normalizeRunnerIterationsInput(value) {
   return Math.min(100, Math.max(1, parsed));
 }
 
+function normalizeRunnerRequestChoices(msg) {
+  var requests = Array.isArray(msg.requests) ? msg.requests : [];
+  var normalized = [];
+  for (var i = 0; i < requests.length; i++) {
+    var entry = requests[i];
+    if (!entry || typeof entry.id !== 'string' || !entry.id) continue;
+    normalized.push({
+      id: entry.id,
+      name: typeof entry.name === 'string' ? entry.name : entry.id,
+      method: typeof entry.method === 'string' && entry.method ? String(entry.method).toUpperCase() : 'GET',
+      folderPath: typeof entry.folderPath === 'string' ? entry.folderPath : '',
+    });
+  }
+  if (normalized.length > 0) return normalized;
+  var fallbackTotal = Number(msg.total) || 0;
+  for (var j = 0; j < fallbackTotal; j++) {
+    normalized.push({
+      id: 'legacy-' + j,
+      name: '#' + (j + 1),
+      method: 'GET',
+      folderPath: '',
+    });
+  }
+  return normalized;
+}
+
+function renderRunnerRequestChoiceRows(requests) {
+  return requests.map(function(entry, index) {
+    var checkboxId = 'runner-req-' + index;
+    var pathHtml = entry.folderPath
+      ? '<div class="runner-request-path">' + escapeHtml(entry.folderPath) + '</div>'
+      : '';
+    return '<label class="runner-request-row" for="' + escapeAttr(checkboxId) + '">' +
+      '<input id="' + escapeAttr(checkboxId) + '" class="js-runner-request-check" data-testid="runner-request-check" type="checkbox" checked data-request-id="' + escapeAttr(entry.id) + '">' +
+      '<span class="runner-request-meta">' +
+        '<span class="runner-request-line">' +
+          '<span class="method-badge method-' + escapeAttr(entry.method) + '">' + escapeHtml(entry.method) + '</span>' +
+          '<span class="runner-request-name">' + escapeHtml(entry.name) + '</span>' +
+        '</span>' +
+        pathHtml +
+      '</span>' +
+    '</label>';
+  }).join('');
+}
+
 function showRunnerSetup(msg) {
   runnerResults = [];
   runnerStatusState = null;
@@ -7674,6 +7747,8 @@ function showRunnerSetup(msg) {
   var delayMs = normalizeRunnerDelayInput(options.delayMs);
   var iterations = normalizeRunnerIterationsInput(options.iterations);
   var stopOnFailure = options.stopOnFailure === true;
+  var requestChoices = normalizeRunnerRequestChoices(msg);
+  var collectionTotal = requestChoices.length;
 
   if (runnerOverlay) runnerOverlay.remove();
   runnerOverlay = document.createElement('div');
@@ -7681,8 +7756,24 @@ function showRunnerSetup(msg) {
   runnerOverlay.innerHTML =
     '<div class="runner-header">' +
       '<h3>' + escapeHtml(tf('webview.runTitle', { name: msg.name })) + '</h3>' +
-      '<button class="btn btn-s js-runner-start" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runStart')) + '</button>' +
-      '<button class="btn btn-s js-runner-close" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runClose')) + '</button>' +
+      '<button class="btn btn-s js-runner-start" data-testid="runner-start" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runStart')) + '</button>' +
+      '<button class="btn btn-s js-runner-close" data-testid="runner-close" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runClose')) + '</button>' +
+    '</div>' +
+    '<div class="runner-request-select" data-testid="runner-request-select">' +
+      '<div class="runner-request-select-head">' +
+        '<div>' +
+          '<div class="runner-request-select-title">' + escapeHtml(tr('webview.runRequests')) + '</div>' +
+          '<div class="runner-request-select-count js-runner-selected-count" data-testid="runner-selected-count"></div>' +
+        '</div>' +
+        '<div class="runner-request-select-actions">' +
+          '<button type="button" class="js-runner-select-all" data-testid="runner-select-all">' + escapeHtml(tr('webview.runSelectAll')) + '</button>' +
+          '<button type="button" class="js-runner-clear-selection" data-testid="runner-clear-selection">' + escapeHtml(tr('webview.runClearSelection')) + '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="runner-request-list js-runner-request-list" data-testid="runner-request-list" role="group" aria-label="' + escapeAttr(tr('webview.runRequests')) + '">' +
+        renderRunnerRequestChoiceRows(requestChoices) +
+      '</div>' +
+      '<div class="runner-select-hint js-runner-select-hint" data-testid="runner-select-hint" hidden></div>' +
     '</div>' +
     '<div class="runner-options">' +
       '<label class="runner-option">' +
@@ -7698,9 +7789,10 @@ function showRunnerSetup(msg) {
         '<span>' + escapeHtml(tr('webview.runStopOnFailure')) + '</span>' +
       '</label>' +
     '</div>' +
-    '<div class="runner-summary">' +
-      '<span>' + escapeHtml(tr('webview.runTotal')) + ': <b>' + msg.total + '</b></span>' +
-      '<span>' + escapeHtml(tr('webview.runRuns')) + ': <b class="js-runner-runs">' + (msg.total * iterations) + '</b></span>' +
+    '<div class="runner-summary" data-testid="runner-summary">' +
+      '<span>' + escapeHtml(tr('webview.runTotal')) + ': <b class="js-runner-collection-total" data-testid="runner-collection-total">' + collectionTotal + '</b></span>' +
+      '<span>' + escapeHtml(tr('webview.runSelected')) + ': <b class="js-runner-selected-total" data-testid="runner-selected-total">' + collectionTotal + '</b></span>' +
+      '<span>' + escapeHtml(tr('webview.runRuns')) + ': <b class="js-runner-runs" data-testid="runner-runs">' + (collectionTotal * iterations) + '</b></span>' +
     '</div>' +
     '<div class="runner-live-status">' +
       '<div class="runner-live-title">' + escapeHtml(tr('webview.runOptions')) + '</div>' +
@@ -7712,19 +7804,68 @@ function showRunnerSetup(msg) {
   var delayInput = runnerOverlay.querySelector('.js-runner-delay');
   var iterationInput = runnerOverlay.querySelector('.js-runner-iterations');
   var runsEl = runnerOverlay.querySelector('.js-runner-runs');
-  var updateRuns = function() {
+  var selectedTotalEl = runnerOverlay.querySelector('.js-runner-selected-total');
+  var selectedCountEl = runnerOverlay.querySelector('.js-runner-selected-count');
+  var selectHintEl = runnerOverlay.querySelector('.js-runner-select-hint');
+  var startBtn = runnerOverlay.querySelector('.js-runner-start');
+  var checkboxes = Array.from(runnerOverlay.querySelectorAll('.js-runner-request-check'));
+
+  var getSelectedRequestIds = function() {
+    return checkboxes
+      .filter(function(input) { return input.checked; })
+      .map(function(input) { return input.dataset.requestId; })
+      .filter(Boolean);
+  };
+
+  var syncRunnerSelectionUi = function() {
+    var selectedCount = getSelectedRequestIds().length;
+    if (selectedCountEl) {
+      selectedCountEl.textContent = tf('webview.runSelectedCount', {
+        selected: selectedCount,
+        total: collectionTotal,
+      });
+    }
+    if (selectedTotalEl) selectedTotalEl.textContent = String(selectedCount);
     if (runsEl) {
-      runsEl.textContent = String(msg.total * normalizeRunnerIterationsInput(iterationInput?.value));
+      runsEl.textContent = String(selectedCount * normalizeRunnerIterationsInput(iterationInput?.value));
+    }
+    var noneSelected = selectedCount === 0;
+    if (startBtn) {
+      startBtn.disabled = noneSelected;
+      startBtn.setAttribute('aria-disabled', noneSelected ? 'true' : 'false');
+    }
+    if (selectHintEl) {
+      selectHintEl.hidden = !noneSelected;
+      selectHintEl.textContent = noneSelected ? tr('webview.runSelectAtLeastOne') : '';
     }
   };
+
+  checkboxes.forEach(function(input) {
+    input.addEventListener('change', syncRunnerSelectionUi);
+  });
+  runnerOverlay.querySelector('.js-runner-select-all')?.addEventListener('click', function() {
+    checkboxes.forEach(function(input) { input.checked = true; });
+    syncRunnerSelectionUi();
+  });
+  runnerOverlay.querySelector('.js-runner-clear-selection')?.addEventListener('click', function() {
+    checkboxes.forEach(function(input) { input.checked = false; });
+    syncRunnerSelectionUi();
+  });
+
   delayInput?.addEventListener('change', function() { this.value = String(normalizeRunnerDelayInput(this.value)); });
   iterationInput?.addEventListener('change', function() {
     this.value = String(normalizeRunnerIterationsInput(this.value));
-    updateRuns();
+    syncRunnerSelectionUi();
   });
-  iterationInput?.addEventListener('input', updateRuns);
+  iterationInput?.addEventListener('input', syncRunnerSelectionUi);
+  syncRunnerSelectionUi();
 
-  runnerOverlay.querySelector('.js-runner-start').addEventListener('click', function() {
+  startBtn?.addEventListener('click', function() {
+    var selectedRequestIds = getSelectedRequestIds();
+    if (selectedRequestIds.length === 0) {
+      syncRunnerSelectionUi();
+      return;
+    }
     var selectedOptions = {
       delayMs: normalizeRunnerDelayInput(delayInput?.value),
       iterations: normalizeRunnerIterationsInput(iterationInput?.value),
@@ -7736,6 +7877,7 @@ function showRunnerSetup(msg) {
       delayMs: selectedOptions.delayMs,
       iterations: selectedOptions.iterations,
       stopOnFailure: selectedOptions.stopOnFailure,
+      selectedRequestIds: selectedRequestIds,
     });
   });
 
@@ -7748,6 +7890,8 @@ function showRunner(msg) {
   runnerResults = [];
   runnerStatusState = null;
   var total = msg.total || 0;
+  var collectionTotal = msg.collectionTotal != null ? msg.collectionTotal : total;
+  var selectedTotal = msg.selectedTotal != null ? msg.selectedTotal : total;
   var totalRuns = msg.totalRuns || total;
   
   if (runnerOverlay) runnerOverlay.remove();
@@ -7756,22 +7900,23 @@ function showRunner(msg) {
   runnerOverlay.innerHTML =
     '<div class="runner-header">' +
       '<h3>' + escapeHtml(tf('webview.runTitle', { name: msg.name })) + '</h3>' +
-      '<button class="btn btn-s js-runner-stop" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runStop')) + '</button>' +
+      '<button class="btn btn-s js-runner-stop" data-testid="runner-stop" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runStop')) + '</button>' +
       '<button class="btn btn-s js-runner-rerun hidden" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runRerunFailed')) + '</button>' +
-      '<button class="btn btn-s js-runner-close hidden" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runClose')) + '</button>' +
+      '<button class="btn btn-s js-runner-close hidden" data-testid="runner-close" style="padding:2px 10px;font-size:13px">' + escapeHtml(tr('webview.runClose')) + '</button>' +
     '</div>' +
-    '<div class="runner-progress">' +
-      '<span class="js-runner-counter">0/' + totalRuns + '</span>' +
+    '<div class="runner-progress" data-testid="runner-progress">' +
+      '<span class="js-runner-counter" data-testid="runner-counter">0/' + totalRuns + '</span>' +
       '<div class="runner-bar"><div class="runner-bar-fill js-runner-bar" style="transform:scaleX(0)"></div></div>' +
       '<span class="spinner js-runner-spinner"></span>' +
     '</div>' +
-    '<div class="runner-summary">' +
-      '<span>' + escapeHtml(tr('webview.runTotal')) + ': <b>' + total + '</b></span>' +
-      '<span>' + escapeHtml(tr('webview.runRuns')) + ': <b>' + totalRuns + '</b></span>' +
+    '<div class="runner-summary" data-testid="runner-summary">' +
+      '<span>' + escapeHtml(tr('webview.runTotal')) + ': <b data-testid="runner-collection-total">' + collectionTotal + '</b></span>' +
+      '<span>' + escapeHtml(tr('webview.runSelected')) + ': <b data-testid="runner-selected-total">' + selectedTotal + '</b></span>' +
+      '<span>' + escapeHtml(tr('webview.runRuns')) + ': <b data-testid="runner-runs">' + totalRuns + '</b></span>' +
       '<span>' + escapeHtml(tr('webview.runIteration')) + ': <b class="js-runner-iteration">1/' + (msg.iterations || 1) + '</b></span>' +
-      '<span class="pass">' + escapeHtml(tr('webview.runPassed')) + ': <b class="js-runner-pass">0</b></span>' +
-      '<span class="fail">' + escapeHtml(tr('webview.runFailed')) + ': <b class="js-runner-fail">0</b></span>' +
-      '<span class="skip">' + escapeHtml(tr('webview.runSkipped')) + ': <b class="js-runner-skip">0</b></span>' +
+      '<span class="pass">' + escapeHtml(tr('webview.runPassed')) + ': <b class="js-runner-pass" data-testid="runner-passed">0</b></span>' +
+      '<span class="fail">' + escapeHtml(tr('webview.runFailed')) + ': <b class="js-runner-fail" data-testid="runner-failed">0</b></span>' +
+      '<span class="skip">' + escapeHtml(tr('webview.runSkipped')) + ': <b class="js-runner-skip" data-testid="runner-skipped">0</b></span>' +
       '<span class="js-runner-time"></span>' +
     '</div>' +
     '<div class="runner-live-status">' +

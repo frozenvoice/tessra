@@ -389,6 +389,15 @@ export interface StartCollectionRunMessage {
   delayMs?: number;
   iterations?: number;
   stopOnFailure?: boolean;
+  /** CollectionItem.id values selected for this run only. */
+  selectedRequestIds?: string[];
+}
+
+export interface CollectionRunRequestChoice {
+  id: string;
+  name: string;
+  method: string;
+  folderPath?: string;
 }
 
 export interface RerunFailedCollectionMessage {
@@ -584,6 +593,7 @@ export interface ConfigureCollectionRunMessage {
   type: MessageType.ConfigureCollectionRun;
   name: string;
   total: number;
+  requests?: CollectionRunRequestChoice[];
   options?: {
     delayMs?: number;
     iterations?: number;

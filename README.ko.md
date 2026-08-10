@@ -8,12 +8,11 @@ VS Code 안에서 동작하는 로컬 우선 API 클라이언트입니다.
 
 Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게 요청을 만들고 실행하려는 개발자를 위한 확장입니다. 모든 데이터는 로컬에 남고, 네트워크 호출은 사용자가 직접 보내는 API 요청에서만 발생합니다.
 
-## 1.0.11에서 달라진 점
+## 1.0.12에서 달라진 점
 
-- 인앱 Guide를 현재 요청 패널 기준으로 현행화: status strip, Pin/Compare + `⋯`, Body 변환, Workspace Backup/Restore, WebSocket, runner 옵션, 단축키, 로컬 저장
-- URL/Params 이중 직렬화로 query가 중복될 수 있던 문제 수정
-- Response sticky 요약의 Pin / Compare 발견성 복구 (Copy / Save / Mode / metadata는 `⋯` 유지)
-- VSIX 패키징에서 `tmp/` 등 스테이징 산출물 제외
+- Collection Runner에서 실행 전에 포함할 요청을 선택할 수 있습니다
+- 기본은 전체 선택이며, 이번 실행에서만 제외할 요청을 체크 해제합니다 (선택은 저장되지 않음)
+- 선택 건수와 함께 delay, iterations, stop-on-failure, Stop, history, Rerun Failed 동작을 유지합니다
 - 로컬 우선 원칙 유지: 로그인 없음, 클라우드 동기화 없음, 텔레메트리 없음
 
 ## 스크린샷
@@ -125,6 +124,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - Drag & Drop 정렬
 - Duplicate / Save As
 - Run All Requests
+- 실행 전에 포함할 요청을 선택할 수 있으며, 기본은 전체 선택이고 이번 실행에만 적용됩니다
 - 현재 요청 강조와 재시도 대기 상태를 보여주는 컬렉션 러너 상태 표시
 - 요청 사이 지연, 반복 실행, 실패 시 중지를 설정할 수 있는 컬렉션 러너 옵션
 - Runner Stop은 진행 중 요청, 재시도 대기, 요청 사이 지연을 함께 중단
