@@ -243,14 +243,16 @@ function extractTaggedTemplate(source: string, tagComment: '/*css*/' | '/*html*/
   return source.slice(start + startMarker.length, end);
 }
 
-/** Expand Body/Response fragment composition without interpreting other ${...} interpolations. */
+/** Expand Body/Response/Runner fragment composition without interpreting other ${...} interpolations. */
 function expandClientScriptTemplate(
   clientScript: string,
   bodyClientScript: string,
-  responseClientScript: string
+  responseClientScript: string,
+  runnerClientScript: string
 ): string {
   const bodyMarker = '${getRequestPanelBodyClientScript()}';
   const responseMarker = '${getRequestPanelResponseClientScript()}';
+  const runnerMarker = '${getRequestPanelRunnerClientScript()}';
   assert.ok(
     clientScript.includes(bodyMarker),
     'requestPanelClientScript should compose getRequestPanelBodyClientScript()'
@@ -259,9 +261,14 @@ function expandClientScriptTemplate(
     clientScript.includes(responseMarker),
     'requestPanelClientScript should compose getRequestPanelResponseClientScript()'
   );
+  assert.ok(
+    clientScript.includes(runnerMarker),
+    'requestPanelClientScript should compose getRequestPanelRunnerClientScript()'
+  );
   return clientScript
     .split(bodyMarker).join(bodyClientScript)
-    .split(responseMarker).join(responseClientScript);
+    .split(responseMarker).join(responseClientScript)
+    .split(runnerMarker).join(runnerClientScript);
 }
 
 /** Compose styles/markup/clientScript the same way requestPanelHtml.ts assembles the shell. */
@@ -282,13 +289,18 @@ function extractHtmlTemplate(): string {
     readSourceFile('src/panels/requestPanel/requestPanelResponseClientScript.ts'),
     '/*js*/'
   );
+  const runnerClientScript = extractTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelRunnerClientScript.ts'),
+    '/*js*/'
+  );
   const clientScript = expandClientScriptTemplate(
     extractTaggedTemplate(
       readSourceFile('src/panels/requestPanel/requestPanelClientScript.ts'),
       '/*js*/'
     ),
     bodyClientScript,
-    responseClientScript
+    responseClientScript,
+    runnerClientScript
   );
 
   // Concatenation keeps ${...} inside markup/script as literals for renderHtml().
@@ -324,6 +336,7 @@ function readRequestPanelHtmlSources(): string {
     'src/panels/requestPanel/requestPanelClientScript.ts',
     'src/panels/requestPanel/requestPanelBodyClientScript.ts',
     'src/panels/requestPanel/requestPanelResponseClientScript.ts',
+    'src/panels/requestPanel/requestPanelRunnerClientScript.ts',
   ]
     .map((relativePath) => readSourceFile(relativePath))
     .join('\n');

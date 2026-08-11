@@ -16,7 +16,7 @@ function extractJsTemplate(source: string): string {
   return source.slice(start + startMarker.length, end);
 }
 
-describe('requestPanelHtml architecture (Phase 1/2/3 split)', () => {
+describe('requestPanelHtml architecture (Phase 1/2/3/4 split)', () => {
   it('keeps getRequestPanelHtml as a thin composition over styles/markup/clientScript', () => {
     const html = read('src/panels/requestPanel/requestPanelHtml.ts');
     assert.match(html, /from '\.\/requestPanelStyles'/);
@@ -33,24 +33,27 @@ describe('requestPanelHtml architecture (Phase 1/2/3 split)', () => {
     assert.doesNotMatch(html, /acquireVsCodeApi\(\)/);
   });
 
-  it('ships dedicated styles, markup, client script, Body, and Response client modules', () => {
+  it('ships dedicated styles, markup, client script, Body, Response, and Runner client modules', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStyles.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelMarkup.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelBodyClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelResponseClientScript.ts')));
+    assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelRunnerClientScript.ts')));
 
     const styles = read('src/panels/requestPanel/requestPanelStyles.ts');
     const markup = read('src/panels/requestPanel/requestPanelMarkup.ts');
     const script = read('src/panels/requestPanel/requestPanelClientScript.ts');
     const body = read('src/panels/requestPanel/requestPanelBodyClientScript.ts');
     const response = read('src/panels/requestPanel/requestPanelResponseClientScript.ts');
+    const runner = read('src/panels/requestPanel/requestPanelRunnerClientScript.ts');
 
     assert.match(styles, /export function getRequestPanelStyles\(/);
     assert.match(markup, /export function getRequestPanelMarkup\(/);
     assert.match(script, /export function getRequestPanelClientScript\(/);
     assert.match(body, /export function getRequestPanelBodyClientScript\(/);
     assert.match(response, /export function getRequestPanelResponseClientScript\(/);
+    assert.match(runner, /export function getRequestPanelRunnerClientScript\(/);
     assert.match(styles, /\.tab-bar\{display:flex/);
     assert.match(markup, /data-testid="environment-disclosure"/);
     assert.match(script, /acquireVsCodeApi\(\)/);
@@ -61,6 +64,10 @@ describe('requestPanelHtml architecture (Phase 1/2/3 split)', () => {
     assert.match(response, /function bindResponseViewerEvents\(/);
     assert.match(response, /data-testid="response-pin"/);
     assert.match(response, /data-testid="response-compare"/);
+    assert.match(runner, /function showRunnerSetup\(/);
+    assert.match(runner, /function showRunner\(/);
+    assert.match(runner, /data-testid="runner-start"/);
+    assert.match(runner, /data-testid="runner-request-check"/);
   });
 
   it('composes Body client fragment into main client script without duplicating Body impl', () => {
@@ -147,5 +154,51 @@ describe('requestPanelHtml architecture (Phase 1/2/3 split)', () => {
     const createTabIdx = scriptJs.indexOf('function createTab(');
     assert.ok(bodyInsertIdx >= 0 && responseInsertIdx > bodyInsertIdx, 'Response fragment should follow Body fragment');
     assert.ok(createTabIdx > responseInsertIdx, 'createTab should follow Response fragment composition');
+  });
+
+  it('composes Runner client fragment into main client script without duplicating Runner impl', () => {
+    const script = read('src/panels/requestPanel/requestPanelClientScript.ts');
+    const runner = read('src/panels/requestPanel/requestPanelRunnerClientScript.ts');
+    const scriptJs = extractJsTemplate(script);
+    const runnerJs = extractJsTemplate(runner);
+
+    assert.match(script, /from '\.\/requestPanelRunnerClientScript'/);
+    assert.ok(
+      scriptJs.includes('${getRequestPanelRunnerClientScript()}'),
+      'main client script should insert Runner fragment via composition'
+    );
+
+    // Main keeps thin dispatcher calls; implementations live in Runner module once.
+    assert.match(scriptJs, /showRunnerSetup\(msg\)/);
+    assert.match(scriptJs, /showRunner\(msg\)/);
+    assert.match(scriptJs, /updateRunnerStatus\(msg\)/);
+    assert.match(scriptJs, /updateRunnerRow\(msg\)/);
+    assert.match(scriptJs, /finishRunner\(msg\)/);
+    assert.match(runnerJs, /function showRunnerSetup\(/);
+    assert.match(runnerJs, /function showRunner\(/);
+    assert.match(runnerJs, /function updateRunnerStatus\(/);
+    assert.match(runnerJs, /function updateRunnerRow\(/);
+    assert.match(runnerJs, /function finishRunner\(/);
+    assert.match(runnerJs, /var runnerOverlay = null/);
+    assert.match(runnerJs, /type: 'startCollectionRun'/);
+    assert.match(runnerJs, /type: 'stopCollectionRun'/);
+    assert.match(runnerJs, /type: 'rerunFailedCollection'/);
+    assert.doesNotMatch(scriptJs, /function showRunnerSetup\(/);
+    assert.doesNotMatch(scriptJs, /function showRunner\(/);
+    assert.doesNotMatch(scriptJs, /function updateRunnerStatus\(/);
+    assert.doesNotMatch(scriptJs, /function updateRunnerRow\(/);
+    assert.doesNotMatch(scriptJs, /function finishRunner\(/);
+    assert.doesNotMatch(scriptJs, /var runnerOverlay = null/);
+
+    // Shared helpers Runner needs remain in main.
+    assert.match(scriptJs, /function isBinaryContentType\(/);
+    assert.match(scriptJs, /function formatSize\(/);
+
+    // Ordering: Response fragment before Runner fragment; Runner before createTab.
+    const responseInsertIdx = scriptJs.indexOf('${getRequestPanelResponseClientScript()}');
+    const runnerInsertIdx = scriptJs.indexOf('${getRequestPanelRunnerClientScript()}');
+    const createTabIdx = scriptJs.indexOf('function createTab(');
+    assert.ok(responseInsertIdx >= 0 && runnerInsertIdx > responseInsertIdx, 'Runner fragment should follow Response fragment');
+    assert.ok(createTabIdx > runnerInsertIdx, 'createTab should follow Runner fragment composition');
   });
 });
