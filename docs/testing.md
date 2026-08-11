@@ -5,7 +5,7 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**10** stable specs, including Collection Runner) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**11** stable specs, including Collection Runner and WebSocket) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
@@ -21,7 +21,7 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (10 specs, includes Collection Runner)
+npm run test:e2e         # stable VS Code UI E2E (11 specs, includes Collection Runner + WebSocket)
 npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
 npm run test:e2e:all     # stable suite then focused runner suite
 npm run test:e2e:ci      # CI stable suite
@@ -63,6 +63,8 @@ User machine settings / other extensions / real Tessra storage are never reused.
 E2E never calls public demo APIs. A Node `http` server binds `127.0.0.1` on a random port and serves deterministic `/users`, `/echo`, `/html`, `/xml`, `/headers`, `/status/500`, `/slow`, `/large`.
 
 Request logs are asserted from the same process.
+
+WebSocket E2E (#11) starts a separate local echo fixture (`e2e/fixtures/websocketServer.ts`) on `127.0.0.1` with a random port. It uses Node built-ins only (HTTP Upgrade + text echo + close) and never calls public WebSocket endpoints.
 
 ## Stable selectors
 

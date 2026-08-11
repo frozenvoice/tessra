@@ -243,18 +243,20 @@ function extractTaggedTemplate(source: string, tagComment: '/*css*/' | '/*html*/
   return source.slice(start + startMarker.length, end);
 }
 
-/** Expand Body/Response/Runner/Status fragment composition without interpreting other ${...} interpolations. */
+/** Expand Body/Response/Runner/Status/WebSocket fragment composition without interpreting other ${...} interpolations. */
 function expandClientScriptTemplate(
   clientScript: string,
   bodyClientScript: string,
   responseClientScript: string,
   runnerClientScript: string,
-  statusClientScript: string
+  statusClientScript: string,
+  webSocketClientScript: string
 ): string {
   const bodyMarker = '${getRequestPanelBodyClientScript()}';
   const responseMarker = '${getRequestPanelResponseClientScript()}';
   const runnerMarker = '${getRequestPanelRunnerClientScript()}';
   const statusMarker = '${getRequestPanelStatusClientScript()}';
+  const webSocketMarker = '${getRequestPanelWebSocketClientScript()}';
   assert.ok(
     clientScript.includes(bodyMarker),
     'requestPanelClientScript should compose getRequestPanelBodyClientScript()'
@@ -271,11 +273,16 @@ function expandClientScriptTemplate(
     clientScript.includes(statusMarker),
     'requestPanelClientScript should compose getRequestPanelStatusClientScript()'
   );
+  assert.ok(
+    clientScript.includes(webSocketMarker),
+    'requestPanelClientScript should compose getRequestPanelWebSocketClientScript()'
+  );
   return clientScript
     .split(bodyMarker).join(bodyClientScript)
     .split(responseMarker).join(responseClientScript)
     .split(runnerMarker).join(runnerClientScript)
-    .split(statusMarker).join(statusClientScript);
+    .split(statusMarker).join(statusClientScript)
+    .split(webSocketMarker).join(webSocketClientScript);
 }
 
 /** Compose styles/markup/clientScript the same way requestPanelHtml.ts assembles the shell. */
@@ -304,6 +311,10 @@ function extractHtmlTemplate(): string {
     readSourceFile('src/panels/requestPanel/requestPanelStatusClientScript.ts'),
     '/*js*/'
   );
+  const webSocketClientScript = extractTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelWebSocketClientScript.ts'),
+    '/*js*/'
+  );
   const clientScript = expandClientScriptTemplate(
     extractTaggedTemplate(
       readSourceFile('src/panels/requestPanel/requestPanelClientScript.ts'),
@@ -312,7 +323,8 @@ function extractHtmlTemplate(): string {
     bodyClientScript,
     responseClientScript,
     runnerClientScript,
-    statusClientScript
+    statusClientScript,
+    webSocketClientScript
   );
 
   // Concatenation keeps ${...} inside markup/script as literals for renderHtml().
@@ -350,6 +362,7 @@ function readRequestPanelHtmlSources(): string {
     'src/panels/requestPanel/requestPanelResponseClientScript.ts',
     'src/panels/requestPanel/requestPanelRunnerClientScript.ts',
     'src/panels/requestPanel/requestPanelStatusClientScript.ts',
+    'src/panels/requestPanel/requestPanelWebSocketClientScript.ts',
   ]
     .map((relativePath) => readSourceFile(relativePath))
     .join('\n');
@@ -909,7 +922,7 @@ describe('RequestPanel Webview', () => {
     const webSocketResponseScript = extractScriptSegment(
       script,
       'function renderWebSocketResponse(tab)',
-      'function renderContent()'
+      'function handleWebSocketStatusMessage(msg)'
     );
     const renderContentScript = extractScriptSegment(
       script,

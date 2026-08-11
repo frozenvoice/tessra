@@ -16,7 +16,7 @@ function extractJsTemplate(source: string): string {
   return source.slice(start + startMarker.length, end);
 }
 
-describe('requestPanelHtml architecture (Phase 1/2/3/4/5 split)', () => {
+describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6 split)', () => {
   it('keeps getRequestPanelHtml as a thin composition over styles/markup/clientScript', () => {
     const html = read('src/panels/requestPanel/requestPanelHtml.ts');
     assert.match(html, /from '\.\/requestPanelStyles'/);
@@ -33,7 +33,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5 split)', () => {
     assert.doesNotMatch(html, /acquireVsCodeApi\(\)/);
   });
 
-  it('ships dedicated styles, markup, client script, Body, Response, Runner, and Status client modules', () => {
+  it('ships dedicated styles, markup, client script, Body, Response, Runner, Status, and WebSocket client modules', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStyles.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelMarkup.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelClientScript.ts')));
@@ -41,6 +41,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5 split)', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelResponseClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelRunnerClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStatusClientScript.ts')));
+    assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelWebSocketClientScript.ts')));
 
     const styles = read('src/panels/requestPanel/requestPanelStyles.ts');
     const markup = read('src/panels/requestPanel/requestPanelMarkup.ts');
@@ -49,6 +50,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5 split)', () => {
     const response = read('src/panels/requestPanel/requestPanelResponseClientScript.ts');
     const runner = read('src/panels/requestPanel/requestPanelRunnerClientScript.ts');
     const status = read('src/panels/requestPanel/requestPanelStatusClientScript.ts');
+    const websocket = read('src/panels/requestPanel/requestPanelWebSocketClientScript.ts');
 
     assert.match(styles, /export function getRequestPanelStyles\(/);
     assert.match(markup, /export function getRequestPanelMarkup\(/);
@@ -57,6 +59,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5 split)', () => {
     assert.match(response, /export function getRequestPanelResponseClientScript\(/);
     assert.match(runner, /export function getRequestPanelRunnerClientScript\(/);
     assert.match(status, /export function getRequestPanelStatusClientScript\(/);
+    assert.match(websocket, /export function getRequestPanelWebSocketClientScript\(/);
     assert.match(styles, /\.tab-bar\{display:flex/);
     assert.match(markup, /data-testid="environment-disclosure"/);
     assert.match(script, /acquireVsCodeApi\(\)/);
@@ -75,6 +78,9 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5 split)', () => {
     assert.match(status, /function buildStatusStripSegments\(/);
     assert.match(status, /testId = 'status-environment'/);
     assert.match(status, /testId = 'status-variable-usage'/);
+    assert.match(websocket, /function renderWebSocketResponse\(/);
+    assert.match(websocket, /function websocketConnect\(/);
+    assert.match(websocket, /type: 'websocketConnect'/);
   });
 
   it('composes Body client fragment into main client script without duplicating Body impl', () => {
@@ -153,7 +159,6 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5 split)', () => {
     assert.match(scriptJs, /function formatSize\(/);
     assert.match(scriptJs, /function buildResponseTimingMetaHtml\(/);
     assert.match(scriptJs, /function applyResponseTiming\(/);
-    assert.match(scriptJs, /function renderWebSocketResponse\(/);
 
     // Ordering: Body fragment before Response fragment; Response before createTab.
     const bodyInsertIdx = scriptJs.indexOf('${getRequestPanelBodyClientScript()}');
@@ -257,5 +262,62 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5 split)', () => {
     const createTabIdx = scriptJs.indexOf('function createTab(');
     assert.ok(runnerInsertIdx >= 0 && statusInsertIdx > runnerInsertIdx, 'Status fragment should follow Runner fragment');
     assert.ok(createTabIdx > statusInsertIdx, 'createTab should follow Status fragment composition');
+  });
+
+  it('composes WebSocket client fragment into main client script without duplicating WebSocket impl', () => {
+    const script = read('src/panels/requestPanel/requestPanelClientScript.ts');
+    const websocket = read('src/panels/requestPanel/requestPanelWebSocketClientScript.ts');
+    const scriptJs = extractJsTemplate(script);
+    const websocketJs = extractJsTemplate(websocket);
+
+    assert.match(script, /from '\.\/requestPanelWebSocketClientScript'/);
+    assert.ok(
+      scriptJs.includes('${getRequestPanelWebSocketClientScript()}'),
+      'main client script should insert WebSocket fragment via composition'
+    );
+    assert.match(scriptJs, /renderWebSocketResponse\(tab\)/);
+    assert.match(scriptJs, /websocketConnect\(/);
+    assert.match(scriptJs, /websocketDisconnect\(/);
+    assert.match(scriptJs, /websocketSend\(/);
+    assert.match(scriptJs, /disconnectWebSocketIfOpen\(/);
+    assert.match(scriptJs, /handleWebSocketStatusMessage\(msg\)/);
+    assert.match(scriptJs, /handleWebSocketMessageEvent\(msg\)/);
+
+    // WebSocket implementations live in the WebSocket module once.
+    assert.match(websocketJs, /function renderWebSocketResponse\(/);
+    assert.match(websocketJs, /function websocketConnect\(/);
+    assert.match(websocketJs, /function websocketDisconnect\(/);
+    assert.match(websocketJs, /function websocketSend\(/);
+    assert.match(websocketJs, /function appendWebSocketMessage\(/);
+    assert.match(websocketJs, /function formatWebSocketCloseMessage\(/);
+    assert.match(websocketJs, /function formatWebSocketErrorMessage\(/);
+    assert.match(websocketJs, /function handleWebSocketStatusMessage\(/);
+    assert.match(websocketJs, /function handleWebSocketMessageEvent\(/);
+    assert.match(websocketJs, /type: 'websocketConnect'/);
+    assert.match(websocketJs, /type: 'websocketDisconnect'/);
+    assert.match(websocketJs, /type: 'websocketSend'/);
+    assert.doesNotMatch(scriptJs, /function renderWebSocketResponse\(/);
+    assert.doesNotMatch(scriptJs, /function websocketConnect\(/);
+    assert.doesNotMatch(scriptJs, /function websocketDisconnect\(/);
+    assert.doesNotMatch(scriptJs, /function websocketSend\(/);
+    assert.doesNotMatch(scriptJs, /function appendWebSocketMessage\(/);
+    assert.doesNotMatch(scriptJs, /function handleWebSocketStatusMessage\(/);
+    assert.doesNotMatch(scriptJs, /function handleWebSocketMessageEvent\(/);
+
+    // requestType detection / tab orchestration / keepalive normalize stay in main.
+    assert.match(scriptJs, /function isWebSocketUrl\(/);
+    assert.match(scriptJs, /function normalizeRequestType\(/);
+    assert.match(scriptJs, /function syncRequestTypeFromUrl\(/);
+    assert.match(scriptJs, /function isWebSocketTab\(/);
+    assert.match(scriptJs, /function normalizeWebSocketKeepAliveInterval\(/);
+    assert.match(scriptJs, /function handlePrimaryAction\(/);
+    assert.match(scriptJs, /function renderPrimaryActionButton\(/);
+
+    // Ordering: Status fragment before WebSocket fragment; WebSocket before createTab.
+    const statusInsertIdx = scriptJs.indexOf('${getRequestPanelStatusClientScript()}');
+    const websocketInsertIdx = scriptJs.indexOf('${getRequestPanelWebSocketClientScript()}');
+    const createTabIdx = scriptJs.indexOf('function createTab(');
+    assert.ok(statusInsertIdx >= 0 && websocketInsertIdx > statusInsertIdx, 'WebSocket fragment should follow Status fragment');
+    assert.ok(createTabIdx > websocketInsertIdx, 'createTab should follow WebSocket fragment composition');
   });
 });
