@@ -41,7 +41,11 @@ describe('extension source', () => {
     assert.match(source, /ImportExportService\.importOpenApiDocuments\(openApiDocuments\)/);
     assert.match(source, /registerCommand\('tessra\.importEnvironment'/);
     assert.match(source, /ImportExportService\.importPostmanEnvironmentDocument\(item\)/);
-    assert.match(source, /createUniqueImportedEnvironmentName\(environment\.name, environments\)/);
+    assert.match(source, /DotEnvService\.classifyEnvironmentImport\(/);
+    assert.match(source, /DotEnvService\.parse\(/);
+    assert.match(source, /DotEnvService\.createUniqueEnvironmentName\(/);
+    assert.match(source, /Does not change the active environment/);
+    assert.doesNotMatch(source, /setActiveEnvironment\([^\)]*imported/);
     assert.match(source, /registerCommand\('tessra\.changeRequestPanelTheme'/);
     assert.match(source, /SUPPORTED_REQUEST_PANEL_THEMES\.map\(\(theme\)/);
     assert.match(source, /picker\.selectRequestPanelTheme/);

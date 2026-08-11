@@ -77,6 +77,7 @@ Body: {"env":"{{envName}}"}
 - URL、headers、body、auth、scripts などの入力欄で変数 autocomplete を使えます。
 - Environment の `N 変数` はアクティブ環境の変数数、リクエストの `使用 N` は現在のリクエストが使う変数数です。
 - workspace variables はバックアップに保持できますが、リクエスト解決は引き続きアクティブ environment に従います。
+- `Tessra: Import Environment` で `.env` / `.env.*` / `*.env` を一度だけローカル Environment として取り込みます。元ファイルは変更せず、取り込んだ環境を自動でアクティブにはしません。
 
 ## ワークスペースプロファイル
 
@@ -136,6 +137,7 @@ Body: {"env":"{{envName}}"}
 - OpenAPI import。`{userId}` のような path parameter は `{{userId}}` として取り込まれます。
 - Tessra collection import
 - Postman collection / environment の import・export
+- `.env` ファイルを Tessra Environment としてインポート（一度きりのコピー。sync / watcher / 書き戻しなし）
 - Tessra Workspace Backup の export・import
 
 ## 表示言語とテーマ

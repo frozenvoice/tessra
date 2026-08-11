@@ -77,6 +77,7 @@ Body: {"env":"{{envName}}"}
 - Variable autocomplete works in URL, headers, body, auth, scripts, and other editable fields
 - Environment `N vars` is the active environment size; request `Used N` is how many variables this request uses
 - Workspace variables can be preserved in backups, but request resolution still follows the active environment
+- Import `.env` / `.env.*` / `*.env` files with `Tessra: Import Environment` as a one-time local copy; Tessra does not modify the source file or auto-activate the imported environment
 
 ## Workspace profiles
 
@@ -136,6 +137,7 @@ Body: {"env":"{{envName}}"}
 - Import OpenAPI; path parameters such as `{userId}` become `{{userId}}`
 - Import Tessra collections
 - Import / export Postman collections and environments
+- Import `.env` files as Tessra Environments (one-time copy; no sync, watcher, or write-back)
 - Export / import Tessra Workspace Backup
 
 ## Display language and theme

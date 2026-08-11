@@ -115,7 +115,7 @@ Group request history by date and run collections with status summaries.
 - Nested `{{variables}}` resolve recursively, with unresolved and circular references reported before send
 - Variable autocomplete in URL, headers, body, auth, scripts, and editable text inputs
 - Variable resolution for URL, headers, params, body, auth, and file paths
-- `Import Environment` from the Environments title bar for Postman Environment JSON files
+- `Import Environment` from the Environments title bar for Postman Environment JSON or `.env` files
 - Workspace-local storage profiles for isolating collections, history, environments, default headers, and saved tabs
 
 ### Collections and history
@@ -182,6 +182,7 @@ Then use `{{sessionKey}}` in request 2.
 - Tessra workspace backup export / import for collections, environments, default headers, variables, and active environment state
 - Postman collection import / export
 - Postman environment import / export
+- Import `.env` files as Tessra Environments. Imports are one-time, local, and do not activate or modify the source file.
 
 #### Workspace Backup / Restore
 

@@ -77,6 +77,7 @@ Body: {"env":"{{envName}}"}
 - URL, headers, body, auth, scripts 등 입력 필드에서 변수 autocomplete를 사용할 수 있습니다.
 - Environment `변수 N개`는 활성 환경의 변수 수이고, 요청 `사용 N`은 현재 요청이 쓰는 변수 수입니다.
 - workspace variables는 백업에 보존될 수 있지만, 요청 해석은 여전히 활성 environment를 따릅니다.
+- `Tessra: Import Environment`로 `.env` / `.env.*` / `*.env` 파일을 한 번만 로컬 Environment로 가져옵니다. 원본 파일을 수정하지 않으며, 가져온 환경을 자동으로 활성으로 바꾸지 않습니다.
 
 ## 워크스페이스 프로필
 
@@ -136,6 +137,7 @@ Body: {"env":"{{envName}}"}
 - OpenAPI import; `{userId}` 같은 path parameter는 `{{userId}}`로 가져옵니다.
 - Tessra collection import
 - Postman collection / environment import·export
+- `.env` 파일을 Tessra Environment로 가져오기 (일회성 복사; sync/watcher/원본 쓰기 없음)
 - Tessra Workspace Backup export·import
 
 ## 표시 언어와 테마

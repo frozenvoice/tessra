@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.13
+
+- Added `.env` file import for Tessra Environments.
+- Supports common quoted values, comments, `export` prefixes, duplicate keys, and malformed-line warnings.
+- `.env` imports are local one-time copies and do not modify the source file or automatically activate the imported environment.
+
 ## 1.0.12
 
 - Added per-run request selection to the Collection Runner.

@@ -347,4 +347,25 @@ describe('LocalizationService source', () => {
       assert.strictEqual(matches.length, 3, `${key} should exist for every supported language`);
     }
   });
+
+  it('keeps .env environment import copy translated for every supported language', () => {
+    const keys = [
+      'error.noValidDotEnvVariables',
+      'error.unsupportedEnvironmentFile',
+      'error.readEnvironmentFileFailed',
+      'error.invalidEnvironmentFileEncoding',
+      'confirm.importDotEnv',
+      'confirm.importDotEnvWithSkipped',
+      'info.importedDotEnvEnvironment',
+      'action.cancel',
+      'dialog.filterEnvironmentFiles',
+      'dialog.filterJsonFiles',
+      'dialog.filterAllFiles',
+    ];
+
+    for (const key of keys) {
+      const matches = source.match(new RegExp(`'${key.replace(/\./g, '\\.')}'\\s*:`, 'g')) ?? [];
+      assert.strictEqual(matches.length, 3, `${key} should exist for every supported language`);
+    }
+  });
 });

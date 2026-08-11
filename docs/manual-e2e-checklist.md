@@ -26,6 +26,18 @@ Runner selection / Clear / Select all: specs exist under `e2e/specs/runner/` (`n
 - Deep Guide locale reading pass
 - WebSocket / Backup / History pin / profile switch (optional automation later)
 
+## 1.0.13 Smoke (~10 min)
+
+`.env` → Tessra Environment import. Use dummy secrets only.
+
+- Create a temporary `.env` (or `.env.local` / `production.env`) with a few `KEY=value` lines and one intentional malformed line.
+- Run `Tessra: Import Environment`, choose the file (use All Files if the OS filter hides extensionless `.env`).
+- Confirm the variable count / skipped-line warning, then Import.
+- Confirm Environments tree shows a new entry named after the basename; Edit Variables shows the expected keys/values (all enabled).
+- Confirm the previously active environment stays active (no auto Set Active).
+- Import the same file again and confirm a unique name such as `.env (2)`.
+- Re-import a Postman Environment JSON once and confirm that path still works.
+
 ## 1.0.12 Smoke (~10 min)
 
 Collection Runner per-run request selection. Run this pass before Marketplace publish.

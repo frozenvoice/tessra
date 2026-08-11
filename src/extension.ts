@@ -21,6 +21,7 @@ import {
 import { CurlService } from './services/CurlService';
 import { GuidePanel } from './panels/GuidePanel';
 import { ImportExportService } from './services/ImportExportService';
+import { DotEnvService } from './services/DotEnvService';
 import { CodegenService } from './services/CodegenService';
 import {
   LocalizationService,
@@ -259,24 +260,100 @@ export function activate(context: vscode.ExtensionContext) {
 
   async function importEnvironmentDocuments(uris: readonly vscode.Uri[]): Promise<void> {
     const environments = storage.getEnvironments();
-    let importedCount = 0;
+    const importedDotEnvNames: string[] = [];
+    let importedJsonCount = 0;
 
     for (const uri of uris) {
       try {
         const raw = await vscode.workspace.fs.readFile(uri);
-        const data = JSON.parse(Buffer.from(raw).toString('utf-8'));
-        const items = Array.isArray(data) ? data : [data];
+        let text: string;
+        try {
+          text = new TextDecoder('utf-8', { fatal: true }).decode(raw);
+        } catch {
+          vscode.window.showErrorMessage(
+            t('error.invalidEnvironmentFileEncoding', {
+              file: DotEnvService.environmentFileBasename(uri.fsPath),
+            })
+          );
+          continue;
+        }
 
+        const kind = DotEnvService.classifyEnvironmentImport(uri.fsPath, text);
+        if (kind === 'unsupported') {
+          vscode.window.showErrorMessage(
+            t('error.unsupportedEnvironmentFile', {
+              file: DotEnvService.environmentFileBasename(uri.fsPath),
+            })
+          );
+          continue;
+        }
+
+        if (kind === 'dotenv') {
+          const parsed = DotEnvService.parse(text);
+          if (parsed.variables.length === 0) {
+            vscode.window.showErrorMessage(
+              t('error.noValidDotEnvVariables', {
+                file: DotEnvService.environmentFileBasename(uri.fsPath),
+              })
+            );
+            continue;
+          }
+
+          const fileName = DotEnvService.environmentFileBasename(uri.fsPath);
+          const proposedName = DotEnvService.createUniqueEnvironmentName(fileName, environments);
+          const confirmMessage = parsed.skippedInvalidLines > 0
+            ? t('confirm.importDotEnvWithSkipped', {
+              count: parsed.variables.length,
+              skipped: parsed.skippedInvalidLines,
+              name: proposedName,
+            })
+            : t('confirm.importDotEnv', {
+              count: parsed.variables.length,
+              file: fileName,
+              name: proposedName,
+            });
+
+          const choice = await vscode.window.showInformationMessage(
+            confirmMessage,
+            { modal: true },
+            t('action.import'),
+            t('action.cancel')
+          );
+          if (choice !== t('action.import')) {
+            continue;
+          }
+
+          const environment = DotEnvService.toEnvironment(createImportId(), proposedName, parsed);
+          environments.push(environment);
+          importedDotEnvNames.push(environment.name);
+          continue;
+        }
+
+        // JSON / Postman Environment path — never reinterpret JSON failures as dotenv.
+        let data: unknown;
+        try {
+          data = JSON.parse(text);
+        } catch (err: unknown) {
+          vscode.window.showErrorMessage(
+            t('error.importFailed', {
+              path: uri.fsPath,
+              message: err instanceof Error ? err.message : String(err),
+            })
+          );
+          continue;
+        }
+
+        const items = Array.isArray(data) ? data : [data];
         for (const item of items) {
           const environment = ImportExportService.importPostmanEnvironmentDocument(item);
           environment.id = createImportId();
-          environment.name = createUniqueImportedEnvironmentName(environment.name, environments);
+          environment.name = DotEnvService.createUniqueEnvironmentName(environment.name, environments);
           environments.push(environment);
-          importedCount++;
+          importedJsonCount += 1;
         }
       } catch (err: unknown) {
         vscode.window.showErrorMessage(
-          t('error.importFailed', {
+          t('error.readEnvironmentFileFailed', {
             path: uri.fsPath,
             message: err instanceof Error ? err.message : String(err),
           })
@@ -284,10 +361,25 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }
 
-    if (importedCount > 0) {
-      storage.saveEnvironments(environments);
-      refreshEnvironmentState();
-      vscode.window.showInformationMessage(t('info.importedEnvironments', { count: importedCount }));
+    if (importedDotEnvNames.length === 0 && importedJsonCount === 0) {
+      return;
+    }
+
+    // Does not change the active environment — import is additive only.
+    storage.saveEnvironments(environments);
+    refreshEnvironmentState();
+
+    for (const name of importedDotEnvNames) {
+      const imported = environments.find((environment) => environment.name === name);
+      vscode.window.showInformationMessage(
+        t('info.importedDotEnvEnvironment', {
+          name,
+          count: imported?.variables.length ?? 0,
+        })
+      );
+    }
+    if (importedJsonCount > 0) {
+      vscode.window.showInformationMessage(t('info.importedEnvironments', { count: importedJsonCount }));
     }
   }
 
@@ -521,7 +613,13 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('tessra.importEnvironment', async () => {
       const uris = await vscode.window.showOpenDialog({
         canSelectMany: true,
-        filters: { 'JSON Files': ['json'] },
+        // Include All Files so extensionless `.env` remains selectable on every OS.
+        // `env` covers `*.env`; JSON covers Postman Environment documents.
+        filters: {
+          [t('dialog.filterEnvironmentFiles')]: ['env', 'json'],
+          [t('dialog.filterJsonFiles')]: ['json'],
+          [t('dialog.filterAllFiles')]: ['*'],
+        },
         openLabel: t('action.import'),
       });
       if (!uris || uris.length === 0) { return; }
@@ -1056,22 +1154,6 @@ function createImportId(): string {
 
 function sanitizeFilename(value: string): string {
   return value.replace(/[<>:"/\\|?*]+/g, '_');
-}
-
-function createUniqueImportedEnvironmentName(name: string, environments: Environment[]): string {
-  const existingNames = new Set(environments.map((environment) => environment.name));
-  if (!existingNames.has(name)) { return name; }
-
-  const importedName = `${name} (Imported)`;
-  if (!existingNames.has(importedName)) { return importedName; }
-
-  let index = 2;
-  let candidate = `${name} (Imported ${index})`;
-  while (existingNames.has(candidate)) {
-    index++;
-    candidate = `${name} (Imported ${index})`;
-  }
-  return candidate;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

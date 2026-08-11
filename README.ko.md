@@ -116,7 +116,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 중첩된 `{{variable}}`도 재귀적으로 치환하고, 미해결/순환 참조는 전송 전에 알려줌
 - URL / Headers / Body / Auth / Scripts / 기타 편집 가능한 텍스트 입력에서 변수 자동완성
 - URL / Headers / Params / Body / Auth / 파일 경로까지 치환
-- Environments 제목 영역의 `Import Environment`로 Postman Environment JSON 가져오기
+- Environments 제목 영역의 `Import Environment`로 Postman Environment JSON 또는 `.env` 파일 가져오기
 - collections / history / environments / default headers / saved tabs를 분리하는 워크스페이스 로컬 저장 프로필
 
 ### Collections / History
@@ -183,6 +183,7 @@ pm.environment.set("sessionKey", String(body.key));
 - 컬렉션, 환경, 기본 헤더, 변수, 활성 환경 상태를 묶은 Tessra 워크스페이스 백업 export / import
 - Postman collection import / export
 - Postman environment import / export
+- `.env` 파일을 Tessra Environment로 가져오기. 한 번만 복사되며, 로컬에만 저장되고, 원본 파일을 수정하거나 자동으로 활성 환경으로 바꾸지 않습니다.
 
 #### Workspace Backup / Restore
 
