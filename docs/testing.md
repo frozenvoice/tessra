@@ -70,7 +70,7 @@ Environment autosave E2E (#12) edits a seeded variable, waits for the Auto-saved
 
 Default Headers E2E (#13) opens the editor via Headers banner Manage, adds a deterministic header, clicks explicit Save (not autosave), asserts `default-headers.json`, reopens for persistence, Sends to local `/headers`, and checks the applied request header.
 
-Auth Bearer E2E (#14) opens the Auth tab, selects Bearer, fills a deterministic token (password-masked by default), Sends to local `/headers`, and checks `Authorization: Bearer …` on the fixture request.
+Auth Bearer E2E (#14) opens the Auth tab, selects Bearer, fills a deterministic token (password-masked by default), toggles Reveal/Hide (password ↔ text), Sends to local `/headers`, and checks `Authorization: Bearer …` on the fixture request.
 
 ## Stable selectors
 

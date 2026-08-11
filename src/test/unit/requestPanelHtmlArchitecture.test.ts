@@ -488,7 +488,8 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9 split)', () => 
     assert.match(authJs, /function collectAuth\(/);
     assert.match(authJs, /function bindRequestAuthEditor\(/);
     assert.match(authJs, /\['none','basic','bearer','apikey'\]/);
-    assert.match(authJs, /closest\('\.auth-inline-control'\)/);
+    assert.match(authJs, /closest\('\.auth-row'\)/);
+    assert.doesNotMatch(authJs, /auth-inline-control/);
     assert.doesNotMatch(scriptJs, /function authTypeLabel\(/);
     assert.doesNotMatch(scriptJs, /function authHtml\(/);
     assert.doesNotMatch(scriptJs, /function authFieldsHtml\(/);

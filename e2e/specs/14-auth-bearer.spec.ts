@@ -11,7 +11,7 @@ import {
 const TOKEN = 'tessra-e2e-token';
 
 test.describe('E2E #14 Auth editor / Bearer request', () => {
-  test('sets Bearer token via Auth tab and applies Authorization on Send', async ({ tessra }) => {
+  test('sets Bearer token via Auth tab, toggles Reveal/Hide, and applies Authorization on Send', async ({ tessra }) => {
     const frame = await openNewRequestPanel(tessra.page);
     await fillUrl(frame, `${tessra.baseUrl}/headers`);
 
@@ -21,14 +21,20 @@ test.describe('E2E #14 Auth editor / Bearer request', () => {
     await authType.selectOption('bearer');
 
     const token = frame.locator('.js-auth-token');
+    const reveal = frame.locator('.js-auth-reveal');
     await expect(token).toBeVisible();
+    await expect(reveal).toBeVisible();
     await expect(token).toHaveAttribute('type', 'password');
     await token.fill(TOKEN);
 
-    // Reveal control is present for sensitive Auth fields (password/token/API value).
-    // Known pre-existing bug: click handler looks for .auth-inline-control while markup uses .auth-row,
-    // so type toggle is not asserted here — see Phase 9 backlog.
-    await expect(frame.locator('.js-auth-reveal')).toBeVisible();
+    // Reveal → text, then Hide → password; value must survive the toggle.
+    await reveal.click();
+    await expect(token).toHaveAttribute('type', 'text');
+    await expect(token).toHaveValue(TOKEN);
+
+    await reveal.click();
+    await expect(token).toHaveAttribute('type', 'password');
+    await expect(token).toHaveValue(TOKEN);
 
     await clickSend(frame);
     await waitForResponseStatus(frame, /200/);

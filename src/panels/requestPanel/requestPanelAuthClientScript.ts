@@ -76,7 +76,7 @@ function bindRequestAuthEditor(mc) {
   });
   mc.querySelector('.js-auth-fields')?.addEventListener('click', function(e) {
     if (!e.target.classList.contains('js-auth-reveal')) return;
-    var wrap = e.target.closest('.auth-inline-control');
+    var wrap = e.target.closest('.auth-row');
     var input = wrap?.querySelector('input');
     if (!input) return;
     var revealing = input.type === 'password';
