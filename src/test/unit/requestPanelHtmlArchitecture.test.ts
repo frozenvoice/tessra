@@ -16,7 +16,7 @@ function extractJsTemplate(source: string): string {
   return source.slice(start + startMarker.length, end);
 }
 
-describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7 split)', () => {
+describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8 split)', () => {
   it('keeps getRequestPanelHtml as a thin composition over styles/markup/clientScript', () => {
     const html = read('src/panels/requestPanel/requestPanelHtml.ts');
     assert.match(html, /from '\.\/requestPanelStyles'/);
@@ -33,7 +33,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7 split)', () => {
     assert.doesNotMatch(html, /acquireVsCodeApi\(\)/);
   });
 
-  it('ships dedicated styles, markup, client script, Body, Response, Runner, Environment, Status, and WebSocket client modules', () => {
+  it('ships dedicated styles, markup, client script, Body, Response, Runner, Environment, Default Headers, Status, and WebSocket client modules', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStyles.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelMarkup.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelClientScript.ts')));
@@ -41,6 +41,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7 split)', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelResponseClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelRunnerClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelEnvironmentClientScript.ts')));
+    assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelDefaultHeadersClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStatusClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelWebSocketClientScript.ts')));
 
@@ -51,6 +52,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7 split)', () => {
     const response = read('src/panels/requestPanel/requestPanelResponseClientScript.ts');
     const runner = read('src/panels/requestPanel/requestPanelRunnerClientScript.ts');
     const environment = read('src/panels/requestPanel/requestPanelEnvironmentClientScript.ts');
+    const defaultHeaders = read('src/panels/requestPanel/requestPanelDefaultHeadersClientScript.ts');
     const status = read('src/panels/requestPanel/requestPanelStatusClientScript.ts');
     const websocket = read('src/panels/requestPanel/requestPanelWebSocketClientScript.ts');
 
@@ -62,6 +64,8 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7 split)', () => {
     assert.match(runner, /export function getRequestPanelRunnerClientScript\(/);
     assert.match(environment, /export function getRequestPanelEnvironmentClientScript\(/);
     assert.match(environment, /export function getRequestPanelEnvironmentBindingsScript\(/);
+    assert.match(defaultHeaders, /export function getRequestPanelDefaultHeadersClientScript\(/);
+    assert.match(defaultHeaders, /export function getRequestPanelDefaultHeadersBindingsScript\(/);
     assert.match(status, /export function getRequestPanelStatusClientScript\(/);
     assert.match(websocket, /export function getRequestPanelWebSocketClientScript\(/);
     assert.match(styles, /\.tab-bar\{display:flex/);
@@ -82,6 +86,10 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7 split)', () => {
     assert.match(environment, /function setEnvironmentEditorData\(/);
     assert.match(environment, /function envScheduleSave\(/);
     assert.match(environment, /type: 'saveEnvironmentVars'/);
+    assert.match(defaultHeaders, /function revealDefaultHeadersEditor\(/);
+    assert.match(defaultHeaders, /function hideDefaultHeadersEditor\(/);
+    assert.match(defaultHeaders, /function setDefaultHeadersEditorData\(/);
+    assert.match(defaultHeaders, /type: 'saveDefaultHeaders'/);
     assert.match(status, /function renderStatusStrip\(/);
     assert.match(status, /function buildStatusStripSegments\(/);
     assert.match(status, /testId = 'status-environment'/);
@@ -317,16 +325,80 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7 split)', () => {
     assert.match(scriptJs, /function bindKvRow\(/);
     assert.match(scriptJs, /function syncKvRowSensitivity\(/);
 
-    // Ordering: Runner → Environment functions → Status; bindings before default-headers late init.
+    // Ordering: Runner → Environment functions → Default Headers functions → Status; bindings before message dispatcher.
     const runnerInsertIdx = scriptJs.indexOf('${getRequestPanelRunnerClientScript()}');
     const environmentInsertIdx = scriptJs.indexOf('${getRequestPanelEnvironmentClientScript()}');
+    const defaultHeadersFnsIdx = scriptJs.indexOf('${getRequestPanelDefaultHeadersClientScript()}');
     const statusInsertIdx = scriptJs.indexOf('${getRequestPanelStatusClientScript()}');
     const bindingsInsertIdx = scriptJs.indexOf('${getRequestPanelEnvironmentBindingsScript()}');
-    const defaultHeadersIdx = scriptJs.indexOf("const defaultHeadersEditor = document.getElementById('defaultHeadersEditor')");
+    const defaultHeadersBindingsIdx = scriptJs.indexOf('${getRequestPanelDefaultHeadersBindingsScript()}');
+    const messageListenerIdx = scriptJs.indexOf("window.addEventListener('message'");
     assert.ok(runnerInsertIdx >= 0 && environmentInsertIdx > runnerInsertIdx, 'Environment fragment should follow Runner fragment');
-    assert.ok(statusInsertIdx > environmentInsertIdx, 'Status fragment should follow Environment fragment');
+    assert.ok(defaultHeadersFnsIdx > environmentInsertIdx, 'Default Headers functions should follow Environment functions');
+    assert.ok(statusInsertIdx > defaultHeadersFnsIdx, 'Status fragment should follow Default Headers functions');
     assert.ok(bindingsInsertIdx > statusInsertIdx, 'Environment bindings should follow Status composition');
-    assert.ok(defaultHeadersIdx > bindingsInsertIdx, 'Environment bindings should precede default-headers editor init');
+    assert.ok(defaultHeadersBindingsIdx > bindingsInsertIdx, 'Default Headers bindings should follow Environment bindings');
+    assert.ok(messageListenerIdx > defaultHeadersBindingsIdx, 'Default Headers bindings should precede message dispatcher');
+  });
+
+  it('composes Default Headers client fragment into main client script without duplicating Default Headers editor impl', () => {
+    const script = read('src/panels/requestPanel/requestPanelClientScript.ts');
+    const defaultHeaders = read('src/panels/requestPanel/requestPanelDefaultHeadersClientScript.ts');
+    const scriptJs = extractJsTemplate(script);
+    const defaultHeadersJs = extractJsTemplate(defaultHeaders);
+
+    assert.match(script, /from '\.\/requestPanelDefaultHeadersClientScript'/);
+    assert.ok(
+      scriptJs.includes('${getRequestPanelDefaultHeadersClientScript()}'),
+      'main client script should insert Default Headers fragment via composition'
+    );
+    assert.ok(
+      scriptJs.includes('${getRequestPanelDefaultHeadersBindingsScript()}'),
+      'main client script should insert Default Headers bindings fragment via composition'
+    );
+    assert.match(scriptJs, /revealDefaultHeadersEditor\(/);
+    assert.match(scriptJs, /setDefaultHeadersEditorData\(/);
+
+    assert.match(defaultHeadersJs, /function revealDefaultHeadersEditor\(/);
+    assert.match(defaultHeadersJs, /function hideDefaultHeadersEditor\(/);
+    assert.match(defaultHeadersJs, /function setDefaultHeadersEditorData\(/);
+    assert.match(defaultHeaders, /getElementById\('defaultHeadersEditor'\)/);
+    assert.match(defaultHeaders, /addDefaultHeaderBtn/);
+    assert.match(defaultHeaders, /type: 'saveDefaultHeaders'/);
+    assert.match(defaultHeaders, /collectKv\(defaultHeaderRows\)/);
+    assert.doesNotMatch(scriptJs, /function revealDefaultHeadersEditor\(/);
+    assert.doesNotMatch(scriptJs, /function hideDefaultHeadersEditor\(/);
+    assert.doesNotMatch(scriptJs, /function setDefaultHeadersEditorData\(/);
+    assert.doesNotMatch(scriptJs, /getElementById\('defaultHeadersEditor'\)/);
+    assert.doesNotMatch(scriptJs, /getElementById\('defaultHeadersSaveBtn'\)/);
+
+    // Shared state / application / banner / generic KV stay outside Default Headers editor module.
+    assert.match(scriptJs, /let workspaceDefaultHeaders = \[\];/);
+    assert.match(scriptJs, /function renderDefaultHeadersBanner\(/);
+    assert.match(scriptJs, /function refreshDefaultHeadersBanner\(/);
+    assert.match(scriptJs, /function getAppliedDefaultHeaders\(/);
+    assert.match(scriptJs, /function collectKv\(/);
+    assert.match(scriptJs, /function addKvRow\(/);
+    assert.match(scriptJs, /function bindKvRow\(/);
+    assert.match(scriptJs, /function syncKvRowSensitivity\(/);
+
+    // Explicit Save (not Environment-style autosave).
+    assert.doesNotMatch(defaultHeadersJs, /focusout/);
+    assert.doesNotMatch(defaultHeadersJs, /envScheduleSave/);
+    assert.doesNotMatch(defaultHeadersJs, /setTimeout\(envAutoSave/);
+    assert.match(defaultHeaders, /type: 'saveDefaultHeaders'/);
+
+    // Ordering: Environment functions → Default Headers functions → Status; Env bindings → DH bindings → message.
+    const environmentInsertIdx = scriptJs.indexOf('${getRequestPanelEnvironmentClientScript()}');
+    const defaultHeadersFnsIdx = scriptJs.indexOf('${getRequestPanelDefaultHeadersClientScript()}');
+    const statusInsertIdx = scriptJs.indexOf('${getRequestPanelStatusClientScript()}');
+    const envBindingsIdx = scriptJs.indexOf('${getRequestPanelEnvironmentBindingsScript()}');
+    const dhBindingsIdx = scriptJs.indexOf('${getRequestPanelDefaultHeadersBindingsScript()}');
+    const messageListenerIdx = scriptJs.indexOf("window.addEventListener('message'");
+    assert.ok(defaultHeadersFnsIdx > environmentInsertIdx, 'Default Headers functions should follow Environment functions');
+    assert.ok(statusInsertIdx > defaultHeadersFnsIdx, 'Status should follow Default Headers functions');
+    assert.ok(dhBindingsIdx > envBindingsIdx, 'Default Headers bindings should follow Environment bindings');
+    assert.ok(messageListenerIdx > dhBindingsIdx, 'message dispatcher should follow Default Headers bindings');
   });
 
   it('composes WebSocket client fragment into main client script without duplicating WebSocket impl', () => {

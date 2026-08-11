@@ -256,7 +256,7 @@ function extractNthTaggedTemplate(source: string, tagComment: '/*css*/' | '/*htm
   return source.slice(from, end);
 }
 
-/** Expand Body/Response/Runner/Environment/Status/WebSocket fragment composition without interpreting other ${...} interpolations. */
+/** Expand Body/Response/Runner/Environment/Default Headers/Status/WebSocket fragment composition without interpreting other ${...} interpolations. */
 function expandClientScriptTemplate(
   clientScript: string,
   bodyClientScript: string,
@@ -264,6 +264,8 @@ function expandClientScriptTemplate(
   runnerClientScript: string,
   environmentClientScript: string,
   environmentBindingsScript: string,
+  defaultHeadersClientScript: string,
+  defaultHeadersBindingsScript: string,
   statusClientScript: string,
   webSocketClientScript: string
 ): string {
@@ -272,6 +274,8 @@ function expandClientScriptTemplate(
   const runnerMarker = '${getRequestPanelRunnerClientScript()}';
   const environmentMarker = '${getRequestPanelEnvironmentClientScript()}';
   const environmentBindingsMarker = '${getRequestPanelEnvironmentBindingsScript()}';
+  const defaultHeadersMarker = '${getRequestPanelDefaultHeadersClientScript()}';
+  const defaultHeadersBindingsMarker = '${getRequestPanelDefaultHeadersBindingsScript()}';
   const statusMarker = '${getRequestPanelStatusClientScript()}';
   const webSocketMarker = '${getRequestPanelWebSocketClientScript()}';
   assert.ok(
@@ -295,6 +299,14 @@ function expandClientScriptTemplate(
     'requestPanelClientScript should compose getRequestPanelEnvironmentBindingsScript()'
   );
   assert.ok(
+    clientScript.includes(defaultHeadersMarker),
+    'requestPanelClientScript should compose getRequestPanelDefaultHeadersClientScript()'
+  );
+  assert.ok(
+    clientScript.includes(defaultHeadersBindingsMarker),
+    'requestPanelClientScript should compose getRequestPanelDefaultHeadersBindingsScript()'
+  );
+  assert.ok(
     clientScript.includes(statusMarker),
     'requestPanelClientScript should compose getRequestPanelStatusClientScript()'
   );
@@ -308,6 +320,8 @@ function expandClientScriptTemplate(
     .split(runnerMarker).join(runnerClientScript)
     .split(environmentMarker).join(environmentClientScript)
     .split(environmentBindingsMarker).join(environmentBindingsScript)
+    .split(defaultHeadersMarker).join(defaultHeadersClientScript)
+    .split(defaultHeadersBindingsMarker).join(defaultHeadersBindingsScript)
     .split(statusMarker).join(statusClientScript)
     .split(webSocketMarker).join(webSocketClientScript);
 }
@@ -344,6 +358,16 @@ function extractHtmlTemplate(): string {
     '/*js*/',
     1
   );
+  const defaultHeadersClientScript = extractNthTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelDefaultHeadersClientScript.ts'),
+    '/*js*/',
+    0
+  );
+  const defaultHeadersBindingsScript = extractNthTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelDefaultHeadersClientScript.ts'),
+    '/*js*/',
+    1
+  );
   const statusClientScript = extractTaggedTemplate(
     readSourceFile('src/panels/requestPanel/requestPanelStatusClientScript.ts'),
     '/*js*/'
@@ -362,6 +386,8 @@ function extractHtmlTemplate(): string {
     runnerClientScript,
     environmentClientScript,
     environmentBindingsScript,
+    defaultHeadersClientScript,
+    defaultHeadersBindingsScript,
     statusClientScript,
     webSocketClientScript
   );
@@ -401,6 +427,7 @@ function readRequestPanelHtmlSources(): string {
     'src/panels/requestPanel/requestPanelResponseClientScript.ts',
     'src/panels/requestPanel/requestPanelRunnerClientScript.ts',
     'src/panels/requestPanel/requestPanelEnvironmentClientScript.ts',
+    'src/panels/requestPanel/requestPanelDefaultHeadersClientScript.ts',
     'src/panels/requestPanel/requestPanelStatusClientScript.ts',
     'src/panels/requestPanel/requestPanelWebSocketClientScript.ts',
   ]
@@ -2053,13 +2080,16 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function renderDefaultHeadersBanner\(tab\)/);
     assert.match(script, /function refreshDefaultHeadersBanner\(mc\)/);
     assert.match(script, /function revealDefaultHeadersEditor\(\)/);
+    assert.match(script, /function setDefaultHeadersEditorData\(/);
     assert.match(script, /function getOverriddenDefaultHeaders\(tab\)/);
     assert.match(script, /function renderDefaultHeaderKeyGroup\(labelKey, headers, chipClass\)/);
     assert.match(script, /js-default-headers-toggle/);
     assert.match(script, /default-headers-oneline/);
     assert.match(script, /js-default-headers-banner-wrap/);
     assert.match(script, /vscode\.postMessage\(\{ type: 'openDefaultHeaders' \}\)/);
+    assert.match(script, /type: 'saveDefaultHeaders'/);
     assert.match(script, /workspaceDefaultHeaders = msg\.headers \|\| \[\];/);
+    assert.match(script, /setDefaultHeadersEditorData\(workspaceDefaultHeaders\)/);
     assert.match(script, /if \(msg\.reveal !== false\)/);
     assert.match(script, /revealDefaultHeadersEditor\(\);/);
     assert.match(script, /tfCount\('webview\.defaultHeadersApplied', applied\.length\)/);

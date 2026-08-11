@@ -2,6 +2,7 @@ import { getRequestPanelBodyClientScript } from './requestPanelBodyClientScript'
 import { getRequestPanelResponseClientScript } from './requestPanelResponseClientScript';
 import { getRequestPanelRunnerClientScript } from './requestPanelRunnerClientScript';
 import { getRequestPanelEnvironmentClientScript, getRequestPanelEnvironmentBindingsScript } from './requestPanelEnvironmentClientScript';
+import { getRequestPanelDefaultHeadersClientScript, getRequestPanelDefaultHeadersBindingsScript } from './requestPanelDefaultHeadersClientScript';
 import { getRequestPanelStatusClientScript } from './requestPanelStatusClientScript';
 import { getRequestPanelWebSocketClientScript } from './requestPanelWebSocketClientScript';
 
@@ -1345,6 +1346,8 @@ ${getRequestPanelRunnerClientScript()}
 
 ${getRequestPanelEnvironmentClientScript()}
 
+${getRequestPanelDefaultHeadersClientScript()}
+
 ${getRequestPanelStatusClientScript()}
 
 ${getRequestPanelWebSocketClientScript()}
@@ -1876,34 +1879,6 @@ function revealLinkedTargetInContent(mc, targetKey) {
   });
   return true;
 }
-
-function revealDefaultHeadersEditor() {
-  if (!defaultHeadersEditor) return;
-  defaultHeadersEditor.classList.remove('hidden');
-  if (editorLinkedFocusTimer) {
-    clearTimeout(editorLinkedFocusTimer);
-    editorLinkedFocusTimer = null;
-  }
-  defaultHeadersEditor.classList.remove('linked-focus-active');
-  if (typeof defaultHeadersEditor.scrollIntoView === 'function') {
-    try {
-      defaultHeadersEditor.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-    } catch (_) {
-      defaultHeadersEditor.scrollIntoView();
-    }
-  }
-  queueLinkedFocusReveal(function() {
-    if (!defaultHeadersEditor?.isConnected) return;
-    defaultHeadersEditor.classList.add('linked-focus-active');
-    var focusTarget = defaultHeaderRows?.querySelector('input[type="text"], input[type="password"]') || document.getElementById('addDefaultHeaderBtn') || defaultHeadersEditor;
-    focusLinkedTarget(focusTarget);
-    editorLinkedFocusTimer = setTimeout(function() {
-      defaultHeadersEditor.classList.remove('linked-focus-active');
-      editorLinkedFocusTimer = null;
-    }, 2200);
-  });
-}
-
 
 function switchRequestEditorTabAndRevealInContent(mc, meta) {
   if (!mc || !meta) return;
@@ -3598,26 +3573,7 @@ function collectAuth(mc) {
 
 ${getRequestPanelEnvironmentBindingsScript()}
 
-const defaultHeadersEditor = document.getElementById('defaultHeadersEditor');
-const defaultHeaderRows = document.getElementById('defaultHeaderRows');
-
-document.getElementById('addDefaultHeaderBtn').addEventListener('click', () => {
-  addKvRow(defaultHeaderRows);
-  defaultHeaderRows?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
-});
-document.getElementById('defaultHeadersCloseBtn').addEventListener('click', () => {
-  defaultHeadersEditor.classList.remove('linked-focus-active');
-  defaultHeadersEditor.classList.add('hidden');
-});
-bindKvRow(defaultHeaderRows, { onChange: function() {} });
-document.getElementById('defaultHeadersSaveBtn').addEventListener('click', () => {
-  const headers = collectKv(defaultHeaderRows);
-  workspaceDefaultHeaders = headers;
-  refreshDefaultHeadersBanner(mainContent);
-  refreshToplineStatusChips(mainContent);
-  refreshRequestPreflight(mainContent);
-  vscode.postMessage({ type: 'saveDefaultHeaders', headers: headers });
-});
+${getRequestPanelDefaultHeadersBindingsScript()}
 
 
 window.addEventListener('message', (event) => {
@@ -3850,8 +3806,7 @@ window.addEventListener('message', (event) => {
 
   if (msg.type === 'loadDefaultHeaders') {
     workspaceDefaultHeaders = msg.headers || [];
-    defaultHeaderRows.innerHTML = kvRowsHtml(workspaceDefaultHeaders);
-    defaultHeaderRows.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+    setDefaultHeadersEditorData(workspaceDefaultHeaders);
     refreshDefaultHeadersBanner(mainContent);
     refreshToplineStatusChips(mainContent);
     refreshRequestPreflight(mainContent);
