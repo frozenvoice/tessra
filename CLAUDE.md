@@ -82,6 +82,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - Pre-request script
 - Test script
 - `pm.test`, `pm.expect`, `pm.environment`
+- Tessra Script utilities: `pm.crypto.sha256` / `hmacSha256`, `pm.encoding.base64Encode` / `base64Decode`, `pm.uuid`, `pm.time.unix` / `unixMs` (Node API는 sandbox에 미노출)
 - `tessra.scriptTimeoutMs` 기반 실행 제한 시간
 - import로 들어온 스크립트는 요청 탭에서 신뢰 처리하기 전까지 기본 비활성화
 - 로그와 테스트 결과 표시

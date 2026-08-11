@@ -158,6 +158,7 @@ Group request history by date and run collections with status summaries.
 - Pre-request scripts
 - Test scripts
 - `pm.test`, `pm.expect`, `pm.environment`
+- Script utilities for SHA-256, HMAC-SHA256, Base64, UUID v4, and Unix timestamps
 - Imported scripts stay disabled until you explicitly trust them in the request tab
 - Script execution timeout is configurable with `tessra.scriptTimeoutMs`
 - Script logs and test results

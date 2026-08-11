@@ -111,7 +111,10 @@ Body: {"env":"{{envName}}"}
 
 - Pre-request script는 전송 전, Test script는 응답 후에 실행됩니다.
 - 흐름: Environment → Pre-request → Send → Tests
-- 지원 API: `pm.test`, `pm.expect`, `pm.environment`
+- Postman 유사 API: `pm.test`, `pm.expect`, `pm.environment`
+- Tessra Script utilities(Postman 공식 `pm.crypto` 아님): `pm.crypto.sha256(value)`, `pm.crypto.hmacSha256(message, secret)`(소문자 hex), `pm.encoding.base64Encode` / `base64Decode`(UTF-8 ↔ 표준 Base64), `pm.uuid()`(UUID v4), `pm.time.unix()`(초), `pm.time.unixMs()`(밀리초)
+- hash/encode 입력은 string/number/boolean/bigint/null/undefined; 객체는 `JSON.stringify(...)`를 사용합니다.
+- 예: `pm.environment.set("signature", pm.crypto.hmacSha256(pm.environment.get("payload") || "", pm.environment.get("secret") || ""));`
 - Scripts 탭에서 예제 삽입과 Open Guide를 사용할 수 있습니다.
 - 가져온 스크립트는 요청 탭에서 신뢰하기 전까지 비활성입니다.
 - 스크립트 timeout은 `tessra.scriptTimeoutMs`로 설정합니다.

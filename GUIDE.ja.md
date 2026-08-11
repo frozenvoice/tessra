@@ -111,7 +111,10 @@ Body: {"env":"{{envName}}"}
 
 - Pre-request script は送信前、Test script はレスポンス後に実行されます。
 - 流れ: Environment → Pre-request → Send → Tests
-- 対応 API: `pm.test`、`pm.expect`、`pm.environment`
+- Postman 互換寄りの API: `pm.test`、`pm.expect`、`pm.environment`
+- Tessra Script utilities（Postman 公式の `pm.crypto` ではありません）: `pm.crypto.sha256(value)`、`pm.crypto.hmacSha256(message, secret)`（小文字 hex）、`pm.encoding.base64Encode` / `base64Decode`（UTF-8 ↔ 標準 Base64）、`pm.uuid()`（UUID v4）、`pm.time.unix()`（秒）、`pm.time.unixMs()`（ミリ秒）
+- hash/encode の入力は string/number/boolean/bigint/null/undefined。オブジェクトは `JSON.stringify(...)` を使います。
+- 例: `pm.environment.set("signature", pm.crypto.hmacSha256(pm.environment.get("payload") || "", pm.environment.get("secret") || ""));`
 - Scripts タブから例の挿入と Open Guide を使えます。
 - インポートしたスクリプトは、リクエストタブで信頼するまで無効です。
 - スクリプト timeout は `tessra.scriptTimeoutMs` で設定します。

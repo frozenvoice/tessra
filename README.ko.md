@@ -159,6 +159,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - Pre-request script
 - Test script
 - `pm.test`, `pm.expect`, `pm.environment`
+- SHA-256, HMAC-SHA256, Base64, UUID v4, Unix timestamp용 Script utilities
 - import로 들어온 스크립트는 요청 탭에서 명시적으로 신뢰 처리하기 전까지 비활성화 유지
 - `tessra.scriptTimeoutMs` 설정으로 script 실행 제한 시간을 조정 가능
 - script logs / test 결과 표시

@@ -5509,15 +5509,15 @@ function renderContent() {
       '<div class="res-cookies-panel' + (showCookies ? '' : ' hidden') + ' js-res-cookies">' +
         (cookieCount > 0 ? cookiesTableHtml : renderInlineEmptyState(tr('webview.inline.response.noCookies.kicker'), tr('webview.inline.response.noCookies.title'), tr('webview.inline.response.noCookies.copy'))) +
       '</div>' +
-      '<div class="res-headers-panel' + (showTests ? '' : ' hidden') + ' js-res-tests">' +
+      '<div class="res-headers-panel' + (showTests ? '' : ' hidden') + ' js-res-tests" data-testid="response-tests">' +
         (testResults.length > 0
           ? testsSummaryHtml +
             testsAlertHtml +
-            '<table class="res-header-table"><thead><tr><th class="res-header-key-col">' + escapeHtml(tr('webview.test')) + '</th><th>' + escapeHtml(tr('webview.result')) + '</th></tr></thead><tbody>' +
+            '<table class="res-header-table" data-testid="response-tests-table"><thead><tr><th class="res-header-key-col">' + escapeHtml(tr('webview.test')) + '</th><th>' + escapeHtml(tr('webview.result')) + '</th></tr></thead><tbody>' +
             testResults.map(function(test) {
               var status = test.passed ? tr('webview.testResult.pass') : tr('webview.testResult.fail');
               var detail = test.passed ? tr('webview.testResult.passed') : (test.error || tr('webview.testResult.failed'));
-              return '<tr class="' + (test.passed ? 'test-row-pass' : 'test-row-fail') + '"><td class="res-header-key">' + escapeHtml(test.name) + '</td><td class="res-header-value" title="' + escapeAttr(detail) + '">' + escapeHtml(status + ' - ' + detail) + '</td></tr>';
+              return '<tr class="' + (test.passed ? 'test-row-pass' : 'test-row-fail') + '" data-testid="response-test-row"><td class="res-header-key">' + escapeHtml(test.name) + '</td><td class="res-header-value" title="' + escapeAttr(detail) + '">' + escapeHtml(status + ' - ' + detail) + '</td></tr>';
             }).join('') +
             '</tbody></table>' +
             ((tab.scriptResults.logs || []).length > 0
@@ -5654,7 +5654,7 @@ function renderContent() {
               '<div class="script-card-actions">' +
                 '<button class="ghost-btn ripple-btn js-insert-script-template" type="button" data-target="preRequest" data-template="preRequestEnv">' + escapeHtml(tr('webview.scriptHelpInsertPreRequest')) + '</button>' +
               '</div>' +
-              '<textarea class="js-script-prerequest" placeholder="' + escapeAttr(tr('webview.preRequestPlaceholder')) + '">' + escapeHtml(tab.scripts?.preRequest || '') + '</textarea>' +
+              '<textarea class="js-script-prerequest" data-testid="script-prerequest" placeholder="' + escapeAttr(tr('webview.preRequestPlaceholder')) + '">' + escapeHtml(tab.scripts?.preRequest || '') + '</textarea>' +
             '</div>' +
             '<div class="script-card">' +
               '<div class="script-card-label">' + escapeHtml(tr('webview.testScript')) + '</div>' +
@@ -5663,7 +5663,7 @@ function renderContent() {
                 '<button class="ghost-btn ripple-btn js-insert-script-template" type="button" data-target="test" data-template="testCaptureValue">' + escapeHtml(tr('webview.scriptHelpInsertCapture')) + '</button>' +
                 '<button class="ghost-btn ripple-btn js-insert-script-template" type="button" data-target="test" data-template="testStatusCheck">' + escapeHtml(tr('webview.scriptHelpInsertStatus')) + '</button>' +
               '</div>' +
-              '<textarea class="js-script-test" placeholder="' + escapeAttr(tr('webview.testPlaceholder')) + '">' + escapeHtml(tab.scripts?.test || '') + '</textarea>' +
+              '<textarea class="js-script-test" data-testid="script-test" placeholder="' + escapeAttr(tr('webview.testPlaceholder')) + '">' + escapeHtml(tab.scripts?.test || '') + '</textarea>' +
             '</div>' +
           '</div>' +
         '</div>' +

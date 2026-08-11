@@ -111,7 +111,10 @@ Body: {"env":"{{envName}}"}
 
 - Pre-request scripts run before send; test scripts run after the response
 - Flow: Environment → Pre-request → Send → Tests
-- Supported APIs include `pm.test`, `pm.expect`, and `pm.environment`
+- Supported Postman-like APIs include `pm.test`, `pm.expect`, and `pm.environment`
+- Tessra Script utilities (not Postman-official `pm.crypto`): `pm.crypto.sha256(value)`, `pm.crypto.hmacSha256(message, secret)` (lowercase hex), `pm.encoding.base64Encode` / `base64Decode` (UTF-8 ↔ standard Base64), `pm.uuid()` (UUID v4), `pm.time.unix()` (seconds), `pm.time.unixMs()` (milliseconds)
+- Hash/encode helpers accept string/number/boolean/bigint/null/undefined; pass `JSON.stringify(...)` for objects
+- Example: `pm.environment.set("signature", pm.crypto.hmacSha256(pm.environment.get("payload") || "", pm.environment.get("secret") || ""));`
 - Insertable examples and Open Guide are available from the Scripts tab
 - Imported scripts stay disabled until you explicitly trust them in the request tab
 - Script timeout is controlled by `tessra.scriptTimeoutMs`

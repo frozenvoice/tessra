@@ -11,6 +11,7 @@ import {
   ScriptExecutionResult,
   ScriptLogEntry,
 } from '../models/types';
+import { ScriptUtilities } from './ScriptUtilities';
 
 export interface ScriptableRequest {
   method: HttpMethod;
@@ -210,6 +211,7 @@ export class ScriptRunner {
         variables: env.api,
         test,
         expect,
+        ...ScriptUtilities.createApi(),
       },
     };
   }

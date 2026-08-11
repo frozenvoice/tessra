@@ -67,6 +67,7 @@ tessra/
 │   │   ├── RequestBodyService.ts
 │   │   ├── ResponseCompareService.ts
 │   │   ├── ScriptRunner.ts
+│   │   ├── ScriptUtilities.ts
 │   │   ├── StorageService.ts
 │   │   ├── VariableService.ts
 │   │   └── WebSocketService.ts
@@ -95,7 +96,7 @@ tessra/
 6. 인증: Basic, Bearer, API Key
 7. Body 타입: JSON(요청 Body mirror 오버레이 구문 강조, textarea 입력원 유지), XML(동일 오버레이 XML 강조), form-urlencoded, form-data, binary, raw
 7a. Body 타입 변경 시 비어 있지 않은 바디에 대해 Convert / Keep text / Cancel 확인(자동 변환 없음). 변환은 원자적 undo(타입+내용). 중첩 JSON→form 거절, form-data file→JSON 거절, Binary 자동 변환 없음
-8. Pre-request / Test scripts (`pm`, `env`, `test`, `expect`, `assert` 내장 지원, 설정 가능한 script timeout, Scripts 한 줄 도움말 + Guide 링크, 편집기별 예제 삽입, import된 스크립트는 명시적으로 신뢰 처리하기 전까지 기본 비활성화)
+8. Pre-request / Test scripts (`pm`, `env`, `test`, `expect`, `assert` 내장 지원, Tessra Script utilities: SHA-256/HMAC-SHA256/Base64/UUID v4/unix·unixMs, 설정 가능한 script timeout, Scripts 한 줄 도움말 + Guide 링크, 편집기별 예제 삽입, import된 스크립트는 명시적으로 신뢰 처리하기 전까지 기본 비활성화)
 9. OpenAPI path parameter placeholder 변환, OpenAPI / Postman collection/environment import/export, Tessra workspace backup export/import
 10. cURL import / copy as cURL
 11. 코드 생성: `fetch`, `axios`, `Java HttpURLConnection`

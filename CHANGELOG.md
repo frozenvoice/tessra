@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.14
+
+- Added Tessra Script utilities for SHA-256 and HMAC-SHA256.
+- Added UTF-8 Base64 encode/decode helpers, UUID v4 generation, and Unix timestamp helpers.
+- Script utilities are available in both pre-request and test scripts without exposing Node.js runtime APIs to the sandbox.
+
 ## 1.0.13
 
 - Added `.env` file import for Tessra Environments.

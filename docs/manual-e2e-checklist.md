@@ -15,6 +15,7 @@ Covered by `e2e/specs/*` against a real VS Code Electron host + localhost fixtur
 - Body JSON→XML Convert + undo
 - Response Pin / Compare primary discoverability (+ overflow utilities smoke)
 - Send Stop / cancellation (slow endpoint)
+- Script utilities (HMAC in pre-request + SHA/Base64 assertions in Tests)
 
 Runner selection / Clear / Select all: specs exist under `e2e/specs/runner/` (`npm run test:e2e:runner`) but are **not** in the default green gate yet — VS Code tree context-menu automation is flaky on Windows Electron (see `docs/testing.md`).
 
@@ -25,6 +26,18 @@ Runner selection / Clear / Select all: specs exist under `e2e/specs/runner/` (`n
 - Unusual OS / display scaling behavior
 - Deep Guide locale reading pass
 - WebSocket / Backup / History pin / profile switch (optional automation later)
+
+## 1.0.14 Smoke (~10 min)
+
+Script utilities for signing / encoding. Use dummy secrets only.
+
+- Pre-request: `pm.crypto.sha256` and `pm.crypto.hmacSha256` → `pm.environment.set`.
+- Send a localhost (or fixture) request; confirm environment values updated.
+- Test script: assert SHA known vector + Base64 roundtrip; confirm Tests tab passes.
+- Generate `pm.uuid()` and `pm.time.unix()` / `unixMs`; confirm formats.
+- Invalid Base64 decode surfaces as a failed test / script error (not silent empty string).
+- Confirm `disableScripts` and imported untrusted script policies still block execution.
+- Spot-check Collection Runner still runs scripts through the shared ScriptRunner path.
 
 ## 1.0.13 Smoke (~10 min)
 

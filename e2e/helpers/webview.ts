@@ -110,7 +110,7 @@ export async function waitForResponseStatus(frame: FrameLocator, status: string 
 
 async function ensureRequestEditorTab(
   frame: FrameLocator,
-  tabName: 'params' | 'headers' | 'body',
+  tabName: 'params' | 'headers' | 'body' | 'scripts',
   contentSelector: string
 ): Promise<void> {
   const tab = frame.locator(`.js-req-tabs .tab[data-tab="${tabName}"]`);
@@ -142,6 +142,39 @@ export async function openParamsTab(frame: FrameLocator): Promise<void> {
 
 export async function openHeadersTab(frame: FrameLocator): Promise<void> {
   await ensureRequestEditorTab(frame, 'headers', '[data-testid="request-headers"]');
+}
+
+export async function openScriptsTab(frame: FrameLocator): Promise<void> {
+  await ensureRequestEditorTab(frame, 'scripts', '[data-testid="script-prerequest"]');
+}
+
+export async function setScriptEditors(
+  frame: FrameLocator,
+  scripts: { preRequest?: string; test?: string }
+): Promise<void> {
+  await openScriptsTab(frame);
+  if (scripts.preRequest !== undefined) {
+    const pre = frame.locator('[data-testid="script-prerequest"]');
+    await pre.click({ clickCount: 3 });
+    await pre.fill(scripts.preRequest);
+  }
+  if (scripts.test !== undefined) {
+    const testEditor = frame.locator('[data-testid="script-test"]');
+    await testEditor.click({ clickCount: 3 });
+    await testEditor.fill(scripts.test);
+  }
+}
+
+export async function waitForPassedTest(frame: FrameLocator, testName: string, timeout = 20000): Promise<void> {
+  const testsTab = frame.locator('.js-res-tabs .tab[data-tab="resTests"]');
+  await expect(testsTab).toBeVisible({ timeout });
+  await testsTab.click();
+  const panel = frame.locator('[data-testid="response-tests"]');
+  await expect(panel).toBeVisible({ timeout });
+  await expect(panel.locator('[data-testid="response-test-row"]').filter({ hasText: testName })).toBeVisible({
+    timeout,
+  });
+  await expect(panel).toContainText(/pass|통과|合格|成功/i);
 }
 
 export async function setParamRows(

@@ -1693,6 +1693,9 @@ describe('RequestPanel Webview', () => {
       'response-pin',
       'response-compare',
       'response-overflow',
+      'script-prerequest',
+      'script-test',
+      'response-tests',
       'runner-selected-count',
       'runner-start',
     ];
