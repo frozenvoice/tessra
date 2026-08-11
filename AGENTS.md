@@ -52,6 +52,9 @@ tessra/
 │   │       ├── WebSocketManager.ts
 │   │       ├── messages.ts
 │   │       ├── requestPanelHtml.ts
+│   │       ├── requestPanelStyles.ts
+│   │       ├── requestPanelMarkup.ts
+│   │       ├── requestPanelClientScript.ts
 │   │       └── requestUtils.ts
 │   ├── providers/
 │   │   ├── CollectionTreeProvider.ts

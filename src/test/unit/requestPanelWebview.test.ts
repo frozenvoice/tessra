@@ -232,15 +232,66 @@ function readRequestPanelSource(): string {
   return readSourceFile('src/panels/RequestPanel.ts');
 }
 
-function extractHtmlTemplate(source: string): string {
-  const startMarker = 'return /*html*/ `';
+function extractTaggedTemplate(source: string, tagComment: '/*css*/' | '/*html*/' | '/*js*/'): string {
+  const startMarker = `return ${tagComment} \``;
   const start = source.indexOf(startMarker);
   const end = source.lastIndexOf('`;');
 
-  assert.ok(start >= 0, 'webview HTML template start marker should exist');
-  assert.ok(end > start, 'webview HTML template end marker should exist');
+  assert.ok(start >= 0, `webview template start marker should exist: ${tagComment}`);
+  assert.ok(end > start, `webview template end marker should exist: ${tagComment}`);
 
   return source.slice(start + startMarker.length, end);
+}
+
+/** Compose styles/markup/clientScript the same way requestPanelHtml.ts assembles the shell. */
+function extractHtmlTemplate(): string {
+  const styles = extractTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelStyles.ts'),
+    '/*css*/'
+  );
+  const markup = extractTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelMarkup.ts'),
+    '/*html*/'
+  );
+  const clientScript = extractTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelClientScript.ts'),
+    '/*js*/'
+  );
+
+  // Concatenation keeps ${...} inside markup/script as literals for renderHtml().
+  return [
+    '<!DOCTYPE html>\n',
+    '<html lang="${displayLanguage}">\n',
+    '<head>\n',
+    '<meta charset="UTF-8"/>\n',
+    '<meta name="viewport" content="width=device-width,initial-scale=1.0"/>\n',
+    '<meta http-equiv="Content-Security-Policy" content="${csp}"/>\n',
+    '<title>Tessra</title>\n',
+    '<style nonce="${nonce}">\n',
+    styles,
+    '\n</style>\n',
+    '</head>\n',
+    '<body data-panel-theme="${requestPanelTheme}">\n',
+    markup,
+    '\n\n<script nonce="${nonce}">\n',
+    clientScript,
+    '\n</script>\n',
+    '<script nonce="${nonce}" src="${bodyConversionUri}"></script>\n',
+    '<script nonce="${nonce}" src="${hljsUri}"></script>\n',
+    '</body>\n',
+    '</html>',
+  ].join('');
+}
+
+function readRequestPanelHtmlSources(): string {
+  return [
+    'src/panels/requestPanel/requestPanelHtml.ts',
+    'src/panels/requestPanel/requestPanelStyles.ts',
+    'src/panels/requestPanel/requestPanelMarkup.ts',
+    'src/panels/requestPanel/requestPanelClientScript.ts',
+  ]
+    .map((relativePath) => readSourceFile(relativePath))
+    .join('\n');
 }
 
 function renderHtml(template: string): string {
@@ -553,12 +604,12 @@ describe('RequestPanel Webview', () => {
 
   before(() => {
     source = readRequestPanelSource();
-    htmlSource = readSourceFile('src/panels/requestPanel/requestPanelHtml.ts');
+    htmlSource = readRequestPanelHtmlSources();
     requestExecutorSource = readSourceFile('src/panels/requestPanel/RequestExecutor.ts');
     collectionRunnerSource = readSourceFile('src/panels/requestPanel/CollectionRunner.ts');
     requestUtilsSource = readSourceFile('src/panels/requestPanel/requestUtils.ts');
     webSocketManagerSource = readSourceFile('src/panels/requestPanel/WebSocketManager.ts');
-    html = renderHtml(extractHtmlTemplate(htmlSource));
+    html = renderHtml(extractHtmlTemplate());
     script = extractInlineScript(html);
   });
 
