@@ -243,6 +243,16 @@ function extractTaggedTemplate(source: string, tagComment: '/*css*/' | '/*html*/
   return source.slice(start + startMarker.length, end);
 }
 
+/** Expand Body fragment composition without interpreting other ${...} interpolations. */
+function expandClientScriptTemplate(clientScript: string, bodyClientScript: string): string {
+  const marker = '${getRequestPanelBodyClientScript()}';
+  assert.ok(
+    clientScript.includes(marker),
+    'requestPanelClientScript should compose getRequestPanelBodyClientScript()'
+  );
+  return clientScript.split(marker).join(bodyClientScript);
+}
+
 /** Compose styles/markup/clientScript the same way requestPanelHtml.ts assembles the shell. */
 function extractHtmlTemplate(): string {
   const styles = extractTaggedTemplate(
@@ -253,9 +263,16 @@ function extractHtmlTemplate(): string {
     readSourceFile('src/panels/requestPanel/requestPanelMarkup.ts'),
     '/*html*/'
   );
-  const clientScript = extractTaggedTemplate(
-    readSourceFile('src/panels/requestPanel/requestPanelClientScript.ts'),
+  const bodyClientScript = extractTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelBodyClientScript.ts'),
     '/*js*/'
+  );
+  const clientScript = expandClientScriptTemplate(
+    extractTaggedTemplate(
+      readSourceFile('src/panels/requestPanel/requestPanelClientScript.ts'),
+      '/*js*/'
+    ),
+    bodyClientScript
   );
 
   // Concatenation keeps ${...} inside markup/script as literals for renderHtml().
@@ -289,6 +306,7 @@ function readRequestPanelHtmlSources(): string {
     'src/panels/requestPanel/requestPanelStyles.ts',
     'src/panels/requestPanel/requestPanelMarkup.ts',
     'src/panels/requestPanel/requestPanelClientScript.ts',
+    'src/panels/requestPanel/requestPanelBodyClientScript.ts',
   ]
     .map((relativePath) => readSourceFile(relativePath))
     .join('\n');

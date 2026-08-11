@@ -55,6 +55,7 @@ tessra/
 │   │       ├── requestPanelStyles.ts
 │   │       ├── requestPanelMarkup.ts
 │   │       ├── requestPanelClientScript.ts
+│   │       ├── requestPanelBodyClientScript.ts
 │   │       └── requestUtils.ts
 │   ├── providers/
 │   │   ├── CollectionTreeProvider.ts
