@@ -380,7 +380,7 @@ export async function waitForResponseStatus(frame: FrameLocator, status: string 
 
 async function ensureRequestEditorTab(
   frame: FrameLocator,
-  tabName: 'params' | 'headers' | 'body' | 'scripts',
+  tabName: 'params' | 'headers' | 'body' | 'scripts' | 'auth',
   contentSelector: string
 ): Promise<void> {
   const tab = frame.locator(`.js-req-tabs .tab[data-tab="${tabName}"]`);
@@ -416,6 +416,10 @@ export async function openHeadersTab(frame: FrameLocator): Promise<void> {
 
 export async function openScriptsTab(frame: FrameLocator): Promise<void> {
   await ensureRequestEditorTab(frame, 'scripts', '[data-testid="script-prerequest"]');
+}
+
+export async function openAuthTab(frame: FrameLocator): Promise<void> {
+  await ensureRequestEditorTab(frame, 'auth', '.js-auth-type');
 }
 
 export async function setScriptEditors(

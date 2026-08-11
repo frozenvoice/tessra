@@ -5,7 +5,7 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**13** stable specs, including Collection Runner, WebSocket, Environment autosave, and Default Headers save/apply) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**14** stable specs, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, and Auth Bearer) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
@@ -21,7 +21,7 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (13 specs, includes Collection Runner + WebSocket + Environment autosave + Default Headers)
+npm run test:e2e         # stable VS Code UI E2E (14 specs, includes Collection Runner + WebSocket + Environment autosave + Default Headers + Auth Bearer)
 npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
 npm run test:e2e:all     # stable suite then focused runner suite
 npm run test:e2e:ci      # CI stable suite
@@ -70,6 +70,8 @@ Environment autosave E2E (#12) edits a seeded variable, waits for the Auto-saved
 
 Default Headers E2E (#13) opens the editor via Headers banner Manage, adds a deterministic header, clicks explicit Save (not autosave), asserts `default-headers.json`, reopens for persistence, Sends to local `/headers`, and checks the applied request header.
 
+Auth Bearer E2E (#14) opens the Auth tab, selects Bearer, fills a deterministic token (password-masked by default), Sends to local `/headers`, and checks `Authorization: Bearer …` on the fixture request.
+
 ## Stable selectors
 
 Prefer `data-testid` (locale-independent). Do not bind E2E to nth-child CSS or English-only labels.
@@ -91,7 +93,7 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 3. Reuse `e2e/helpers/*` and the local fixture server.
 4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
 5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
-6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **13** (or intentionally adjust the count here).
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **14** (or intentionally adjust the count here).
 
 ### Native file dialogs (`.env` import)
 
