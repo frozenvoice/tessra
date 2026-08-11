@@ -16,7 +16,7 @@ function extractJsTemplate(source: string): string {
   return source.slice(start + startMarker.length, end);
 }
 
-describe('requestPanelHtml architecture (Phase 1/2 split)', () => {
+describe('requestPanelHtml architecture (Phase 1/2/3 split)', () => {
   it('keeps getRequestPanelHtml as a thin composition over styles/markup/clientScript', () => {
     const html = read('src/panels/requestPanel/requestPanelHtml.ts');
     assert.match(html, /from '\.\/requestPanelStyles'/);
@@ -33,27 +33,34 @@ describe('requestPanelHtml architecture (Phase 1/2 split)', () => {
     assert.doesNotMatch(html, /acquireVsCodeApi\(\)/);
   });
 
-  it('ships dedicated styles, markup, client script, and Body client modules', () => {
+  it('ships dedicated styles, markup, client script, Body, and Response client modules', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStyles.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelMarkup.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelBodyClientScript.ts')));
+    assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelResponseClientScript.ts')));
 
     const styles = read('src/panels/requestPanel/requestPanelStyles.ts');
     const markup = read('src/panels/requestPanel/requestPanelMarkup.ts');
     const script = read('src/panels/requestPanel/requestPanelClientScript.ts');
     const body = read('src/panels/requestPanel/requestPanelBodyClientScript.ts');
+    const response = read('src/panels/requestPanel/requestPanelResponseClientScript.ts');
 
     assert.match(styles, /export function getRequestPanelStyles\(/);
     assert.match(markup, /export function getRequestPanelMarkup\(/);
     assert.match(script, /export function getRequestPanelClientScript\(/);
     assert.match(body, /export function getRequestPanelBodyClientScript\(/);
+    assert.match(response, /export function getRequestPanelResponseClientScript\(/);
     assert.match(styles, /\.tab-bar\{display:flex/);
     assert.match(markup, /data-testid="environment-disclosure"/);
     assert.match(script, /acquireVsCodeApi\(\)/);
     assert.match(body, /function handleBodyTypeSelectChange\(/);
     assert.match(body, /function bindRequestBodyEditor\(/);
     assert.match(body, /TessraBodyConversion/);
+    assert.match(response, /function buildHttpResponseAreaHtml\(/);
+    assert.match(response, /function bindResponseViewerEvents\(/);
+    assert.match(response, /data-testid="response-pin"/);
+    assert.match(response, /data-testid="response-compare"/);
   });
 
   it('composes Body client fragment into main client script without duplicating Body impl', () => {
@@ -89,5 +96,56 @@ describe('requestPanelHtml architecture (Phase 1/2 split)', () => {
     const createTabIdx = scriptJs.indexOf('function createTab(');
     assert.ok(editableIdx >= 0 && bodyInsertIdx > editableIdx, 'Body fragment should follow shared helpers');
     assert.ok(createTabIdx > bodyInsertIdx, 'createTab should follow Body fragment composition');
+  });
+
+  it('composes Response client fragment into main client script without duplicating Response impl', () => {
+    const script = read('src/panels/requestPanel/requestPanelClientScript.ts');
+    const response = read('src/panels/requestPanel/requestPanelResponseClientScript.ts');
+    const scriptJs = extractJsTemplate(script);
+    const responseJs = extractJsTemplate(response);
+
+    assert.match(script, /from '\.\/requestPanelResponseClientScript'/);
+    assert.ok(
+      scriptJs.includes('${getRequestPanelResponseClientScript()}'),
+      'main client script should insert Response fragment via composition'
+    );
+    assert.match(scriptJs, /buildHttpResponseAreaHtml\(tab\)/);
+    assert.match(scriptJs, /bindResponseViewerEvents\(mc\)/);
+
+    // Response-specific implementations live in the Response module once.
+    assert.match(responseJs, /function normalizeCompareList\(/);
+    assert.match(responseJs, /function buildJsonTree\(/);
+    assert.match(responseJs, /function hasHtmlPreview\(/);
+    assert.match(responseJs, /function renderResponseBody\(/);
+    assert.match(responseJs, /function switchResponseTabInContent\(/);
+    assert.match(responseJs, /function bindResponseViewerEvents\(/);
+    assert.match(responseJs, /function buildHttpResponseAreaHtml\(/);
+    assert.doesNotMatch(scriptJs, /function normalizeCompareList\(/);
+    assert.doesNotMatch(scriptJs, /function buildJsonTree\(/);
+    assert.doesNotMatch(scriptJs, /function hasHtmlPreview\(/);
+    assert.doesNotMatch(scriptJs, /function renderResponseBody\(/);
+    assert.doesNotMatch(scriptJs, /function switchResponseTabInContent\(/);
+    assert.doesNotMatch(scriptJs, /function bindResponseViewerEvents\(/);
+    assert.doesNotMatch(scriptJs, /function buildHttpResponseAreaHtml\(/);
+
+    // Pin/Compare stay primary (not overflow-only) in Response markup.
+    assert.match(responseJs, /data-testid="response-pin"/);
+    assert.match(responseJs, /data-testid="response-compare"/);
+    assert.match(responseJs, /data-testid="response-overflow"/);
+    assert.match(responseJs, /Pin\/Compare stay on the primary toolbar/);
+
+    // Shared helpers Response needs remain in main.
+    assert.match(scriptJs, /function isBinaryContentType\(/);
+    assert.match(scriptJs, /function formatSize\(/);
+    assert.match(scriptJs, /function buildResponseTimingMetaHtml\(/);
+    assert.match(scriptJs, /function applyResponseTiming\(/);
+    assert.match(scriptJs, /function renderWebSocketResponse\(/);
+
+    // Ordering: Body fragment before Response fragment; Response before createTab.
+    const bodyInsertIdx = scriptJs.indexOf('${getRequestPanelBodyClientScript()}');
+    const responseInsertIdx = scriptJs.indexOf('${getRequestPanelResponseClientScript()}');
+    const createTabIdx = scriptJs.indexOf('function createTab(');
+    assert.ok(bodyInsertIdx >= 0 && responseInsertIdx > bodyInsertIdx, 'Response fragment should follow Body fragment');
+    assert.ok(createTabIdx > responseInsertIdx, 'createTab should follow Response fragment composition');
   });
 });
