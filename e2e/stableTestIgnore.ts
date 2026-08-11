@@ -1,3 +1,0 @@
-// Stable E2E must ignore only e2e/specs/runner (path segment specs/runner).
-// Never use a bare **/runner/** glob — GitHub Actions paths contain /home/runner/work/...
-export const STABLE_E2E_TEST_IGNORE = /[\\/]specs[\\/]runner[\\/]/;

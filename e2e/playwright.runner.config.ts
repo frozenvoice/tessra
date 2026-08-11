@@ -3,7 +3,7 @@ import * as path from 'path';
 
 const artifacts = path.join(__dirname, '.artifacts');
 
-/** Collection Runner UI specs — opt-in via `npm run test:e2e:runner` (flaky context-menu path). */
+/** Focused Collection Runner UI suite — same specs as stable; use for fast local re-runs. */
 export default defineConfig({
   testDir: path.join(__dirname, 'specs', 'runner'),
   fullyParallel: false,

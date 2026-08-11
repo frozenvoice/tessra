@@ -5,7 +5,7 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (stable suite includes Script utilities) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**10** stable specs, including Collection Runner) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
@@ -21,22 +21,30 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (excludes flaky Collection Runner tree-menu specs)
-npm run test:e2e:runner  # Collection Runner UI specs (known flaky on Windows context menus — see below)
-npm run test:e2e:all     # every UI E2E spec including runner
+npm run test:e2e         # stable VS Code UI E2E (10 specs, includes Collection Runner)
+npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
+npm run test:e2e:all     # stable suite then focused runner suite
 npm run test:e2e:ci      # CI stable suite
 npm run test:all         # unit + stable E2E
 ```
 
 `npm run ci` stays unit/typecheck/build only. GitHub Actions runs `test:e2e:ci` in a separate job.
 
-Stable suite ignore is `STABLE_E2E_TEST_IGNORE` in `e2e/stableTestIgnore.ts` (`/[\\/]specs[\\/]runner[\\/]/`). Do **not** use a bare `**/runner/**` glob — GitHub Actions absolute paths contain `/home/runner/work/...` and that pattern would drop every stable spec (`No tests found`).
+Do **not** add a bare `**/runner/**` Playwright `testIgnore` — GitHub Actions absolute paths contain `/home/runner/work/...` and that pattern would drop every stable spec (`No tests found`). Collection Runner specs live under `e2e/specs/runner/` and are part of the default suite.
 
-### Collection Runner E2E status
+### Collection Runner E2E
 
-Opening **Run All Requests** requires the VS Code Collections tree context menu. Under Playwright + Electron on Windows this path is intermittently broken (menu appears / click registers, but `configureCollectionRun` does not reliably reach the webview). Specs live in `e2e/specs/runner/` and can pass in isolation, but they are not yet part of the default green gate.
+Runner specs exercise the real user path: Tessra Activity Bar → Collections tree → context menu → **Run All Requests** → Runner webview overlay.
 
-Next step to stabilize: investigate VS Code context-menu action invocation under automation (or a first-party Tessra UI entry point that does not rely on the workbench context menu).
+Automation strategy (no production backdoors):
+
+- Scope the Collections tree via `.monaco-list[aria-label="Collections"]` (not every workbench monaco list)
+- Focus the collection `treeitem` (accessible name may include the `N req` description)
+- Open the menu with `Shift+F10` (right-click fallback)
+- Activate the command inside the visible `.context-view.monaco-menu-container` with **Enter** (Monaco menus often focus on mouse click without running the action under Electron automation)
+- Wait for Runner UI via `data-testid` (`runner-start`, `runner-selected-count`), not CSS-class-only coupling
+
+`npm run test:e2e:runner` remains available for fast local re-runs of the two Runner specs.
 
 ## Isolation
 
@@ -64,7 +72,7 @@ Core ids include: `request-url`, `send-request`, `stop-request`, `status-environ
 
 ## Failure diagnostics
 
-On failure, artifacts land in `e2e/.artifacts/` (screenshot + meta including fixture request log). CI uploads that folder.
+On failure, artifacts land in `e2e/.artifacts/` (screenshot + meta including fixture request log). CI uploads that folder. Runner context-menu failures also write a scoped diagnostics JSON (visible menu text, focus summary, webview iframe counts) — no secret dumps.
 
 ## VS Code version strategy
 
@@ -73,10 +81,11 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 ## Adding a new E2E
 
 1. Keep production behavior unchanged; add inert `data-testid` / aria only if needed.
-2. Put specs under `e2e/specs/`.
+2. Put specs under `e2e/specs/` (Collection Runner under `e2e/specs/runner/`).
 3. Reuse `e2e/helpers/*` and the local fixture server.
 4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
 5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **10** (or intentionally adjust the count here).
 
 ### Native file dialogs (`.env` import)
 

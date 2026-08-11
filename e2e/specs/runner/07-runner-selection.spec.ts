@@ -1,5 +1,5 @@
-import { test, expect } from '../fixtures';
-import { runCollectionFromSidebar } from '../helpers/webview';
+import { test, expect } from '../../fixtures';
+import { runCollectionFromSidebar } from '../../helpers/webview';
 
 test.describe('E2E #7 Collection Runner selection / reset', () => {
   test('default all selected, deselect one, run 4/5, reopen resets', async ({ tessra }) => {

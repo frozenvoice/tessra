@@ -1,12 +1,13 @@
 import { defineConfig } from '@playwright/test';
 import * as path from 'path';
-import { STABLE_E2E_TEST_IGNORE } from './stableTestIgnore';
 
 const artifacts = path.join(__dirname, '.artifacts');
 
 export default defineConfig({
   testDir: path.join(__dirname, 'specs'),
-  testIgnore: STABLE_E2E_TEST_IGNORE,
+  // Do not add a bare **/runner/** testIgnore — GitHub Actions paths contain /home/runner/work/...
+  // and that pattern would drop every stable spec (`No tests found`). Collection Runner specs live
+  // under e2e/specs/runner/ and are part of the stable suite.
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,

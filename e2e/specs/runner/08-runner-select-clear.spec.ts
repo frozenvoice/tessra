@@ -1,5 +1,5 @@
-import { test, expect } from '../fixtures';
-import { runCollectionFromSidebar } from '../helpers/webview';
+import { test, expect } from '../../fixtures';
+import { runCollectionFromSidebar } from '../../helpers/webview';
 
 test.describe('E2E #8 Runner Select all / Clear / zero selection', () => {
   test('Clear disables Start; Select all re-enables', async ({ tessra }) => {

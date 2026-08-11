@@ -16,8 +16,10 @@ Covered by `e2e/specs/*` against a real VS Code Electron host + localhost fixtur
 - Response Pin / Compare primary discoverability (+ overflow utilities smoke)
 - Send Stop / cancellation (slow endpoint)
 - Script utilities (HMAC in pre-request + SHA/Base64 assertions in Tests)
+- Collection Runner selection / reset (`e2e/specs/runner/07-runner-selection.spec.ts`)
+- Collection Runner Clear / Select all / zero selection (`e2e/specs/runner/08-runner-select-clear.spec.ts`)
 
-Runner selection / Clear / Select all: specs exist under `e2e/specs/runner/` (`npm run test:e2e:runner`) but are **not** in the default green gate yet — VS Code tree context-menu automation is flaky on Windows Electron (see `docs/testing.md`).
+Unusual OS / display-scaling context-menu behavior can still be spot-checked manually; the stable suite covers the keyboard context-menu path (see `docs/testing.md`).
 
 ## Manual remaining
 
@@ -55,7 +57,7 @@ Script utilities for signing / encoding. Use dummy secrets only.
 
 Collection Runner per-run request selection. Run this pass before Marketplace publish.
 
-- [Partial automation] `npm run test:e2e:runner` (flaky on Windows context menus — still confirm manually when touching Runner).
+- [Automated] Runner selection / Clear / Select all via `npm run test:e2e` (or focused `npm run test:e2e:runner`).
 - Spot-check Stop, Rerun Failed (failed selected only), and history only for executed selected requests.
 - Nested folders + WebSocket row labeling still worth a quick manual glance.
 
