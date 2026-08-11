@@ -243,16 +243,18 @@ function extractTaggedTemplate(source: string, tagComment: '/*css*/' | '/*html*/
   return source.slice(start + startMarker.length, end);
 }
 
-/** Expand Body/Response/Runner fragment composition without interpreting other ${...} interpolations. */
+/** Expand Body/Response/Runner/Status fragment composition without interpreting other ${...} interpolations. */
 function expandClientScriptTemplate(
   clientScript: string,
   bodyClientScript: string,
   responseClientScript: string,
-  runnerClientScript: string
+  runnerClientScript: string,
+  statusClientScript: string
 ): string {
   const bodyMarker = '${getRequestPanelBodyClientScript()}';
   const responseMarker = '${getRequestPanelResponseClientScript()}';
   const runnerMarker = '${getRequestPanelRunnerClientScript()}';
+  const statusMarker = '${getRequestPanelStatusClientScript()}';
   assert.ok(
     clientScript.includes(bodyMarker),
     'requestPanelClientScript should compose getRequestPanelBodyClientScript()'
@@ -265,10 +267,15 @@ function expandClientScriptTemplate(
     clientScript.includes(runnerMarker),
     'requestPanelClientScript should compose getRequestPanelRunnerClientScript()'
   );
+  assert.ok(
+    clientScript.includes(statusMarker),
+    'requestPanelClientScript should compose getRequestPanelStatusClientScript()'
+  );
   return clientScript
     .split(bodyMarker).join(bodyClientScript)
     .split(responseMarker).join(responseClientScript)
-    .split(runnerMarker).join(runnerClientScript);
+    .split(runnerMarker).join(runnerClientScript)
+    .split(statusMarker).join(statusClientScript);
 }
 
 /** Compose styles/markup/clientScript the same way requestPanelHtml.ts assembles the shell. */
@@ -293,6 +300,10 @@ function extractHtmlTemplate(): string {
     readSourceFile('src/panels/requestPanel/requestPanelRunnerClientScript.ts'),
     '/*js*/'
   );
+  const statusClientScript = extractTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelStatusClientScript.ts'),
+    '/*js*/'
+  );
   const clientScript = expandClientScriptTemplate(
     extractTaggedTemplate(
       readSourceFile('src/panels/requestPanel/requestPanelClientScript.ts'),
@@ -300,7 +311,8 @@ function extractHtmlTemplate(): string {
     ),
     bodyClientScript,
     responseClientScript,
-    runnerClientScript
+    runnerClientScript,
+    statusClientScript
   );
 
   // Concatenation keeps ${...} inside markup/script as literals for renderHtml().
@@ -337,6 +349,7 @@ function readRequestPanelHtmlSources(): string {
     'src/panels/requestPanel/requestPanelBodyClientScript.ts',
     'src/panels/requestPanel/requestPanelResponseClientScript.ts',
     'src/panels/requestPanel/requestPanelRunnerClientScript.ts',
+    'src/panels/requestPanel/requestPanelStatusClientScript.ts',
   ]
     .map((relativePath) => readSourceFile(relativePath))
     .join('\n');
@@ -2429,6 +2442,12 @@ describe('RequestPanel Webview', () => {
       function collectVariableUsage(tab) { return tab && tab.__usage ? tab.__usage : []; }
       function getUnresolvedDraftVariableNames(tab) { return tab && tab.__unresolved ? tab.__unresolved : []; }
       function getAppliedDefaultHeaders(tab) { return tab && tab.__appliedDefaults ? tab.__appliedDefaults : []; }
+      function isEnvironmentEditorOpen() {
+        return !!(envEditor && !envEditor.classList.contains('hidden'));
+      }
+      function renderTessraMark(extraClass) {
+        return '<svg class="tessra-mark' + (extraClass ? ' ' + extraClass : '') + '"></svg>';
+      }
       ${stripHelpers}
       function renderStatusStripExpandDetails() { return ''; }
       function renderStatusStrip(tab) {

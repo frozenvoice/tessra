@@ -58,6 +58,7 @@ tessra/
 │   │       ├── requestPanelBodyClientScript.ts
 │   │       ├── requestPanelResponseClientScript.ts
 │   │       ├── requestPanelRunnerClientScript.ts
+│   │       ├── requestPanelStatusClientScript.ts
 │   │       └── requestUtils.ts
 │   ├── providers/
 │   │   ├── CollectionTreeProvider.ts

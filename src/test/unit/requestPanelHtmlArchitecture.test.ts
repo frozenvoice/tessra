@@ -16,7 +16,7 @@ function extractJsTemplate(source: string): string {
   return source.slice(start + startMarker.length, end);
 }
 
-describe('requestPanelHtml architecture (Phase 1/2/3/4 split)', () => {
+describe('requestPanelHtml architecture (Phase 1/2/3/4/5 split)', () => {
   it('keeps getRequestPanelHtml as a thin composition over styles/markup/clientScript', () => {
     const html = read('src/panels/requestPanel/requestPanelHtml.ts');
     assert.match(html, /from '\.\/requestPanelStyles'/);
@@ -33,13 +33,14 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4 split)', () => {
     assert.doesNotMatch(html, /acquireVsCodeApi\(\)/);
   });
 
-  it('ships dedicated styles, markup, client script, Body, Response, and Runner client modules', () => {
+  it('ships dedicated styles, markup, client script, Body, Response, Runner, and Status client modules', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStyles.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelMarkup.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelBodyClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelResponseClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelRunnerClientScript.ts')));
+    assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStatusClientScript.ts')));
 
     const styles = read('src/panels/requestPanel/requestPanelStyles.ts');
     const markup = read('src/panels/requestPanel/requestPanelMarkup.ts');
@@ -47,6 +48,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4 split)', () => {
     const body = read('src/panels/requestPanel/requestPanelBodyClientScript.ts');
     const response = read('src/panels/requestPanel/requestPanelResponseClientScript.ts');
     const runner = read('src/panels/requestPanel/requestPanelRunnerClientScript.ts');
+    const status = read('src/panels/requestPanel/requestPanelStatusClientScript.ts');
 
     assert.match(styles, /export function getRequestPanelStyles\(/);
     assert.match(markup, /export function getRequestPanelMarkup\(/);
@@ -54,6 +56,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4 split)', () => {
     assert.match(body, /export function getRequestPanelBodyClientScript\(/);
     assert.match(response, /export function getRequestPanelResponseClientScript\(/);
     assert.match(runner, /export function getRequestPanelRunnerClientScript\(/);
+    assert.match(status, /export function getRequestPanelStatusClientScript\(/);
     assert.match(styles, /\.tab-bar\{display:flex/);
     assert.match(markup, /data-testid="environment-disclosure"/);
     assert.match(script, /acquireVsCodeApi\(\)/);
@@ -68,6 +71,10 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4 split)', () => {
     assert.match(runner, /function showRunner\(/);
     assert.match(runner, /data-testid="runner-start"/);
     assert.match(runner, /data-testid="runner-request-check"/);
+    assert.match(status, /function renderStatusStrip\(/);
+    assert.match(status, /function buildStatusStripSegments\(/);
+    assert.match(status, /testId = 'status-environment'/);
+    assert.match(status, /testId = 'status-variable-usage'/);
   });
 
   it('composes Body client fragment into main client script without duplicating Body impl', () => {
@@ -200,5 +207,55 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4 split)', () => {
     const createTabIdx = scriptJs.indexOf('function createTab(');
     assert.ok(responseInsertIdx >= 0 && runnerInsertIdx > responseInsertIdx, 'Runner fragment should follow Response fragment');
     assert.ok(createTabIdx > runnerInsertIdx, 'createTab should follow Runner fragment composition');
+  });
+
+  it('composes Status client fragment into main client script without duplicating Status impl', () => {
+    const script = read('src/panels/requestPanel/requestPanelClientScript.ts');
+    const status = read('src/panels/requestPanel/requestPanelStatusClientScript.ts');
+    const scriptJs = extractJsTemplate(script);
+    const statusJs = extractJsTemplate(status);
+
+    assert.match(script, /from '\.\/requestPanelStatusClientScript'/);
+    assert.ok(
+      scriptJs.includes('${getRequestPanelStatusClientScript()}'),
+      'main client script should insert Status fragment via composition'
+    );
+    assert.match(scriptJs, /renderStatusStrip\(tab\)/);
+    assert.match(scriptJs, /refreshStatusStrip\(/);
+    assert.match(scriptJs, /refreshToplineStatusChips\(/);
+
+    // Status-strip implementations live in the Status module once.
+    assert.match(statusJs, /function renderStatusStrip\(/);
+    assert.match(statusJs, /function buildStatusStripSegments\(/);
+    assert.match(statusJs, /function refreshStatusStrip\(/);
+    assert.match(statusJs, /function setStatusStripExpanded\(/);
+    assert.match(statusJs, /function revealVariableUsageDisclosure\(/);
+    assert.match(statusJs, /function syncEnvironmentStripDisclosureState\(/);
+    assert.match(statusJs, /tfCount\('environment\.vars'/);
+    assert.match(statusJs, /tfCount\('webview\.stripUsedCount'/);
+    assert.match(statusJs, /testId = 'status-environment'/);
+    assert.match(statusJs, /testId = 'status-variable-usage'/);
+    assert.match(statusJs, /data-testid="variable-usage-disclosure"/);
+    assert.doesNotMatch(scriptJs, /function renderStatusStrip\(/);
+    assert.doesNotMatch(scriptJs, /function buildStatusStripSegments\(/);
+    assert.doesNotMatch(scriptJs, /function refreshStatusStrip\(/);
+    assert.doesNotMatch(scriptJs, /function setStatusStripExpanded\(/);
+    assert.doesNotMatch(scriptJs, /function syncEnvironmentStripDisclosureState\(/);
+
+    // Full Environment editor / shared helpers remain in main.
+    assert.match(scriptJs, /function revealEnvironmentEditor\(/);
+    assert.match(scriptJs, /function isEnvironmentEditorOpen\(/);
+    assert.match(scriptJs, /function hideEnvironmentEditor\(/);
+    assert.match(scriptJs, /function setEnvironmentEditorData\(/);
+    assert.match(scriptJs, /function renderVariableUsage\(/);
+    assert.match(scriptJs, /function refreshRequestPreflight\(/);
+    assert.match(scriptJs, /function renderDefaultHeadersBanner\(/);
+
+    // Ordering: Runner fragment before Status fragment; Status before createTab.
+    const runnerInsertIdx = scriptJs.indexOf('${getRequestPanelRunnerClientScript()}');
+    const statusInsertIdx = scriptJs.indexOf('${getRequestPanelStatusClientScript()}');
+    const createTabIdx = scriptJs.indexOf('function createTab(');
+    assert.ok(runnerInsertIdx >= 0 && statusInsertIdx > runnerInsertIdx, 'Status fragment should follow Runner fragment');
+    assert.ok(createTabIdx > statusInsertIdx, 'createTab should follow Status fragment composition');
   });
 });

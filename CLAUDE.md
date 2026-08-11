@@ -149,7 +149,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 현재 구조 메모
 - 요청 패널 오케스트레이션은 `src/panels/RequestPanel.ts`에 있다
-- Webview HTML은 `requestPanelHtml.ts`가 CSP/URI/i18n을 조립하고, CSS는 `requestPanelStyles.ts`, shell markup은 `requestPanelMarkup.ts`, inline client JS는 `requestPanelClientScript.ts`(+ Body fragment `requestPanelBodyClientScript.ts`, Response Viewer fragment `requestPanelResponseClientScript.ts`, Collection Runner fragment `requestPanelRunnerClientScript.ts`)에 둔다 (source split; runtime asset/CSP 변경 없음)
+- Webview HTML은 `requestPanelHtml.ts`가 CSP/URI/i18n을 조립하고, CSS는 `requestPanelStyles.ts`, shell markup은 `requestPanelMarkup.ts`, inline client JS는 `requestPanelClientScript.ts`(+ Body fragment `requestPanelBodyClientScript.ts`, Response Viewer fragment `requestPanelResponseClientScript.ts`, Collection Runner fragment `requestPanelRunnerClientScript.ts`, Status Strip fragment `requestPanelStatusClientScript.ts`)에 둔다 (source split; runtime asset/CSP 변경 없음)
 - HTTP 실행은 `src/panels/requestPanel/RequestExecutor.ts`, 컬렉션 러너는 `src/panels/requestPanel/CollectionRunner.ts`, WebSocket 세션 관리는 `src/panels/requestPanel/WebSocketManager.ts`가 담당한다
 - highlight.js 관련 리소스는 `src/webview/hljs.ts`에서 관리한다
 - Body 타입 변환은 `src/services/BodyConversionService.ts`, webview 노출은 `src/webview/bodyConversion.ts` (`dist/bodyConversion.js`)
