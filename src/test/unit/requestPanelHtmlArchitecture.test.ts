@@ -16,7 +16,7 @@ function extractJsTemplate(source: string): string {
   return source.slice(start + startMarker.length, end);
 }
 
-describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6 split)', () => {
+describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7 split)', () => {
   it('keeps getRequestPanelHtml as a thin composition over styles/markup/clientScript', () => {
     const html = read('src/panels/requestPanel/requestPanelHtml.ts');
     assert.match(html, /from '\.\/requestPanelStyles'/);
@@ -33,13 +33,14 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6 split)', () => {
     assert.doesNotMatch(html, /acquireVsCodeApi\(\)/);
   });
 
-  it('ships dedicated styles, markup, client script, Body, Response, Runner, Status, and WebSocket client modules', () => {
+  it('ships dedicated styles, markup, client script, Body, Response, Runner, Environment, Status, and WebSocket client modules', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStyles.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelMarkup.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelBodyClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelResponseClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelRunnerClientScript.ts')));
+    assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelEnvironmentClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStatusClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelWebSocketClientScript.ts')));
 
@@ -49,6 +50,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6 split)', () => {
     const body = read('src/panels/requestPanel/requestPanelBodyClientScript.ts');
     const response = read('src/panels/requestPanel/requestPanelResponseClientScript.ts');
     const runner = read('src/panels/requestPanel/requestPanelRunnerClientScript.ts');
+    const environment = read('src/panels/requestPanel/requestPanelEnvironmentClientScript.ts');
     const status = read('src/panels/requestPanel/requestPanelStatusClientScript.ts');
     const websocket = read('src/panels/requestPanel/requestPanelWebSocketClientScript.ts');
 
@@ -58,6 +60,8 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6 split)', () => {
     assert.match(body, /export function getRequestPanelBodyClientScript\(/);
     assert.match(response, /export function getRequestPanelResponseClientScript\(/);
     assert.match(runner, /export function getRequestPanelRunnerClientScript\(/);
+    assert.match(environment, /export function getRequestPanelEnvironmentClientScript\(/);
+    assert.match(environment, /export function getRequestPanelEnvironmentBindingsScript\(/);
     assert.match(status, /export function getRequestPanelStatusClientScript\(/);
     assert.match(websocket, /export function getRequestPanelWebSocketClientScript\(/);
     assert.match(styles, /\.tab-bar\{display:flex/);
@@ -74,6 +78,10 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6 split)', () => {
     assert.match(runner, /function showRunner\(/);
     assert.match(runner, /data-testid="runner-start"/);
     assert.match(runner, /data-testid="runner-request-check"/);
+    assert.match(environment, /function revealEnvironmentEditor\(/);
+    assert.match(environment, /function setEnvironmentEditorData\(/);
+    assert.match(environment, /function envScheduleSave\(/);
+    assert.match(environment, /type: 'saveEnvironmentVars'/);
     assert.match(status, /function renderStatusStrip\(/);
     assert.match(status, /function buildStatusStripSegments\(/);
     assert.match(status, /testId = 'status-environment'/);
@@ -247,21 +255,78 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6 split)', () => {
     assert.doesNotMatch(scriptJs, /function setStatusStripExpanded\(/);
     assert.doesNotMatch(scriptJs, /function syncEnvironmentStripDisclosureState\(/);
 
-    // Full Environment editor / shared helpers remain in main.
-    assert.match(scriptJs, /function revealEnvironmentEditor\(/);
-    assert.match(scriptJs, /function isEnvironmentEditorOpen\(/);
-    assert.match(scriptJs, /function hideEnvironmentEditor\(/);
-    assert.match(scriptJs, /function setEnvironmentEditorData\(/);
+    // Shared helpers Status needs remain in main; Environment editor lives in Environment fragment.
     assert.match(scriptJs, /function renderVariableUsage\(/);
     assert.match(scriptJs, /function refreshRequestPreflight\(/);
     assert.match(scriptJs, /function renderDefaultHeadersBanner\(/);
+    assert.match(scriptJs, /function collectKv\(/);
+    assert.match(scriptJs, /function addKvRow\(/);
 
-    // Ordering: Runner fragment before Status fragment; Status before createTab.
-    const runnerInsertIdx = scriptJs.indexOf('${getRequestPanelRunnerClientScript()}');
+    // Ordering: Environment fragment before Status fragment; Status before createTab.
+    const environmentInsertIdx = scriptJs.indexOf('${getRequestPanelEnvironmentClientScript()}');
     const statusInsertIdx = scriptJs.indexOf('${getRequestPanelStatusClientScript()}');
     const createTabIdx = scriptJs.indexOf('function createTab(');
-    assert.ok(runnerInsertIdx >= 0 && statusInsertIdx > runnerInsertIdx, 'Status fragment should follow Runner fragment');
+    assert.ok(environmentInsertIdx >= 0 && statusInsertIdx > environmentInsertIdx, 'Status fragment should follow Environment fragment');
     assert.ok(createTabIdx > statusInsertIdx, 'createTab should follow Status fragment composition');
+  });
+
+  it('composes Environment client fragment into main client script without duplicating Environment editor impl', () => {
+    const script = read('src/panels/requestPanel/requestPanelClientScript.ts');
+    const environment = read('src/panels/requestPanel/requestPanelEnvironmentClientScript.ts');
+    const scriptJs = extractJsTemplate(script);
+    const environmentJs = extractJsTemplate(environment);
+
+    assert.match(script, /from '\.\/requestPanelEnvironmentClientScript'/);
+    assert.ok(
+      scriptJs.includes('${getRequestPanelEnvironmentClientScript()}'),
+      'main client script should insert Environment fragment via composition'
+    );
+    assert.ok(
+      scriptJs.includes('${getRequestPanelEnvironmentBindingsScript()}'),
+      'main client script should insert Environment bindings fragment via composition'
+    );
+    assert.match(scriptJs, /revealEnvironmentEditor\(/);
+    assert.match(scriptJs, /toggleEnvironmentEditor\(/);
+    assert.match(scriptJs, /setEnvironmentEditorData\(/);
+
+    assert.match(environmentJs, /function revealEnvironmentEditor\(/);
+    assert.match(environmentJs, /function hideEnvironmentEditor\(/);
+    assert.match(environmentJs, /function toggleEnvironmentEditor\(/);
+    assert.match(environmentJs, /function isEnvironmentEditorOpen\(/);
+    assert.match(environmentJs, /function setEnvironmentEditorData\(/);
+    assert.match(environmentJs, /function envAutoSave\(/);
+    assert.match(environmentJs, /function envScheduleSave\(/);
+    assert.match(environmentJs, /function flushPendingEnvironmentSave\(/);
+    assert.match(environmentJs, /let editingEnvId = null/);
+    assert.match(environmentJs, /let envEditorVariableCount = 0/);
+    assert.match(environmentJs, /setTimeout\(envAutoSave, 500\)/);
+    assert.match(environmentJs, /type: 'saveEnvironmentVars'/);
+    assert.match(environment, /getElementById\('envEditor'\)/);
+    assert.match(environment, /addEnvVarBtn\.addEventListener/);
+    assert.match(environment, /envVarRows\.addEventListener\('focusout'/);
+    assert.doesNotMatch(scriptJs, /function revealEnvironmentEditor\(/);
+    assert.doesNotMatch(scriptJs, /function hideEnvironmentEditor\(/);
+    assert.doesNotMatch(scriptJs, /function setEnvironmentEditorData\(/);
+    assert.doesNotMatch(scriptJs, /function envAutoSave\(/);
+    assert.doesNotMatch(scriptJs, /function envScheduleSave\(/);
+    assert.doesNotMatch(scriptJs, /let editingEnvId = null/);
+
+    // Generic KV helpers and Status strip stay outside Environment module.
+    assert.match(scriptJs, /function collectKv\(/);
+    assert.match(scriptJs, /function addKvRow\(/);
+    assert.match(scriptJs, /function bindKvRow\(/);
+    assert.match(scriptJs, /function syncKvRowSensitivity\(/);
+
+    // Ordering: Runner → Environment functions → Status; bindings before default-headers late init.
+    const runnerInsertIdx = scriptJs.indexOf('${getRequestPanelRunnerClientScript()}');
+    const environmentInsertIdx = scriptJs.indexOf('${getRequestPanelEnvironmentClientScript()}');
+    const statusInsertIdx = scriptJs.indexOf('${getRequestPanelStatusClientScript()}');
+    const bindingsInsertIdx = scriptJs.indexOf('${getRequestPanelEnvironmentBindingsScript()}');
+    const defaultHeadersIdx = scriptJs.indexOf("const defaultHeadersEditor = document.getElementById('defaultHeadersEditor')");
+    assert.ok(runnerInsertIdx >= 0 && environmentInsertIdx > runnerInsertIdx, 'Environment fragment should follow Runner fragment');
+    assert.ok(statusInsertIdx > environmentInsertIdx, 'Status fragment should follow Environment fragment');
+    assert.ok(bindingsInsertIdx > statusInsertIdx, 'Environment bindings should follow Status composition');
+    assert.ok(defaultHeadersIdx > bindingsInsertIdx, 'Environment bindings should precede default-headers editor init');
   });
 
   it('composes WebSocket client fragment into main client script without duplicating WebSocket impl', () => {

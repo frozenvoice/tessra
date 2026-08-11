@@ -235,26 +235,43 @@ function readRequestPanelSource(): string {
 function extractTaggedTemplate(source: string, tagComment: '/*css*/' | '/*html*/' | '/*js*/'): string {
   const startMarker = `return ${tagComment} \``;
   const start = source.indexOf(startMarker);
-  const end = source.lastIndexOf('`;');
-
   assert.ok(start >= 0, `webview template start marker should exist: ${tagComment}`);
-  assert.ok(end > start, `webview template end marker should exist: ${tagComment}`);
-
-  return source.slice(start + startMarker.length, end);
+  const contentStart = start + startMarker.length;
+  const end = source.indexOf('`;', contentStart);
+  assert.ok(end > contentStart, `webview template end marker should exist: ${tagComment}`);
+  return source.slice(contentStart, end);
 }
 
-/** Expand Body/Response/Runner/Status/WebSocket fragment composition without interpreting other ${...} interpolations. */
+function extractNthTaggedTemplate(source: string, tagComment: '/*css*/' | '/*html*/' | '/*js*/', index: number): string {
+  const startMarker = `return ${tagComment} \``;
+  let from = 0;
+  let start = -1;
+  for (let i = 0; i <= index; i++) {
+    start = source.indexOf(startMarker, from);
+    assert.ok(start >= 0, `webview template #${i} start marker should exist: ${tagComment}`);
+    from = start + startMarker.length;
+  }
+  const end = source.indexOf('`;', from);
+  assert.ok(end > from, `webview template #${index} end marker should exist: ${tagComment}`);
+  return source.slice(from, end);
+}
+
+/** Expand Body/Response/Runner/Environment/Status/WebSocket fragment composition without interpreting other ${...} interpolations. */
 function expandClientScriptTemplate(
   clientScript: string,
   bodyClientScript: string,
   responseClientScript: string,
   runnerClientScript: string,
+  environmentClientScript: string,
+  environmentBindingsScript: string,
   statusClientScript: string,
   webSocketClientScript: string
 ): string {
   const bodyMarker = '${getRequestPanelBodyClientScript()}';
   const responseMarker = '${getRequestPanelResponseClientScript()}';
   const runnerMarker = '${getRequestPanelRunnerClientScript()}';
+  const environmentMarker = '${getRequestPanelEnvironmentClientScript()}';
+  const environmentBindingsMarker = '${getRequestPanelEnvironmentBindingsScript()}';
   const statusMarker = '${getRequestPanelStatusClientScript()}';
   const webSocketMarker = '${getRequestPanelWebSocketClientScript()}';
   assert.ok(
@@ -270,6 +287,14 @@ function expandClientScriptTemplate(
     'requestPanelClientScript should compose getRequestPanelRunnerClientScript()'
   );
   assert.ok(
+    clientScript.includes(environmentMarker),
+    'requestPanelClientScript should compose getRequestPanelEnvironmentClientScript()'
+  );
+  assert.ok(
+    clientScript.includes(environmentBindingsMarker),
+    'requestPanelClientScript should compose getRequestPanelEnvironmentBindingsScript()'
+  );
+  assert.ok(
     clientScript.includes(statusMarker),
     'requestPanelClientScript should compose getRequestPanelStatusClientScript()'
   );
@@ -281,6 +306,8 @@ function expandClientScriptTemplate(
     .split(bodyMarker).join(bodyClientScript)
     .split(responseMarker).join(responseClientScript)
     .split(runnerMarker).join(runnerClientScript)
+    .split(environmentMarker).join(environmentClientScript)
+    .split(environmentBindingsMarker).join(environmentBindingsScript)
     .split(statusMarker).join(statusClientScript)
     .split(webSocketMarker).join(webSocketClientScript);
 }
@@ -307,6 +334,16 @@ function extractHtmlTemplate(): string {
     readSourceFile('src/panels/requestPanel/requestPanelRunnerClientScript.ts'),
     '/*js*/'
   );
+  const environmentClientScript = extractNthTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelEnvironmentClientScript.ts'),
+    '/*js*/',
+    0
+  );
+  const environmentBindingsScript = extractNthTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelEnvironmentClientScript.ts'),
+    '/*js*/',
+    1
+  );
   const statusClientScript = extractTaggedTemplate(
     readSourceFile('src/panels/requestPanel/requestPanelStatusClientScript.ts'),
     '/*js*/'
@@ -323,6 +360,8 @@ function extractHtmlTemplate(): string {
     bodyClientScript,
     responseClientScript,
     runnerClientScript,
+    environmentClientScript,
+    environmentBindingsScript,
     statusClientScript,
     webSocketClientScript
   );
@@ -361,6 +400,7 @@ function readRequestPanelHtmlSources(): string {
     'src/panels/requestPanel/requestPanelBodyClientScript.ts',
     'src/panels/requestPanel/requestPanelResponseClientScript.ts',
     'src/panels/requestPanel/requestPanelRunnerClientScript.ts',
+    'src/panels/requestPanel/requestPanelEnvironmentClientScript.ts',
     'src/panels/requestPanel/requestPanelStatusClientScript.ts',
     'src/panels/requestPanel/requestPanelWebSocketClientScript.ts',
   ]
