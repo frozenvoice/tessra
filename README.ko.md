@@ -8,12 +8,15 @@ VS Code 안에서 동작하는 로컬 우선 API 클라이언트입니다.
 
 Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게 요청을 만들고 실행하려는 개발자를 위한 확장입니다. 모든 데이터는 로컬에 남고, 네트워크 호출은 사용자가 직접 보내는 API 요청에서만 발생합니다.
 
-## 1.0.12에서 달라진 점
+## 최근 주요 변경
 
-- Collection Runner에서 실행 전에 포함할 요청을 선택할 수 있습니다
-- 기본은 전체 선택이며, 이번 실행에서만 제외할 요청을 체크 해제합니다 (선택은 저장되지 않음)
-- 선택 건수와 함께 delay, iterations, stop-on-failure, Stop, history, Rerun Failed 동작을 유지합니다
-- 로컬 우선 원칙 유지: 로그인 없음, 클라우드 동기화 없음, 텔레메트리 없음
+- Basic 비밀번호, Bearer 토큰, API Key 값 같은 민감한 인증 필드의 Reveal / Hide가 정상 동작합니다.
+- Collection Runner에서 실행할 요청을 매번 선택할 수 있으며 기본값은 전체 선택입니다.
+- `.env` 파일을 Tessra Environment로 직접 가져올 수 있습니다.
+- Pre-request / Test script에서 SHA-256, HMAC-SHA256, Base64, UUID v4, Unix timestamp utilities를 사용할 수 있습니다.
+- 로컬 우선 원칙은 그대로입니다: 로그인 없음, 클라우드 동기화 없음, 텔레메트리 없음.
+
+전체 릴리스 기록은 [Changelog](./CHANGELOG.md)를 참고하세요.
 
 ## 스크린샷
 

@@ -6,12 +6,15 @@ No login. No cloud sync. No paywalled core workflows.
 
 Tessra is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
 
-## What's new in 1.0.12
+## Recent highlights
 
-- Collection Runner lets you choose which requests to include before each run
-- All requests start selected; uncheck to exclude for that run only (selection is not saved)
-- Selected-request counts keep delay, iterations, stop-on-failure, Stop, history, and Rerun Failed behavior
-- Still local-first: no login, no cloud sync, no telemetry
+- Auth sensitive fields support working Reveal / Hide controls for Basic passwords, Bearer tokens, and API Key values.
+- Collection Runner supports per-run request selection, with all requests selected by default.
+- Import `.env` files directly as Tessra Environments.
+- Pre-request and test scripts include SHA-256, HMAC-SHA256, Base64, UUID v4, and Unix timestamp utilities.
+- Tessra remains local-first: no login, no cloud sync, no telemetry.
+
+See the [Changelog](./CHANGELOG.md) for full release history.
 
 ## Screenshots
 

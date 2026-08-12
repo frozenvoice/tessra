@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+
+- Refreshed the extension Details README so the top highlights no longer present the old 1.0.12 section as the latest release.
+- Replaced version-specific README highlights with version-neutral recent highlights to prevent stale release labeling.
+- No runtime, request, or storage behavior changes.
+
 ## 1.1.0
 
 ### User-facing
