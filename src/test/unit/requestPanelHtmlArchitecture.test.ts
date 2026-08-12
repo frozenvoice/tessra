@@ -16,7 +16,7 @@ function extractJsTemplate(source: string): string {
   return source.slice(start + startMarker.length, end);
 }
 
-describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9 split)', () => {
+describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10 split)', () => {
   it('keeps getRequestPanelHtml as a thin composition over styles/markup/clientScript', () => {
     const html = read('src/panels/requestPanel/requestPanelHtml.ts');
     assert.match(html, /from '\.\/requestPanelStyles'/);
@@ -33,7 +33,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9 split)', () => 
     assert.doesNotMatch(html, /acquireVsCodeApi\(\)/);
   });
 
-  it('ships dedicated styles, markup, client script, Body, Response, Runner, Environment, Default Headers, Status, WebSocket, and Auth client modules', () => {
+  it('ships dedicated styles, markup, client script, Body, Response, Runner, Environment, Default Headers, Status, WebSocket, Auth, and Scripts client modules', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStyles.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelMarkup.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelClientScript.ts')));
@@ -45,6 +45,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9 split)', () => 
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStatusClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelWebSocketClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelAuthClientScript.ts')));
+    assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelScriptsClientScript.ts')));
 
     const styles = read('src/panels/requestPanel/requestPanelStyles.ts');
     const markup = read('src/panels/requestPanel/requestPanelMarkup.ts');
@@ -57,6 +58,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9 split)', () => 
     const status = read('src/panels/requestPanel/requestPanelStatusClientScript.ts');
     const websocket = read('src/panels/requestPanel/requestPanelWebSocketClientScript.ts');
     const auth = read('src/panels/requestPanel/requestPanelAuthClientScript.ts');
+    const scripts = read('src/panels/requestPanel/requestPanelScriptsClientScript.ts');
 
     assert.match(styles, /export function getRequestPanelStyles\(/);
     assert.match(markup, /export function getRequestPanelMarkup\(/);
@@ -71,6 +73,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9 split)', () => 
     assert.match(status, /export function getRequestPanelStatusClientScript\(/);
     assert.match(websocket, /export function getRequestPanelWebSocketClientScript\(/);
     assert.match(auth, /export function getRequestPanelAuthClientScript\(/);
+    assert.match(scripts, /export function getRequestPanelScriptsClientScript\(/);
     assert.match(styles, /\.tab-bar\{display:flex/);
     assert.match(markup, /data-testid="environment-disclosure"/);
     assert.match(script, /acquireVsCodeApi\(\)/);
@@ -103,6 +106,11 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9 split)', () => 
     assert.match(auth, /function authHtml\(/);
     assert.match(auth, /function collectAuth\(/);
     assert.match(auth, /function bindRequestAuthEditor\(/);
+    assert.match(scripts, /function scriptTemplateSource\(/);
+    assert.match(scripts, /function renderScriptsEditorContents\(/);
+    assert.match(scripts, /function insertScriptTemplate\(/);
+    assert.match(scripts, /function collectScripts\(/);
+    assert.match(scripts, /function bindRequestScriptsEditor\(/);
   });
 
   it('composes Body client fragment into main client script without duplicating Body impl', () => {
@@ -456,14 +464,16 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9 split)', () => 
     assert.match(scriptJs, /function handlePrimaryAction\(/);
     assert.match(scriptJs, /function renderPrimaryActionButton\(/);
 
-    // Ordering: Status fragment before WebSocket fragment; WebSocket before Auth; Auth before createTab.
+    // Ordering: Status fragment before WebSocket fragment; WebSocket before Auth; Auth before Scripts; Scripts before createTab.
     const statusInsertIdx = scriptJs.indexOf('${getRequestPanelStatusClientScript()}');
     const websocketInsertIdx = scriptJs.indexOf('${getRequestPanelWebSocketClientScript()}');
     const authInsertIdx = scriptJs.indexOf('${getRequestPanelAuthClientScript()}');
+    const scriptsInsertIdx = scriptJs.indexOf('${getRequestPanelScriptsClientScript()}');
     const createTabIdx = scriptJs.indexOf('function createTab(');
     assert.ok(statusInsertIdx >= 0 && websocketInsertIdx > statusInsertIdx, 'WebSocket fragment should follow Status fragment');
     assert.ok(authInsertIdx > websocketInsertIdx, 'Auth fragment should follow WebSocket fragment');
-    assert.ok(createTabIdx > authInsertIdx, 'createTab should follow Auth fragment composition');
+    assert.ok(scriptsInsertIdx > authInsertIdx, 'Scripts fragment should follow Auth fragment');
+    assert.ok(createTabIdx > scriptsInsertIdx, 'createTab should follow Scripts fragment composition');
   });
 
   it('composes Auth client fragment into main client script without duplicating Auth editor impl', () => {
@@ -512,8 +522,59 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9 split)', () => 
 
     const websocketInsertIdx = scriptJs.indexOf('${getRequestPanelWebSocketClientScript()}');
     const authInsertIdx = scriptJs.indexOf('${getRequestPanelAuthClientScript()}');
-    const createTabIdx = scriptJs.indexOf('function createTab(');
+    const scriptsInsertIdx = scriptJs.indexOf('${getRequestPanelScriptsClientScript()}');
     assert.ok(authInsertIdx > websocketInsertIdx, 'Auth fragment should follow WebSocket fragment');
-    assert.ok(createTabIdx > authInsertIdx, 'createTab should follow Auth fragment');
+    assert.ok(scriptsInsertIdx > authInsertIdx, 'Scripts fragment should follow Auth fragment');
+  });
+
+  it('composes Scripts client fragment into main client script without duplicating Scripts editor impl', () => {
+    const script = read('src/panels/requestPanel/requestPanelClientScript.ts');
+    const scripts = read('src/panels/requestPanel/requestPanelScriptsClientScript.ts');
+    const scriptJs = extractJsTemplate(script);
+    const scriptsJs = extractJsTemplate(scripts);
+
+    assert.match(script, /from '\.\/requestPanelScriptsClientScript'/);
+    assert.ok(
+      scriptJs.includes('${getRequestPanelScriptsClientScript()}'),
+      'main client script should insert Scripts fragment via composition'
+    );
+    assert.match(scriptJs, /renderScriptsEditorContents\(tab\)/);
+    assert.match(scriptJs, /collectScripts\(mc\)/);
+    assert.match(scriptJs, /bindRequestScriptsEditor\(mc\)/);
+
+    assert.match(scriptsJs, /function scriptTemplateSource\(/);
+    assert.match(scriptsJs, /function renderScriptHelpers\(/);
+    assert.match(scriptsJs, /function renderScriptsEditorContents\(/);
+    assert.match(scriptsJs, /function insertScriptTemplate\(/);
+    assert.match(scriptsJs, /function collectScripts\(/);
+    assert.match(scriptsJs, /function bindRequestScriptsEditor\(/);
+    assert.match(scriptsJs, /preRequestEnv/);
+    assert.match(scriptsJs, /testCaptureValue/);
+    assert.match(scriptsJs, /testStatusCheck/);
+    assert.match(scriptsJs, /data-testid="script-prerequest"/);
+    assert.match(scriptsJs, /data-testid="script-test"/);
+    assert.match(scriptsJs, /type: 'openGuide'/);
+    assert.doesNotMatch(scriptJs, /function scriptTemplateSource\(/);
+    assert.doesNotMatch(scriptJs, /function renderScriptHelpers\(/);
+    assert.doesNotMatch(scriptJs, /function renderScriptsEditorContents\(/);
+    assert.doesNotMatch(scriptJs, /function insertScriptTemplate\(/);
+    assert.doesNotMatch(scriptJs, /function collectScripts\(/);
+    assert.doesNotMatch(scriptJs, /function bindRequestScriptsEditor\(/);
+
+    // Trust / disable / send policy stay in main.
+    assert.match(scriptJs, /function hasExecutableScripts\(/);
+    assert.match(scriptJs, /function ensureTrustedScriptsBeforeSend\(/);
+    assert.match(scriptJs, /function sendActiveTab\(/);
+    assert.match(scriptJs, /js-disable-scripts/);
+    assert.match(scriptJs, /scriptsTrusted/);
+
+    const bindMatches = scriptJs.match(/bindRequestScriptsEditor\(mc\)/g) || [];
+    assert.strictEqual(bindMatches.length, 1, 'bindRequestScriptsEditor should be called exactly once from main');
+
+    const authInsertIdx = scriptJs.indexOf('${getRequestPanelAuthClientScript()}');
+    const scriptsInsertIdx = scriptJs.indexOf('${getRequestPanelScriptsClientScript()}');
+    const createTabIdx = scriptJs.indexOf('function createTab(');
+    assert.ok(scriptsInsertIdx > authInsertIdx, 'Scripts fragment should follow Auth fragment');
+    assert.ok(createTabIdx > scriptsInsertIdx, 'createTab should follow Scripts fragment');
   });
 });

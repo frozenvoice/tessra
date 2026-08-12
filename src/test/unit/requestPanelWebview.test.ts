@@ -256,7 +256,7 @@ function extractNthTaggedTemplate(source: string, tagComment: '/*css*/' | '/*htm
   return source.slice(from, end);
 }
 
-/** Expand Body/Response/Runner/Environment/Default Headers/Status/WebSocket/Auth fragment composition without interpreting other ${...} interpolations. */
+/** Expand Body/Response/Runner/Environment/Default Headers/Status/WebSocket/Auth/Scripts fragment composition without interpreting other ${...} interpolations. */
 function expandClientScriptTemplate(
   clientScript: string,
   bodyClientScript: string,
@@ -268,7 +268,8 @@ function expandClientScriptTemplate(
   defaultHeadersBindingsScript: string,
   statusClientScript: string,
   webSocketClientScript: string,
-  authClientScript: string
+  authClientScript: string,
+  scriptsClientScript: string
 ): string {
   const bodyMarker = '${getRequestPanelBodyClientScript()}';
   const responseMarker = '${getRequestPanelResponseClientScript()}';
@@ -280,6 +281,7 @@ function expandClientScriptTemplate(
   const statusMarker = '${getRequestPanelStatusClientScript()}';
   const webSocketMarker = '${getRequestPanelWebSocketClientScript()}';
   const authMarker = '${getRequestPanelAuthClientScript()}';
+  const scriptsMarker = '${getRequestPanelScriptsClientScript()}';
   assert.ok(
     clientScript.includes(bodyMarker),
     'requestPanelClientScript should compose getRequestPanelBodyClientScript()'
@@ -320,6 +322,10 @@ function expandClientScriptTemplate(
     clientScript.includes(authMarker),
     'requestPanelClientScript should compose getRequestPanelAuthClientScript()'
   );
+  assert.ok(
+    clientScript.includes(scriptsMarker),
+    'requestPanelClientScript should compose getRequestPanelScriptsClientScript()'
+  );
   return clientScript
     .split(bodyMarker).join(bodyClientScript)
     .split(responseMarker).join(responseClientScript)
@@ -330,7 +336,8 @@ function expandClientScriptTemplate(
     .split(defaultHeadersBindingsMarker).join(defaultHeadersBindingsScript)
     .split(statusMarker).join(statusClientScript)
     .split(webSocketMarker).join(webSocketClientScript)
-    .split(authMarker).join(authClientScript);
+    .split(authMarker).join(authClientScript)
+    .split(scriptsMarker).join(scriptsClientScript);
 }
 
 /** Compose styles/markup/clientScript the same way requestPanelHtml.ts assembles the shell. */
@@ -387,6 +394,10 @@ function extractHtmlTemplate(): string {
     readSourceFile('src/panels/requestPanel/requestPanelAuthClientScript.ts'),
     '/*js*/'
   );
+  const scriptsClientScript = extractTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelScriptsClientScript.ts'),
+    '/*js*/'
+  );
   const clientScript = expandClientScriptTemplate(
     extractTaggedTemplate(
       readSourceFile('src/panels/requestPanel/requestPanelClientScript.ts'),
@@ -401,7 +412,8 @@ function extractHtmlTemplate(): string {
     defaultHeadersBindingsScript,
     statusClientScript,
     webSocketClientScript,
-    authClientScript
+    authClientScript,
+    scriptsClientScript
   );
 
   // Concatenation keeps ${...} inside markup/script as literals for renderHtml().
@@ -443,6 +455,7 @@ function readRequestPanelHtmlSources(): string {
     'src/panels/requestPanel/requestPanelStatusClientScript.ts',
     'src/panels/requestPanel/requestPanelWebSocketClientScript.ts',
     'src/panels/requestPanel/requestPanelAuthClientScript.ts',
+    'src/panels/requestPanel/requestPanelScriptsClientScript.ts',
   ]
     .map((relativePath) => readSourceFile(relativePath))
     .join('\n');
@@ -1070,7 +1083,7 @@ describe('RequestPanel Webview', () => {
       kvRowsHtml: () => '',
       renderDefaultHeadersBanner: () => '',
       authHtml: () => '',
-      renderScriptHelpers: () => '',
+      renderScriptsEditorContents: () => '',
       bodyTypeLabel: (value: string) => value,
       renderFormDataSummary: () => '',
       formDataRowsHtml: () => '',
