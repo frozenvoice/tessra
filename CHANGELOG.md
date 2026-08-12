@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0
+
+### User-facing
+
+- Fixed Auth sensitive-field Reveal / Hide so Basic password, Bearer token, and API Key value can be shown and hidden again.
+
+### Reliability / Engineering
+
+- Split the Request Panel webview client into subsystem source modules (Body, Response, Runner, Environment, Default Headers, Status, WebSocket, Auth, Scripts, Settings) without changing runtime CSP or request/storage schemas.
+- Expanded deterministic VS Code UI E2E coverage for those request-panel flows (stable suite now 16 specs).
+- No storage or request schema migration; existing local data remains compatible.
+
 ## 1.0.14
 
 - Added Tessra Script utilities for SHA-256 and HMAC-SHA256.

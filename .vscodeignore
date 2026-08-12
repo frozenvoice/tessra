@@ -5,6 +5,8 @@
 .impeccable/**
 DESIGN.md
 PRODUCT.md
+AGENTS.md
+demo/**
 src/**
 node_modules/**
 dist/test/**
@@ -21,6 +23,7 @@ CLAUDE.md
 **/*.test.js
 **/*.test.ts
 **/*.zip
+**/*.vsix
 tmp/**
 _remote-screenshot*
 marketplace-screenshots/**
