@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.0
+
+### Added
+
+- Added Path Variables under the URL bar for full path-segment `{{variable}}` placeholders.
+- Environment values remain the default fallback; Override keeps a request-local value, and Reset / Clear returns to Environment fallback or an unresolved editable state.
+- Path variables missing from the Environment can be entered directly on the request.
+- Request-local overrides apply only to matching URL path segments, so same-named query, header, body, and auth variables stay unchanged.
+- Saved path overrides are applied consistently for Send, Collection Runner, WebSocket URLs, and request export (cURL / codegen).
+
+### Reliability / Compatibility
+
+- Existing 1.1.1 request data remains backward compatible; Path Variables are optional.
+- Path Variables never rewrite the Environment itself or the raw URL template.
+- Expanded deterministic VS Code UI E2E coverage (stable suite now 17 specs).
+
 ## 1.1.1
 
 - Refreshed the extension Details README so the top highlights no longer present the old 1.0.12 section as the latest release.
