@@ -16,7 +16,7 @@ function extractJsTemplate(source: string): string {
   return source.slice(start + startMarker.length, end);
 }
 
-describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10 split)', () => {
+describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10/11 split)', () => {
   it('keeps getRequestPanelHtml as a thin composition over styles/markup/clientScript', () => {
     const html = read('src/panels/requestPanel/requestPanelHtml.ts');
     assert.match(html, /from '\.\/requestPanelStyles'/);
@@ -33,7 +33,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10 split)', () 
     assert.doesNotMatch(html, /acquireVsCodeApi\(\)/);
   });
 
-  it('ships dedicated styles, markup, client script, Body, Response, Runner, Environment, Default Headers, Status, WebSocket, Auth, and Scripts client modules', () => {
+  it('ships dedicated styles, markup, client script, Body, Response, Runner, Environment, Default Headers, Status, WebSocket, Auth, Scripts, and Settings client modules', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStyles.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelMarkup.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelClientScript.ts')));
@@ -46,6 +46,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10 split)', () 
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelWebSocketClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelAuthClientScript.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelScriptsClientScript.ts')));
+    assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelSettingsClientScript.ts')));
 
     const styles = read('src/panels/requestPanel/requestPanelStyles.ts');
     const markup = read('src/panels/requestPanel/requestPanelMarkup.ts');
@@ -59,6 +60,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10 split)', () 
     const websocket = read('src/panels/requestPanel/requestPanelWebSocketClientScript.ts');
     const auth = read('src/panels/requestPanel/requestPanelAuthClientScript.ts');
     const scripts = read('src/panels/requestPanel/requestPanelScriptsClientScript.ts');
+    const settings = read('src/panels/requestPanel/requestPanelSettingsClientScript.ts');
 
     assert.match(styles, /export function getRequestPanelStyles\(/);
     assert.match(markup, /export function getRequestPanelMarkup\(/);
@@ -74,6 +76,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10 split)', () 
     assert.match(websocket, /export function getRequestPanelWebSocketClientScript\(/);
     assert.match(auth, /export function getRequestPanelAuthClientScript\(/);
     assert.match(scripts, /export function getRequestPanelScriptsClientScript\(/);
+    assert.match(settings, /export function getRequestPanelSettingsClientScript\(/);
     assert.match(styles, /\.tab-bar\{display:flex/);
     assert.match(markup, /data-testid="environment-disclosure"/);
     assert.match(script, /acquireVsCodeApi\(\)/);
@@ -111,6 +114,9 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10 split)', () 
     assert.match(scripts, /function insertScriptTemplate\(/);
     assert.match(scripts, /function collectScripts\(/);
     assert.match(scripts, /function bindRequestScriptsEditor\(/);
+    assert.match(settings, /function syncSettingsToggleStates\(/);
+    assert.match(settings, /function renderSettingsEditorContents\(/);
+    assert.match(settings, /function bindRequestSettingsEditor\(/);
   });
 
   it('composes Body client fragment into main client script without duplicating Body impl', () => {
@@ -573,8 +579,61 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10 split)', () 
 
     const authInsertIdx = scriptJs.indexOf('${getRequestPanelAuthClientScript()}');
     const scriptsInsertIdx = scriptJs.indexOf('${getRequestPanelScriptsClientScript()}');
+    const settingsInsertIdx = scriptJs.indexOf('${getRequestPanelSettingsClientScript()}');
     const createTabIdx = scriptJs.indexOf('function createTab(');
     assert.ok(scriptsInsertIdx > authInsertIdx, 'Scripts fragment should follow Auth fragment');
-    assert.ok(createTabIdx > scriptsInsertIdx, 'createTab should follow Scripts fragment');
+    assert.ok(settingsInsertIdx > scriptsInsertIdx, 'Settings fragment should follow Scripts fragment');
+    assert.ok(createTabIdx > settingsInsertIdx, 'createTab should follow Settings fragment');
+  });
+
+  it('composes Settings client fragment into main client script without duplicating Settings editor impl', () => {
+    const script = read('src/panels/requestPanel/requestPanelClientScript.ts');
+    const settings = read('src/panels/requestPanel/requestPanelSettingsClientScript.ts');
+    const body = read('src/panels/requestPanel/requestPanelBodyClientScript.ts');
+    const scriptJs = extractJsTemplate(script);
+    const settingsJs = extractJsTemplate(settings);
+    const bodyJs = extractJsTemplate(body);
+
+    assert.match(script, /from '\.\/requestPanelSettingsClientScript'/);
+    assert.ok(
+      scriptJs.includes('${getRequestPanelSettingsClientScript()}'),
+      'main client script should insert Settings fragment via composition'
+    );
+    assert.match(scriptJs, /renderSettingsEditorContents\(tab, isWs\)/);
+    assert.match(scriptJs, /bindRequestSettingsEditor\(mc\)/);
+    assert.match(scriptJs, /syncSettingsToggleStates\(mc\)/);
+
+    assert.match(settingsJs, /function syncSettingsToggleStates\(/);
+    assert.match(settingsJs, /function renderSettingsEditorContents\(/);
+    assert.match(settingsJs, /function bindRequestSettingsEditor\(/);
+    assert.match(settingsJs, /js-timeout/);
+    assert.match(settingsJs, /js-tls-validation/);
+    assert.match(settingsJs, /js-ws-keepalive-enabled/);
+    assert.match(settingsJs, /settingsPanel\.addEventListener\('change'/);
+    assert.doesNotMatch(scriptJs, /function syncSettingsToggleStates\(/);
+    assert.doesNotMatch(scriptJs, /function renderSettingsEditorContents\(/);
+    assert.doesNotMatch(scriptJs, /function bindRequestSettingsEditor\(/);
+    assert.doesNotMatch(bodyJs, /js-settings-panel/);
+    assert.doesNotMatch(bodyJs, /settingsPanel\.addEventListener/);
+
+    // Settings state / send / dirty lifecycle stay in main.
+    assert.match(scriptJs, /function normalizeNumberSetting\(/);
+    assert.match(scriptJs, /function normalizeMaxResponseSizeSetting\(/);
+    assert.match(scriptJs, /function normalizeTlsValidation\(/);
+    assert.match(scriptJs, /function getRequestSettings\(/);
+    assert.match(scriptJs, /function applyRequestSettings\(/);
+    assert.match(scriptJs, /function requestSettingsSnapshot\(/);
+    assert.match(scriptJs, /function saveActiveTabState\(/);
+    assert.match(scriptJs, /function buildDraftTabFromContent\(/);
+    assert.match(scriptJs, /function sendActiveTab\(/);
+
+    const bindMatches = scriptJs.match(/bindRequestSettingsEditor\(mc\)/g) || [];
+    assert.strictEqual(bindMatches.length, 1, 'bindRequestSettingsEditor should be called exactly once from main');
+
+    const scriptsInsertIdx = scriptJs.indexOf('${getRequestPanelScriptsClientScript()}');
+    const settingsInsertIdx = scriptJs.indexOf('${getRequestPanelSettingsClientScript()}');
+    const createTabIdx = scriptJs.indexOf('function createTab(');
+    assert.ok(settingsInsertIdx > scriptsInsertIdx, 'Settings fragment should follow Scripts fragment');
+    assert.ok(createTabIdx > settingsInsertIdx, 'createTab should follow Settings fragment');
   });
 });

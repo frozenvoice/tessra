@@ -256,7 +256,7 @@ function extractNthTaggedTemplate(source: string, tagComment: '/*css*/' | '/*htm
   return source.slice(from, end);
 }
 
-/** Expand Body/Response/Runner/Environment/Default Headers/Status/WebSocket/Auth/Scripts fragment composition without interpreting other ${...} interpolations. */
+/** Expand Body/Response/Runner/Environment/Default Headers/Status/WebSocket/Auth/Scripts/Settings fragment composition without interpreting other ${...} interpolations. */
 function expandClientScriptTemplate(
   clientScript: string,
   bodyClientScript: string,
@@ -269,7 +269,8 @@ function expandClientScriptTemplate(
   statusClientScript: string,
   webSocketClientScript: string,
   authClientScript: string,
-  scriptsClientScript: string
+  scriptsClientScript: string,
+  settingsClientScript: string
 ): string {
   const bodyMarker = '${getRequestPanelBodyClientScript()}';
   const responseMarker = '${getRequestPanelResponseClientScript()}';
@@ -282,6 +283,7 @@ function expandClientScriptTemplate(
   const webSocketMarker = '${getRequestPanelWebSocketClientScript()}';
   const authMarker = '${getRequestPanelAuthClientScript()}';
   const scriptsMarker = '${getRequestPanelScriptsClientScript()}';
+  const settingsMarker = '${getRequestPanelSettingsClientScript()}';
   assert.ok(
     clientScript.includes(bodyMarker),
     'requestPanelClientScript should compose getRequestPanelBodyClientScript()'
@@ -326,6 +328,10 @@ function expandClientScriptTemplate(
     clientScript.includes(scriptsMarker),
     'requestPanelClientScript should compose getRequestPanelScriptsClientScript()'
   );
+  assert.ok(
+    clientScript.includes(settingsMarker),
+    'requestPanelClientScript should compose getRequestPanelSettingsClientScript()'
+  );
   return clientScript
     .split(bodyMarker).join(bodyClientScript)
     .split(responseMarker).join(responseClientScript)
@@ -337,7 +343,8 @@ function expandClientScriptTemplate(
     .split(statusMarker).join(statusClientScript)
     .split(webSocketMarker).join(webSocketClientScript)
     .split(authMarker).join(authClientScript)
-    .split(scriptsMarker).join(scriptsClientScript);
+    .split(scriptsMarker).join(scriptsClientScript)
+    .split(settingsMarker).join(settingsClientScript);
 }
 
 /** Compose styles/markup/clientScript the same way requestPanelHtml.ts assembles the shell. */
@@ -398,6 +405,10 @@ function extractHtmlTemplate(): string {
     readSourceFile('src/panels/requestPanel/requestPanelScriptsClientScript.ts'),
     '/*js*/'
   );
+  const settingsClientScript = extractTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelSettingsClientScript.ts'),
+    '/*js*/'
+  );
   const clientScript = expandClientScriptTemplate(
     extractTaggedTemplate(
       readSourceFile('src/panels/requestPanel/requestPanelClientScript.ts'),
@@ -413,7 +424,8 @@ function extractHtmlTemplate(): string {
     statusClientScript,
     webSocketClientScript,
     authClientScript,
-    scriptsClientScript
+    scriptsClientScript,
+    settingsClientScript
   );
 
   // Concatenation keeps ${...} inside markup/script as literals for renderHtml().
@@ -456,6 +468,7 @@ function readRequestPanelHtmlSources(): string {
     'src/panels/requestPanel/requestPanelWebSocketClientScript.ts',
     'src/panels/requestPanel/requestPanelAuthClientScript.ts',
     'src/panels/requestPanel/requestPanelScriptsClientScript.ts',
+    'src/panels/requestPanel/requestPanelSettingsClientScript.ts',
   ]
     .map((relativePath) => readSourceFile(relativePath))
     .join('\n');
@@ -1027,6 +1040,11 @@ describe('RequestPanel Webview', () => {
       'function normalizeNumberSetting(value)',
       'function normalizeTlsValidation(value)'
     );
+    const settingsRenderScript = extractScriptSegment(
+      script,
+      'function renderSettingsEditorContents(tab, isWs)',
+      'function bindRequestSettingsEditor(mc)'
+    );
     const escapeScript = extractScriptSegment(
       script,
       'function stringifyForHtml(value)',
@@ -1098,7 +1116,7 @@ describe('RequestPanel Webview', () => {
 
     vm.createContext(context);
     vm.runInContext(
-      modeScript + '\n' + settingsNormalizeScript + '\n' + primaryButtonScript + '\n' + webSocketResponseScript + '\n' + renderContentScript + '\n' + escapeScript,
+      modeScript + '\n' + settingsNormalizeScript + '\n' + settingsRenderScript + '\n' + primaryButtonScript + '\n' + webSocketResponseScript + '\n' + renderContentScript + '\n' + escapeScript,
       context
     );
 
@@ -1848,10 +1866,11 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /min="' \+ MIN_WS_KEEPALIVE_INTERVAL_SECONDS \+ '" max="' \+ MAX_WS_KEEPALIVE_INTERVAL_SECONDS/);
     assert.match(script, /function syncSettingsToggleStates\(mc\)/);
     assert.match(script, /settingsPanel\.addEventListener\('change', function\(e\)/);
+    assert.match(script, /function bindRequestSettingsEditor\(/);
     const settingsSegment = extractScriptSegment(
       script,
       "var settingsPanel = mc.querySelector('.js-settings-panel');",
-      '// === textarea'
+      'function createTab('
     );
     assert.doesNotMatch(settingsSegment, /renderContent\(\);/);
   });

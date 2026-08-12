@@ -575,24 +575,6 @@ function bindRequestBodyEditor(mc) {
   var initBodyType = mc.querySelector('.js-body-type')?.value || 'none';
   if (initBodyType !== 'none' && !isWebSocketTab(tabs.find(t => t.id === activeTabId))) syncAutoContentType(mc, initBodyType);
 
-  
-  var settingsPanel = mc.querySelector('.js-settings-panel');
-  if (settingsPanel) {
-    var refreshSettingsDraftUi = function() {
-      syncSettingsToggleStates(mc);
-      markDirty();
-      refreshDraftInsights(mc);
-    };
-    settingsPanel.addEventListener('input', function(e) {
-      if (e.target?.matches?.('input[type="checkbox"]')) return;
-      refreshSettingsDraftUi();
-    });
-    settingsPanel.addEventListener('change', function(e) {
-      if (!e.target?.matches?.('input[type="checkbox"], select')) return;
-      refreshSettingsDraftUi();
-    });
-  }
-
   // === textarea auto grow + JSON body highlight mirror ===
   var bodyTa = mc.querySelector('.js-body');
   var bodyEditorEl = mc.querySelector('.js-body-editor');

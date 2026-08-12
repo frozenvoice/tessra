@@ -5,7 +5,7 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**15** stable specs, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, and Scripts template insertion) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**16** stable specs, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts template insertion, and Settings editor state) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
@@ -21,7 +21,7 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (15 specs, includes Collection Runner + WebSocket + Environment autosave + Default Headers + Auth Bearer + Scripts template)
+npm run test:e2e         # stable VS Code UI E2E (16 specs, includes Collection Runner + WebSocket + Environment autosave + Default Headers + Auth Bearer + Scripts template + Settings editor)
 npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
 npm run test:e2e:all     # stable suite then focused runner suite
 npm run test:e2e:ci      # CI stable suite
@@ -74,6 +74,8 @@ Auth Bearer E2E (#14) opens the Auth tab, selects Bearer, fills a deterministic 
 
 Scripts template E2E (#15) opens the Scripts tab, clicks pre-request/test template buttons, asserts representative template fragments and append-not-overwrite behavior, and checks the request dirty-dot.
 
+Settings editor E2E (#16) opens the Settings tab, asserts HTTP transport/behavior controls and absent WebSocket keepalive controls, changes representative values, checks dirty-dot, roundtrips via another request tab, flips the URL to `ws://` to assert keepalive controls, and checks keepalive values after a second tab roundtrip (no TLS/retry/WS connect runtime).
+
 ## Stable selectors
 
 Prefer `data-testid` (locale-independent). Do not bind E2E to nth-child CSS or English-only labels.
@@ -95,7 +97,7 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 3. Reuse `e2e/helpers/*` and the local fixture server.
 4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
 5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
-6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **15** (or intentionally adjust the count here).
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **16** (or intentionally adjust the count here).
 
 ### Native file dialogs (`.env` import)
 
