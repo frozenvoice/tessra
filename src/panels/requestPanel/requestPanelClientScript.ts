@@ -57,9 +57,55 @@ var activeFormatMenuState = null;
 var splitDragState = null;
 var contentDelegatedEventsBound = false;
 
+function clearActionsMoreMenuPlacement(menu) {
+  if (!menu || !menu.style) return;
+  menu.classList.remove('actions-more-menu-fixed');
+  menu.style.position = '';
+  menu.style.left = '';
+  menu.style.right = '';
+  menu.style.top = '';
+  menu.style.bottom = '';
+  menu.style.visibility = '';
+}
+
+function placeActionsMoreMenu(button, menu) {
+  if (!button || !menu) return;
+  var padding = 6;
+  var gap = 4;
+  var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+  var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  menu.classList.add('actions-more-menu-fixed');
+  menu.style.position = 'fixed';
+  menu.style.right = 'auto';
+  menu.style.bottom = 'auto';
+  menu.style.left = '0px';
+  menu.style.top = '0px';
+  menu.style.visibility = 'hidden';
+  menu.classList.add('open');
+  var menuWidth = Math.max(menu.offsetWidth || 0, 180);
+  var menuHeight = Math.max(menu.offsetHeight || 0, 1);
+  var buttonRect = button.getBoundingClientRect();
+  var preferredLeft = buttonRect.right - menuWidth;
+  var maxLeft = Math.max(padding, viewportWidth - menuWidth - padding);
+  var clampedLeft = Math.min(Math.max(preferredLeft, padding), maxLeft);
+  var preferredTop = buttonRect.bottom + gap;
+  var top = preferredTop;
+  if (preferredTop + menuHeight > viewportHeight - padding && (buttonRect.top - gap - menuHeight) >= padding) {
+    top = buttonRect.top - gap - menuHeight;
+  } else if (preferredTop + menuHeight > viewportHeight - padding) {
+    top = Math.max(padding, viewportHeight - menuHeight - padding);
+  }
+  menu.style.left = clampedLeft + 'px';
+  menu.style.top = top + 'px';
+  menu.style.visibility = '';
+}
+
 function closeActiveFormatMenu() {
   if (!activeFormatMenuState) return;
-  if (activeFormatMenuState.menu) activeFormatMenuState.menu.classList.remove('open');
+  if (activeFormatMenuState.menu) {
+    activeFormatMenuState.menu.classList.remove('open');
+    clearActionsMoreMenuPlacement(activeFormatMenuState.menu);
+  }
   if (activeFormatMenuState.button) activeFormatMenuState.button.setAttribute('aria-expanded', 'false');
   activeFormatMenuState = null;
 }
@@ -132,7 +178,7 @@ function bindActionsMoreMenu(button, menu) {
       return;
     }
     closeActiveFormatMenu();
-    menu.classList.add('open');
+    placeActionsMoreMenu(button, menu);
     button.setAttribute('aria-expanded', 'true');
     activeFormatMenuState = { button: button, menu: menu };
   });
@@ -966,6 +1012,9 @@ const mainContent = document.getElementById('mainContent');
 const emptyPlaceholder = document.getElementById('emptyPlaceholder');
 
 window.addEventListener('resize', function() {
+  if (activeFormatMenuState && activeFormatMenuState.button && activeFormatMenuState.menu) {
+    placeActionsMoreMenu(activeFormatMenuState.button, activeFormatMenuState.menu);
+  }
   var reqArea = mainContent?.querySelector('.req-area');
   if (!reqArea) return;
   var splitEl = mainContent.querySelector('.split');
@@ -2407,14 +2456,16 @@ function renderContent() {
           '<div class="var-overlay js-var-overlay hidden"></div>' +
         '</div>' +
       '</div>' +
-      '<div class="url-hero-actions">' + renderPrimaryActionButton(tab) + '</div>' +
-      '<div class="url-overflow-wrap actions-more-wrap">' +
-        '<button class="res-action-btn js-request-more-btn" type="button" title="' + escapeAttr(tr('webview.more') || 'More') + '" aria-label="' + escapeAttr(tr('webview.more') || 'More') + '" aria-haspopup="menu" aria-expanded="false" aria-controls="requestActionsMoreMenu"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="13" cy="8" r="1.4"/></svg></button>' +
-        '<div class="actions-more-menu js-request-more-menu" id="requestActionsMoreMenu" role="menu">' +
-          '<button class="res-action-btn js-save" type="button" role="menuitem" title="' + escapeAttr(tr('webview.save')) + '"><span class="action-label">' + escapeHtml(tr('webview.save')) + '</span></button>' +
-          (tab.requestId ? '<button class="res-action-btn js-save-as" type="button" role="menuitem" title="' + escapeAttr(tr('webview.saveAs')) + '"><span class="action-label">' + escapeHtml(tr('webview.saveAs')) + '</span></button>' : '') +
-          '<button class="res-action-btn js-copy-curl" type="button" role="menuitem" title="' + escapeAttr(tr('webview.copyAsCurl')) + '"><span class="action-label">cURL</span></button>' +
-          '<button class="res-action-btn js-generate-code" type="button" role="menuitem" title="' + escapeAttr(tr('webview.generateCode')) + '"><span class="action-label">' + escapeHtml(tr('webview.code')) + '</span></button>' +
+      '<div class="url-action-group">' +
+        '<div class="url-hero-actions">' + renderPrimaryActionButton(tab) + '</div>' +
+        '<div class="url-overflow-wrap actions-more-wrap">' +
+          '<button class="res-action-btn js-request-more-btn" data-testid="request-overflow" type="button" title="' + escapeAttr(tr('webview.more') || 'More') + '" aria-label="' + escapeAttr(tr('webview.more') || 'More') + '" aria-haspopup="menu" aria-expanded="false" aria-controls="requestActionsMoreMenu"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="3" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="13" cy="8" r="1.4"/></svg></button>' +
+          '<div class="actions-more-menu js-request-more-menu" id="requestActionsMoreMenu" data-testid="request-overflow-menu" role="menu">' +
+            '<button class="res-action-btn js-save" type="button" role="menuitem" title="' + escapeAttr(tr('webview.save')) + '"><span class="action-label">' + escapeHtml(tr('webview.save')) + '</span></button>' +
+            (tab.requestId ? '<button class="res-action-btn js-save-as" type="button" role="menuitem" title="' + escapeAttr(tr('webview.saveAs')) + '"><span class="action-label">' + escapeHtml(tr('webview.saveAs')) + '</span></button>' : '') +
+            '<button class="res-action-btn js-copy-curl" type="button" role="menuitem" title="' + escapeAttr(tr('webview.copyAsCurl')) + '"><span class="action-label">cURL</span></button>' +
+            '<button class="res-action-btn js-generate-code" type="button" role="menuitem" title="' + escapeAttr(tr('webview.generateCode')) + '"><span class="action-label">' + escapeHtml(tr('webview.code')) + '</span></button>' +
+          '</div>' +
         '</div>' +
       '</div>' +
     '</div>' +

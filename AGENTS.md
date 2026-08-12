@@ -131,7 +131,7 @@ tessra/
 
 ### 현재 품질 기준
 1. 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴가 키보드 접근과 명확한 포커스 상태를 유지해야 한다.
-2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다. 핵심 클릭 경로는 `npm run test:e2e` UI 자동화로도 검증한다 (`docs/testing.md`). stable UI E2E는 **17개**(Collection Runner 2개 + WebSocket 1개 + Environment autosave 1개 + Default Headers save/apply 1개 + Auth Bearer 1개 + Scripts template 1개 + Settings editor 1개 + Path Variables 1개 포함)를 유지한다.
+2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다. 핵심 클릭 경로는 `npm run test:e2e` UI 자동화로도 검증한다 (`docs/testing.md`). stable UI E2E는 **18개**(Collection Runner 2개 + WebSocket 1개 + Environment autosave 1개 + Default Headers save/apply 1개 + Auth Bearer 1개 + Scripts template 1개 + Settings editor 1개 + Path Variables 1개 + Request More narrow geometry 1개 포함)를 유지한다.
 3. 요청 패널 시각 계약은 `DESIGN.md` Quiet Instrument를 따른다 (pill wall / soft-card / Send success-green 재도입 금지).
 4. Request Panel UI를 바꾸면 관련 `data-testid`와 `e2e/specs/*`를 함께 갱신한다. Collection Runner UI를 바꾸면 `e2e/specs/runner/*`도 함께 갱신한다. production backdoor(`window.__tessraTest` 등)는 넣지 않는다.
 

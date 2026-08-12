@@ -18,6 +18,8 @@ Covered by `e2e/specs/*` against a real VS Code Electron host + localhost fixtur
 - Script utilities (HMAC in pre-request + SHA/Base64 assertions in Tests)
 - Collection Runner selection / reset (`e2e/specs/runner/07-runner-selection.spec.ts`)
 - Collection Runner Clear / Select all / zero selection (`e2e/specs/runner/08-runner-select-clear.spec.ts`)
+- Path Variables request-local override (`e2e/specs/17-path-variables.spec.ts`)
+- Request More narrow-viewport geometry (`e2e/specs/18-request-more-narrow.spec.ts`)
 
 Unusual OS / display-scaling context-menu behavior can still be spot-checked manually; the stable suite covers the keyboard context-menu path (see `docs/testing.md`).
 

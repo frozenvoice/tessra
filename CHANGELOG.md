@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.1
+
+### Fixed
+
+- Fixed Request More (`...`) layout on narrow Request Webview widths so Send and More stay grouped instead of leaving More orphaned on the left.
+- Request and Response More menus now use viewport-safe placement so the full menu stays inside the Webview and remains clickable.
+
+### Reliability
+
+- Expanded stable VS Code UI E2E coverage with geometry assertions for narrow More menu placement (stable suite now 18 specs).
+
 ## 1.2.0
 
 ### Added

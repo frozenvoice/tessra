@@ -2323,7 +2323,7 @@ describe('RequestPanel Webview', () => {
 
     const keyboardHarness = [
       'var activeFormatMenuState = null;',
-      extractScriptSegment(script, 'function closeActiveFormatMenu() {', 'function releaseSplitDrag() {'),
+      extractScriptSegment(script, 'function clearActionsMoreMenuPlacement(menu) {', 'function releaseSplitDrag() {'),
       'var pinnedResponses = [];',
       'var lastResponse = null;',
       'var compareSettings = { mode: "normalized", includeMetadataSummary: true };',
@@ -2985,13 +2985,21 @@ describe('RequestPanel Webview', () => {
     assert.doesNotMatch(htmlSource, /\.default-headers-banner-title\{[^}]*text-transform:uppercase/);
     assert.match(script, /data-template="testCaptureValue"/);
     assert.match(htmlSource, /\.req-area\{flex:1 1 0;min-height:0;overflow:hidden;padding:2px 8px;display:flex;flex-direction:column\}/);
-    assert.match(htmlSource, /\.url-primary-group\{display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 auto\}/);
+    assert.match(htmlSource, /\.url-bar\{display:flex;flex-wrap:wrap;gap:6px;/);
+    assert.match(htmlSource, /\.url-primary-group\{display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 200px\}/);
+    assert.match(htmlSource, /\.url-action-group\{display:flex;align-items:center;justify-content:flex-end;gap:4px;flex:0 0 auto;margin-left:auto\}/);
     assert.match(htmlSource, /\.url-hero-actions\{display:flex;align-items:stretch;justify-content:flex-end;flex:0 0 auto\}/);
     assert.match(htmlSource, /\.status-strip\{display:flex;flex-direction:column;/);
     assert.match(htmlSource, /\.response-summary-card\{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:2px 0;[\s\S]*flex-wrap:nowrap;min-width:0\}/);
     assert.match(htmlSource, /\.response-stat-inline\{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;font-size:13px;font-weight:700;/);
     assert.match(htmlSource, /\.response-action-cluster\{display:flex;align-items:center;justify-content:flex-end;gap:4px;flex-wrap:nowrap;flex:0 0 auto\}/);
     assert.match(htmlSource, /\.actions-more-menu\{display:none;position:absolute;/);
+    assert.match(htmlSource, /\.actions-more-menu\.actions-more-menu-fixed\{position:fixed;right:auto;bottom:auto\}/);
+    assert.match(script, /function placeActionsMoreMenu\(button, menu\)/);
+    assert.match(script, /function clearActionsMoreMenuPlacement\(menu\)/);
+    assert.match(script, /class="url-action-group"/);
+    assert.match(script, /data-testid="request-overflow"/);
+    assert.match(script, /data-testid="request-overflow-menu"/);
     assert.match(htmlSource, /\.divider-grip\{position:relative;z-index:1;display:inline-flex;align-items:center;gap:3px;padding:1px 6px;/);
     assert.match(htmlSource, /\.json-body\{background:var\(--vscode-editor-background\);padding:8px 10px;border-radius:2px;/);
     assert.match(htmlSource, /\.runner-row\.method-GET::before\{background:linear-gradient\(180deg,rgba\(78,201,78,.8\),rgba\(78,201,78,.18\)\)\}/);

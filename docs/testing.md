@@ -5,7 +5,7 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**17** stable specs, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts template insertion, Settings editor state, and Path Variables override) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**18** stable specs, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts template insertion, Settings editor state, Path Variables override, and Request More narrow-viewport geometry) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
@@ -21,7 +21,7 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (17 specs, includes Collection Runner + WebSocket + Environment autosave + Default Headers + Auth Bearer + Scripts template + Settings editor + Path Variables)
+npm run test:e2e         # stable VS Code UI E2E (18 specs, includes Collection Runner + WebSocket + Environment autosave + Default Headers + Auth Bearer + Scripts template + Settings editor + Path Variables + Request More narrow geometry)
 npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
 npm run test:e2e:all     # stable suite then focused runner suite
 npm run test:e2e:ci      # CI stable suite
@@ -78,6 +78,8 @@ Settings editor E2E (#16) opens the Settings tab, asserts HTTP transport/behavio
 
 Path Variables E2E (#17) fills `{{baseUrl}}/mz-chat/{{customerId}}/customer.do`, asserts only `customerId` appears under Path Variables, Overrides to `1111` and Sends, verifies Environment `customerId` stays `9000`, Resets to env fallback `9000`, then switches to an unregistered path variable and Sends `2222`.
 
+Request More narrow geometry E2E (#18) forces a ~430–500px Request Webview width, asserts Method/URL/Send/More stay visible with Send+More adjacent (no left-orphan More), opens Request overflow, and asserts menu `getBoundingClientRect()` stays inside the webview viewport with padding (not merely `.toBeVisible()`).
+
 ## Stable selectors
 
 Prefer `data-testid` (locale-independent). Do not bind E2E to nth-child CSS or English-only labels.
@@ -99,7 +101,7 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 3. Reuse `e2e/helpers/*` and the local fixture server.
 4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
 5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
-6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **17** (or intentionally adjust the count here).
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **18** (or intentionally adjust the count here).
 
 ### Native file dialogs (`.env` import)
 
