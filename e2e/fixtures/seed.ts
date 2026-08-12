@@ -45,6 +45,7 @@ export function seedTessraStorage(options: SeedOptions): string {
         kv('baseUrl', options.baseUrl),
         kv('token', 'e2e-token'),
         kv('envName', 'e2e'),
+        kv('customerId', '9000'),
       ],
     },
   ];

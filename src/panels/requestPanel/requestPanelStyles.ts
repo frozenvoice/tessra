@@ -162,7 +162,28 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .preflight-warning-actions{display:flex;flex-wrap:wrap;gap:6px}
 .ghost-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:4px 8px;border-radius:3px;border:1px solid var(--vscode-panel-border,#444);background:transparent;color:var(--vscode-foreground);font-size:12px;cursor:pointer;min-height:28px}
 .ghost-btn:hover{background:var(--vscode-toolbar-hoverBackground,var(--vscode-list-hoverBackground))}
-.url-bar{display:flex;flex-wrap:nowrap;gap:6px;padding:4px 8px;flex-shrink:0;align-items:center;position:relative;overflow:visible;border-bottom:1px solid var(--vscode-panel-border,#444)}
+.path-variables{flex-shrink:0;padding:2px 8px 6px;border-bottom:1px solid var(--vscode-panel-border,#444)}
+.path-variables-head{display:flex;align-items:center;gap:8px;min-height:18px;margin-bottom:2px}
+.path-variables-title{font-size:11px;font-weight:600;letter-spacing:0.02em;color:var(--vscode-descriptionForeground);text-transform:none}
+.path-variables-rows{display:flex;flex-direction:column;gap:2px}
+.path-var-row{display:grid;grid-template-columns:minmax(72px,140px) minmax(0,1fr) auto auto;gap:6px;align-items:center;min-width:0}
+.path-var-key{font-family:var(--vscode-editor-font-family,monospace);font-size:12px;color:var(--vscode-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.path-var-value-wrap{min-width:0;display:flex;flex-direction:column;gap:1px}
+.path-var-input,.path-var-readonly{width:100%;min-width:0;height:26px;padding:0 8px;box-sizing:border-box;border-radius:2px;font-size:12px;font-family:var(--vscode-editor-font-family,monospace)}
+.path-var-input{background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent)}
+.path-var-input:focus{outline:1px solid var(--vscode-focusBorder)}
+.path-var-readonly{display:flex;align-items:center;background:transparent;color:var(--vscode-foreground);border:1px solid transparent;opacity:0.92}
+.path-var-env-hint{font-size:10px;line-height:1.2;color:var(--vscode-descriptionForeground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.path-var-meta{font-size:11px;color:var(--vscode-descriptionForeground);white-space:nowrap}
+.path-var-action{height:26px;padding:0 8px;font-size:11px;flex-shrink:0}
+.path-var-action-spacer{width:52px;height:26px;flex-shrink:0}
+@media (max-width: 720px){
+  .path-var-row{grid-template-columns:minmax(64px,110px) minmax(0,1fr) auto;grid-template-areas:"key value action" "key meta action"}
+  .path-var-key{grid-area:key}
+  .path-var-value-wrap{grid-area:value}
+  .path-var-meta{grid-area:meta}
+  .path-var-action,.path-var-action-spacer{grid-area:action}
+}
 .url-primary-group{display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 auto}
 .url-bar select{width:100px;height:28px;padding:0 8px;background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border:1px solid var(--vscode-dropdown-border);border-radius:2px;font-size:13px;font-weight:600}
 .url-bar input{flex:1;height:28px;padding:0 8px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}

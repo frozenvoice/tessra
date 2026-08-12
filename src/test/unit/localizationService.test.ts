@@ -147,6 +147,27 @@ describe('LocalizationService source', () => {
     assert.strictEqual(emptyMatches.length, 3);
   });
 
+  it('keeps path variables copy translated for every supported language', () => {
+    const keys = [
+      'webview.requestDiffPathVariables',
+      'webview.pathVariables',
+      'webview.pathVarSourceEnvironment',
+      'webview.pathVarSourceRequest',
+      'webview.pathVarSourceUnresolved',
+      'webview.pathVarOverride',
+      'webview.pathVarReset',
+      'webview.pathVarClear',
+      'webview.pathVarEnterValue',
+      'webview.pathVarEnvHint',
+      'webview.pathVarValueAria',
+    ];
+
+    for (const key of keys) {
+      const matches = source.match(new RegExp(`'${key.replace(/\./g, '\\.')}'\\s*:`, 'g')) ?? [];
+      assert.strictEqual(matches.length, 3, `${key} should exist for every supported language`);
+    }
+  });
+
   it('keeps response timing labels translated for every supported language', () => {
     const keys = [
       'webview.requestedAt',

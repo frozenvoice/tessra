@@ -1,6 +1,7 @@
 import { KeyValue, MessageType, Request, WebSocketConnectMessage, WebSocketSendMessage } from '../../models/types';
 import { AuthService } from '../../services/AuthService';
 import { LocalizationService } from '../../services/LocalizationService';
+import { PathVariableService } from '../../services/PathVariableService';
 import { VariableService } from '../../services/VariableService';
 import { WebSocketConnection, WebSocketService } from '../../services/WebSocketService';
 import {
@@ -54,7 +55,11 @@ export class WebSocketManager {
 
     try {
       const vars = this.host.getActiveVariables();
-      const resolvedUrl = VariableService.resolve(message.url, vars);
+      const pathVariableOverrides = PathVariableService.pruneOverrides(
+        message.url,
+        message.pathVariableOverrides
+      );
+      const resolvedUrl = PathVariableService.resolveUrl(message.url, pathVariableOverrides, vars);
       const resolvedHeaders = VariableService.resolveKeyValues(message.headers ?? [], vars);
       const resolvedParams = VariableService.resolveKeyValues(message.params ?? [], vars);
       const defaultHeaders = message.skipDefaultHeaders === true

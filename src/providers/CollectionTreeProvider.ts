@@ -343,6 +343,7 @@ export class CollectionTreeProvider
       url: string;
       headers: Request['headers'];
       params: Request['params'];
+      pathVariableOverrides?: Request['pathVariableOverrides'];
       body: string;
       bodyType: RequestBodyType;
       formData?: Request['formData'];
@@ -377,6 +378,7 @@ export class CollectionTreeProvider
         existing.request.url = requestData.url;
         existing.request.headers = requestData.headers ?? [];
           existing.request.params = requestData.params ?? [];
+          existing.request.pathVariableOverrides = requestData.pathVariableOverrides ?? [];
           existing.request.body = requestData.body ?? '';
           existing.request.bodyType = requestData.bodyType;
           existing.request.formData = requestData.formData ?? [];
@@ -433,6 +435,7 @@ export class CollectionTreeProvider
         url: requestData.url,
         headers: requestData.headers ?? [],
         params: requestData.params ?? [],
+        pathVariableOverrides: requestData.pathVariableOverrides ?? [],
         body: requestData.body ?? '',
         bodyType: requestData.bodyType,
         formData: requestData.formData ?? [],

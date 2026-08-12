@@ -91,4 +91,22 @@ describe('RequestExportService', () => {
 
     assert.deepStrictEqual(skipped.headers, []);
   });
+
+  it('applies path variable overrides to URL path only', () => {
+    const exported = RequestExportService.resolve({
+      method: 'GET',
+      url: '{{baseUrl}}/customers/{{customerId}}?echo={{customerId}}',
+      pathVariableOverrides: [{ key: 'customerId', value: '1111' }],
+      headers: [],
+      params: [],
+      body: '',
+      bodyType: 'none',
+      auth: { type: 'none' },
+    }, [
+      ...vars,
+      { key: 'customerId', value: '9000', enabled: true },
+    ]);
+
+    assert.strictEqual(exported.url, 'https://api.example.com/customers/1111?echo=9000');
+  });
 });

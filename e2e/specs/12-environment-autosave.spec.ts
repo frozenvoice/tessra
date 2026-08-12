@@ -38,8 +38,8 @@ test.describe('E2E #12 Environment autosave / reopen', () => {
     await expect(disclosure).toBeVisible();
     await expect(disclosure).not.toHaveClass(/hidden/);
 
-    // Seed starts with 3 vars (baseUrl, token, envName).
-    await expect(envSeg).toContainText(/3\s*vars/i);
+    // Seed starts with 4 vars (baseUrl, token, envName, customerId).
+    await expect(envSeg).toContainText(/4\s*vars/i);
 
     const valueInput = await findEnvValueInput(frame, 'envName');
     await expect(valueInput).toHaveValue('e2e');
@@ -65,13 +65,13 @@ test.describe('E2E #12 Environment autosave / reopen', () => {
     await expect(disclosure).not.toHaveClass(/hidden/);
     await expect(await findEnvValueInput(frame, 'envName')).toHaveValue('e2e-autosaved');
 
-    // Add a variable → count should become 4 vars on Status strip after autosave.
+    // Add a variable → count should become 5 vars on Status strip after autosave.
     await frame.locator('[data-testid="environment-add-variable"]').click();
     const emptyKey = frame.locator('[data-testid="environment-var-rows"] .kv-row').last().locator('input[type="text"]').first();
     await emptyKey.fill('e2eExtra');
     await emptyKey.blur();
     await expect(autosaved).toHaveClass(/show/, { timeout: 10000 });
-    await expect(envSeg).toContainText(/4\s*vars/i, { timeout: 10000 });
+    await expect(envSeg).toContainText(/5\s*vars/i, { timeout: 10000 });
 
     await expect
       .poll(() => {

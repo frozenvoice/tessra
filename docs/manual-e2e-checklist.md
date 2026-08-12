@@ -118,6 +118,8 @@ Quiet Instrument layout and Body workflows. Keep as a deeper regression pass whe
 - Confirm the request panel status strip shows the active environment and its defined variable count (`N vars`), separate from request `Used N`; the variable editor opens from the Environment segment (keyboard Enter/Space), strip expand, or Environments view (not a permanent collapsed card above the compose path).
 - Confirm requests still resolve environment variables while the editor is closed, and after editing variables while open.
 - Resolve `{{variable}}` values across URL, params, headers, body, auth, and scripts.
+- Confirm Path Variables appear under the URL bar for full path-segment placeholders (e.g. `{{baseUrl}}/users/{{userId}}` shows `userId` only).
+- Confirm Environment fallback, Override / Reset, and that Environment storage is not mutated by Path Variable edits.
 - Confirm nested variables such as `host -> baseUrl -> apiUrl` resolve recursively.
 - Confirm circular references and unresolved nested variables are reported before send.
 - Confirm unresolved variables are surfaced before send.

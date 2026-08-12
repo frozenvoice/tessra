@@ -10,10 +10,10 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 
 ## 최근 주요 변경
 
+- URL 아래 Path Variables에서 현재 요청의 path segment `{{변수}}`만 재정의할 수 있으며 Environment 값은 그대로 둡니다.
 - Basic 비밀번호, Bearer 토큰, API Key 값 같은 민감한 인증 필드의 Reveal / Hide가 정상 동작합니다.
 - Collection Runner에서 실행할 요청을 매번 선택할 수 있으며 기본값은 전체 선택입니다.
 - `.env` 파일을 Tessra Environment로 직접 가져올 수 있습니다.
-- Pre-request / Test script에서 SHA-256, HMAC-SHA256, Base64, UUID v4, Unix timestamp utilities를 사용할 수 있습니다.
 - 로컬 우선 원칙은 그대로입니다: 로그인 없음, 클라우드 동기화 없음, 텔레메트리 없음.
 
 전체 릴리스 기록은 [Changelog](./CHANGELOG.md)를 참고하세요.

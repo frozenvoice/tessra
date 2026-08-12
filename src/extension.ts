@@ -14,6 +14,7 @@ import {
   HistoryEntry,
   HttpMethod,
   KeyValue,
+  PathVariableOverride,
   Request,
   RequestBodyType,
   RequestScripts,
@@ -1208,6 +1209,23 @@ function normalizeImportedKeyValues(value: unknown): KeyValue[] {
   return items;
 }
 
+function normalizeImportedPathVariableOverrides(value: unknown): PathVariableOverride[] {
+  if (!Array.isArray(value)) { return []; }
+  const items: PathVariableOverride[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!isRecord(item)) { continue; }
+    const key = typeof item.key === 'string' ? item.key.trim() : '';
+    if (!key || seen.has(key)) { continue; }
+    seen.add(key);
+    items.push({
+      key,
+      value: typeof item.value === 'string' ? item.value : String(item.value ?? ''),
+    });
+  }
+  return items;
+}
+
 function normalizeImportedFormData(value: unknown): FormDataField[] {
   if (!Array.isArray(value)) { return []; }
 
@@ -1290,6 +1308,7 @@ function normalizeImportedRequest(value: unknown, fallbackName: string): Request
     url: typeof value.url === 'string' ? value.url : '',
     headers: normalizeImportedKeyValues(value.headers),
     params: normalizeImportedKeyValues(value.params),
+    pathVariableOverrides: normalizeImportedPathVariableOverrides(value.pathVariableOverrides),
     body: typeof value.body === 'string' ? value.body : '',
     bodyType: normalizeImportedBodyType(value.bodyType),
     formData: normalizeImportedFormData(value.formData),

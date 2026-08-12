@@ -1,5 +1,6 @@
 import { HttpService, SendHandle } from '../../services/HttpService';
 import { VariableService } from '../../services/VariableService';
+import { PathVariableService } from '../../services/PathVariableService';
 import {
   KeyValue,
   MessageType,
@@ -109,7 +110,11 @@ export class RequestExecutor {
     requestState.method = method;
     requestState.bodyType = bodyType;
 
-    const resolvedUrl = VariableService.resolve(requestState.url, vars);
+    const pathVariableOverrides = PathVariableService.pruneOverrides(
+      requestState.url,
+      message.pathVariableOverrides
+    );
+    const resolvedUrl = PathVariableService.resolveUrl(requestState.url, pathVariableOverrides, vars);
     const resolvedHeaders = VariableService.resolveKeyValues(requestState.headers, vars);
     const resolvedParams = VariableService.resolveKeyValues(requestState.params, vars);
     const resolvedBody = VariableService.resolve(requestState.body ?? '', vars);

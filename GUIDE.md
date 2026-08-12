@@ -74,6 +74,9 @@ Body: {"env":"{{envName}}"}
 - Create, edit, activate, and delete environments
 - Request `{{variable}}` resolution uses the active environment
 - Nested `{{variables}}` resolve recursively; unresolved and circular references are reported before send
+- When the URL path contains a full-segment placeholder such as `/users/{{userId}}`, Path Variables appear under the URL bar
+- Path Variables use Environment values by default; Override keeps a request-local value, and Reset returns to the Environment fallback without changing the Environment itself
+- Path overrides apply only to matching path segments — not query, headers, body, or auth — and they also apply to WebSocket URLs and Collection Runner / cURL / codegen resolution
 - Variable autocomplete works in URL, headers, body, auth, scripts, and other editable fields
 - Environment `N vars` is the active environment size; request `Used N` is how many variables this request uses
 - Workspace variables can be preserved in backups, but request resolution still follows the active environment

@@ -74,6 +74,9 @@ Body: {"env":"{{envName}}"}
 - Environment CRUD와 활성 환경 전환
 - 요청 `{{variable}}` 해석은 활성 environment를 기준으로 합니다.
 - 중첩 `{{variables}}`는 재귀 해석되며, 미해결/순환 참조는 전송 전에 보고됩니다.
+- URL path에 `/users/{{userId}}`처럼 segment 전체가 placeholder이면 URL 아래에 Path Variables가 나타납니다.
+- Path Variables는 기본적으로 Environment 값을 쓰고, Override로 요청 로컬 값을 두며, Reset하면 Environment로 돌아가고 Environment 자체는 바뀌지 않습니다.
+- Path override는 해당 path segment에만 적용되며 query / headers / body / auth에는 영향을 주지 않습니다. WebSocket URL과 Collection Runner / cURL / codegen 해석에도 동일하게 적용됩니다.
 - URL, headers, body, auth, scripts 등 입력 필드에서 변수 autocomplete를 사용할 수 있습니다.
 - Environment `변수 N개`는 활성 환경의 변수 수이고, 요청 `사용 N`은 현재 요청이 쓰는 변수 수입니다.
 - workspace variables는 백업에 보존될 수 있지만, 요청 해석은 여전히 활성 environment를 따릅니다.

@@ -74,6 +74,9 @@ Body: {"env":"{{envName}}"}
 - Environment の CRUD とアクティブ環境の切り替え
 - リクエストの `{{variable}}` 解決はアクティブ environment を基準にします。
 - 入れ子の `{{variables}}` は再帰的に解決され、未解決/循環参照は送信前に報告されます。
+- URL path に `/users/{{userId}}` のように segment 全体が placeholder のとき、URL 下に Path Variables が表示されます。
+- Path Variables は既定で Environment 値を使い、Override でリクエストローカル値を置き、Reset すると Environment に戻ります（Environment 自体は変更しません）。
+- Path override は該当 path segment にのみ適用され、query / headers / body / auth には影響しません。WebSocket URL と Collection Runner / cURL / codegen の解決にも同じ規則が適用されます。
 - URL、headers、body、auth、scripts などの入力欄で変数 autocomplete を使えます。
 - Environment の `N 変数` はアクティブ環境の変数数、リクエストの `使用 N` は現在のリクエストが使う変数数です。
 - workspace variables はバックアップに保持できますが、リクエスト解決は引き続きアクティブ environment に従います。

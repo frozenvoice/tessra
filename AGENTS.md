@@ -65,6 +65,7 @@ tessra/
 │   │       ├── requestPanelAuthClientScript.ts
 │   │       ├── requestPanelScriptsClientScript.ts
 │   │       ├── requestPanelSettingsClientScript.ts
+│   │       ├── requestPanelPathVariablesClientScript.ts
 │   │       └── requestUtils.ts
 │   ├── providers/
 │   │   ├── CollectionTreeProvider.ts
@@ -86,6 +87,7 @@ tessra/
 │   │   ├── ScriptUtilities.ts
 │   │   ├── StorageService.ts
 │   │   ├── VariableService.ts
+│   │   ├── PathVariableService.ts
 │   │   └── WebSocketService.ts
 │   ├── test/
 │   │   └── unit/
@@ -108,6 +110,7 @@ tessra/
 2. HTTP 요청 전송, 취소, 응답 표시
 3. Collections / folders / requests CRUD와 실행
 4. Environments CRUD와 재귀적 `{{variable}}` 치환, Postman Environment JSON / `.env` import 진입점
+4a. Path Variables: URL path의 full-segment `{{variable}}`를 Request-local로 override (Environment fallback / Reset; query·headers·body·auth에는 영향 없음)
 5. History 저장, pin, filter, 날짜 그룹화, 자동 정리와 보존 개수 설정 진입점
 6. 인증: Basic, Bearer, API Key
 7. Body 타입: JSON(요청 Body mirror 오버레이 구문 강조, textarea 입력원 유지), XML(동일 오버레이 XML 강조), form-urlencoded, form-data, binary, raw
@@ -128,7 +131,7 @@ tessra/
 
 ### 현재 품질 기준
 1. 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴가 키보드 접근과 명확한 포커스 상태를 유지해야 한다.
-2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다. 핵심 클릭 경로는 `npm run test:e2e` UI 자동화로도 검증한다 (`docs/testing.md`). stable UI E2E는 **16개**(Collection Runner 2개 + WebSocket 1개 + Environment autosave 1개 + Default Headers save/apply 1개 + Auth Bearer 1개 + Scripts template 1개 + Settings editor 1개 포함)를 유지한다.
+2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다. 핵심 클릭 경로는 `npm run test:e2e` UI 자동화로도 검증한다 (`docs/testing.md`). stable UI E2E는 **17개**(Collection Runner 2개 + WebSocket 1개 + Environment autosave 1개 + Default Headers save/apply 1개 + Auth Bearer 1개 + Scripts template 1개 + Settings editor 1개 + Path Variables 1개 포함)를 유지한다.
 3. 요청 패널 시각 계약은 `DESIGN.md` Quiet Instrument를 따른다 (pill wall / soft-card / Send success-green 재도입 금지).
 4. Request Panel UI를 바꾸면 관련 `data-testid`와 `e2e/specs/*`를 함께 갱신한다. Collection Runner UI를 바꾸면 `e2e/specs/runner/*`도 함께 갱신한다. production backdoor(`window.__tessraTest` 등)는 넣지 않는다.
 

@@ -43,6 +43,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - 활성 환경 전환
 - 재귀적 `{{variable}}` 치환
 - URL / Headers / Params / Body / Auth / 파일 경로 치환
+- Path Variables: URL path의 full-segment `{{variable}}` Request-local override (Environment fallback / Reset; query·headers·body·auth 비영향)
 - Environments 제목 영역의 `Import Environment`로 Postman Environment JSON 또는 `.env` 파일 가져오기 (일회성 로컬 복사, 자동 active 전환 없음)
 
 ### Collections / History
@@ -149,7 +150,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 현재 구조 메모
 - 요청 패널 오케스트레이션은 `src/panels/RequestPanel.ts`에 있다
-- Webview HTML은 `requestPanelHtml.ts`가 CSP/URI/i18n을 조립하고, CSS는 `requestPanelStyles.ts`, shell markup은 `requestPanelMarkup.ts`, inline client JS는 `requestPanelClientScript.ts`(+ Body fragment `requestPanelBodyClientScript.ts`, Response Viewer fragment `requestPanelResponseClientScript.ts`, Collection Runner fragment `requestPanelRunnerClientScript.ts`, Environment Editor fragment `requestPanelEnvironmentClientScript.ts`, Default Headers Editor fragment `requestPanelDefaultHeadersClientScript.ts`, Status Strip fragment `requestPanelStatusClientScript.ts`, WebSocket fragment `requestPanelWebSocketClientScript.ts`, Auth Editor fragment `requestPanelAuthClientScript.ts`, Scripts Editor fragment `requestPanelScriptsClientScript.ts`, Settings Editor fragment `requestPanelSettingsClientScript.ts`)에 둔다 (source split; runtime asset/CSP 변경 없음)
+- Webview HTML은 `requestPanelHtml.ts`가 CSP/URI/i18n을 조립하고, CSS는 `requestPanelStyles.ts`, shell markup은 `requestPanelMarkup.ts`, inline client JS는 `requestPanelClientScript.ts`(+ Body fragment `requestPanelBodyClientScript.ts`, Response Viewer fragment `requestPanelResponseClientScript.ts`, Collection Runner fragment `requestPanelRunnerClientScript.ts`, Environment Editor fragment `requestPanelEnvironmentClientScript.ts`, Default Headers Editor fragment `requestPanelDefaultHeadersClientScript.ts`, Status Strip fragment `requestPanelStatusClientScript.ts`, WebSocket fragment `requestPanelWebSocketClientScript.ts`, Auth Editor fragment `requestPanelAuthClientScript.ts`, Scripts Editor fragment `requestPanelScriptsClientScript.ts`, Settings Editor fragment `requestPanelSettingsClientScript.ts`, Path Variables fragment `requestPanelPathVariablesClientScript.ts`)에 둔다 (source split; runtime asset/CSP 변경 없음)
 - HTTP 실행은 `src/panels/requestPanel/RequestExecutor.ts`, 컬렉션 러너는 `src/panels/requestPanel/CollectionRunner.ts`, WebSocket 세션 관리는 `src/panels/requestPanel/WebSocketManager.ts`가 담당한다
 - highlight.js 관련 리소스는 `src/webview/hljs.ts`에서 관리한다
 - Body 타입 변환은 `src/services/BodyConversionService.ts`, webview 노출은 `src/webview/bodyConversion.ts` (`dist/bodyConversion.js`)
@@ -165,7 +166,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 품질 기준
 - 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다
-- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 1.0.12 smoke 포함). stable UI E2E는 `npm run test:e2e` 기준 **16개**(Collection Runner + WebSocket + Environment autosave + Default Headers save/apply + Auth Bearer + Scripts template + Settings editor 포함)다.
+- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 1.0.12 smoke 포함). stable UI E2E는 `npm run test:e2e` 기준 **17개**(Collection Runner + WebSocket + Environment autosave + Default Headers save/apply + Auth Bearer + Scripts template + Settings editor + Path Variables 포함)다.
 - Quiet Instrument 계약: pill wall / soft-card / Send success-green 재도입 금지
 
 ## 빌드 / 테스트

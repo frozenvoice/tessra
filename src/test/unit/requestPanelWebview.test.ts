@@ -256,7 +256,7 @@ function extractNthTaggedTemplate(source: string, tagComment: '/*css*/' | '/*htm
   return source.slice(from, end);
 }
 
-/** Expand Body/Response/Runner/Environment/Default Headers/Status/WebSocket/Auth/Scripts/Settings fragment composition without interpreting other ${...} interpolations. */
+/** Expand Body/Response/Runner/Environment/Default Headers/Status/WebSocket/Auth/Scripts/Settings/PathVariables fragment composition without interpreting other ${...} interpolations. */
 function expandClientScriptTemplate(
   clientScript: string,
   bodyClientScript: string,
@@ -270,7 +270,8 @@ function expandClientScriptTemplate(
   webSocketClientScript: string,
   authClientScript: string,
   scriptsClientScript: string,
-  settingsClientScript: string
+  settingsClientScript: string,
+  pathVariablesClientScript: string
 ): string {
   const bodyMarker = '${getRequestPanelBodyClientScript()}';
   const responseMarker = '${getRequestPanelResponseClientScript()}';
@@ -284,6 +285,7 @@ function expandClientScriptTemplate(
   const authMarker = '${getRequestPanelAuthClientScript()}';
   const scriptsMarker = '${getRequestPanelScriptsClientScript()}';
   const settingsMarker = '${getRequestPanelSettingsClientScript()}';
+  const pathVariablesMarker = '${getRequestPanelPathVariablesClientScript()}';
   assert.ok(
     clientScript.includes(bodyMarker),
     'requestPanelClientScript should compose getRequestPanelBodyClientScript()'
@@ -332,6 +334,10 @@ function expandClientScriptTemplate(
     clientScript.includes(settingsMarker),
     'requestPanelClientScript should compose getRequestPanelSettingsClientScript()'
   );
+  assert.ok(
+    clientScript.includes(pathVariablesMarker),
+    'requestPanelClientScript should compose getRequestPanelPathVariablesClientScript()'
+  );
   return clientScript
     .split(bodyMarker).join(bodyClientScript)
     .split(responseMarker).join(responseClientScript)
@@ -344,7 +350,8 @@ function expandClientScriptTemplate(
     .split(webSocketMarker).join(webSocketClientScript)
     .split(authMarker).join(authClientScript)
     .split(scriptsMarker).join(scriptsClientScript)
-    .split(settingsMarker).join(settingsClientScript);
+    .split(settingsMarker).join(settingsClientScript)
+    .split(pathVariablesMarker).join(pathVariablesClientScript);
 }
 
 /** Compose styles/markup/clientScript the same way requestPanelHtml.ts assembles the shell. */
@@ -409,6 +416,10 @@ function extractHtmlTemplate(): string {
     readSourceFile('src/panels/requestPanel/requestPanelSettingsClientScript.ts'),
     '/*js*/'
   );
+  const pathVariablesClientScript = extractTaggedTemplate(
+    readSourceFile('src/panels/requestPanel/requestPanelPathVariablesClientScript.ts'),
+    '/*js*/'
+  );
   const clientScript = expandClientScriptTemplate(
     extractTaggedTemplate(
       readSourceFile('src/panels/requestPanel/requestPanelClientScript.ts'),
@@ -425,7 +436,8 @@ function extractHtmlTemplate(): string {
     webSocketClientScript,
     authClientScript,
     scriptsClientScript,
-    settingsClientScript
+    settingsClientScript,
+    pathVariablesClientScript
   );
 
   // Concatenation keeps ${...} inside markup/script as literals for renderHtml().
@@ -867,7 +879,7 @@ describe('RequestPanel Webview', () => {
     assert.match(source, /case MessageType\.WebSocketConnect:/);
     assert.match(source, /case MessageType\.WebSocketDisconnect:/);
     assert.match(source, /case MessageType\.WebSocketSend:/);
-    assert.match(webSocketManagerSource, /VariableService\.resolve\(message\.url, vars\)/);
+    assert.match(webSocketManagerSource, /PathVariableService\.resolveUrl\(message\.url, pathVariableOverrides, vars\)/);
     assert.match(webSocketManagerSource, /AuthService\.applyAuth\(auth, finalHeaders, finalParams, vars\)/);
     assert.match(webSocketManagerSource, /manualDisconnectTabs/);
     assert.match(webSocketManagerSource, /closeSource/);

@@ -8,6 +8,12 @@ export interface KeyValue {
   enabled: boolean;
 }
 
+/** Request-local path override. Presence of an entry means override is active (value may be empty). */
+export interface PathVariableOverride {
+  key: string;
+  value: string;
+}
+
 // 인증 타입
 export type AuthType = 'none' | 'basic' | 'bearer' | 'apikey';
 
@@ -88,6 +94,8 @@ export interface TabState {
   url: string;
   headers: KeyValue[];
   params: KeyValue[];
+  /** Optional request-local overrides for full path-segment `{{variables}}` only. */
+  pathVariableOverrides?: PathVariableOverride[];
   body: string;
   bodyType: RequestBodyType;
   formData?: FormDataField[];
@@ -132,6 +140,8 @@ export interface Request extends RequestSettings {
   url: string;
   headers: KeyValue[];
   params: KeyValue[];
+  /** Optional request-local overrides for full path-segment `{{variables}}` only. */
+  pathVariableOverrides?: PathVariableOverride[];
   body: string;
   bodyType: RequestBodyType;
   formData?: FormDataField[];
@@ -265,6 +275,7 @@ export interface SendRequestMessage extends RequestSettings {
   url: string;
   headers: KeyValue[];
   params: KeyValue[];
+  pathVariableOverrides?: PathVariableOverride[];
   body: string;
   bodyType: RequestBodyType;
   formData?: FormDataField[];
@@ -281,6 +292,7 @@ export interface SaveRequestMessage extends RequestSettings {
   url: string;
   headers: KeyValue[];
   params: KeyValue[];
+  pathVariableOverrides?: PathVariableOverride[];
   body: string;
   bodyType: RequestBodyType;
   formData?: FormDataField[];
@@ -301,6 +313,7 @@ export interface CopyAsCurlMessage {
   url: string;
   headers: KeyValue[];
   params: KeyValue[];
+  pathVariableOverrides?: PathVariableOverride[];
   body: string;
   bodyType?: RequestBodyType;
   formData?: FormDataField[];
@@ -417,6 +430,7 @@ export interface GenerateCodeMessage {
   url: string;
   headers: KeyValue[];
   params: KeyValue[];
+  pathVariableOverrides?: PathVariableOverride[];
   body: string;
   bodyType: RequestBodyType;
   formData?: FormDataField[];
@@ -479,6 +493,7 @@ export interface WebSocketConnectMessage extends RequestSettings {
   url: string;
   headers: KeyValue[];
   params: KeyValue[];
+  pathVariableOverrides?: PathVariableOverride[];
   auth: AuthConfig;
 }
 
@@ -518,6 +533,7 @@ export interface LoadRequestMessage extends RequestSettings {
   url: string;
   headers: KeyValue[];
   params: KeyValue[];
+  pathVariableOverrides?: PathVariableOverride[];
   body: string;
   bodyType: RequestBodyType;
   formData?: FormDataField[];

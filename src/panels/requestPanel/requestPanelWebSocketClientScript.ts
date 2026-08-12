@@ -102,6 +102,7 @@ function websocketConnect(tab) {
     url: tab.url,
     headers: allHeaders,
     params: tab.params,
+    pathVariableOverrides: prunePathVariableOverrides(tab.url || '', tab.pathVariableOverrides),
     auth: tab.auth,
     timeout: tab.timeout,
     followRedirects: !!tab.followRedirects,

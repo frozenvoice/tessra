@@ -8,10 +8,10 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 
 ## Recent highlights
 
+- Path Variables under the URL bar let you override full path-segment `{{variables}}` for the current request without editing the Environment.
 - Auth sensitive fields support working Reveal / Hide controls for Basic passwords, Bearer tokens, and API Key values.
 - Collection Runner supports per-run request selection, with all requests selected by default.
 - Import `.env` files directly as Tessra Environments.
-- Pre-request and test scripts include SHA-256, HMAC-SHA256, Base64, UUID v4, and Unix timestamp utilities.
 - Tessra remains local-first: no login, no cloud sync, no telemetry.
 
 See the [Changelog](./CHANGELOG.md) for full release history.

@@ -8,6 +8,7 @@ import { getRequestPanelWebSocketClientScript } from './requestPanelWebSocketCli
 import { getRequestPanelAuthClientScript } from './requestPanelAuthClientScript';
 import { getRequestPanelScriptsClientScript } from './requestPanelScriptsClientScript';
 import { getRequestPanelSettingsClientScript } from './requestPanelSettingsClientScript';
+import { getRequestPanelPathVariablesClientScript } from './requestPanelPathVariablesClientScript';
 
 export interface RequestPanelClientScriptInput {
   localizedStrings: string;
@@ -402,7 +403,12 @@ function authSummaryLabel(auth) {
 function getUnresolvedDraftVariableNames(tab) {
   var names = new Set();
   if (!tab) return [];
-  collectTemplateVariableNames(names, tab.url);
+  collectTemplateVariableNames(
+    names,
+    (typeof applyPathVariableOverridesToUrl === 'function')
+      ? applyPathVariableOverridesToUrl(tab.url || '', tab.pathVariableOverrides)
+      : (tab.url || '')
+  );
   collectTemplateVariablesFromKeyValues(names, tab.headers);
   collectTemplateVariablesFromKeyValues(names, tab.params);
   collectTemplateVariableNames(names, tab.body);
@@ -448,6 +454,7 @@ function buildDraftTabFromContent(mc) {
     requestType: normalizeRequestType(tab.requestType, mc.querySelector('.js-url')?.value || tab.url || ''),
     headers: collectKv(mc.querySelector('.js-header-rows')),
     params: collectKv(mc.querySelector('.js-param-rows')),
+    pathVariableOverrides: collectPathVariableOverridesFromContent(mc, mc.querySelector('.js-url')?.value || tab.url || ''),
     body: mc.querySelector('.js-body')?.value || '',
     bodyType: normalizeBodyType(mc.querySelector('.js-body-type')?.value || tab.bodyType),
     formData: collectFormData(mc.querySelector('.js-formdata-rows')),
@@ -489,6 +496,7 @@ function createRequestChangeBaseline(tab) {
     url: '',
     headers: [],
     params: [],
+    pathVariableOverrides: [],
     body: '',
     bodyType: 'none',
     formData: [],
@@ -520,6 +528,7 @@ function createRequestChangeBaseline(tab) {
     baseline.url = raw.url || '';
     baseline.headers = raw.headers || [];
     baseline.params = raw.params || [];
+    baseline.pathVariableOverrides = normalizePathVariableOverrides(raw.pathVariableOverrides);
     baseline.body = raw.body || '';
     baseline.bodyType = normalizeBodyType(raw.bodyType || baseline.bodyType);
     baseline.formData = raw.formData || [];
@@ -563,6 +572,16 @@ function buildRequestChangeItems(tab) {
       label: tr('webview.requestDiffRequest'),
       detail: baseline.method !== tab.method ? baseline.method + '→' + tab.method : tr('webview.requestDiffEdited'),
       action: 'focus-url'
+    });
+  }
+  if (!sameJson(normalizePathVariableOverrides(baseline.pathVariableOverrides), normalizePathVariableOverrides(tab.pathVariableOverrides))) {
+    items.push({
+      label: tr('webview.requestDiffPathVariables'),
+      detail: changeDetailWithCounts(
+        normalizePathVariableOverrides(baseline.pathVariableOverrides).length,
+        normalizePathVariableOverrides(tab.pathVariableOverrides).length
+      ),
+      action: 'focus-path-variables'
     });
   }
   if (!sameJson(baseline.params, tab.params)) {
@@ -883,8 +902,20 @@ function resolveTemplateVariables(text) {
 }
 
 function getUrlModeInfo(rawUrl) {
+  var overrides = [];
+  try {
+    if (typeof tabs !== 'undefined' && typeof activeTabId !== 'undefined' && Array.isArray(tabs)) {
+      var tab = tabs.find(function(t) { return t && t.id === activeTabId; });
+      if (tab && tab.pathVariableOverrides) {
+        overrides = tab.pathVariableOverrides;
+      }
+    }
+  } catch (_) {}
+  var withPathOverrides = typeof applyPathVariableOverridesToUrl === 'function'
+    ? applyPathVariableOverridesToUrl(rawUrl, overrides)
+    : String(rawUrl || '');
   var raw = String(rawUrl || '').trim();
-  var resolved = String(resolveTemplateVariables(raw) || '').trim();
+  var resolved = String(resolveTemplateVariables(withPathOverrides) || '').trim();
   var hasVariables = hasTemplateVariables(raw);
   var unresolved = hasVariables && hasUnresolvedTemplateVariables(resolved);
   return {
@@ -1189,6 +1220,7 @@ function buildSaveRequestMessage(tab, requestId) {
     url: tab.url,
     headers: tab.headers,
     params: tab.params,
+    pathVariableOverrides: prunePathVariableOverrides(tab.url || '', tab.pathVariableOverrides),
     body: tab.body,
     bodyType: tab.bodyType,
     formData: tab.formData || [],
@@ -1207,6 +1239,7 @@ function snapshotTab(tab) {
     requestType: normalizeRequestType(tab.requestType, tab.url),
     method: tab.method, url: tab.url,
     headers: tab.headers, params: tab.params,
+    pathVariableOverrides: prunePathVariableOverrides(tab.url || '', tab.pathVariableOverrides),
     body: tab.body, bodyType: tab.bodyType,
     formData: tab.formData, binaryFilePath: tab.binaryFilePath,
     auth: tab.auth, scripts: tab.scripts,
@@ -1223,6 +1256,7 @@ function isTabDirty(tab) {
       tab.url ||
       tab.headers.some(function(h){return h.key||h.value}) ||
       tab.params.some(function(p){return p.key||p.value}) ||
+      normalizePathVariableOverrides(tab.pathVariableOverrides).length > 0 ||
       tab.body ||
       (tab.formData || []).some(function(field){return field.key || field.value}) ||
       tab.binaryFilePath ||
@@ -1282,6 +1316,8 @@ ${getRequestPanelScriptsClientScript()}
 
 ${getRequestPanelSettingsClientScript()}
 
+${getRequestPanelPathVariablesClientScript()}
+
   function createTab(data) {
     const id = 'tab_' + (++tabIdCounter);
     const incomingName = data?.name;
@@ -1301,6 +1337,7 @@ ${getRequestPanelSettingsClientScript()}
     url: data?.url || '',
     headers: data?.headers || [],
     params: data?.params || [],
+    pathVariableOverrides: prunePathVariableOverrides(data?.url || '', data?.pathVariableOverrides),
     body: data?.body || '',
     bodyType: normalizeBodyType(data?.bodyType),
     formData: data?.formData || [],
@@ -1629,6 +1666,10 @@ function saveActiveTabState() {
   syncRequestTypeFromUrl(tab);
   tab.headers = collectKv(mc.querySelector('.js-header-rows'));
   tab.params = collectKv(mc.querySelector('.js-param-rows'));
+  tab.pathVariableOverrides = prunePathVariableOverrides(
+    tab.url || '',
+    collectPathVariableOverridesFromContent(mc, tab.url || '')
+  );
   tab.body = mc.querySelector('.js-body')?.value || '';
   tab.bodyType = mc.querySelector('.js-body-type')?.value || 'none';
   tab.formData = collectFormData(mc.querySelector('.js-formdata-rows'));
@@ -2377,6 +2418,7 @@ function renderContent() {
         '</div>' +
       '</div>' +
     '</div>' +
+    ((typeof renderPathVariablesSection === 'function') ? renderPathVariablesSection(tab) : '') +
     requestInfoRowHtml +
     '<div class="split">' +
       '<div class="req-area">' +
@@ -2576,6 +2618,16 @@ function bindContentDelegatedEventsOnce() {
     }
     if (action === 'switch-tab' && meta) {
       switchRequestEditorTabAndRevealInContent(mainContent, meta);
+      return;
+    }
+    if (action === 'focus-path-variables') {
+      focusPathVariablesSection(mainContent);
+      return;
+    }
+    if (action === 'focus-url') {
+      var linkedUrl = mainContent.querySelector('.js-url');
+      linkedUrl?.focus();
+      linkedUrl?.select?.();
     }
   });
   mainContent.addEventListener('click', function(e) {
@@ -2594,6 +2646,10 @@ function bindContentDelegatedEventsOnce() {
       var urlInput = mainContent.querySelector('.js-url');
       urlInput?.focus();
       urlInput?.select?.();
+      return;
+    }
+    if (action === 'focus-path-variables') {
+      focusPathVariablesSection(mainContent);
       return;
     }
     if (action === 'switch-environment') {
@@ -2624,14 +2680,17 @@ function bindContentEvents() {
       var wasWs = isWebSocketTab(activeTab);
       if (activeTab) {
         activeTab.url = e.target.value;
+        activeTab.pathVariableOverrides = prunePathVariableOverrides(activeTab.url, activeTab.pathVariableOverrides);
         syncRequestTypeFromUrl(activeTab);
       }
       syncParamsFromUrlInput(mc);
+      refreshPathVariablesSection(mc);
       checkUnresolvedVars();
       markDirty();
       activeTab = tabs.find(t => t.id === activeTabId);
       if (activeTab) {
         activeTab.url = e.target.value;
+        activeTab.pathVariableOverrides = prunePathVariableOverrides(activeTab.url, activeTab.pathVariableOverrides);
         syncRequestTypeFromUrl(activeTab);
       }
       if (wasWs !== isWebSocketTab(activeTab)) {
@@ -2705,7 +2764,7 @@ function bindContentEvents() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
-    vscode.postMessage({ type: 'copyAsCurl', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, skipDefaultHeaders: !!tab.skipDefaultHeaders });
+    vscode.postMessage({ type: 'copyAsCurl', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, pathVariableOverrides: prunePathVariableOverrides(tab.url || '', tab.pathVariableOverrides), body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, skipDefaultHeaders: !!tab.skipDefaultHeaders });
     showBtnFeedback(this, tr('webview.copied'), 1200);
   });
 
@@ -2713,7 +2772,7 @@ function bindContentEvents() {
     saveActiveTabState();
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab || !tab.url) return;
-    vscode.postMessage({ type: 'generateCode', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, skipDefaultHeaders: !!tab.skipDefaultHeaders });
+    vscode.postMessage({ type: 'generateCode', method: tab.method, url: tab.url, headers: tab.headers, params: tab.params, pathVariableOverrides: prunePathVariableOverrides(tab.url || '', tab.pathVariableOverrides), body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, skipDefaultHeaders: !!tab.skipDefaultHeaders });
     showBtnFeedback(this, tr('webview.opened'), 1000);
   });
 
@@ -2826,6 +2885,7 @@ function bindContentEvents() {
   });
   bindRequestScriptsEditor(mc);
   bindRequestSettingsEditor(mc);
+  bindPathVariablesSection(mc);
 
   
   var divider = mc.querySelector('.divider');
@@ -2950,7 +3010,7 @@ function sendActiveTab() {
   vscode.postMessage({
     type: 'sendRequest', tabId: tab.id,
     requestStartedAt: requestStartedAt,
-    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: !!tab.followRedirects, saveToHistory: tab.saveToHistory !== false, tlsValidation: normalizeTlsValidation(tab.tlsValidation), maxResponseSizeKb: normalizeMaxResponseSizeSetting(tab.maxResponseSizeKb), retryCount: normalizeNumberSetting(tab.retryCount), retryDelayMs: normalizeNumberSetting(tab.retryDelayMs), stopAfterHeaders: !!tab.stopAfterHeaders, skipDefaultHeaders: !!tab.skipDefaultHeaders, disableScripts: !!tab.disableScripts, scriptsTrusted: tab.scriptsTrusted !== false,
+    method: tab.method, url: tab.url, headers: allHeaders, params: tab.params, pathVariableOverrides: prunePathVariableOverrides(tab.url || '', tab.pathVariableOverrides), body: tab.body, bodyType: tab.bodyType, formData: tab.formData || [], binaryFilePath: tab.binaryFilePath || '', auth: tab.auth, scripts: tab.scripts || { preRequest: '', test: '' }, timeout: tab.timeout, followRedirects: !!tab.followRedirects, saveToHistory: tab.saveToHistory !== false, tlsValidation: normalizeTlsValidation(tab.tlsValidation), maxResponseSizeKb: normalizeMaxResponseSizeSetting(tab.maxResponseSizeKb), retryCount: normalizeNumberSetting(tab.retryCount), retryDelayMs: normalizeNumberSetting(tab.retryDelayMs), stopAfterHeaders: !!tab.stopAfterHeaders, skipDefaultHeaders: !!tab.skipDefaultHeaders, disableScripts: !!tab.disableScripts, scriptsTrusted: tab.scriptsTrusted !== false,
   });
 }
 
@@ -3519,6 +3579,7 @@ window.addEventListener('message', (event) => {
       url: msg.url,
       headers: msg.headers || [],
       params: msg.params || [],
+      pathVariableOverrides: prunePathVariableOverrides(msg.url || '', msg.pathVariableOverrides),
       body: msg.body || '',
       bodyType: msg.bodyType || 'none',
       formData: msg.formData || [],
@@ -4121,7 +4182,7 @@ function handleVariableAutocompleteKeydown(event) {
 function persistTabState() {
     saveActiveTabState();
     var tabData = tabs.map(function(t) {
-    return Object.assign({ name: t.name, autoName: !!t.autoName, requestType: normalizeRequestType(t.requestType, t.url), requestEditorTab: normalizeRequestEditorTab(t.requestEditorTab), requestSplitHeightPx: normalizeRequestSplitHeight(t.requestSplitHeightPx) || undefined, method: t.method, url: t.url, headers: t.headers, params: t.params, body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, scriptHelpCollapsed: t.scriptHelpCollapsed === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
+    return Object.assign({ name: t.name, autoName: !!t.autoName, requestType: normalizeRequestType(t.requestType, t.url), requestEditorTab: normalizeRequestEditorTab(t.requestEditorTab), requestSplitHeightPx: normalizeRequestSplitHeight(t.requestSplitHeightPx) || undefined, method: t.method, url: t.url, headers: t.headers, params: t.params, pathVariableOverrides: prunePathVariableOverrides(t.url || '', t.pathVariableOverrides), body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, scriptHelpCollapsed: t.scriptHelpCollapsed === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
     });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
   vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx), compareSettings: cloneCompareSettings(compareSettings) });

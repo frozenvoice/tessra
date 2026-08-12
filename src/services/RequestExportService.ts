@@ -1,4 +1,5 @@
-import { AuthConfig, FormDataField, HttpMethod, KeyValue, RequestBodyType } from '../models/types';
+import { AuthConfig, FormDataField, HttpMethod, KeyValue, PathVariableOverride, RequestBodyType } from '../models/types';
+import { PathVariableService } from './PathVariableService';
 import { VariableService } from './VariableService';
 
 export interface ExportableRequest {
@@ -6,6 +7,7 @@ export interface ExportableRequest {
   url: string;
   headers?: KeyValue[];
   params?: KeyValue[];
+  pathVariableOverrides?: PathVariableOverride[];
   body?: string;
   bodyType?: RequestBodyType;
   formData?: FormDataField[];
@@ -44,7 +46,11 @@ export class RequestExportService {
 
     return {
       method: request.method,
-      url: VariableService.resolve(request.url ?? '', variables),
+      url: PathVariableService.resolveUrl(
+        request.url ?? '',
+        PathVariableService.pruneOverrides(request.url ?? '', request.pathVariableOverrides),
+        variables
+      ),
       headers: this.mergeDefaultHeaders(defaultHeaders, resolvedHeaders),
       params: resolvedParams,
       body: VariableService.resolve(request.body ?? '', variables),

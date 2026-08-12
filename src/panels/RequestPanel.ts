@@ -258,6 +258,7 @@ export class RequestPanel {
       url: req.url,
       headers: req.headers ?? [],
       params: req.params ?? [],
+      pathVariableOverrides: req.pathVariableOverrides ?? [],
       body: req.body ?? '',
       bodyType: normalizeBodyType(req.bodyType),
       formData: req.formData ?? [],
@@ -382,6 +383,7 @@ export class RequestPanel {
           url: message.url,
           headers: message.headers ?? [],
           params: message.params ?? [],
+          pathVariableOverrides: message.pathVariableOverrides ?? [],
           body: message.body ?? '',
           bodyType: normalizeBodyType(message.bodyType),
           formData: message.formData ?? [],
@@ -417,6 +419,7 @@ export class RequestPanel {
           url: message.url,
           headers: message.headers ?? [],
           params: message.params ?? [],
+          pathVariableOverrides: message.pathVariableOverrides ?? [],
           body: message.body ?? '',
           bodyType: normalizeBodyType(message.bodyType),
           formData: message.formData ?? [],
@@ -681,6 +684,7 @@ export class RequestPanel {
     url: string;
     headers: KeyValue[];
     params: KeyValue[];
+    pathVariableOverrides?: Request['pathVariableOverrides'];
     body: string;
     bodyType: RequestBodyType;
     formData?: FormDataField[];
@@ -703,6 +707,7 @@ export class RequestPanel {
       url: message.url,
       headers: message.headers ?? [],
       params: message.params ?? [],
+      pathVariableOverrides: message.pathVariableOverrides ?? [],
       body: message.body ?? '',
       bodyType: message.bodyType,
       formData: message.formData ?? [],
