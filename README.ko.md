@@ -10,6 +10,8 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 
 ## 최근 주요 변경
 
+- Path Variable URL 경고는 실제 전송 시 해석을 따릅니다. Request-local path 값은 missing으로 보이지 않고, 같은 이름이 query 등 다른 필드에 있으면 그대로 unresolved일 수 있습니다.
+- 긴 JSON / XML / Raw Body 편집기는 짧은 화면에서도 textarea 스크롤바 하나만 사용합니다 (ghost / 이중 스크롤 없음).
 - 좁은 Request 패널에서도 Send와 More(`...`)가 함께 유지되고, More 메뉴가 Webview 안에 완전히 보입니다.
 - URL 아래 Path Variables에서 현재 요청의 path segment `{{변수}}`만 재정의할 수 있으며 Environment 값은 그대로 둡니다.
 - Basic 비밀번호, Bearer 토큰, API Key 값 같은 민감한 인증 필드의 Reveal / Hide가 정상 동작합니다.

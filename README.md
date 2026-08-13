@@ -8,6 +8,8 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 
 ## Recent highlights
 
+- Path Variable URL warnings follow the actual send-time resolution: a Request-local path value is not shown as missing, while the same name in query or other fields can still be unresolved.
+- Long JSON / XML / Raw Body editors keep a single textarea scrollbar (no ghost or double scroll) on short windows.
 - Narrow Request panels keep Send and More (`...`) grouped, and More menus stay fully inside the Webview.
 - Path Variables under the URL bar let you override full path-segment `{{variables}}` for the current request without editing the Environment.
 - Auth sensitive fields support working Reveal / Hide controls for Basic passwords, Bearer tokens, and API Key values.

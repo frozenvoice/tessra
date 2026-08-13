@@ -34,6 +34,17 @@ Unusual OS / display-scaling context-menu behavior can still be spot-checked man
 - Deep Guide locale reading pass
 - WebSocket / Backup / History pin / profile switch (optional automation later)
 
+## 1.2.2 Smoke (~10 min)
+
+Path Variable occurrence UI and Body single-scroll-owner. Run this pass before Marketplace publish.
+
+- Environment has `baseUrl` but not `dsgIdn`. URL: `{{baseUrl}}/mz-chat/{{dsgIdn}}/customer.do`. Set Path Variables `dsgIdn` to `1111`.
+- Confirm the path `{{dsgIdn}}` has no red underline and the variable popover shows Request / `1111`, not missing-from-environment.
+- Send and confirm the path is `/mz-chat/1111/...`.
+- Append `?echo={{dsgIdn}}`. Confirm the path occurrence stays resolved and the query occurrence stays unresolved.
+- Open Body JSON with a long payload on a short window. Confirm one vertical scrollbar on the textarea, wheel moves the body text, and the highlight overlay stays in sync.
+- Resize the Request/Response split and switch JSON → Raw → JSON; confirm the single-scroll contract still holds. Form Data should not keep text-mode overflow.
+
 ## 1.0.14 Smoke (~10 min)
 
 Script utilities for signing / encoding. Use dummy secrets only.

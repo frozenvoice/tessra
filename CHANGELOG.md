@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.2
+
+### Fixed
+
+- URL variable warnings now follow occurrence-level resolution: a Request-local Path Variable value clears the red underline for that path segment even when the key is missing from the Environment.
+- The same name in query, headers, body, or auth stays unresolved unless Environment (or that field's own resolution) can fill it.
+- JSON / XML / Raw Body editors no longer show a ghost or double vertical scrollbar; the textarea is the single scroll owner, including on short windows.
+
+### Reliability
+
+- Expanded stable VS Code UI E2E coverage to 20 specs, including Path Variable occurrence-resolution UI and Body scroll-ownership contracts.
+- GitHub Actions now runs `test:e2e:ui-regressions` (#18/#19/#20) as a named critical UI gate before the full stable suite.
+
 ## 1.2.1
 
 ### Fixed

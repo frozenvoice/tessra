@@ -147,7 +147,7 @@ npm run test:e2e
 npm run package
 ```
 
-단위 테스트는 `npm test`, 실제 VS Code UI E2E는 `npm run test:e2e`다. 수동 시각 QA는 `docs/manual-e2e-checklist.md`를 기준으로 수행한다. 릴리스 전에는 같은 문서의 1.0.12 smoke도 확인한다.
+단위 테스트는 `npm test`, 실제 VS Code UI E2E는 `npm run test:e2e`다. 수동 시각 QA는 `docs/manual-e2e-checklist.md`를 기준으로 수행한다. 릴리스 전에는 같은 문서의 1.2.2 smoke도 확인한다.
 
 ## 저장 데이터
 모든 데이터는 VS Code `globalStorage` 아래 JSON 파일로 저장된다. 기본 프로필은 루트에 저장되고, 사용자 지정 프로필은 `profiles/<profile-name>/` 아래 같은 파일 구조로 분리된다.
