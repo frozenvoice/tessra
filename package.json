@@ -509,6 +509,7 @@
     "test:e2e": "playwright test -c e2e/playwright.config.ts",
     "test:e2e:runner": "playwright test -c e2e/playwright.runner.config.ts",
     "test:e2e:ci": "playwright test -c e2e/playwright.config.ts",
+    "test:e2e:ui-regressions": "playwright test -c e2e/playwright.config.ts e2e/specs/18-request-more-narrow.spec.ts e2e/specs/19-path-variable-resolution-ui.spec.ts e2e/specs/20-body-scroll-ownership.spec.ts",
     "test:e2e:all": "npm run test:e2e && npm run test:e2e:runner",
     "test:all": "npm test && npm run test:e2e"
   },

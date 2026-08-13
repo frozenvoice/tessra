@@ -155,6 +155,55 @@ function getEnvironmentPathVariableValue(name) {
     : '';
 }
 
+/**
+ * Occurrence-level URL template analysis for underline / popover.
+ * Path overrides resolve only full path-segment occurrences.
+ */
+function analyzeUrlVariableOccurrencesForUi(rawUrl, overrides) {
+  var url = String(rawUrl || '');
+  var parts = splitUrlBaseForPathVars(url);
+  var overrideMap = getPathVariableOverrideMap(overrides);
+  var pathNames = {};
+  extractPathVariableNames(url).forEach(function(name) { pathNames[name] = true; });
+  var out = [];
+  var re = /\\{\\{([^}]+)\\}\\}/g;
+  var match;
+  while ((match = re.exec(url)) !== null) {
+    var raw = match[0];
+    var name = String(match[1] || '').trim();
+    if (!name) continue;
+    var index = match.index;
+    var end = index + raw.length;
+    var inPathPortion = end <= parts.base.length;
+    var prev = index > 0 ? url.charAt(index - 1) : '';
+    var next = end < parts.base.length ? parts.base.charAt(end) : '';
+    var boundedAsSegment = inPathPortion
+      && (index === 0 || prev === '/')
+      && (end === parts.base.length || next === '/');
+    var scope = (boundedAsSegment && pathNames[name]) ? 'path' : 'other';
+    var resolvedBy = null;
+    var value = '';
+    if (scope === 'path' && Object.prototype.hasOwnProperty.call(overrideMap, name)) {
+      resolvedBy = 'path-override';
+      value = String(overrideMap[name] ?? '');
+    } else if (hasEnvironmentPathVariable(name)) {
+      resolvedBy = 'environment';
+      value = getEnvironmentPathVariableValue(name);
+    }
+    out.push({
+      index: index,
+      end: end,
+      name: name,
+      raw: raw,
+      scope: scope,
+      resolvedBy: resolvedBy,
+      value: value,
+      missing: resolvedBy === null
+    });
+  }
+  return out;
+}
+
 function renderPathVariablesSection(tab) {
   var names = extractPathVariableNames(tab && tab.url ? tab.url : '');
   if (!names.length) return '';

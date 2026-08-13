@@ -20,6 +20,9 @@ Covered by `e2e/specs/*` against a real VS Code Electron host + localhost fixtur
 - Collection Runner Clear / Select all / zero selection (`e2e/specs/runner/08-runner-select-clear.spec.ts`)
 - Path Variables request-local override (`e2e/specs/17-path-variables.spec.ts`)
 - Request More narrow-viewport geometry (`e2e/specs/18-request-more-narrow.spec.ts`)
+- Path Variable occurrence resolution UI (`e2e/specs/19-path-variable-resolution-ui.spec.ts`)
+- Body text single-scroll-owner (`e2e/specs/20-body-scroll-ownership.spec.ts`)
+- Critical UI regression gate (`npm run test:e2e:ui-regressions` → #18/#19/#20)
 
 Unusual OS / display-scaling context-menu behavior can still be spot-checked manually; the stable suite covers the keyboard context-menu path (see `docs/testing.md`).
 

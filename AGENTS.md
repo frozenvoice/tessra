@@ -131,9 +131,10 @@ tessra/
 
 ### 현재 품질 기준
 1. 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴가 키보드 접근과 명확한 포커스 상태를 유지해야 한다.
-2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다. 핵심 클릭 경로는 `npm run test:e2e` UI 자동화로도 검증한다 (`docs/testing.md`). stable UI E2E는 **18개**(Collection Runner 2개 + WebSocket 1개 + Environment autosave 1개 + Default Headers save/apply 1개 + Auth Bearer 1개 + Scripts template 1개 + Settings editor 1개 + Path Variables 1개 + Request More narrow geometry 1개 포함)를 유지한다.
-3. 요청 패널 시각 계약은 `DESIGN.md` Quiet Instrument를 따른다 (pill wall / soft-card / Send success-green 재도입 금지).
-4. Request Panel UI를 바꾸면 관련 `data-testid`와 `e2e/specs/*`를 함께 갱신한다. Collection Runner UI를 바꾸면 `e2e/specs/runner/*`도 함께 갱신한다. production backdoor(`window.__tessraTest` 등)는 넣지 않는다.
+2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다. 핵심 클릭 경로는 `npm run test:e2e` UI 자동화로도 검증한다 (`docs/testing.md`). stable UI E2E는 **20개**(Collection Runner 2개 + WebSocket 1개 + Environment autosave 1개 + Default Headers save/apply 1개 + Auth Bearer 1개 + Scripts template 1개 + Settings editor 1개 + Path Variables 1개 + Request More narrow geometry 1개 + Path Variable occurrence resolution UI 1개 + Body scroll ownership 1개 포함)를 유지한다. GitHub Actions e2e job은 전체 suite 전에 `npm run test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 별도 named step으로 실행한다.
+3. UI 품질 원칙: (1) DOM visible만으로 layout PASS 금지 (2) popup/menu는 viewport geometry 검증 (3) variable warning은 occurrence resolution 기준 (4) scrollable editor는 scroll owner 수 + wheel interaction 검증 (5) Request Panel layout은 narrow-width와 short-height BrowserWindow에서 검증.
+4. 요청 패널 시각 계약은 `DESIGN.md` Quiet Instrument를 따른다 (pill wall / soft-card / Send success-green 재도입 금지).
+5. Request Panel UI를 바꾸면 관련 `data-testid`와 `e2e/specs/*`를 함께 갱신한다. Collection Runner UI를 바꾸면 `e2e/specs/runner/*`도 함께 갱신한다. production backdoor(`window.__tessraTest` 등)는 넣지 않는다.
 
 ## 빌드 & 테스트
 ```bash

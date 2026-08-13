@@ -288,6 +288,10 @@ function syncBodyTypeUiFromTab(tab) {
   var formDataPanel = mc.querySelector('.js-formdata-panel');
   var binaryPanel = mc.querySelector('.js-binary-panel');
   var hideBodyEditor = (!wsBody && (bodyType === 'none' || bodyType === 'formdata' || bodyType === 'binary'));
+  var bodyPanel = mc.querySelector('.js-body-panel');
+  if (bodyPanel) {
+    bodyPanel.classList.toggle('is-text-body', !hideBodyEditor);
+  }
   if (bodyEditor) bodyEditor.style.display = hideBodyEditor ? 'none' : '';
   else if (textarea) textarea.style.display = hideBodyEditor ? 'none' : '';
   if (formDataPanel) {
@@ -311,6 +315,9 @@ function syncBodyTypeUiFromTab(tab) {
   if (!wsBody) syncAutoContentType(mc, bodyType);
   if (typeof textarea?._tessraRefreshBodyHighlight === 'function') {
     textarea._tessraRefreshBodyHighlight(true);
+  }
+  if (typeof textarea?._tessraAutoGrow === 'function') {
+    textarea._tessraAutoGrow();
   }
 }
 
@@ -630,6 +637,19 @@ function bindRequestBodyEditor(mc) {
       bodyHighlightTimer = setTimeout(run, BODY_JSON_HIGHLIGHT_DEBOUNCE_MS);
     }
     function autoGrow() {
+      var bodyPanel = mc.querySelector('.js-body-panel');
+      var textBodyMode = !!(bodyPanel && bodyPanel.classList.contains('is-text-body'));
+      if (textBodyMode) {
+        // Flex fill owns height; clear stale autoGrow px caps that create double scrollbars.
+        bodyTa.style.height = '';
+        bodyTa.style.maxHeight = '';
+        if (bodyEditorEl) {
+          bodyEditorEl.style.height = '';
+          bodyEditorEl.style.maxHeight = '';
+        }
+        syncBodyHighlightScroll(bodyTa, bodyHighlightEl);
+        return;
+      }
       bodyTa.style.height = 'auto';
       var h = Math.max(100, Math.min(400, bodyTa.scrollHeight));
       bodyTa.style.height = h + 'px';

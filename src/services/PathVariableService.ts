@@ -4,6 +4,23 @@ import { VariableService } from './VariableService';
 export type { PathVariableOverride };
 
 const FULL_SEGMENT_PLACEHOLDER = /^\{\{\s*([^}]+?)\s*\}\}$/;
+const TEMPLATE_TOKEN = /\{\{([^}]+)\}\}/g;
+
+export type UrlVariableOccurrenceScope = 'path' | 'other';
+export type UrlVariableResolvedBy = 'path-override' | 'environment' | null;
+
+export interface UrlVariableOccurrence {
+  index: number;
+  end: number;
+  name: string;
+  raw: string;
+  /** Full path-segment `{{name}}` in the URL path (not query/authority/partial). */
+  scope: UrlVariableOccurrenceScope;
+  resolvedBy: UrlVariableResolvedBy;
+  value: string;
+  /** True when this occurrence will remain unresolved at send time. */
+  missing: boolean;
+}
 
 type UrlBaseParts = {
   base: string;
@@ -116,6 +133,72 @@ export class PathVariableService {
     variables: KeyValue[]
   ): string {
     return VariableService.resolve(this.applyOverridesToUrl(rawUrl, overrides), variables);
+  }
+
+  /**
+   * Occurrence-level URL template analysis for UI (underline / popover).
+   * Path-local overrides resolve only matching full path-segment occurrences;
+   * same-named query/header-style tokens stay unresolved unless Environment has them.
+   */
+  static analyzeUrlVariableOccurrences(
+    rawUrl: string,
+    overrides: PathVariableOverride[] | unknown,
+    envKeys: Iterable<string>,
+    envValues: Record<string, string> = {}
+  ): UrlVariableOccurrence[] {
+    const url = String(rawUrl ?? '');
+    const parts = splitUrlBase(url);
+    const overrideMap = this.getOverrideMap(overrides);
+    const pathNames = new Set(this.extractPathVariableNames(url));
+    const envKeySet = new Set(
+      Array.from(envKeys, (key) => String(key || '').trim()).filter(Boolean)
+    );
+
+    const out: UrlVariableOccurrence[] = [];
+    TEMPLATE_TOKEN.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = TEMPLATE_TOKEN.exec(url)) !== null) {
+      const raw = match[0];
+      const name = String(match[1] || '').trim();
+      if (!name) {
+        continue;
+      }
+      const index = match.index;
+      const end = index + raw.length;
+      const inPathPortion = end <= parts.base.length;
+      const prev = index > 0 ? url.charAt(index - 1) : '';
+      const next = end < parts.base.length ? parts.base.charAt(end) : '';
+      const boundedAsSegment =
+        inPathPortion &&
+        (index === 0 || prev === '/') &&
+        (end === parts.base.length || next === '/');
+      const scope: UrlVariableOccurrenceScope =
+        boundedAsSegment && pathNames.has(name) ? 'path' : 'other';
+
+      let resolvedBy: UrlVariableResolvedBy = null;
+      let value = '';
+      if (scope === 'path' && overrideMap.has(name)) {
+        resolvedBy = 'path-override';
+        value = overrideMap.get(name) ?? '';
+      } else if (envKeySet.has(name)) {
+        resolvedBy = 'environment';
+        value = Object.prototype.hasOwnProperty.call(envValues, name)
+          ? String(envValues[name] ?? '')
+          : '';
+      }
+
+      out.push({
+        index,
+        end,
+        name,
+        raw,
+        scope,
+        resolvedBy,
+        value,
+        missing: resolvedBy === null,
+      });
+    }
+    return out;
   }
 
   private static getPathSegments(base: string): string[] {

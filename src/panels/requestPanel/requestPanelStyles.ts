@@ -208,6 +208,8 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .var-preview-name{color:var(--vscode-debugTokenExpression-name,var(--vscode-symbolIcon-variableForeground));font-family:var(--vscode-editor-font-family,monospace);white-space:nowrap}
 .var-preview-value{color:var(--vscode-foreground);word-break:break-word}
 .var-preview-value.missing{color:var(--vscode-errorForeground,#f48771)}
+.var-preview-source{margin-left:6px;font-size:11px;color:var(--vscode-descriptionForeground,#a8a8a8);white-space:nowrap}
+.resolved-var{color:transparent;text-decoration:none}
 .var-autocomplete{position:fixed;z-index:170;min-width:260px;max-width:420px;padding:6px;border-radius:4px;border:1px solid var(--vscode-panel-border,#444);background:var(--vscode-editorWidget-background,var(--vscode-editor-background));box-shadow:0 2px 8px rgba(0,0,0,.25);font-size:12px;line-height:1.4}
 .var-autocomplete.hidden{display:none}
 .var-autocomplete-title{font-size:11px;font-weight:600;color:var(--vscode-descriptionForeground,#a8a8a8);padding:4px 6px}
@@ -260,6 +262,12 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 .req-area{flex:1 1 0;min-height:0;overflow:hidden;padding:2px 8px;display:flex;flex-direction:column}
 .req-area.is-collapsed{flex:0 0 auto}
 .request-editor-panel:not(.hidden){flex:1;min-height:0;display:flex;flex-direction:column;overflow-y:auto}
+/* Text Body modes: textarea is the sole vertical scroll owner (no panel + textarea double scroll). */
+.js-body-panel.request-editor-panel.is-text-body:not(.hidden){overflow:hidden;min-height:0}
+.js-body-panel.is-text-body .body-type-select{flex:0 0 auto}
+.js-body-panel.is-text-body .body-editor{display:flex;flex-direction:column;flex:1 1 0;min-height:70px;min-width:0;height:auto !important;max-height:none}
+.js-body-panel.is-text-body .body-editor .js-body{flex:1 1 auto;min-height:70px;height:100% !important;max-height:none;overflow:auto;scrollbar-gutter:stable}
+.js-body-panel.is-text-body .body-highlight{overflow:hidden !important;scrollbar-gutter:stable}
 .divider{height:8px;background:transparent;flex-shrink:0;cursor:row-resize;position:relative;z-index:10;border:none;display:flex;align-items:center;justify-content:center}
 .divider::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;transform:translateY(-50%);background:var(--vscode-panel-border,#444)}
 .divider-grip{position:relative;z-index:1;display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:2px;border:1px solid var(--vscode-panel-border,#444);background:var(--vscode-editor-background);box-shadow:none}

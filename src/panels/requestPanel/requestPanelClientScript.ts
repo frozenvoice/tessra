@@ -837,6 +837,7 @@ function refreshDraftInsights(mc, options) {
   refreshVariableUsage(mc);
   refreshFormDataSummary(mc);
   syncVariablePreviewHints(mc);
+  checkUnresolvedVars();
   if (opts.renderContent === true) {
     renderContent();
   }
@@ -2512,7 +2513,7 @@ function renderContent() {
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="js-body-panel request-editor-panel body-section' + (showBodyEditor ? '' : ' hidden') + '">' +
+        '<div class="js-body-panel request-editor-panel body-section' + (showBodyEditor ? '' : ' hidden') + ((isWs || (tab.bodyType !== 'none' && tab.bodyType !== 'formdata' && tab.bodyType !== 'binary')) ? ' is-text-body' : '') + '">' +
           '<select class="js-body-type body-type-select" data-testid="body-type">' +
             ['none','json','xml','form','formdata','binary','raw'].map(function(t) {
               var label = bodyTypeLabel(t);
@@ -3932,25 +3933,53 @@ function checkUnresolvedVars() {
   var overlay = mainContent.querySelector('.js-var-overlay');
   if (!urlEl || !overlay) return;
   var val = urlEl.value || '';
-  var re = /\\{\\{([^}]+)\\}\\}/g;
-  var match;
-  var unresolvedNames = [];
-  while ((match = re.exec(val)) !== null) {
-    var name = match[1].trim();
-    if (activeVarKeys.indexOf(name) < 0) {
-      unresolvedNames.push(name);
+  var tab = tabs.find(function(t) { return t.id === activeTabId; });
+  var occurrences = (typeof analyzeUrlVariableOccurrencesForUi === 'function')
+    ? analyzeUrlVariableOccurrencesForUi(val, tab && tab.pathVariableOverrides)
+    : null;
+  var html = '';
+  var hasUnresolved = false;
+  if (occurrences) {
+    var cursor = 0;
+    occurrences.forEach(function(occ) {
+      if (occ.index > cursor) {
+        html += escapeHtml(val.substring(cursor, occ.index));
+      }
+      var token = escapeHtml(occ.raw);
+      if (occ.missing) {
+        hasUnresolved = true;
+        html += '<span class="unresolved-var" data-testid="url-var-unresolved" data-var-name="' + escapeAttr(occ.name) + '" data-var-scope="' + escapeAttr(occ.scope) + '">' + token + '</span>';
+      } else {
+        html += '<span class="resolved-var" data-testid="url-var-resolved" data-var-name="' + escapeAttr(occ.name) + '" data-var-scope="' + escapeAttr(occ.scope) + '" data-var-source="' + escapeAttr(occ.resolvedBy || '') + '">' + token + '</span>';
+      }
+      cursor = occ.end;
+    });
+    if (cursor < val.length) {
+      html += escapeHtml(val.substring(cursor));
+    }
+  } else {
+    var re = /\\{\\{([^}]+)\\}\\}/g;
+    var match;
+    var unresolvedNames = [];
+    while ((match = re.exec(val)) !== null) {
+      var name = match[1].trim();
+      if (activeVarKeys.indexOf(name) < 0) {
+        unresolvedNames.push(name);
+      }
+    }
+    if (unresolvedNames.length > 0) {
+      hasUnresolved = true;
+      html = escapeHtml(val).replace(/\\{\\{([^}]+)\\}\\}/g, function(m, n) {
+        if (unresolvedNames.indexOf(n.trim()) >= 0) {
+          return '<span class="unresolved-var" data-testid="url-var-unresolved" data-var-name="' + escapeAttr(n.trim()) + '">' + m + '</span>';
+        }
+        return m;
+      });
     }
   }
-  if (unresolvedNames.length > 0) {
-    var html = escapeHtml(val).replace(/\\{\\{([^}]+)\\}\\}/g, function(m, n) {
-      if (unresolvedNames.indexOf(n.trim()) >= 0) {
-        return '<span class="unresolved-var">' + m + '</span>';
-      }
-      return m;
-    });
+  if (hasUnresolved) {
     overlay.innerHTML = html;
     overlay.classList.remove('hidden');
-    
     overlay.scrollLeft = urlEl.scrollLeft;
   } else {
     overlay.innerHTML = '';
@@ -3958,23 +3987,45 @@ function checkUnresolvedVars() {
   }
 }
 
-function collectVariablePreviewItems(text) {
+function collectVariablePreviewItems(text, field) {
   var value = String(text || '');
-  var regex = /\{\{([^}]+)\}\}/g;
-  var seen = {};
-  var items = [];
+  var isUrlField = !!(field && field.classList && field.classList.contains('js-url'));
+  if (isUrlField && typeof analyzeUrlVariableOccurrencesForUi === 'function') {
+    var tab = tabs.find(function(t) { return t.id === activeTabId; });
+    var occurrences = analyzeUrlVariableOccurrencesForUi(value, tab && tab.pathVariableOverrides);
+    var items = [];
+    var seen = {};
+    occurrences.forEach(function(occ) {
+      var key = occ.name + '\\0' + occ.scope + '\\0' + String(occ.resolvedBy) + '\\0' + (occ.missing ? '1' : '0') + '\\0' + occ.value;
+      if (seen[key]) return;
+      seen[key] = true;
+      items.push({
+        name: occ.name,
+        value: occ.value,
+        missing: !!occ.missing,
+        source: occ.resolvedBy === 'path-override' ? 'request' : (occ.resolvedBy === 'environment' ? 'environment' : ''),
+        scope: occ.scope
+      });
+    });
+    return items;
+  }
+  var regex = /\\{\\{([^}]+)\\}\\}/g;
+  var seenNames = {};
+  var legacyItems = [];
   var match;
   while ((match = regex.exec(value)) !== null) {
-    var name = (match[1] || '').trim();
-    if (!name || seen[name]) continue;
-    seen[name] = true;
-    items.push({
-      name: name,
-      value: Object.prototype.hasOwnProperty.call(activeVarValues, name) ? String(activeVarValues[name] ?? '') : '',
-      missing: activeVarKeys.indexOf(name) < 0
+    var legacyName = (match[1] || '').trim();
+    if (!legacyName || seenNames[legacyName]) continue;
+    seenNames[legacyName] = true;
+    legacyItems.push({
+      name: legacyName,
+      value: Object.prototype.hasOwnProperty.call(activeVarValues, legacyName) ? String(activeVarValues[legacyName] ?? '') : '',
+      missing: activeVarKeys.indexOf(legacyName) < 0,
+      source: activeVarKeys.indexOf(legacyName) >= 0 ? 'environment' : '',
+      scope: ''
     });
   }
-  return items;
+  return legacyItems;
 }
 
 function ensureVariablePreviewPopover() {
@@ -3999,7 +4050,7 @@ function syncVariablePreviewHints(scope) {
       field.removeAttribute('title');
       return;
     }
-    var items = collectVariablePreviewItems(field.value || '');
+    var items = collectVariablePreviewItems(field.value || '', field);
     if (!items.length) {
       delete field.dataset.varPreview;
       delete field.dataset.varPreviewHtml;
@@ -4008,13 +4059,25 @@ function syncVariablePreviewHints(scope) {
     }
 
     var previewText = items.map(function(item) {
-      return '{{' + item.name + '}} → ' + (item.missing ? tr('webview.variablePreviewMissing') : item.value);
+      if (item.missing) {
+        return '{{' + item.name + '}} → ' + tr('webview.variablePreviewMissing');
+      }
+      var sourceLabel = item.source === 'request'
+        ? tr('webview.variablePreviewSourceRequest')
+        : (item.source === 'environment' ? tr('webview.variablePreviewSourceEnvironment') : '');
+      return '{{' + item.name + '}} → ' + item.value + (sourceLabel ? (' (' + sourceLabel + ')') : '');
     }).join('\\n');
     var previewHtml = '<div class="var-preview-title">' + escapeHtml(tr('webview.variablePreviewTitle')) + '</div>' +
       items.map(function(item) {
-        return '<div class="var-preview-line">' +
+        var sourceLabel = item.source === 'request'
+          ? tr('webview.variablePreviewSourceRequest')
+          : (item.source === 'environment' ? tr('webview.variablePreviewSourceEnvironment') : '');
+        var valueText = item.missing ? tr('webview.variablePreviewMissing') : item.value;
+        return '<div class="var-preview-line" data-testid="var-preview-line" data-var-name="' + escapeAttr(item.name) + '" data-var-missing="' + (item.missing ? 'true' : 'false') + '" data-var-source="' + escapeAttr(item.source || '') + '" data-var-scope="' + escapeAttr(item.scope || '') + '">' +
           '<span class="var-preview-name">{{' + escapeHtml(item.name) + '}}</span>' +
-          '<span class="var-preview-value' + (item.missing ? ' missing' : '') + '">' + escapeHtml(item.missing ? tr('webview.variablePreviewMissing') : item.value) + '</span>' +
+          '<span class="var-preview-value' + (item.missing ? ' missing' : '') + '" data-testid="var-preview-value">' + escapeHtml(valueText) +
+            ((!item.missing && sourceLabel) ? ('<span class="var-preview-source">' + escapeHtml(sourceLabel) + '</span>') : '') +
+          '</span>' +
         '</div>';
       }).join('');
 

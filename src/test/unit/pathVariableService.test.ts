@@ -105,6 +105,91 @@ describe('PathVariableService', () => {
     });
   });
 
+  describe('analyzeUrlVariableOccurrences', () => {
+    it('marks path override as resolved when Environment is missing the key', () => {
+      const occurrences = PathVariableService.analyzeUrlVariableOccurrences(
+        '{{baseUrl}}/mz-chat/{{dsgIdn}}/customer.do',
+        [{ key: 'dsgIdn', value: '1111' }],
+        ['baseUrl'],
+        { baseUrl: 'https://example.test' }
+      );
+      const pathDsg = occurrences.find((item) => item.name === 'dsgIdn');
+      const base = occurrences.find((item) => item.name === 'baseUrl');
+      assert.ok(pathDsg);
+      assert.strictEqual(pathDsg!.scope, 'path');
+      assert.strictEqual(pathDsg!.resolvedBy, 'path-override');
+      assert.strictEqual(pathDsg!.value, '1111');
+      assert.strictEqual(pathDsg!.missing, false);
+      assert.strictEqual(base!.resolvedBy, 'environment');
+      assert.strictEqual(base!.missing, false);
+    });
+
+    it('keeps path unresolved when override and Environment are both missing', () => {
+      const occurrences = PathVariableService.analyzeUrlVariableOccurrences(
+        '{{baseUrl}}/mz-chat/{{dsgIdn}}/customer.do',
+        [],
+        ['baseUrl'],
+        { baseUrl: 'https://example.test' }
+      );
+      const pathDsg = occurrences.find((item) => item.name === 'dsgIdn');
+      assert.strictEqual(pathDsg!.missing, true);
+      assert.strictEqual(pathDsg!.resolvedBy, null);
+    });
+
+    it('uses Environment for path when override is absent', () => {
+      const occurrences = PathVariableService.analyzeUrlVariableOccurrences(
+        '/users/{{userId}}',
+        [],
+        ['userId'],
+        { userId: '9000' }
+      );
+      assert.strictEqual(occurrences[0].resolvedBy, 'environment');
+      assert.strictEqual(occurrences[0].value, '9000');
+      assert.strictEqual(occurrences[0].missing, false);
+    });
+
+    it('prefers path override over Environment for path occurrence', () => {
+      const occurrences = PathVariableService.analyzeUrlVariableOccurrences(
+        '/users/{{userId}}',
+        [{ key: 'userId', value: '1111' }],
+        ['userId'],
+        { userId: '9000' }
+      );
+      assert.strictEqual(occurrences[0].resolvedBy, 'path-override');
+      assert.strictEqual(occurrences[0].value, '1111');
+    });
+
+    it('keeps query occurrence unresolved when only path override exists', () => {
+      const occurrences = PathVariableService.analyzeUrlVariableOccurrences(
+        '{{baseUrl}}/mz-chat/{{dsgIdn}}/customer.do?echo={{dsgIdn}}',
+        [{ key: 'dsgIdn', value: '1111' }],
+        ['baseUrl'],
+        { baseUrl: 'https://example.test' }
+      );
+      const dsg = occurrences.filter((item) => item.name === 'dsgIdn');
+      assert.strictEqual(dsg.length, 2);
+      assert.strictEqual(dsg[0].scope, 'path');
+      assert.strictEqual(dsg[0].missing, false);
+      assert.strictEqual(dsg[0].resolvedBy, 'path-override');
+      assert.strictEqual(dsg[1].scope, 'other');
+      assert.strictEqual(dsg[1].missing, true);
+      assert.strictEqual(dsg[1].resolvedBy, null);
+    });
+
+    it('does not treat path override as resolving non-path scopes', () => {
+      const occurrences = PathVariableService.analyzeUrlVariableOccurrences(
+        '/users/{{userId}}',
+        [{ key: 'userId', value: '1111' }],
+        [],
+        {}
+      );
+      assert.strictEqual(occurrences[0].scope, 'path');
+      assert.strictEqual(occurrences[0].missing, false);
+      // Same key in a body-like string is out of scope for this analyzer; callers must not reuse path results.
+      assert.ok(!PathVariableService.extractPathVariableNames('{"id":"{{userId}}"}').includes('userId'));
+    });
+  });
+
   describe('normalize and prune', () => {
     it('normalizes missing/invalid override payloads to empty', () => {
       assert.deepStrictEqual(PathVariableService.normalizeOverrides(undefined), []);

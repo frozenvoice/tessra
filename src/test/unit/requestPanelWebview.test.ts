@@ -195,6 +195,8 @@ const TEST_STRINGS: Record<string, string> = {
   'webview.variableUsageCount': '{count} variables',
   'webview.variablePreviewTitle': 'Resolved variables',
   'webview.variablePreviewMissing': 'Missing in the active environment',
+  'webview.variablePreviewSourceRequest': 'Request',
+  'webview.variablePreviewSourceEnvironment': 'Environment',
   'webview.variableAutocompleteTitle': 'Insert variable',
   'webview.variableAutocompleteEmpty': 'There are no matching variables in the active environment.',
   'webview.varScopeUrl': 'URL',

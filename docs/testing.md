@@ -5,7 +5,7 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**18** stable specs, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts template insertion, Settings editor state, Path Variables override, and Request More narrow-viewport geometry) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**20** stable specs, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts template insertion, Settings editor state, Path Variables override, Request More narrow-viewport geometry, Path Variable occurrence resolution UI, and Body scroll ownership) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
@@ -21,14 +21,15 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (18 specs, includes Collection Runner + WebSocket + Environment autosave + Default Headers + Auth Bearer + Scripts template + Settings editor + Path Variables + Request More narrow geometry)
+npm run test:e2e         # stable VS Code UI E2E (20 specs, includes Collection Runner + WebSocket + Environment autosave + Default Headers + Auth Bearer + Scripts template + Settings editor + Path Variables + Request More narrow geometry + Path Variable resolution UI + Body scroll ownership)
+npm run test:e2e:ui-regressions  # critical UI contracts (#18/#19/#20): narrow geometry + path occurrence resolution + body scroll ownership
 npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
 npm run test:e2e:all     # stable suite then focused runner suite
 npm run test:e2e:ci      # CI stable suite
 npm run test:all         # unit + stable E2E
 ```
 
-`npm run ci` stays unit/typecheck/build only. GitHub Actions runs `test:e2e:ci` in a separate job.
+`npm run ci` stays unit/typecheck/build only. GitHub Actions e2e job runs `test:e2e:ui-regressions` (named critical UI regression contracts) then `test:e2e:ci`.
 
 Do **not** add a bare `**/runner/**` Playwright `testIgnore` — GitHub Actions absolute paths contain `/home/runner/work/...` and that pattern would drop every stable spec (`No tests found`). Collection Runner specs live under `e2e/specs/runner/` and are part of the default suite.
 
@@ -80,6 +81,18 @@ Path Variables E2E (#17) fills `{{baseUrl}}/mz-chat/{{customerId}}/customer.do`,
 
 Request More narrow geometry E2E (#18) forces a ~430–500px Request Webview width, asserts Method/URL/Send/More stay visible with Send+More adjacent (no left-orphan More), opens Request overflow, and asserts menu `getBoundingClientRect()` stays inside the webview viewport with padding (not merely `.toBeVisible()`).
 
+Path Variable resolution UI E2E (#19) uses Environment-missing `dsgIdn` with Request-local Path Variables `1111`, asserts path occurrence is not unresolved/red and preview source/value is Request/`1111`, Sends `/mz-chat/1111/customer.do`, then adds `?echo={{dsgIdn}}` and asserts path stays resolved while query stays unresolved (occurrence-level, not name-global).
+
+Body scroll ownership E2E (#20) loads a long JSON body, forces short BrowserWindow + Playwright viewport heights, asserts text Body hierarchy has exactly one vertically scrollable owner (textarea), wheels content and checks outer panel stays at `scrollTop=0` with highlight mirror sync, then JSON→Raw→JSON and Form Data class cleanup.
+
+### Critical UI regression quality principles
+
+1. UI element가 DOM상 visible인 것만으로 layout PASS 처리하지 않는다.
+2. popup/menu는 viewport geometry를 검증한다.
+3. variable warning은 source 존재 여부가 아니라 실제 occurrence resolution을 검증한다.
+4. scrollable editor는 실제 scroll owner 수와 wheel interaction을 검증한다.
+5. Request Panel layout 변경은 narrow-width와 short-height 실제 BrowserWindow에서 검증한다.
+
 ## Stable selectors
 
 Prefer `data-testid` (locale-independent). Do not bind E2E to nth-child CSS or English-only labels.
@@ -101,7 +114,8 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 3. Reuse `e2e/helpers/*` and the local fixture server.
 4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
 5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
-6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **18** (or intentionally adjust the count here).
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **20** (or intentionally adjust the count here).
+7. Layout / variable-resolution / scroll-ownership regressions that users can see immediately should also stay in `npm run test:e2e:ui-regressions` (#18/#19/#20).
 
 ### Native file dialogs (`.env` import)
 
