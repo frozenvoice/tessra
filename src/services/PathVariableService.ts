@@ -55,6 +55,11 @@ function splitUrlBase(rawUrl: string): UrlBaseParts {
  * query/fragment placeholders, and partial-segment tokens like `user-{{id}}`.
  */
 export class PathVariableService {
+  /** Non-empty usable override only. Whitespace-only is inactive; stored value is not auto-trimmed. */
+  static isActiveOverrideValue(value: unknown): boolean {
+    return String(value ?? '').trim().length > 0;
+  }
+
   static normalizeOverrides(value: unknown): PathVariableOverride[] {
     if (!Array.isArray(value)) {
       return [];
@@ -70,10 +75,14 @@ export class PathVariableService {
       if (!key || seen.has(key)) {
         continue;
       }
+      const nextValue = typeof raw.value === 'string' ? raw.value : String(raw.value ?? '');
+      if (!this.isActiveOverrideValue(nextValue)) {
+        continue;
+      }
       seen.add(key);
       out.push({
         key,
-        value: typeof raw.value === 'string' ? raw.value : String(raw.value ?? ''),
+        value: nextValue,
       });
     }
     return out;

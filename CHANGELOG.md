@@ -7,6 +7,7 @@
 - URL variable warnings now follow occurrence-level resolution: a Request-local Path Variable value clears the red underline for that path segment even when the key is missing from the Environment.
 - The same name in query, headers, body, or auth stays unresolved unless Environment (or that field's own resolution) can fill it.
 - JSON / XML / Raw Body editors no longer show a ghost or double vertical scrollbar; the textarea is the single scroll owner, including on short windows.
+- Clearing a request-local Path Variable now removes the override, restoring Environment fallback or unresolved state instead of treating an empty value as resolved.
 
 ### Reliability
 

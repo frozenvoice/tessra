@@ -59,6 +59,10 @@ function extractPathVariableNames(rawUrl) {
   return names;
 }
 
+function isActivePathVariableOverrideValue(value) {
+  return String(value == null ? '' : value).trim().length > 0;
+}
+
 function normalizePathVariableOverrides(value) {
   if (!Array.isArray(value)) return [];
   var out = [];
@@ -67,10 +71,12 @@ function normalizePathVariableOverrides(value) {
     if (!item || typeof item !== 'object') return;
     var key = typeof item.key === 'string' ? item.key.trim() : '';
     if (!key || seen[key]) return;
+    var nextValue = typeof item.value === 'string' ? item.value : String(item.value == null ? '' : item.value);
+    if (!isActivePathVariableOverrideValue(nextValue)) return;
     seen[key] = true;
     out.push({
       key: key,
-      value: typeof item.value === 'string' ? item.value : String(item.value == null ? '' : item.value)
+      value: nextValue
     });
   });
   return out;
@@ -260,7 +266,9 @@ function collectPathVariableOverridesFromContent(mc, url) {
     if (!key || !active[key]) return;
     if (row.dataset.mode !== 'request' || row.dataset.override !== '1') return;
     var input = row.querySelector('.js-path-var-value');
-    overrides.push({ key: key, value: input ? (input.value || '') : '' });
+    var value = input ? (input.value || '') : '';
+    if (!isActivePathVariableOverrideValue(value)) return;
+    overrides.push({ key: key, value: value });
   });
   return overrides;
 }
@@ -297,7 +305,9 @@ function upsertPathVariableOverride(tab, key, value) {
   var next = normalizePathVariableOverrides(tab.pathVariableOverrides).filter(function(item) {
     return item.key !== key;
   });
-  next.push({ key: key, value: value == null ? '' : String(value) });
+  if (isActivePathVariableOverrideValue(value)) {
+    next.push({ key: key, value: value == null ? '' : String(value) });
+  }
   setTabPathVariableOverrides(tab, next);
 }
 
@@ -319,11 +329,15 @@ function bindPathVariablesSection(mc) {
     var row = input.closest('.js-path-var-row');
     var tab = tabs.find(function(t) { return t.id === activeTabId; });
     if (!tab || !row || !row.dataset.key) return;
+    var nextValue = input.value || '';
     var wasOverride = row.dataset.override === '1';
-    row.dataset.override = '1';
-    row.dataset.mode = 'request';
-    upsertPathVariableOverride(tab, row.dataset.key, input.value || '');
-    if (!wasOverride) {
+    var isActive = isActivePathVariableOverrideValue(nextValue);
+    if (isActive) {
+      upsertPathVariableOverride(tab, row.dataset.key, nextValue);
+    } else {
+      removePathVariableOverride(tab, row.dataset.key);
+    }
+    if (wasOverride !== isActive) {
       refreshPathVariablesSection(mc);
       var nextInput = mc.querySelector('.js-path-var-row[data-key="' + row.dataset.key + '"] .js-path-var-value');
       if (nextInput) {

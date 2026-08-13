@@ -30,6 +30,7 @@ import {
   SUPPORTED_REQUEST_PANEL_THEMES,
 } from './services/LocalizationService';
 import { RequestExportService } from './services/RequestExportService';
+import { PathVariableService } from './services/PathVariableService';
 
 const VALID_HTTP_METHODS: ReadonlySet<HttpMethod> = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 
@@ -1210,20 +1211,7 @@ function normalizeImportedKeyValues(value: unknown): KeyValue[] {
 }
 
 function normalizeImportedPathVariableOverrides(value: unknown): PathVariableOverride[] {
-  if (!Array.isArray(value)) { return []; }
-  const items: PathVariableOverride[] = [];
-  const seen = new Set<string>();
-  for (const item of value) {
-    if (!isRecord(item)) { continue; }
-    const key = typeof item.key === 'string' ? item.key.trim() : '';
-    if (!key || seen.has(key)) { continue; }
-    seen.add(key);
-    items.push({
-      key,
-      value: typeof item.value === 'string' ? item.value : String(item.value ?? ''),
-    });
-  }
-  return items;
+  return PathVariableService.normalizeOverrides(value);
 }
 
 function normalizeImportedFormData(value: unknown): FormDataField[] {

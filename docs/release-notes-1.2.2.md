@@ -8,4 +8,6 @@ When a Path Variable has a Request-local value, Send already resolved that path 
 
 Long JSON / XML / Raw Body payloads could show a ghost scrollbar or two vertical scrollbars, especially on shorter windows. Text Body modes now keep a single scroll owner on the textarea. Form Data and Binary keep their existing panel scrolling.
 
-No Path Variables execution contract, Environment, Runner, or request schema changes.
+Clearing a request-local Path Variable value now removes that override. Environment fallback returns if the key exists; otherwise the path occurrence is unresolved again. An empty value is not sent as a blank path segment.
+
+No Path Variables execution contract beyond this empty-value rule, Environment, Runner, or request schema changes.

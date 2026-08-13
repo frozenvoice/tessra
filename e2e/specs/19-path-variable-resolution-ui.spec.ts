@@ -5,6 +5,51 @@ import {
   openNewRequestPanel,
   waitForResponseStatus,
 } from '../helpers/webview';
+import type { FrameLocator } from '@playwright/test';
+
+type PreviewLine = {
+  name: string;
+  missing: string;
+  source: string;
+  scope: string;
+};
+
+async function readUrlPreviewLines(frame: FrameLocator, varName?: string): Promise<PreviewLine[]> {
+  return frame.locator('[data-testid="request-url"]').evaluate((el, name) => {
+    const lines = Array.from(
+      new DOMParser()
+        .parseFromString((el as HTMLInputElement).dataset.varPreviewHtml || '', 'text/html')
+        .querySelectorAll('[data-testid="var-preview-line"]')
+    ).map((node) => ({
+      name: (node as HTMLElement).dataset.varName || '',
+      missing: (node as HTMLElement).dataset.varMissing || '',
+      source: (node as HTMLElement).dataset.varSource || '',
+      scope: (node as HTMLElement).dataset.varScope || '',
+    }));
+    return name ? lines.filter((line) => line.name === name) : lines;
+  }, varName);
+}
+
+async function readNamedOccurrenceState(frame: FrameLocator, varName: string) {
+  return frame.locator('body').evaluate((_, name) => {
+    const unresolved = Array.from(
+      document.querySelectorAll(`[data-testid="url-var-unresolved"][data-var-name="${name}"]`)
+    ).map((el) => (el as HTMLElement).dataset.varScope || '');
+    const resolved = Array.from(
+      document.querySelectorAll(`[data-testid="url-var-resolved"][data-var-name="${name}"]`)
+    ).map((el) => ({
+      scope: (el as HTMLElement).dataset.varScope || '',
+      source: (el as HTMLElement).dataset.varSource || '',
+    }));
+    const row = document.querySelector('[data-testid="path-variable-row"]') as HTMLElement | null;
+    return {
+      unresolved,
+      resolved,
+      override: row?.dataset.override || '',
+      mode: row?.dataset.mode || '',
+    };
+  }, varName);
+}
 
 test.describe('E2E #19 Path Variable occurrence resolution UI', () => {
   test('request-local path override clears path unresolved UI without resolving query', async ({ tessra }) => {
@@ -22,35 +67,18 @@ test.describe('E2E #19 Path Variable occurrence resolution UI', () => {
     await valueInput.fill('1111');
     await expect(valueInput).toHaveValue('1111');
 
-    const url = frame.locator('[data-testid="request-url"]');
     await expect
       .poll(async () => {
         return frame.locator('[data-testid="url-var-unresolved"][data-var-name="dsgIdn"]').count();
       }, { timeout: 8000 })
       .toBe(0);
 
-    const preview = await url.evaluate((el: HTMLInputElement) => ({
-      html: el.dataset.varPreviewHtml || '',
-      text: el.dataset.varPreview || '',
-      lines: Array.from(
-        new DOMParser()
-          .parseFromString(el.dataset.varPreviewHtml || '', 'text/html')
-          .querySelectorAll('[data-testid="var-preview-line"]')
-      ).map((node) => ({
-        name: (node as HTMLElement).dataset.varName || '',
-        missing: (node as HTMLElement).dataset.varMissing || '',
-        source: (node as HTMLElement).dataset.varSource || '',
-        scope: (node as HTMLElement).dataset.varScope || '',
-      })),
-    }));
-    const dsgLine = preview.lines.find((line) => line.name === 'dsgIdn');
+    const dsgLine = (await readUrlPreviewLines(frame, 'dsgIdn'))[0];
     expect(dsgLine).toEqual(expect.objectContaining({
       missing: 'false',
       source: 'request',
       scope: 'path',
     }));
-    expect(preview.lines.some((line) => line.name === 'dsgIdn' && line.missing === 'true')).toBe(false);
-    expect(preview.text.toLowerCase()).not.toContain('missing');
 
     await clickSend(frame);
     await waitForResponseStatus(frame, /404|200/);
@@ -61,41 +89,68 @@ test.describe('E2E #19 Path Variable occurrence resolution UI', () => {
     await expect(valueInput).toHaveValue('1111');
 
     await expect
-      .poll(async () => {
-        return frame.locator('body').evaluate(() => {
-          const unresolved = Array.from(
-            document.querySelectorAll('[data-testid="url-var-unresolved"][data-var-name="dsgIdn"]')
-          ).map((el) => (el as HTMLElement).dataset.varScope || '');
-          const resolved = Array.from(
-            document.querySelectorAll('[data-testid="url-var-resolved"][data-var-name="dsgIdn"]')
-          ).map((el) => ({
-            scope: (el as HTMLElement).dataset.varScope || '',
-            source: (el as HTMLElement).dataset.varSource || '',
-          }));
-          const previewHtml = (document.querySelector('[data-testid="request-url"]') as HTMLInputElement | null)
-            ?.dataset.varPreviewHtml || '';
-          return { unresolved, resolved, previewHtml };
-        });
-      }, { timeout: 8000 })
+      .poll(async () => readNamedOccurrenceState(frame, 'dsgIdn'), { timeout: 8000 })
       .toMatchObject({
         unresolved: ['other'],
         resolved: [{ scope: 'path', source: 'path-override' }],
+        override: '1',
       });
 
-    const mixedLines = await url.evaluate((el: HTMLInputElement) =>
-      Array.from(
-        new DOMParser()
-          .parseFromString(el.dataset.varPreviewHtml || '', 'text/html')
-          .querySelectorAll('[data-testid="var-preview-line"][data-var-name="dsgIdn"]')
-      ).map((node) => ({
-        missing: (node as HTMLElement).dataset.varMissing || '',
-        source: (node as HTMLElement).dataset.varSource || '',
-        scope: (node as HTMLElement).dataset.varScope || '',
-      }))
-    );
+    const mixedLines = await readUrlPreviewLines(frame, 'dsgIdn');
     expect(mixedLines).toEqual(expect.arrayContaining([
       expect.objectContaining({ scope: 'path', missing: 'false', source: 'request' }),
       expect.objectContaining({ scope: 'other', missing: 'true' }),
     ]));
+
+    await valueInput.fill('');
+    await expect(valueInput).toHaveValue('');
+    await expect
+      .poll(async () => readNamedOccurrenceState(frame, 'dsgIdn'), { timeout: 8000 })
+      .toMatchObject({
+        unresolved: expect.arrayContaining(['path', 'other']),
+        resolved: [],
+        override: '0',
+      });
+
+    const clearedLines = await readUrlPreviewLines(frame, 'dsgIdn');
+    expect(clearedLines.length).toBeGreaterThan(0);
+    expect(clearedLines.every((line) => line.missing === 'true' && line.source !== 'request')).toBe(true);
+    await expect(frame.locator('.preflight-warning')).toHaveCount(1);
+
+    await fillUrl(frame, '{{baseUrl}}/mz-chat/{{customerId}}/customer.do');
+    await expect(section).toBeVisible();
+    await expect(frame.locator('[data-testid="path-variable-env-value"]')).toHaveText('9000');
+
+    await frame.locator('[data-testid="path-variable-override"]').click();
+    await expect(valueInput).toBeVisible();
+    await valueInput.fill('1111');
+    await expect(valueInput).toHaveValue('1111');
+
+    await expect
+      .poll(async () => {
+        const lines = await readUrlPreviewLines(frame, 'customerId');
+        return lines.find((line) => line.scope === 'path');
+      }, { timeout: 8000 })
+      .toEqual(expect.objectContaining({
+        missing: 'false',
+        source: 'request',
+      }));
+    await expect(frame.locator('[data-testid="url-var-unresolved"][data-var-name="customerId"]')).toHaveCount(0);
+
+    await valueInput.fill('');
+    await expect(frame.locator('[data-testid="path-variable-env-value"]')).toHaveText('9000');
+    await expect(frame.locator('[data-testid="path-variable-value"]')).toHaveCount(0);
+    await expect(frame.locator('[data-testid="path-variable-row"]')).toHaveAttribute('data-mode', 'environment');
+
+    await expect
+      .poll(async () => {
+        const lines = await readUrlPreviewLines(frame, 'customerId');
+        return lines.find((line) => line.scope === 'path');
+      }, { timeout: 8000 })
+      .toEqual(expect.objectContaining({
+        missing: 'false',
+        source: 'environment',
+      }));
+    await expect(frame.locator('[data-testid="url-var-unresolved"][data-var-name="customerId"]')).toHaveCount(0);
   });
 });
