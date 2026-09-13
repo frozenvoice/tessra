@@ -11,6 +11,7 @@ export const INCOMING_WEBVIEW_MESSAGE_TYPES = new Set<string>([
   MessageType.SaveDefaultHeaders,
   MessageType.CancelRequest,
   MessageType.SaveTabState,
+  MessageType.UpdateTabDraft,
   MessageType.CompareResponses,
   MessageType.StopCollectionRun,
   MessageType.StartCollectionRun,

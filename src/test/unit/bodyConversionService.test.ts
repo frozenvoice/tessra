@@ -121,6 +121,21 @@ describe('BodyConversionService', () => {
         assert.deepStrictEqual(JSON.parse(result.body), { a: ['1', '2'] });
       }
     });
+
+    it('decodes plus as spaces and reports malformed percent encoding as invalid input', () => {
+      assert.deepStrictEqual(formUrlEncodedToJson('message=hello+world&signature=abc=='), {
+        message: 'hello world',
+        signature: 'abc==',
+      });
+      const result = BodyConversionService.convert(
+        { bodyType: 'form', body: 'message=%E0%A4%A' },
+        'json'
+      );
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.code, 'invalid_input');
+      }
+    });
   });
 
   describe('JSON ↔ form-data', () => {

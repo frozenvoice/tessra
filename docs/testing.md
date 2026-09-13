@@ -5,7 +5,7 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**20** stable specs, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts template insertion, Settings editor state, Path Variables override, Request More narrow-viewport geometry, Path Variable occurrence resolution UI, and Body scroll ownership) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**23 tests in 22 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, and execution context isolation) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
@@ -21,7 +21,7 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (20 specs, includes Collection Runner + WebSocket + Environment autosave + Default Headers + Auth Bearer + Scripts template + Settings editor + Path Variables + Request More narrow geometry + Path Variable resolution UI + Body scroll ownership)
+npm run test:e2e         # stable VS Code UI E2E (23 tests in 22 files)
 npm run test:e2e:ui-regressions  # critical UI contracts (#18/#19/#20): narrow geometry + path occurrence resolution + body scroll ownership
 npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
 npm run test:e2e:all     # stable suite then focused runner suite
@@ -85,6 +85,16 @@ Path Variable resolution UI E2E (#19) uses Environment-missing `dsgIdn` with Req
 
 Body scroll ownership E2E (#20) loads a long JSON body, forces short BrowserWindow + Playwright viewport heights, asserts text Body hierarchy has exactly one vertically scrollable owner (textarea), wheels content and checks outer panel stays at `scrollTop=0` with highlight mirror sync, then JSON→Raw→JSON and Form Data class cleanup.
 
+Response keyboard E2E (#21) checks roving tabindex, Arrow/Home/End navigation, selected states, and actual focus. Draft preservation E2E (#22) closes and reopens the VS Code request editor immediately after editing, before its disk-save debounce.
+
+Execution context E2E (#23) holds a real HTTP response in the local `/held` fixture, switches environments, and checks the new environment remains unchanged. It then switches profiles while another response is held and confirms late completion cannot populate the new profile's history or restored tabs. The fixture controls response completion; production code has no test backdoor.
+
+### Execution and data regression tests
+
+`executionLifecycle.test.ts` combines the real storage merge and RequestPanel execution-context methods with deferred HTTP/body preparation. It checks zero environment writes for empty scripts, changes applied to the original environment, set/unset conflicts preserving newer user edits, zero sends after cancellation during preparation, and zero history/UI writes from obsolete executions. Collection Runner has corresponding reset, empty-script, and WebSocket rejection tests.
+
+Storage validation tests load syntactically valid but malformed nested data from temporary files and assert original bytes, corrupt backups, and in-memory fallback behavior. Conversion tests execute generated fetch code with real FormData and compare multipart/auth/file semantics; transport tests assert unsupported initial and redirect protocols make no target connection. Script boundary tests cover constructor chains, errors, dynamic compilation, result serialization, and timeout behavior. These tests do not establish an OS security sandbox; see [script security limits](script-security.md).
+
 ### Critical UI regression quality principles
 
 1. UI element가 DOM상 visible인 것만으로 layout PASS 처리하지 않는다.
@@ -114,7 +124,7 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 3. Reuse `e2e/helpers/*` and the local fixture server.
 4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
 5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
-6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **20** (or intentionally adjust the count here).
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **23 tests** (or intentionally adjust the count here).
 7. Layout / variable-resolution / scroll-ownership regressions that users can see immediately should also stay in `npm run test:e2e:ui-regressions` (#18/#19/#20).
 
 ### Native file dialogs (`.env` import)

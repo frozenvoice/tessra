@@ -265,8 +265,48 @@ describe('CurlService', () => {
       const binary = CurlService.parseWithWarnings('curl --data-binary=@payload.json https://example.com');
 
       assert.strictEqual(raw.request.body, 'foo=bar');
-      assert.strictEqual(binary.request.body, '@payload.json');
-      assert.strictEqual(binary.request.bodyType, 'raw');
+      assert.strictEqual(binary.request.body, '');
+      assert.strictEqual(binary.request.binaryFilePath, 'payload.json');
+      assert.strictEqual(binary.request.bodyType, 'binary');
+    });
+
+    it('imports multipart text, duplicate, and file fields without reading files', () => {
+      const result = CurlService.parseWithWarnings(
+        "curl 'https://example.com/upload' -F 'name=demo' -F 'name=second=value' -F 'file=@fixture.bin'"
+      );
+      assert.strictEqual(result.request.method, 'POST');
+      assert.strictEqual(result.request.bodyType, 'formdata');
+      assert.deepStrictEqual(result.request.formData?.map(({ key, value, type }) => ({ key, value, type })), [
+        { key: 'name', value: 'demo', type: 'text' },
+        { key: 'name', value: 'second=value', type: 'text' },
+        { key: 'file', value: 'fixture.bin', type: 'file' },
+      ]);
+      assert.deepStrictEqual(result.warnings, []);
+    });
+
+    it('keeps @ literal for --form-string and warns on unsupported form attributes', () => {
+      const text = CurlService.parseWithWarnings("curl --form-string 'value=@literal' https://example.com");
+      assert.deepStrictEqual(text.request.formData?.[0], {
+        id: text.request.formData?.[0].id,
+        key: 'value',
+        value: '@literal',
+        enabled: true,
+        type: 'text',
+      });
+      const file = CurlService.parseWithWarnings("curl -F 'upload=@fixture.bin;type=application/octet-stream' https://example.com");
+      assert.strictEqual(file.request.formData?.[0].type, 'file');
+      assert.ok(file.warnings.some((warning) => warning.includes('form attributes')));
+    });
+
+    it('consumes unsupported option arguments so they cannot replace the URL', () => {
+      const result = CurlService.parseWithWarnings("curl --cert client.pem 'https://example.com/upload'");
+      assert.strictEqual(result.request.url, 'https://example.com/upload');
+      assert.ok(result.warnings.some((warning) => warning.includes('--cert')));
+      assert.ok(!result.warnings.some((warning) => warning.includes('No URL')));
+
+      const missingForm = CurlService.parseWithWarnings("curl -F 'https://example.com/upload'");
+      assert.strictEqual(missingForm.request.url, 'https://example.com/upload');
+      assert.ok(missingForm.warnings.some((warning) => warning.includes('Missing value for cURL option: -F')));
     });
 
     it('keeps hyphen-prefixed header values and auth values', () => {
@@ -421,6 +461,47 @@ describe('CurlService', () => {
       assert.strictEqual(parsed1.url, parsed2.url);
       assert.strictEqual(parsed1.body, parsed2.body);
       assert.strictEqual(parsed1.headers.length, parsed2.headers.length);
+    });
+
+    it('preserves multipart field order, duplicates, and file references', () => {
+      const original = {
+        method: 'POST',
+        url: 'https://api.example.com/upload',
+        headers: [{ key: 'Authorization', value: 'Bearer token', enabled: true }],
+        body: '',
+        bodyType: 'formdata' as const,
+        formData: [
+          { id: '1', key: 'tag', value: 'one', enabled: true, type: 'text' as const },
+          { id: '2', key: 'tag', value: 'two=with=equals', enabled: true, type: 'text' as const },
+          { id: '3', key: 'attachment', value: 'fixtures/data.bin', enabled: true, type: 'file' as const },
+        ],
+        auth: { type: 'none' as const },
+      };
+      const generated = CurlService.generate(original);
+      const parsed = CurlService.parse(generated);
+      assert.strictEqual(parsed.bodyType, 'formdata');
+      assert.deepStrictEqual(parsed.formData?.map(({ key, value, type }) => ({ key, value, type })), original.formData.map(({ key, value, type }) => ({ key, value, type })));
+      assert.strictEqual(parsed.auth.type, 'bearer');
+      assert.strictEqual(parsed.auth.bearer?.token, 'token');
+    });
+
+    it('preserves special multipart text and file paths through generated cURL', () => {
+      const original = {
+        method: 'POST',
+        url: 'https://api.example.com/upload',
+        body: '',
+        bodyType: 'formdata' as const,
+        formData: [
+          { id: '1', key: 'at', value: '@literal', enabled: true, type: 'text' as const },
+          { id: '2', key: 'less', value: '<literal', enabled: true, type: 'text' as const },
+          { id: '3', key: 'attrs', value: 'value;type=text', enabled: true, type: 'text' as const },
+          { id: '4', key: 'file', value: 'fixtures/my file;v1.bin', enabled: true, type: 'file' as const },
+        ],
+      };
+      const generated = CurlService.generate(original);
+      assert.ok(generated.includes('--form-string'));
+      const parsed = CurlService.parse(generated);
+      assert.deepStrictEqual(parsed.formData?.map(({ key, value, type }) => ({ key, value, type })), original.formData.map(({ key, value, type }) => ({ key, value, type })));
     });
   });
 });

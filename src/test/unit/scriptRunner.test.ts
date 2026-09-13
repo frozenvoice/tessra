@@ -91,6 +91,7 @@ describe('ScriptRunner', () => {
           pm.environment.set("requestId", pm.uuid());
           pm.environment.set("timestamp", String(pm.time.unix()));
           pm.environment.set("encoded", pm.encoding.base64Encode("Tessra"));
+          pm.environment.set("emptyDecoded", pm.encoding.base64Decode(""));
         `,
         test: '',
       },
@@ -107,6 +108,7 @@ describe('ScriptRunner', () => {
     assert.match(values.requestId, /^[0-9a-f-]{36}$/i);
     assert.ok(Number(values.timestamp) > 1_700_000_000);
     assert.strictEqual(values.encoded, pmBase64('Tessra'));
+    assert.strictEqual(values.emptyDecoded, '');
   });
 
   it('exposes the same utilities in test scripts and records utility failures', () => {
@@ -152,7 +154,7 @@ describe('ScriptRunner', () => {
     );
   });
 
-  it('keeps Node runtime APIs inaccessible from the sandbox', () => {
+  it('rejects direct references to Node runtime globals', () => {
     const probes = [
       'require("fs")',
       'process.env',
@@ -167,6 +169,102 @@ describe('ScriptRunner', () => {
         /Script execution failed/
       );
     }
+  });
+
+  it('빈 script는 빈 key를 포함한 environment 행을 그대로 보존한다', () => {
+    const variables = [{ key: '', value: 'draft', enabled: false }];
+    const result = ScriptRunner.runPreRequest({ preRequest: '', test: '' }, request, variables);
+    assert.deepStrictEqual(result.envVariables, variables);
+  });
+
+  it('blocks constructor-chain escapes from globals, exposed functions, errors, and results', () => {
+    const preRequestProbes = [
+      'globalThis.constructor.constructor("return process")()',
+      'request.constructor.constructor("return process")()',
+      'pm.environment.set.constructor("return process")()',
+      'console.log.constructor("return process")()',
+    ];
+    for (const probe of preRequestProbes) {
+      assert.throws(
+        () => ScriptRunner.runPreRequest({ preRequest: probe, test: '' }, request, []),
+        /Script execution failed/
+      );
+    }
+
+    const result = ScriptRunner.runTests(
+      {
+        preRequest: '',
+        test: `
+          pm.test('error is realm-owned', function () {
+            try {
+              throw new Error('expected failure');
+            } catch (error) {
+              error.constructor.constructor('return process')();
+            }
+          });
+          pm.test('response result is realm-owned', function () {
+            pm.response.json().constructor.constructor('return process')();
+          });
+        `,
+      },
+      request,
+      okResponse,
+      []
+    );
+
+    assert.strictEqual(result.result.tests.length, 2);
+    assert.ok(result.result.tests.every((test) => !test.passed));
+    assert.match(result.result.tests[0].error || '', /Code generation from strings disallowed/);
+    assert.match(result.result.tests[1].error || '', /Code generation from strings disallowed/);
+  });
+
+  it('disallows eval and Function string compilation while preserving timeout enforcement', () => {
+    for (const probe of ['eval("process")', 'Function("return process")()']) {
+      assert.throws(
+        () => ScriptRunner.runPreRequest({ preRequest: probe, test: '' }, request, []),
+        /Script execution failed.*Code generation from strings disallowed/
+      );
+    }
+    assert.throws(
+      () => ScriptRunner.runPreRequest({ preRequest: 'while (true) {}', test: '' }, request, [], 100),
+      /Script execution timed out after 100 ms/
+    );
+    assert.throws(
+      () => ScriptRunner.runPreRequest(
+        { preRequest: 'throw { get message() { while (true) {} } };', test: '' },
+        request,
+        [],
+        100
+      ),
+      /Script execution timed out after 100 ms/
+    );
+  });
+
+  it('preserves a useful syntax error without evaluating user code', () => {
+    assert.throws(
+      () => ScriptRunner.runPreRequest({ preRequest: 'const broken = ;', test: '' }, request, []),
+      /Script execution failed:.*Unexpected token/
+    );
+  });
+
+  it('bounds Promise microtasks and the realm UUID pool', () => {
+    assert.throws(
+      () => ScriptRunner.runPreRequest(
+        { preRequest: 'Promise.resolve().then(function () { while (true) {} });', test: '' },
+        request,
+        [],
+        100
+      ),
+      /Script execution timed out after 100 ms/
+    );
+    assert.throws(
+      () => ScriptRunner.runPreRequest(
+        { preRequest: 'for (let index = 0; index < 257; index += 1) { pm.uuid(); }', test: '' },
+        request,
+        []
+      ),
+      /UUID utility pool exhausted/
+    );
   });
 
   it('keeps pm.environment and pm.variables aliases working with utilities', () => {

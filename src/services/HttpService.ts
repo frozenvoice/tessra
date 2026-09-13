@@ -139,6 +139,7 @@ export class HttpService {
         try {
           nextUrl = new URL(location, currentUrl).toString();
         } catch {
+          safeReject(new Error('Invalid redirect URL'));
           return null;
         }
 
@@ -171,12 +172,22 @@ export class HttpService {
         currentHeaders: Record<string, string>,
         redirectCount: number
       ) => {
+        if (settled) { return; }
         if (aborted) {
           safeReject(new Error('Request was canceled'));
           return;
         }
 
-        const parsedUrl = new URL(currentUrl);
+        let parsedUrl: URL;
+        try {
+          parsedUrl = new URL(currentUrl);
+          if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            throw new Error(`Unsupported HTTP protocol: ${parsedUrl.protocol}`);
+          }
+        } catch (error: unknown) {
+          safeReject(error);
+          return;
+        }
         const isHttps = parsedUrl.protocol === 'https:';
         const transport = isHttps ? https : http;
         const requestOptions: http.RequestOptions & { rejectUnauthorized?: boolean } = {
@@ -218,6 +229,7 @@ export class HttpService {
               responseHeaders,
               currentHeaders
             );
+            if (settled) { res.resume(); return; }
             if (redirectTarget) {
               res.resume();
               res.on('end', () => {

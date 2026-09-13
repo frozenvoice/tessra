@@ -12,6 +12,7 @@ import { AuthService } from '../../services/AuthService';
 import { RequestBodyService } from '../../services/RequestBodyService';
 import { ScriptRunner } from '../../services/ScriptRunner';
 import { LocalizationService } from '../../services/LocalizationService';
+import { ExecutionContext, hasEnvironmentChanges } from './executionContext';
 import {
   buildUrl,
   cloneAllKeyValues,
@@ -35,17 +36,20 @@ import {
 } from './requestUtils';
 
 export interface CollectionRunnerHost {
+  captureExecutionContext(): ExecutionContext;
+  isExecutionContextCurrent(context: ExecutionContext): boolean;
   postMessage(message: unknown): void;
   getActiveVariables(): KeyValue[];
   getDefaultHeaders(): KeyValue[];
   getAllowInsecureCertificates(): boolean;
   getScriptTimeoutMs(): number;
   showInformationMessage?(message: string): void;
-  saveActiveEnvironmentVariables(variables: KeyValue[]): void;
+  saveEnvironmentChanges(context: ExecutionContext, before: KeyValue[], after: KeyValue[]): void;
   saveToHistory(
     request: Request,
     response: { status: number; statusText: string; time: number } | null,
-    timing?: RequestTiming
+    timing: RequestTiming | undefined,
+    context: ExecutionContext
   ): void;
   refreshHistory(): void;
 }
@@ -228,6 +232,15 @@ export class CollectionRunner {
     this.currentCollectionDelayCancel = null;
   }
 
+  reset(): void {
+    this.stop();
+    ++this.activeRunId;
+    this.stoppedRunIds.clear();
+    this.lastCollectionRunRequests = [];
+    this.lastCollectionRunName = null;
+    this.lastCollectionRunBaseName = null;
+  }
+
   private async runCollectionRequests(
     name: string,
     requests: Array<{ name: string; request: Request }>,
@@ -236,7 +249,9 @@ export class CollectionRunner {
   ): Promise<void> {
     this.stop();
     const runId = ++this.activeRunId;
-    this.stoppedRunIds.delete(runId);
+    const context = this.host.captureExecutionContext();
+    if (!this.host.isExecutionContextCurrent(context)) { return; }
+    this.stoppedRunIds.clear();
     this.collectionRunAbort = false;
     this.currentCollectionRequest = null;
     this.currentCollectionDelayCancel = null;
@@ -280,7 +295,7 @@ export class CollectionRunner {
     runLoop:
     for (let iterationIndex = 0; iterationIndex < options.iterations; iterationIndex++) {
       for (let requestIndex = 0; requestIndex < requests.length; requestIndex++) {
-        if (this.isRunStopped(runId)) { break runLoop; }
+        if (this.isRunStopped(runId) || !this.host.isExecutionContextCurrent(context)) { break runLoop; }
 
         const runIndex = completedRuns;
         const result = await this.executeCollectionRequest({
@@ -293,8 +308,9 @@ export class CollectionRunner {
           totalIterations: options.iterations,
           entry: requests[requestIndex],
           vars,
+          context,
         });
-        if (!result || this.isRunStopped(runId)) { break runLoop; }
+        if (!result || this.isRunStopped(runId) || !this.host.isExecutionContextCurrent(context)) { break runLoop; }
         vars = result.vars;
         completedRuns++;
         if (result.result.failed) { failed++; } else { passed++; }
@@ -350,7 +366,7 @@ export class CollectionRunner {
       }
     }
 
-    if (runId === this.activeRunId) {
+    if (runId === this.activeRunId && this.host.isExecutionContextCurrent(context)) {
       this.host.postMessage({
         type: MessageType.RunCollectionDone,
         total: requests.length,
@@ -382,6 +398,7 @@ export class CollectionRunner {
     totalIterations: number;
     entry: { name: string; request: Request };
     vars: KeyValue[];
+    context: ExecutionContext;
   }): Promise<{ result: CollectionRequestRunResult; vars: KeyValue[] } | null> {
     let vars = input.vars;
     const { name: reqName, request: req } = input.entry;
@@ -410,16 +427,23 @@ export class CollectionRunner {
     let status = 0;
     let statusText = '';
     let time = 0;
+    const isStopped = () => this.isRunStopped(input.runId) || !this.host.isExecutionContextCurrent(input.context);
 
     try {
+      if (isStopped()) { return null; }
+      if (isWebSocketCollectionRequest(req)) {
+        throw new Error(LocalizationService.t('panel.runnerWebSocketUnsupported'));
+      }
       if (isScriptExecutionBlocked(scripts, settings)) {
         throw new Error(LocalizationService.t('panel.importedScriptsBlocked'));
       }
       if (!settings.disableScripts) {
         const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars, this.host.getScriptTimeoutMs());
         requestState = preRequestResult.request;
+        if (hasEnvironmentChanges(vars, preRequestResult.envVariables)) {
+          this.host.saveEnvironmentChanges(input.context, vars, preRequestResult.envVariables);
+        }
         vars = preRequestResult.envVariables;
-        this.host.saveActiveEnvironmentVariables(vars);
       }
 
       const method = normalizeMethod(requestState.method, initialMethod);
@@ -432,6 +456,9 @@ export class CollectionRunner {
         req.pathVariableOverrides
       );
       const resolvedUrl = PathVariableService.resolveUrl(requestState.url, pathVariableOverrides, vars);
+      if (/^wss?:\/\//i.test(resolvedUrl)) {
+        throw new Error(LocalizationService.t('panel.runnerWebSocketUnsupported'));
+      }
       const resolvedHeaders = VariableService.resolveKeyValues(requestState.headers, vars);
       const resolvedParams = VariableService.resolveKeyValues(requestState.params, vars);
       const resolvedBody = VariableService.resolve(requestState.body ?? '', vars);
@@ -477,6 +504,7 @@ export class CollectionRunner {
         headers: finalHeaders,
         vars,
       });
+      if (isStopped()) { return null; }
       const executedRequest = createScriptableRequest({
         method,
         url,
@@ -501,7 +529,7 @@ export class CollectionRunner {
 
       const totalAttempts = Math.max(1, settings.retryCount + 1);
       for (let attempt = 0; attempt <= settings.retryCount; attempt++) {
-        if (this.isRunStopped(input.runId)) {
+        if (isStopped()) {
           throw new Error('Request was canceled');
         }
 
@@ -537,10 +565,10 @@ export class CollectionRunner {
 
         try {
           response = await handle.promise;
-          this.currentCollectionRequest = null;
+          if (this.currentCollectionRequest === handle) { this.currentCollectionRequest = null; }
         } catch (err: unknown) {
-          this.currentCollectionRequest = null;
-          if (this.isRunStopped(input.runId) || attempt >= settings.retryCount) {
+          if (this.currentCollectionRequest === handle) { this.currentCollectionRequest = null; }
+          if (isStopped() || attempt >= settings.retryCount) {
             throw err;
           }
           this.host.postMessage({
@@ -561,6 +589,8 @@ export class CollectionRunner {
           await this.waitForCollectionRetryDelay(settings.retryDelayMs, input.runId);
           continue;
         }
+
+        if (isStopped()) { return null; }
 
         if (response && attempt < settings.retryCount && shouldRetryResponse(response.status)) {
           this.host.postMessage({
@@ -589,29 +619,33 @@ export class CollectionRunner {
       if (!response) {
         throw new Error('Request did not produce a response.');
       }
+      if (isStopped()) { return null; }
       status = response.status;
       statusText = response.statusText;
       time = response.time;
 
       if (!settings.disableScripts) {
         const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars, this.host.getScriptTimeoutMs());
+        if (hasEnvironmentChanges(vars, testResult.envVariables)) {
+          this.host.saveEnvironmentChanges(input.context, vars, testResult.envVariables);
+        }
         vars = testResult.envVariables;
-        this.host.saveActiveEnvironmentVariables(vars);
         const failedTests = testResult.result.tests.filter((test) => !test.passed).length;
         if (failedTests > 0) {
           error = `Tests failed: ${failedTests}`;
         }
       }
     } catch (err: unknown) {
-      if (this.isRunStopped(input.runId)) { return null; }
+      if (isStopped()) { return null; }
       error = err instanceof Error ? err.message : String(err);
     } finally {
-      this.currentCollectionRequest = null;
-      if (!this.isRunStopped(input.runId) && settings.saveToHistory && historyRequest) {
+      if (input.runId === this.activeRunId) { this.currentCollectionRequest = null; }
+      if (!isStopped() && settings.saveToHistory && historyRequest) {
         this.host.saveToHistory(
           historyRequest,
           response ? { status: response.status, statusText: response.statusText, time: response.time } : null,
-          createRequestTiming(requestStartedAt)
+          createRequestTiming(requestStartedAt),
+          input.context
         );
         this.host.refreshHistory();
       }
@@ -644,12 +678,20 @@ export class CollectionRunner {
   private async waitForCancelableDelay(ms: number, runId: number): Promise<void> {
     if (ms <= 0) { return; }
 
+    let delayCancel: (() => void) | null = null;
     try {
       await createCancelableDelay(ms, (cancel) => {
-        this.currentCollectionDelayCancel = cancel;
+        if (cancel) {
+          delayCancel = cancel;
+          this.currentCollectionDelayCancel = cancel;
+        } else if (this.currentCollectionDelayCancel === delayCancel) {
+          this.currentCollectionDelayCancel = null;
+        }
       });
     } finally {
-      this.currentCollectionDelayCancel = null;
+      if (this.currentCollectionDelayCancel === delayCancel) {
+        this.currentCollectionDelayCancel = null;
+      }
     }
 
     if (this.isRunStopped(runId)) {

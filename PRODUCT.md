@@ -52,6 +52,9 @@ Hard constraints future work must preserve:
 - No external CDN / remote resource loading in the Webview
 - Runtime stays dependency-light: esbuild bundle plus Node built-ins (`http` / `https` / `net` / `tls`)
 - Security defaults stay safe (TLS verification on; insecure TLS and script trust are opt-in)
+- Execution keeps the starting profile/environment; script set/unset deltas preserve concurrent edits with conflict warnings. Profile changes cancel active work and reject late results.
+- HTTP transport accepts http/https only, including redirects. Collection Runner rejects WebSocket execution; WebSocket connections remain available in request tabs.
+- Script APIs use JSON boundaries and VM-owned objects. This limits exposed capabilities but is not an OS sandbox for hostile code; see `docs/script-security.md`.
 - `engines.vscode` is not raised casually
 - Workspace `variables.json` may be preserved in backups, but request `{{variable}}` resolution remains active-environment-driven unless product scope explicitly changes
 

@@ -104,4 +104,35 @@ describe('ImportExportService', () => {
     assert.strictEqual(request.disableScripts, true);
     assert.strictEqual(request.scriptsTrusted, false);
   });
+
+  it('exports form-urlencoded values using the first equals and plus as a space', () => {
+    const exported = ImportExportService.exportCollection({
+      id: 'collection-1',
+      name: 'Form collection',
+      items: [{
+        id: 'request-1',
+        name: 'Form request',
+        type: 'request',
+        request: {
+          id: 'request-1',
+          name: 'Form request',
+          method: 'POST',
+          url: 'https://example.com/form',
+          headers: [],
+          params: [],
+          body: 'message=hello+world&signature=abc==',
+          bodyType: 'form',
+          formData: [],
+          binaryFilePath: '',
+          auth: { type: 'none' },
+        },
+      }],
+    });
+    const body = (exported.item as Array<Record<string, unknown>>)[0].request as Record<string, unknown>;
+    const entries = body.body as Record<string, unknown>;
+    assert.deepStrictEqual(entries.urlencoded, [
+      { key: 'message', value: 'hello world', disabled: false },
+      { key: 'signature', value: 'abc==', disabled: false },
+    ]);
+  });
 });

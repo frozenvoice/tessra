@@ -8,6 +8,8 @@ export interface RequestPanelHtmlInput {
   webview: vscode.Webview;
   extensionUri: vscode.Uri;
   nonce: string;
+  sessionId?: string;
+  profileName?: string;
 }
 
 /**
@@ -41,6 +43,8 @@ export function getRequestPanelHtml(input: RequestPanelHtmlInput): string {
     dateLocale,
     displayLanguage,
     requestPanelTheme,
+    sessionId: input.sessionId ?? '',
+    profileName: input.profileName ?? 'default',
   });
 
   return /*html*/ `<!DOCTYPE html>

@@ -1100,12 +1100,12 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   const requestPanelSerializer = vscode.window.registerWebviewPanelSerializer('tessra.requestPanel', {
-    async deserializeWebviewPanel(panel: vscode.WebviewPanel, _state: unknown) {
+    async deserializeWebviewPanel(panel: vscode.WebviewPanel, state: unknown) {
       panel.webview.options = {
         enableScripts: true,
         localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist')],
       };
-      RequestPanel.revive(panel, context.extensionUri);
+      RequestPanel.revive(panel, context.extensionUri, state);
     },
   });
   context.subscriptions.push(requestPanelSerializer);

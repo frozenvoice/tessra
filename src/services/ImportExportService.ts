@@ -1160,11 +1160,13 @@ export class ImportExportService {
 
   private static parseUrlEncodedBody(body: string): KeyValue[] {
     if (!body) { return []; }
-    return body.split('&').map((entry) => {
-      const [rawKey, rawValue = ''] = entry.split('=');
+    return body.split('&').filter((entry) => entry.length > 0).map((entry) => {
+      const separator = entry.indexOf('=');
+      const rawKey = separator >= 0 ? entry.slice(0, separator) : entry;
+      const rawValue = separator >= 0 ? entry.slice(separator + 1) : '';
       return {
-        key: decodeURIComponent(rawKey ?? ''),
-        value: decodeURIComponent(rawValue),
+        key: decodeURIComponent(rawKey.replace(/\+/g, ' ')),
+        value: decodeURIComponent(rawValue.replace(/\+/g, ' ')),
         enabled: true,
       };
     });

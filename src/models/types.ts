@@ -227,6 +227,7 @@ export enum MessageType {
   SaveDefaultHeaders = 'saveDefaultHeaders',
   CancelRequest = 'cancelRequest',
   SaveTabState = 'saveTabState',
+  UpdateTabDraft = 'updateTabDraft',
   CompareResponses = 'compareResponses',
   StopCollectionRun = 'stopCollectionRun',
   StartCollectionRun = 'startCollectionRun',
@@ -350,7 +351,7 @@ export interface CancelRequestMessage {
 }
 
 export interface SaveTabStateMessage {
-  type: MessageType.SaveTabState;
+  type: MessageType.SaveTabState | MessageType.UpdateTabDraft;
   tabs: TabState[];
   activeIndex: number;
   compareSettings?: CompareSettings;

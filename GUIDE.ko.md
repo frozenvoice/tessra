@@ -121,6 +121,8 @@ Body: {"env":"{{envName}}"}
 - 예: `pm.environment.set("signature", pm.crypto.hmacSha256(pm.environment.get("payload") || "", pm.environment.get("secret") || ""));`
 - Scripts 탭에서 예제 삽입과 Open Guide를 사용할 수 있습니다.
 - 가져온 스크립트는 요청 탭에서 신뢰하기 전까지 비활성입니다.
+- 스크립트 변수 변경은 시작 환경에만 적용하며, 같은 키의 동시 편집은 보존하고 경고합니다. 프로필 변경은 진행 중 실행을 취소합니다.
+- 스크립트에 호스트 객체·함수를 전달하지 않습니다. VM은 OS 샌드박스가 아니므로 내용을 이해하고 신뢰하는 스크립트만 실행하세요.
 - 스크립트 timeout은 `tessra.scriptTimeoutMs`로 설정합니다.
 - script logs와 pass/fail 결과는 응답 Tests 탭에 표시됩니다.
 

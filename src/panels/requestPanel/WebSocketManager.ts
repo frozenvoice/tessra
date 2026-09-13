@@ -99,6 +99,7 @@ export class WebSocketManager {
       this.sessions.set(message.tabId, { connection });
 
       connection.on('open', () => {
+        if (this.sessions.get(message.tabId)?.connection !== connection) { return; }
         this.host.postMessage({
           type: MessageType.WebSocketStatus,
           tabId: message.tabId,
@@ -107,6 +108,7 @@ export class WebSocketManager {
         this.startKeepAlive(message.tabId, connection, message);
       });
       connection.on('message', (event) => {
+        if (this.sessions.get(message.tabId)?.connection !== connection) { return; }
         this.host.postMessage({
           type: MessageType.WebSocketMessage,
           tabId: message.tabId,

@@ -15,12 +15,22 @@ export interface RequestPanelClientScriptInput {
   dateLocale: string;
   displayLanguage: string;
   requestPanelTheme: string;
+  sessionId?: string;
+  profileName?: string;
 }
 
 export function getRequestPanelClientScript(input: RequestPanelClientScriptInput): string {
-  const { localizedStrings, dateLocale, displayLanguage, requestPanelTheme } = input;
+  const { localizedStrings, dateLocale, displayLanguage, requestPanelTheme, sessionId, profileName } = input;
   return /*js*/ `
-const vscode = acquireVsCodeApi();
+const rawVscode = acquireVsCodeApi();
+const WEBVIEW_SESSION_ID = ${JSON.stringify(sessionId || '')};
+// 호스트는 HTML 세션이 바뀐 뒤 도착한 이전 webview 메시지를 폐기한다.
+// getState/setState는 원본 API를 그대로 감싸서 webview draft 복원을 유지한다.
+const vscode = {
+  getState: () => rawVscode.getState(),
+  setState: (state) => rawVscode.setState(state),
+  postMessage: (message) => rawVscode.postMessage(Object.assign({}, message, { sessionId: WEBVIEW_SESSION_ID })),
+};
 let i18n = ${localizedStrings};
 let appDateLocale = ${JSON.stringify(dateLocale)};
 let currentDisplayLanguage = ${JSON.stringify(displayLanguage)};
@@ -32,7 +42,7 @@ let tabs = [];       // { id, name, method, url, headers, params, body, auth, re
 let activeTabId = null;
 let tabIdCounter = 0;
 let currentEnvName = null;
-let currentWorkspaceProfile = 'default';
+let currentWorkspaceProfile = ${JSON.stringify(profileName || 'default')};
 let activeVarKeys = [];
 let activeVarValues = {};
 let workspaceDefaultHeaders = [];
@@ -56,6 +66,8 @@ var compareSettings = normalizeCompareSettings();
 var activeFormatMenuState = null;
 var splitDragState = null;
 var contentDelegatedEventsBound = false;
+var webviewDraftRestored = false;
+var initialWebviewDraft = null;
 
 function clearActionsMoreMenuPlacement(menu) {
   if (!menu || !menu.style) return;
@@ -406,10 +418,11 @@ function renderEnvironmentStatusChip(envName) {
 }
 
 function renderPreflightPill(label, tone, action, meta) {
-  return '<button class="preflight-pill' + (tone ? ' ' + tone : '') + (action ? ' clickable' : '') + '"' +
-    (action ? ' type="button" data-action="' + escapeAttr(action) + '"' : '') +
+  // 이 훅은 aria-hidden legacy 영역에서만 사용되므로 숨김 영역에 버튼을 만들지 않는다.
+  return '<span class="preflight-pill' + (tone ? ' ' + tone : '') + (action ? ' clickable' : '') + '"' +
+    (action ? ' data-action="' + escapeAttr(action) + '"' : '') +
     (meta ? ' data-meta="' + escapeAttr(meta) + '"' : '') +
-    '>' + escapeHtml(label) + '</button>';
+    '>' + escapeHtml(label) + '</span>';
 }
 
 function collectTemplateVariableNames(target, text) {
@@ -850,8 +863,8 @@ function renderUnresolvedVariableBanner(tab) {
     '<div class="preflight-warning-title">' + escapeHtml(tfCount('webview.unresolvedVariablesCount', unresolved.length)) + '</div>' +
     '<div class="preflight-warning-copy">' + escapeHtml(unresolved.map(function(name) { return '{{' + name + '}}'; }).join(', ')) + '</div>' +
     '<div class="preflight-warning-actions">' +
-      '<button class="ghost-btn ripple-btn js-preflight-action" type="button" data-action="switch-environment">' + escapeHtml(tr('webview.openEnvironmentPicker')) + '</button>' +
-      '<button class="ghost-btn ripple-btn js-preflight-action" type="button" data-action="switch-tab" data-meta="headers">' + escapeHtml(tr('webview.reviewRequestInputs')) + '</button>' +
+      '<span class="ghost-btn ripple-btn js-preflight-action" data-action="switch-environment">' + escapeHtml(tr('webview.openEnvironmentPicker')) + '</span>' +
+      '<span class="ghost-btn ripple-btn js-preflight-action" data-action="switch-tab" data-meta="headers">' + escapeHtml(tr('webview.reviewRequestInputs')) + '</span>' +
     '</div>' +
   '</div>';
 }
@@ -1339,6 +1352,9 @@ function markDirty() {
   var wasDirty = tab.dirty;
   tab.dirty = isTabDirty(tab);
   if (tab.dirty !== wasDirty) renderTabBar();
+  // 모든 편집 경로가 공통으로 거치는 지점에서 최신 draft를 남긴다.
+  // 파일 저장은 기존처럼 debounce해 키 입력마다 디스크를 쓰지 않는다.
+  debouncePersist();
 }
 
 function isEditableTarget(target) {
@@ -1474,11 +1490,67 @@ function closeTab(id) {
   doCloseTab(id);
 }
 
+function getDirtyDialogFocusables(overlay) {
+  if (!overlay) return [];
+  return Array.prototype.slice.call(overlay.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+    .filter(function(el) { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length); });
+}
+
+function closeDirtyConfirmOverlay(restoreFocus) {
+  var overlay = document.getElementById('dirtyConfirmOverlay');
+  if (!overlay) return;
+  var returnFocus = overlay._restoreFocus;
+  overlay.remove();
+  if (restoreFocus !== false && returnFocus && returnFocus.isConnected && typeof returnFocus.focus === 'function') {
+    returnFocus.focus();
+  }
+}
+
+function setupDirtyConfirmOverlay(overlay) {
+  var dialog = overlay.querySelector('.dirty-confirm-dialog');
+  var message = overlay.querySelector('.dirty-confirm-msg');
+  if (dialog) {
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'dirtyConfirmTitle');
+  }
+  if (message) message.id = 'dirtyConfirmTitle';
+  overlay._restoreFocus = document.activeElement;
+  overlay.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeDirtyConfirmOverlay();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    var focusables = getDirtyDialogFocusables(overlay);
+    if (!focusables.length) {
+      e.preventDefault();
+      dialog?.focus();
+      return;
+    }
+    var first = focusables[0];
+    var last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
+  setTimeout(function() {
+    var focusables = getDirtyDialogFocusables(overlay);
+    if (focusables[0]) focusables[0].focus();
+    else dialog?.focus();
+  }, 0);
+}
+
 
 function showDirtyConfirm(tabId) {
   
   var old = document.getElementById('dirtyConfirmOverlay');
-  if (old) old.remove();
+  if (old) closeDirtyConfirmOverlay(false);
   var overlay = document.createElement('div');
   overlay.id = 'dirtyConfirmOverlay';
   overlay.className = 'dirty-confirm-overlay';
@@ -1490,12 +1562,14 @@ function showDirtyConfirm(tabId) {
         '<button class="dirty-btn dirty-btn-discard" data-action="discard">' + escapeHtml(tr('webview.discard')) + '</button>' +
         '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">' + escapeHtml(tr('webview.cancel')) + '</button>' +
       '</div>' +
-    '</div>';
+      '</div>';
   document.body.appendChild(overlay);
+  setupDirtyConfirmOverlay(overlay);
   overlay.addEventListener('click', function(e) {
-    var action = e.target.dataset.action;
+    var actionEl = e.target.closest?.('[data-action]');
+    var action = actionEl?.dataset.action;
     if (!action) return;
-    overlay.remove();
+    closeDirtyConfirmOverlay();
     if (action === 'save') {
       
       var tab = tabs.find(function(t){return t.id === tabId});
@@ -1535,7 +1609,7 @@ function closeTabs(ids) {
 
   function showBatchDirtyConfirm(tabId, remaining) {
     var old = document.getElementById('dirtyConfirmOverlay');
-    if (old) old.remove();
+    if (old) closeDirtyConfirmOverlay(false);
     var tabObj = tabs.find(function(t){return t.id === tabId});
     var tabLabel = tabObj ? (tabObj.name || tr('webview.stage.newRequest')) : '';
     var overlay = document.createElement('div');
@@ -1548,12 +1622,14 @@ function closeTabs(ids) {
           '<button class="dirty-btn dirty-btn-discard" data-action="discard">' + escapeHtml(tr('webview.discard')) + '</button>' +
           '<button class="dirty-btn dirty-btn-cancel" data-action="cancel">' + escapeHtml(tr('webview.cancel')) + '</button>' +
         '</div>' +
-      '</div>';
+        '</div>';
     document.body.appendChild(overlay);
+    setupDirtyConfirmOverlay(overlay);
     overlay.addEventListener('click', function(e) {
-      var action = e.target.dataset.action;
+      var actionEl = e.target.closest?.('[data-action]');
+      var action = actionEl?.dataset.action;
       if (!action) return;
-      overlay.remove();
+      closeDirtyConfirmOverlay();
       if (action === 'discard') {
         doCloseTab(tabId);
         next();
@@ -1977,6 +2053,12 @@ function renderTabBar() {
     });
     el.addEventListener('keydown', (e) => {
       if (e.target.closest('.close-tab')) return;
+      if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+        e.preventDefault();
+        const rect = el.getBoundingClientRect();
+        showTabContextMenu(rect.left, rect.bottom, tab.id, el);
+        return;
+      }
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         switchTab(tab.id);
@@ -1984,13 +2066,13 @@ function renderTabBar() {
     });
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      showTabContextMenu(e.clientX, e.clientY, tab.id);
+      showTabContextMenu(e.clientX, e.clientY, tab.id, el);
     });
     tabBar.insertBefore(el, addTabBtn);
   }
 }
 
-function showTabContextMenu(x, y, tabId) {
+function showTabContextMenu(x, y, tabId, trigger) {
   closeTabContextMenu();
   const tab = tabs.find(t => t.id === tabId);
   if (!tab) return;
@@ -2016,6 +2098,9 @@ function showTabContextMenu(x, y, tabId) {
   const menu = document.createElement('div');
   menu.className = 'tab-ctx-menu';
   menu.id = 'tabCtxMenu';
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', tr('webview.tabActions'));
+  menu._restoreFocus = trigger && trigger.isConnected ? trigger : document.activeElement;
   items.forEach(function(it) {
     if (it.sep) {
       var sep = document.createElement('div');
@@ -2025,6 +2110,9 @@ function showTabContextMenu(x, y, tabId) {
     }
     var el = document.createElement('div');
     el.className = 'ctx-item' + (it.disabled ? ' disabled' : '');
+    el.setAttribute('role', 'menuitem');
+    el.tabIndex = it.disabled ? -1 : 0;
+    if (it.disabled) el.setAttribute('aria-disabled', 'true');
     el.textContent = it.label;
     el.dataset.action = it.action;
     menu.appendChild(el);
@@ -2039,8 +2127,43 @@ function showTabContextMenu(x, y, tabId) {
   if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 4) + 'px';
   if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 4) + 'px';
 
+  var menuItems = Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]:not([aria-disabled="true"])'));
+  var focusMenuItem = function(index) {
+    if (!menuItems.length) return;
+    var next = (index + menuItems.length) % menuItems.length;
+    menuItems[next].focus();
+  };
+  menu.addEventListener('keydown', function(e) {
+    var current = menuItems.indexOf(document.activeElement);
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeTabContextMenu();
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      focusMenuItem(current < 0 ? 0 : current + 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      focusMenuItem(current < 0 ? menuItems.length - 1 : current - 1);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      focusMenuItem(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      focusMenuItem(menuItems.length - 1);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      if (current >= 0) {
+        e.preventDefault();
+        menuItems[current].click();
+      }
+    }
+  });
+  focusMenuItem(0);
+
   menu.addEventListener('click', function(e) {
-    var action = e.target.dataset.action;
+    var actionEl = e.target.closest?.('[data-action]');
+    var action = actionEl?.dataset.action;
     if (!action) return;
     closeTabContextMenu();
     switch (action) {
@@ -2077,7 +2200,10 @@ function showTabContextMenu(x, y, tabId) {
 
 function closeTabContextMenu() {
   var m = document.getElementById('tabCtxMenu');
-  if (m) m.remove();
+  if (!m) return;
+  var restoreFocus = m._restoreFocus;
+  m.remove();
+  if (restoreFocus && restoreFocus.isConnected && typeof restoreFocus.focus === 'function') restoreFocus.focus();
 }
 
 function getRequestStageInfo(tab) {
@@ -3583,11 +3709,19 @@ window.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'restoreTabState') {
+    // A synchronous webview draft is newer than the debounced disk snapshot.
+    // The host may explicitly replace it when the draft belongs to another profile.
+    if (webviewDraftRestored && msg.replace !== true) {
+      return;
+    }
     compareSettings = normalizeCompareSettings(msg.compareSettings);
     var restoreTabs = msg.tabs || [];
     var restoreIdx = msg.activeIndex || 0;
+    if (webviewDraftRestored && msg.replace === true) {
+      tabs = [];
+      activeTabId = null;
+    }
     if (restoreTabs.length > 0) {
-      
       if (tabs.length === 1 && !tabs[0].url) {
         tabs.splice(0, 1);
       }
@@ -3599,6 +3733,7 @@ window.addEventListener('message', (event) => {
         switchTab(tabs[restoreIdx].id);
       }
     }
+    webviewDraftRestored = false;
   }
 
   if (msg.type === 'activeVarKeys') {
@@ -4293,13 +4428,46 @@ function handleVariableAutocompleteKeydown(event) {
 }
 
 
-function persistTabState() {
-    saveActiveTabState();
-    var tabData = tabs.map(function(t) {
+function buildWebviewDraftState() {
+  saveActiveTabState();
+  var tabData = tabs.map(function(t) {
     return Object.assign({ name: t.name, autoName: !!t.autoName, requestType: normalizeRequestType(t.requestType, t.url), requestEditorTab: normalizeRequestEditorTab(t.requestEditorTab), requestSplitHeightPx: normalizeRequestSplitHeight(t.requestSplitHeightPx) || undefined, method: t.method, url: t.url, headers: t.headers, params: t.params, pathVariableOverrides: prunePathVariableOverrides(t.url || '', t.pathVariableOverrides), body: t.body, bodyType: t.bodyType, formData: t.formData || [], binaryFilePath: t.binaryFilePath || '', auth: t.auth, scripts: t.scripts || { preRequest: '', test: '' }, jsonFormatStyle: t.jsonFormatStyle, xmlFormatStyle: t.xmlFormatStyle, formatIndent: t.formatIndent, responseSearchQuery: t.responseSearchQuery || '', responseSearchIndex: typeof t.responseSearchIndex === 'number' ? t.responseSearchIndex : 0, responseSearchCaseSensitive: t.responseSearchCaseSensitive === true, responseSearchRegex: t.responseSearchRegex === true, scriptHelpCollapsed: t.scriptHelpCollapsed === true, pinned: t.pinned || false, requestId: t.requestId || undefined }, requestSettingsSnapshot(t));
-    });
+  });
   var activeIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
-  vscode.postMessage({ type: 'saveTabState', tabs: tabData, activeIndex: Math.max(0, activeIdx), compareSettings: cloneCompareSettings(compareSettings) });
+  return {
+    profileName: currentWorkspaceProfile || 'default',
+    tabs: tabData,
+    activeIndex: Math.max(0, activeIdx),
+    compareSettings: cloneCompareSettings(compareSettings),
+  };
+}
+
+function persistWebviewDraftState() {
+  var draft = buildWebviewDraftState();
+  try {
+    vscode.setState(draft);
+  } catch (_) {
+    // setState is a best-effort in-memory/webview persistence layer; disk save follows below.
+  }
+  // 패널이 즉시 닫혀 webview state가 사라져도 호스트가 마지막 draft를 복구할 수 있다.
+  vscode.postMessage({
+    type: 'updateTabDraft',
+    tabs: draft.tabs,
+    activeIndex: draft.activeIndex,
+    compareSettings: draft.compareSettings,
+  });
+  return draft;
+}
+
+function persistTabState() {
+  _persistTimer = null;
+  var draft = persistWebviewDraftState();
+  vscode.postMessage({
+    type: 'saveTabState',
+    tabs: draft.tabs,
+    activeIndex: draft.activeIndex,
+    compareSettings: cloneCompareSettings(compareSettings),
+  });
 }
 
 
@@ -4308,14 +4476,68 @@ var variablePreviewPopover = null;
 var variableAutocompletePopover = null;
 var variableAutocompleteState = null;
 function debouncePersist() {
+  persistWebviewDraftState();
   if (_persistTimer) clearTimeout(_persistTimer);
   _persistTimer = setTimeout(persistTabState, 1000);
 }
 
+function flushPersist() {
+  if (_persistTimer) {
+    clearTimeout(_persistTimer);
+    _persistTimer = null;
+  }
+  persistTabState();
+}
 
-createTab();
+window.addEventListener('beforeunload', flushPersist);
 
 
-vscode.postMessage({ type: 'webviewReady' });
+function readInitialWebviewDraft() {
+  var state = null;
+  try {
+    state = vscode.getState();
+  } catch (_) {
+    return null;
+  }
+  if (!state || typeof state !== 'object' || !Array.isArray(state.tabs) || state.tabs.length === 0) {
+    return null;
+  }
+  var normalizedProfile = typeof state.profileName === 'string' && state.profileName.trim() ? state.profileName : 'default';
+  if (normalizedProfile !== (currentWorkspaceProfile || 'default')) {
+    return null;
+  }
+  var activeIndex = Number.isInteger(state.activeIndex) ? state.activeIndex : 0;
+  return {
+    profileName: normalizedProfile,
+    tabs: state.tabs,
+    activeIndex: Math.max(0, activeIndex),
+    compareSettings: state.compareSettings,
+  };
+}
+
+function restoreInitialWebviewDraft(draft) {
+  if (!draft || !Array.isArray(draft.tabs) || draft.tabs.length === 0) return false;
+  compareSettings = normalizeCompareSettings(draft.compareSettings);
+  tabs = [];
+  activeTabId = null;
+  for (var i = 0; i < draft.tabs.length; i++) {
+    createTab(draft.tabs[i]);
+  }
+  if (draft.activeIndex >= 0 && draft.activeIndex < tabs.length) {
+    switchTab(tabs[draft.activeIndex].id);
+  }
+  return tabs.length > 0;
+}
+
+initialWebviewDraft = readInitialWebviewDraft();
+webviewDraftRestored = restoreInitialWebviewDraft(initialWebviewDraft);
+if (!webviewDraftRestored) createTab();
+
+
+vscode.postMessage({
+  type: 'webviewReady',
+  webviewDraft: initialWebviewDraft,
+  webviewDraftRestored: webviewDraftRestored,
+});
 `;
 }

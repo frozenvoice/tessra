@@ -78,12 +78,14 @@ class FakeHttpService {
 function createHost() {
   const posted: any[] = [];
   const host: RequestExecutorHost = {
+    captureExecutionContext: () => ({ profileName: 'default', environmentId: null, generation: 0 }),
+    isExecutionContextCurrent: () => true,
     postMessage: (message) => posted.push(message),
     getActiveVariables: () => [],
     getDefaultHeaders: () => [],
     getAllowInsecureCertificates: () => false,
     getScriptTimeoutMs: () => 3000,
-    saveActiveEnvironmentVariables: () => undefined,
+    saveEnvironmentChanges: () => undefined,
     saveToHistory: () => undefined,
     refreshHistory: () => undefined,
   };

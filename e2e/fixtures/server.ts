@@ -19,6 +19,7 @@ export interface FixtureServer {
   close: () => Promise<void>;
   waitForRequest: (predicate: (req: FixtureRequestLog) => boolean, timeoutMs?: number) => Promise<FixtureRequestLog>;
   clearRequests: () => void;
+  releaseHeldRequests: () => void;
 }
 
 function parseQuery(search: string): Record<string, string | string[]> {
@@ -60,6 +61,13 @@ function text(res: http.ServerResponse, status: number, body: string, contentTyp
 export async function startFixtureServer(options?: { slowMs?: number }): Promise<FixtureServer> {
   const slowMs = options?.slowMs ?? 3000;
   const requests: FixtureRequestLog[] = [];
+  const heldResponses = new Set<http.ServerResponse>();
+  const releaseHeldRequests = () => {
+    for (const response of heldResponses) {
+      if (!response.destroyed) { json(response, 200, { held: true }); }
+    }
+    heldResponses.clear();
+  };
 
   const server = http.createServer(async (req, res) => {
     const method = req.method || 'GET';
@@ -79,6 +87,11 @@ export async function startFixtureServer(options?: { slowMs?: number }): Promise
     requests.push(entry);
 
     try {
+      if (parsed.pathname === '/held') {
+        heldResponses.add(res);
+        res.once('close', () => heldResponses.delete(res));
+        return;
+      }
       if (parsed.pathname === '/users') {
         const users = [
           { id: 1, name: 'Ada Lovelace' },
@@ -175,8 +188,10 @@ export async function startFixtureServer(options?: { slowMs?: number }): Promise
       requests.length = 0;
     },
     waitForRequest,
+    releaseHeldRequests,
     close: () =>
       new Promise((resolve, reject) => {
+        releaseHeldRequests();
         server.close((err) => (err ? reject(err) : resolve()));
       }),
   };

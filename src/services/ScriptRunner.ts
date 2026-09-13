@@ -1,4 +1,3 @@
-import * as assert from 'assert';
 import * as vm from 'vm';
 import {
   AuthConfig,
@@ -12,6 +11,7 @@ import {
   ScriptLogEntry,
 } from '../models/types';
 import { ScriptUtilities } from './ScriptUtilities';
+import { createScriptRealmBootstrap } from './scriptRealmBootstrap';
 
 export interface ScriptableRequest {
   method: HttpMethod;
@@ -25,16 +25,20 @@ export interface ScriptableRequest {
   auth: AuthConfig;
 }
 
-interface MutableEnvApi {
-  get(name: string): string | undefined;
-  set(name: string, value: unknown): void;
-  unset(name: string): void;
-  toObject(): Record<string, string>;
-}
-
 interface ScriptRunState {
   logs: ScriptLogEntry[];
   tests: ScriptExecutionResult['tests'];
+}
+
+interface ScriptRealmSnapshot {
+  request: ScriptableRequest;
+  envVariables: KeyValue[];
+  state: ScriptRunState;
+}
+
+interface ScriptRealmExecutionState {
+  state: 'idle' | 'running' | 'capturing' | 'captured' | 'awaiting' | 'complete';
+  message: string;
 }
 
 // pre-request/test 스크립트 실행기
@@ -42,6 +46,7 @@ export class ScriptRunner {
   static readonly DEFAULT_TIMEOUT_MS = 3000;
   static readonly MIN_TIMEOUT_MS = 100;
   static readonly MAX_TIMEOUT_MS = 30000;
+  static readonly UUID_POOL_SIZE = 256;
 
   static normalizeTimeoutMs(value: unknown): number {
     const numeric = typeof value === 'number' ? value : Number(value);
@@ -60,21 +65,19 @@ export class ScriptRunner {
   ): { request: ScriptableRequest; envVariables: KeyValue[]; result: ScriptExecutionResult } {
     const script = scripts.preRequest?.trim();
     const clonedRequest = this.cloneRequest(request);
-    const env = this.createEnvStore(envVariables);
-    const state: ScriptRunState = { logs: [], tests: [] };
+    const clonedEnvVariables = this.cloneEnvVariables(envVariables);
 
     if (!script) {
-      return { request: clonedRequest, envVariables: env.toList(), result: state };
+      return { request: clonedRequest, envVariables: clonedEnvVariables, result: { logs: [], tests: [] } };
     }
 
-    this.execute(script, {
+    const snapshot = this.execute(script, {
       request: clonedRequest,
-      env,
+      envVariables: clonedEnvVariables,
       response: undefined,
-      state,
     }, timeoutMs);
 
-    return { request: clonedRequest, envVariables: env.toList(), result: state };
+    return { request: snapshot.request, envVariables: snapshot.envVariables, result: snapshot.state };
   }
 
   static runTests(
@@ -85,275 +88,155 @@ export class ScriptRunner {
     timeoutMs = ScriptRunner.DEFAULT_TIMEOUT_MS
   ): { envVariables: KeyValue[]; result: ScriptExecutionResult } {
     const script = scripts.test?.trim();
-    const env = this.createEnvStore(envVariables);
-    const state: ScriptRunState = { logs: [], tests: [] };
+    const clonedEnvVariables = this.cloneEnvVariables(envVariables);
 
     if (!script) {
-      return { envVariables: env.toList(), result: state };
+      return { envVariables: clonedEnvVariables, result: { logs: [], tests: [] } };
     }
 
-    this.execute(script, {
+    const snapshot = this.execute(script, {
       request: this.cloneRequest(request),
-      env,
+      envVariables: clonedEnvVariables,
       response,
-      state,
     }, timeoutMs);
 
-    return { envVariables: env.toList(), result: state };
+    return { envVariables: snapshot.envVariables, result: snapshot.state };
   }
 
   private static execute(
     source: string,
     contextData: {
       request: ScriptableRequest;
-      env: ReturnType<typeof ScriptRunner.createEnvStore>;
+      envVariables: KeyValue[];
       response?: Response;
-      state: ScriptRunState;
     },
     timeoutMs: number
-  ): void {
-    const sandbox = this.createSandbox(contextData);
-    const context = vm.createContext(sandbox);
+  ): ScriptRealmSnapshot {
     const normalizedTimeoutMs = ScriptRunner.normalizeTimeoutMs(timeoutMs);
+    const serializedInput = JSON.stringify({
+      request: this.cloneRequest(contextData.request),
+      envVariables: this.cloneEnvVariables(contextData.envVariables),
+      response: contextData.response ? this.cloneResponse(contextData.response) : undefined,
+      uuidPool: Array.from({ length: ScriptRunner.UUID_POOL_SIZE }, () => ScriptUtilities.uuidV4()),
+    });
+    const context = vm.createContext(Object.create(null) as Record<string, unknown>, {
+      codeGeneration: { strings: false, wasm: false },
+      microtaskMode: 'afterEvaluate',
+    });
 
     try {
-      new vm.Script(source).runInContext(context, { timeout: normalizedTimeoutMs });
+      new vm.Script(createScriptRealmBootstrap(serializedInput)).runInContext(context, {
+        timeout: normalizedTimeoutMs,
+      });
+    } catch {
+      throw new Error('Script execution failed: Script runtime initialization failed.');
+    }
+
+    const wrappedSource = [
+      '__tessraMarkExecutionStarted();',
+      'try {',
+      source,
+      '} catch (__tessraCaughtError) {',
+      '  __tessraCaptureExecutionError(__tessraCaughtError);',
+      '}',
+      '__tessraMarkAwaitingMicrotasks();',
+      '__tessraQueueExecutionCompletion();',
+    ].join('\n');
+
+    let compiledScript: vm.Script;
+    try {
+      compiledScript = new vm.Script(wrappedSource);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (/Script execution timed out/i.test(message)) {
-        throw new Error(`Script execution timed out after ${normalizedTimeoutMs} ms`);
-      }
+      // 컴파일 단계에는 사용자 코드가 실행되지 않아 호스트의 구문 오류만 읽는다.
+      const message = error instanceof Error ? error.message : 'Invalid JavaScript syntax.';
       throw new Error(`Script execution failed: ${message}`);
     }
-  }
 
-  private static createSandbox(contextData: {
-    request: ScriptableRequest;
-    env: ReturnType<typeof ScriptRunner.createEnvStore>;
-    response?: Response;
-    state: ScriptRunState;
-  }): Record<string, unknown> {
-    const { request, env, response, state } = contextData;
-    const logger = this.createLogger(state.logs);
-    const expect = (actual: unknown) => this.createExpectation(actual);
-    const pmResponse = response
-      ? {
-          code: response.status,
-          status: response.statusText,
-          headers: {
-            get(name: string): string | undefined {
-              const lookup = name.toLowerCase();
-              return Object.entries(response.headers).find(([key]) => key.toLowerCase() === lookup)?.[1];
-            },
-          },
-          text(): string {
-            return response.body;
-          },
-          json(): unknown {
-            return JSON.parse(response.body);
-          },
-          to: {
-            have: {
-              status(expectedStatus: number): void {
-                if (response.status !== expectedStatus) {
-                  throw new Error(`Expected response status ${expectedStatus}, received ${response.status}.`);
-                }
-              },
-            },
-          },
-        }
-      : undefined;
-
-    const test = (name: string, fn: () => void): void => {
-      try {
-        fn();
-        state.tests.push({ name, passed: true });
-      } catch (error: unknown) {
-        state.tests.push({
-          name,
-          passed: false,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    };
-
-    return {
-      console: logger,
-      request,
-      response: response
-        ? {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-            body: response.body,
-            json(): unknown {
-              return JSON.parse(response.body);
-            },
-          }
-        : undefined,
-      env: {
-        get: (name: string) => env.api.get(name),
-        set: (name: string, value: unknown) => env.api.set(name, value),
-        unset: (name: string) => env.api.unset(name),
-        toObject: () => env.api.toObject(),
-      },
-      test,
-      expect,
-      assert: (condition: unknown, message?: string) => {
-        if (!condition) {
-          throw new Error(message ?? 'Assertion failed');
-        }
-      },
-      pm: {
-        request,
-        response: pmResponse,
-        environment: env.api,
-        variables: env.api,
-        test,
-        expect,
-        ...ScriptUtilities.createApi(),
-      },
-    };
-  }
-
-  private static createLogger(target: ScriptLogEntry[]) {
-    const push = (level: ScriptLogEntry['level'], values: unknown[]): void => {
-      const message = values.map((value) => this.stringifyLogValue(value)).join(' ');
-      target.push({ level, message });
-    };
-
-    return {
-      log: (...values: unknown[]) => push('log', values),
-      warn: (...values: unknown[]) => push('warn', values),
-      error: (...values: unknown[]) => push('error', values),
-    };
-  }
-
-  private static stringifyLogValue(value: unknown): string {
-    if (typeof value === 'string') { return value; }
-    if (value instanceof Error) { return value.message; }
+    let scriptThrew = false;
     try {
-      return JSON.stringify(value);
+      compiledScript.runInContext(context, {
+        timeout: normalizedTimeoutMs,
+      });
     } catch {
-      return String(value);
+      scriptThrew = true;
+    }
+
+    const executionState = this.readScriptRealmExecutionState(context, normalizedTimeoutMs);
+    if (scriptThrew || executionState?.state === 'running' || executionState?.state === 'capturing' || executionState?.state === 'awaiting') {
+      if (executionState?.state === 'running' || executionState?.state === 'capturing' || executionState?.state === 'awaiting') {
+        throw new Error(`Script execution timed out after ${normalizedTimeoutMs} ms`);
+      }
+      throw new Error(`Script execution failed: ${executionState?.message || 'Script did not complete.'}`);
+    }
+    if (executionState?.state === 'captured') {
+      throw new Error(`Script execution failed: ${executionState.message || 'Unknown script error'}`);
+    }
+
+    try {
+      const serializedOutput = new vm.Script('__tessraSnapshot()').runInContext(context, {
+        timeout: normalizedTimeoutMs,
+      });
+      if (typeof serializedOutput !== 'string') {
+        throw new Error('Script returned an invalid execution result.');
+      }
+      const parsed: unknown = JSON.parse(serializedOutput);
+      if (!this.isScriptRealmSnapshot(parsed)) {
+        throw new Error('Script returned an invalid execution result.');
+      }
+      return parsed;
+    } catch {
+      throw new Error('Script execution failed: Script result serialization failed.');
     }
   }
 
-  private static createEnvStore(envVariables: KeyValue[]) {
-    const map = new Map<string, KeyValue>();
-    for (const variable of envVariables) {
-      if (!variable.key) { continue; }
-      map.set(variable.key, { ...variable });
+  private static readScriptRealmExecutionState(
+    context: vm.Context,
+    timeoutMs: number
+  ): ScriptRealmExecutionState | undefined {
+    try {
+      const serialized = new vm.Script('__tessraReadExecutionState()').runInContext(context, {
+        timeout: timeoutMs,
+      });
+      if (typeof serialized !== 'string') { return undefined; }
+      const parsed: unknown = JSON.parse(serialized);
+      if (!parsed || typeof parsed !== 'object') { return undefined; }
+      const state = parsed as Partial<ScriptRealmExecutionState>;
+      if (typeof state.state !== 'string' || typeof state.message !== 'string') { return undefined; }
+      if (!['idle', 'running', 'capturing', 'captured', 'awaiting', 'complete'].includes(state.state)) {
+        return undefined;
+      }
+      return { state: state.state as ScriptRealmExecutionState['state'], message: state.message };
+    } catch {
+      return undefined;
     }
+  }
 
-    const api: MutableEnvApi = {
-      get(name: string): string | undefined {
-        return map.get(name)?.value;
-      },
-      set(name: string, value: unknown): void {
-        const current = map.get(name);
-        map.set(name, {
-          key: name,
-          value: typeof value === 'string' ? value : JSON.stringify(value),
-          enabled: current?.enabled ?? true,
-        });
-      },
-      unset(name: string): void {
-        map.delete(name);
-      },
-      toObject(): Record<string, string> {
-        return [...map.values()].reduce<Record<string, string>>((acc, variable) => {
-          acc[variable.key] = variable.value;
-          return acc;
-        }, {});
-      },
-    };
+  private static isScriptRealmSnapshot(value: unknown): value is ScriptRealmSnapshot {
+    if (!value || typeof value !== 'object') { return false; }
+    const snapshot = value as Partial<ScriptRealmSnapshot>;
+    return Boolean(
+      snapshot.request && typeof snapshot.request === 'object' &&
+      Array.isArray(snapshot.envVariables) &&
+      snapshot.state && typeof snapshot.state === 'object' &&
+      Array.isArray(snapshot.state.logs) && Array.isArray(snapshot.state.tests)
+    );
+  }
 
+  private static cloneEnvVariables(envVariables: KeyValue[]): KeyValue[] {
+    return envVariables.map((variable) => ({ ...variable }));
+  }
+
+  private static cloneResponse(response: Response): Response {
     return {
-      api,
-      toList(): KeyValue[] {
-        return [...map.values()];
-      },
+      status: response.status,
+      statusText: response.statusText,
+      headers: { ...response.headers },
+      rawSetCookies: response.rawSetCookies ? [...response.rawSetCookies] : undefined,
+      body: response.body,
+      bodyBase64: response.bodyBase64,
+      time: response.time,
+      size: response.size,
     };
-  }
-
-  private static createExpectation(actual: unknown): Record<string, unknown> {
-    const api: Record<string, unknown> = {};
-    const to: Record<string, unknown> = {};
-    const be: Record<string, unknown> = {};
-    const have: Record<string, unknown> = {};
-
-    const assertInclude = (expected: unknown): void => {
-      if (typeof actual === 'string') {
-        if (!actual.includes(String(expected))) {
-          throw new Error(`"${String(actual)}" does not include "${String(expected)}".`);
-        }
-        return;
-      }
-
-      if (Array.isArray(actual)) {
-        if (!actual.includes(expected)) {
-          throw new Error('The array does not contain the expected value.');
-        }
-        return;
-      }
-
-      throw new Error('The include assertion only supports strings or arrays.');
-    };
-
-    Object.assign(to, {
-      equal(expected: unknown): void {
-        assert.strictEqual(actual, expected);
-      },
-      eql(expected: unknown): void {
-        assert.deepStrictEqual(actual, expected);
-      },
-      include(expected: unknown): void {
-        assertInclude(expected);
-      },
-      match(pattern: RegExp): void {
-        if (typeof actual !== 'string' || !pattern.test(actual)) {
-          throw new Error(`"${String(actual)}" does not match ${pattern.toString()}.`);
-        }
-      },
-      have,
-      be,
-    });
-
-    Object.assign(have, {
-      property(name: string, expectedValue?: unknown): void {
-        if (actual === null || typeof actual !== 'object' || !(name in (actual as Record<string, unknown>))) {
-          throw new Error(`Property "${name}" does not exist.`);
-        }
-        if (arguments.length >= 2) {
-          assert.deepStrictEqual((actual as Record<string, unknown>)[name], expectedValue);
-        }
-      },
-    });
-
-    Object.defineProperty(be, 'true', {
-      get() {
-        assert.strictEqual(actual, true);
-        return api;
-      },
-    });
-    Object.defineProperty(be, 'false', {
-      get() {
-        assert.strictEqual(actual, false);
-        return api;
-      },
-    });
-    Object.defineProperty(be, 'ok', {
-      get() {
-        if (!actual) {
-          throw new Error('The value is not truthy.');
-        }
-        return api;
-      },
-    });
-
-    api.to = to;
-    return api;
   }
 
   private static cloneRequest(request: ScriptableRequest): ScriptableRequest {

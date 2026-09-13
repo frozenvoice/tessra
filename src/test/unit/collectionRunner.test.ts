@@ -32,6 +32,7 @@ interface PlannedSend {
   never?: boolean;
   aborted?: boolean;
   resolveLate?: () => void;
+  ignoreAbort?: boolean;
 }
 
 class FakeHttpService {
@@ -73,6 +74,7 @@ class FakeHttpService {
       promise,
       abort: () => {
         plan.aborted = true;
+        if (plan.ignoreAbort) { return; }
         if (timer) { clearTimeout(timer); }
         rejectPromise?.(new Error('Request was canceled'));
       },
@@ -86,6 +88,12 @@ class FakeRunnerHost {
   showInformationMessage?: (message: string) => void;
 
   constructor(private readonly scriptTimeoutMs = 100) {}
+
+  captureExecutionContext() {
+    return { profileName: 'default', environmentId: null, generation: 0 };
+  }
+
+  isExecutionContextCurrent(): boolean { return true; }
 
   postMessage(message: unknown): void {
     this.messages.push(message);
@@ -107,7 +115,7 @@ class FakeRunnerHost {
     return this.scriptTimeoutMs;
   }
 
-  saveActiveEnvironmentVariables(_variables: KeyValue[]): void {}
+  saveEnvironmentChanges(_context: unknown, _before: KeyValue[], _after: KeyValue[]): void {}
 
   saveToHistory(request: Request, response: { status: number; statusText: string; time: number } | null): void {
     this.histories.push({ request, response });
@@ -164,6 +172,52 @@ async function waitForCondition(condition: () => boolean): Promise<void> {
 }
 
 describe('CollectionRunner', () => {
+  it('WS/WSS와 변수로 해석된 WebSocket 요청을 전송 전에 거절한다', async () => {
+    const http = new FakeHttpService();
+    const host = new FakeRunnerHost();
+    host.getActiveVariables = () => [{ key: 'socketUrl', value: 'wss://example.invalid/socket', enabled: true }];
+    await new CollectionRunner(http as never, host).runCollection('Unsupported WebSocket', items(
+      request('ws', { url: 'ws://example.invalid/socket' }),
+      request('wss', { url: 'wss://example.invalid/socket' }),
+      request('variable', { url: '{{socketUrl}}' }),
+      request('typed', { requestType: 'websocket', url: 'https://example.invalid/socket' }),
+    ));
+    assert.strictEqual(http.calls.length, 0);
+    const done = latestMessage<Record<string, unknown>>(host.messages, MessageType.RunCollectionDone);
+    assert.strictEqual(done.failed, 4);
+    const errors = host.messages.filter((message) => (message as { type?: string }).type === MessageType.RunCollectionProgress);
+    assert.ok(errors.every((message) => /HTTP requests only/.test(String((message as { error: unknown }).error))));
+  });
+
+  it('빈 스크립트 실행은 환경 변수 쓰기를 발생시키지 않는다', async () => {
+    const host = new FakeRunnerHost();
+    let writes = 0;
+    host.saveEnvironmentChanges = () => { writes++; };
+    await new CollectionRunner(new FakeHttpService() as never, host).runCollection('No scripts', items(request('plain')));
+    assert.strictEqual(writes, 0);
+  });
+
+  it('프로필 무효화와 reset 뒤 늦은 러너 응답을 저장하거나 표시하지 않는다', async () => {
+    const plan: PlannedSend = { never: true, ignoreAbort: true };
+    const http = new FakeHttpService([plan]);
+    const host = new FakeRunnerHost();
+    let current = true;
+    host.isExecutionContextCurrent = () => current;
+    const runner = new CollectionRunner(http as never, host);
+    const pending = runner.runCollection('Old profile', items(request('late', { saveToHistory: true,
+      scripts: { preRequest: '', test: 'pm.environment.set("late", "value");' } })));
+    await waitForCondition(() => http.calls.length === 1);
+    current = false;
+    runner.reset();
+    const previousMessages = host.messages.length;
+    plan.resolveLate?.();
+    await pending;
+    assert.strictEqual(host.messages.length, previousMessages);
+    assert.deepStrictEqual(host.histories, []);
+    await runner.rerunFailed([0]);
+    assert.strictEqual(http.calls.length, 1);
+  });
+
   it('normalizes runner options within safe bounds', () => {
     assert.deepStrictEqual(normalizeCollectionRunnerOptions(), {
       delayMs: 0,

@@ -221,4 +221,44 @@ describe('WebSocketManager keepalive', () => {
       )
     );
   });
+
+  it('ignores open and message events that arrive after disconnectAll', () => {
+    const { manager, service, posted, timers } = createManager();
+
+    manager.connect(connectMessage());
+    const oldConnection = service.connections[0];
+    const postedBeforeDisconnect = posted.length;
+    manager.disconnectAll();
+
+    oldConnection.emit('open');
+    oldConnection.emit('message', { type: 'text', data: 'late-old-message', size: 16 });
+
+    assert.strictEqual(timers.timers.length, 0);
+    assert.strictEqual(posted.length, postedBeforeDisconnect + 1, 'only the explicit disconnect status should be posted');
+    assert.ok(!posted.some((message) => message.data === 'late-old-message'));
+  });
+
+  it('ignores late events from an old connection after reconnecting', () => {
+    const { manager, service, posted, timers } = createManager();
+
+    manager.connect(connectMessage({ webSocketKeepAliveMessage: 'old' }));
+    const oldConnection = service.connections[0];
+    manager.connect(connectMessage({ webSocketKeepAliveMessage: 'new' }));
+    const newConnection = service.connections[1];
+    const postedBeforeLateEvents = posted.length;
+
+    oldConnection.emit('open');
+    oldConnection.emit('message', { type: 'text', data: 'late-old-message', size: 16 });
+    assert.strictEqual(timers.timers.length, 0);
+    assert.strictEqual(posted.length, postedBeforeLateEvents);
+
+    newConnection.emit('open');
+    assert.strictEqual(timers.timers.length, 1);
+    const postedAfterNewOpen = posted.length;
+    oldConnection.emit('open');
+    oldConnection.emit('message', { type: 'text', data: 'late-after-new-open', size: 20 });
+    assert.strictEqual(timers.timers.length, 1);
+    assert.strictEqual(posted.length, postedAfterNewOpen);
+    assert.ok(!posted.some((message) => message.data === 'late-old-message' || message.data === 'late-after-new-open'));
+  });
 });

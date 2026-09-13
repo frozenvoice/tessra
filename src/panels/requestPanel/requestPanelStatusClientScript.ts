@@ -347,8 +347,9 @@ function renderStatusStripExpandDetails(tab) {
       return '<button type="button" class="status-strip-link" data-action="' + escapeAttr(w.action) + '" data-meta="' + escapeAttr(w.meta) + '">' + escapeHtml(w.label) + '</button>';
     }).join('') + '</div>');
   }
-  // linked-focus 호환용 숨김 칩/프리플라이트 훅 유지 (변수 사용처는 위 disclosure에 노출)
-  parts.push('<div class="request-status-chips js-topline-status-chips visually-hidden" aria-hidden="true">' + renderLegacyStatusChipHooks(tab) + '</div>');
+  // 레거시 선택자는 유지하되, aria-hidden 영역 안에 포커스 가능한 버튼을 만들지 않는다.
+  // 실제 상태 액션은 위 disclosure의 일반 버튼에서 제공한다.
+  parts.push('<div class="request-status-chips js-topline-status-chips visually-hidden" aria-hidden="true"></div>');
   parts.push('<div class="js-request-preflight-wrap visually-hidden" aria-hidden="true">' + renderRequestPreflight(tab) + '</div>');
   return parts.join('');
 }

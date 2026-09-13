@@ -22,6 +22,8 @@ Covered by `e2e/specs/*` against a real VS Code Electron host + localhost fixtur
 - Request More narrow-viewport geometry (`e2e/specs/18-request-more-narrow.spec.ts`)
 - Path Variable occurrence resolution UI (`e2e/specs/19-path-variable-resolution-ui.spec.ts`)
 - Body text single-scroll-owner (`e2e/specs/20-body-scroll-ownership.spec.ts`)
+- Response tab keyboard navigation and immediate editor-close draft preservation (`e2e/specs/21-accessibility-and-draft.spec.ts`, #21/#22)
+- Environment/profile switch during a held HTTP response, with storage isolation (`e2e/specs/23-execution-context.spec.ts`)
 - Critical UI regression gate (`npm run test:e2e:ui-regressions` → #18/#19/#20)
 
 Unusual OS / display-scaling context-menu behavior can still be spot-checked manually; the stable suite covers the keyboard context-menu path (see `docs/testing.md`).
@@ -32,7 +34,9 @@ Unusual OS / display-scaling context-menu behavior can still be spot-checked man
 - Marketplace screenshots
 - Unusual OS / display scaling behavior
 - Deep Guide locale reading pass
-- WebSocket / Backup / History pin / profile switch (optional automation later)
+- WebSocket edge cases / Backup / History pin / full application restart restore
+- Dirty-close dialog and request-tab context menu keyboard behavior across OS/display settings
+- Script trust prompts and error wording; see `docs/script-security.md` for execution limits
 
 ## 1.2.2 Smoke (~10 min)
 

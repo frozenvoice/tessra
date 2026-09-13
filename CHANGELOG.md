@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Pin HTTP and collection execution to the starting profile and environment. Merge only script-changed variables, preserve concurrent edits with a warning, and reject late results after profile switches or panel disposal.
+- Honor cancellation during request body preparation and restrict HTTP transports and redirects to HTTP/HTTPS. Collection Runner reports unsupported WebSocket requests before sending.
+- Remove host objects/functions from script VM input, disable dynamic code generation, and serialize results/errors inside timed VM evaluation. Document the remaining same-process isolation limits.
+- Validate stored JSON structure as well as syntax while preserving corrupt originals and backups.
+- Preserve authentication/custom headers in generated multipart fetch code, form/binary semantics in cURL, and equals signs/spaces in Postman form export. Invalid form encoding returns a conversion error.
+- Preserve the latest request draft when closing the editor before its disk-save debounce, and add keyboard navigation and accessibility semantics to response tabs and request-tab menus/dialogs.
+
+### Reliability
+
+- Add execution lifecycle, storage corruption/conflict, script boundary, transport protocol, and conversion roundtrip regressions.
+- Expand stable VS Code UI coverage to 23 tests, including response keyboard navigation, immediate draft preservation, and environment/profile execution isolation.
+
 ## 1.2.2
 
 ### Fixed

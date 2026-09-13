@@ -43,6 +43,7 @@ import {
   shouldQueueWebviewMessage,
 } from './requestPanel/messages';
 import { getRequestPanelHtml } from './requestPanel/requestPanelHtml';
+import { ExecutionContext } from './requestPanel/executionContext';
 
 // Request webview panel manager with multi-tab support.
 export class RequestPanel {
@@ -61,15 +62,20 @@ export class RequestPanel {
   private readonly webSocketManager: WebSocketManager;
   private disposables: vscode.Disposable[] = [];
   private isDisposed = false;
+  private executionGeneration = 0;
+  private storageProfileName: string;
+  private webviewSessionId = '';
+  private latestTabDraft: StoredTabState | null = null;
   private webviewReady = false;
   private pendingWebviewMessages: unknown[] = [];
   private pendingFlushResolvers: Array<() => void> = [];
   private pendingCollectionRun: { name: string; items: CollectionItem[] } | null = null;
   private lastCollectionRunnerOptions: NormalizedCollectionRunnerOptions = { ...DEFAULT_COLLECTION_RUNNER_OPTIONS };
 
-  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
+  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, serializedDraft?: unknown) {
     this.panel = panel;
     this.extensionUri = extensionUri;
+    this.storageProfileName = RequestPanel.storage.getWorkspaceProfileName();
     this.httpService = new HttpService();
     this.webSocketManager = new WebSocketManager(new WebSocketService(), {
       postMessage: (message: unknown) => this.postMessage(message),
@@ -78,18 +84,23 @@ export class RequestPanel {
       getAllowInsecureCertificates: () => this.getAllowInsecureCertificates(),
     });
     const executionHost = {
+      captureExecutionContext: () => this.captureExecutionContext(),
+      isExecutionContextCurrent: (context: ExecutionContext) => this.isExecutionContextCurrent(context),
       postMessage: (message: unknown) => this.postMessage(message),
       getActiveVariables: () => RequestPanel.environmentProvider.getActiveVariables(),
       getDefaultHeaders: () => RequestPanel.storage.getDefaultHeaders(),
       getAllowInsecureCertificates: () => this.getAllowInsecureCertificates(),
       getScriptTimeoutMs: () => this.getScriptTimeoutMs(),
       showInformationMessage: (message: string) => vscode.window.showInformationMessage(message),
-      saveActiveEnvironmentVariables: (variables: KeyValue[]) => this.saveActiveEnvironmentVariables(variables),
+      saveEnvironmentChanges: (context: ExecutionContext, before: KeyValue[], after: KeyValue[]) => this.saveEnvironmentChanges(context, before, after),
       saveToHistory: (
         request: Request,
         response: { status: number; statusText: string; time: number } | null,
-        timing?: RequestTiming
-      ) => this.saveToHistory(request, response, timing),
+        timing: RequestTiming | undefined,
+        context: ExecutionContext
+      ) => {
+        if (this.isExecutionContextCurrent(context)) { this.saveToHistory(request, response, timing); }
+      },
       refreshHistory: () => RequestPanel.historyProvider.refresh(),
     };
     this.requestExecutor = new RequestExecutor(this.httpService, executionHost);
@@ -98,7 +109,9 @@ export class RequestPanel {
     this.reloadWebview();
 
     this.panel.webview.onDidReceiveMessage(
-      (message) => this.handleMessage(message),
+      (message) => this.handleMessage(message).catch((error: unknown) => {
+        vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+      }),
       null,
       this.disposables
     );
@@ -107,6 +120,8 @@ export class RequestPanel {
 
     // Restore saved tab state.
     this.restoreTabState();
+    const draft = this.readScopedDraft(serializedDraft);
+    if (draft) { this.pendingRestore = draft; this.latestTabDraft = draft; }
   }
 
   // Prepare saved tab state for the webview.
@@ -183,8 +198,8 @@ export class RequestPanel {
     RequestPanel.currentPanel = new RequestPanel(panel, extensionUri);
   }
 
-  public static revive(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
-    RequestPanel.currentPanel = new RequestPanel(panel, extensionUri);
+  public static revive(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, serializedDraft?: unknown) {
+    RequestPanel.currentPanel = new RequestPanel(panel, extensionUri, serializedDraft);
   }
 
   public static refreshCurrentPanel(): void {
@@ -199,12 +214,16 @@ export class RequestPanel {
 
   public static reloadCurrentPanelForStorageChange(): void {
     if (!RequestPanel.currentPanel) { return; }
+    RequestPanel.currentPanel.invalidateExecutions();
+    RequestPanel.currentPanel.latestTabDraft = null;
+    RequestPanel.currentPanel.storageProfileName = RequestPanel.storage.getWorkspaceProfileName();
     RequestPanel.currentPanel.pendingRestore = RequestPanel.storage.getTabState();
     RequestPanel.currentPanel.reloadWebview();
   }
 
   private reloadWebview(): void {
     this.webviewReady = false;
+    this.webviewSessionId = RequestPanel.createNonce();
     this.panel.webview.html = this.getHtmlContent();
   }
 
@@ -342,18 +361,23 @@ export class RequestPanel {
 
   private async handleMessage(message: unknown) {
     if (!isIncomingWebviewMessage(message)) { return; }
+    if (this.isDisposed || this.storageProfileName !== RequestPanel.storage.getWorkspaceProfileName()) { return; }
+    if ((message as { sessionId?: unknown }).sessionId !== this.webviewSessionId) { return; }
     // Restore saved state after the webview finishes initializing.
     if (message.type === 'webviewReady') {
       this.webviewReady = true;
       // Read the latest saved state each time the webview reports readiness.
       // With retainContextWhenHidden disabled, VS Code can recreate the webview.
-      const state = this.pendingRestore ?? RequestPanel.storage.getTabState();
+      const webviewDraft = this.readScopedDraft((message as { webviewDraft?: unknown }).webviewDraft);
+      const state = webviewDraft ?? this.pendingRestore ?? RequestPanel.storage.getTabState();
+      if (webviewDraft) { this.latestTabDraft = webviewDraft; }
       if (state && (state.tabs.length > 0 || state.compareSettings)) {
         this.postMessage({
           type: MessageType.RestoreTabState,
           tabs: state.tabs,
           activeIndex: state.activeIndex,
           compareSettings: state.compareSettings,
+          replace: true,
         });
       }
       this.pendingRestore = null;
@@ -459,8 +483,16 @@ export class RequestPanel {
         vscode.window.showInformationMessage(LocalizationService.t('panel.savedDefaultHeaders'));
         break;
       case MessageType.SaveTabState:
-        RequestPanel.storage.saveTabState(message.tabs ?? [], message.activeIndex ?? 0, message.compareSettings);
+      case MessageType.UpdateTabDraft: {
+        const state = RequestPanel.storage.validateTabState({ tabs: message.tabs ?? [], activeIndex: message.activeIndex ?? 0, compareSettings: message.compareSettings });
+        if (state) {
+          this.latestTabDraft = state;
+          if (message.type === MessageType.SaveTabState) {
+            RequestPanel.storage.saveTabState(state.tabs, state.activeIndex, state.compareSettings);
+          }
+        }
         break;
+      }
       case MessageType.CompareResponses:
         await this.compareResponses(message);
         break;
@@ -569,12 +601,48 @@ export class RequestPanel {
     this.postMessage({ type: 'activeVarKeys', varKeys, varValues });
   }
 
-  private saveActiveEnvironmentVariables(variables: KeyValue[]): void {
-    const activeEnvId = RequestPanel.environmentProvider.activeEnvId;
-    if (!activeEnvId) { return; }
-    RequestPanel.storage.updateEnvironmentVars(activeEnvId, variables);
-    RequestPanel.environmentProvider.refresh();
-    this.sendActiveVarsToWebview();
+  private captureExecutionContext(): ExecutionContext {
+    return {
+      profileName: this.storageProfileName,
+      environmentId: RequestPanel.environmentProvider.activeEnvId,
+      generation: this.executionGeneration,
+    };
+  }
+
+  private readScopedDraft(value: unknown): StoredTabState | null {
+    if (!value || typeof value !== 'object' || (value as { profileName?: unknown }).profileName !== this.storageProfileName) { return null; }
+    try { return RequestPanel.storage.validateTabState(value); } catch { return null; }
+  }
+
+  private isExecutionContextCurrent(context: ExecutionContext): boolean {
+    return !this.isDisposed
+      && context.generation === this.executionGeneration
+      && context.profileName === this.storageProfileName
+      && context.profileName === RequestPanel.storage.getWorkspaceProfileName();
+  }
+
+  private saveEnvironmentChanges(context: ExecutionContext, before: KeyValue[], after: KeyValue[]): void {
+    if (!this.isExecutionContextCurrent(context) || !context.environmentId) { return; }
+    const result = RequestPanel.storage.applyEnvironmentVariableChanges(context.environmentId, before, after);
+    if (result.conflicts.length > 0) {
+      vscode.window.showWarningMessage(LocalizationService.t('warn.environmentVariableConflict', {
+        keys: result.conflicts.join(', '),
+      }));
+    }
+    if (result.changed) {
+      RequestPanel.environmentProvider.refresh();
+      if (context.environmentId === RequestPanel.environmentProvider.activeEnvId) { this.sendActiveVarsToWebview(); }
+    }
+  }
+
+  private invalidateExecutions(): void {
+    ++this.executionGeneration;
+    this.requestExecutor.cancelAll();
+    this.collectionRunner.reset();
+    this.webSocketManager.disconnectAll();
+    this.pendingCollectionRun = null;
+    this.pendingWebviewMessages = [];
+    for (const resolve of this.pendingFlushResolvers.splice(0)) { resolve(); }
   }
 
   private saveToHistory(
@@ -756,10 +824,17 @@ export class RequestPanel {
   }
 
   private dispose() {
+    if (this.isDisposed) { return; }
+    if (this.latestTabDraft && this.storageProfileName === RequestPanel.storage.getWorkspaceProfileName()) {
+      try {
+        RequestPanel.storage.saveTabState(this.latestTabDraft.tabs, this.latestTabDraft.activeIndex, this.latestTabDraft.compareSettings);
+      } catch (error: unknown) {
+        vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+      }
+    }
     this.isDisposed = true;
-    RequestPanel.currentPanel = undefined;
-    this.collectionRunner.stop();
-    this.webSocketManager.disconnectAll();
+    if (RequestPanel.currentPanel === this) { RequestPanel.currentPanel = undefined; }
+    this.invalidateExecutions();
     // Tab state is saved periodically from the webview before disposal.
     for (const d of this.disposables) { d.dispose(); }
     this.disposables = [];
@@ -773,6 +848,8 @@ export class RequestPanel {
       webview: this.panel.webview,
       extensionUri: this.extensionUri,
       nonce: RequestPanel.createNonce(),
+      sessionId: this.webviewSessionId,
+      profileName: this.storageProfileName,
     });
   }
 }

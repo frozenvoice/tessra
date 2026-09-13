@@ -711,8 +711,12 @@ export class BodyConversionService {
     }
 
     if (from === 'form' && to === 'json') {
-      const value = formUrlEncodedToJson(payload.body || '');
-      return success('json', `${JSON.stringify(value, null, 2)}\n`, [], '');
+      try {
+        const value = formUrlEncodedToJson(payload.body || '');
+        return success('json', `${JSON.stringify(value, null, 2)}\n`, [], '');
+      } catch {
+        return failure('invalid_input', 'Form-urlencoded body contains malformed percent-encoding.');
+      }
     }
 
     if (from === 'json' && to === 'formdata') {

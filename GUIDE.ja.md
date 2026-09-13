@@ -121,6 +121,8 @@ Body: {"env":"{{envName}}"}
 - 例: `pm.environment.set("signature", pm.crypto.hmacSha256(pm.environment.get("payload") || "", pm.environment.get("secret") || ""));`
 - Scripts タブから例の挿入と Open Guide を使えます。
 - インポートしたスクリプトは、リクエストタブで信頼するまで無効です。
+- スクリプトの変数変更は開始時の環境に適用され、同じキーの同時編集は保持して警告します。プロファイル変更で実行中の処理を取り消します。
+- スクリプトにホストのオブジェクトや関数を渡しません。VMはOSサンドボックスではないため、内容を理解して信頼するスクリプトだけを実行してください。
 - スクリプト timeout は `tessra.scriptTimeoutMs` で設定します。
 - script logs と pass/fail 結果はレスポンスの Tests タブに表示されます。
 

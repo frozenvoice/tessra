@@ -48,6 +48,7 @@ export function seedTessraStorage(options: SeedOptions): string {
         kv('customerId', '9000'),
       ],
     },
+    { id: 'env-execution-b', name: 'Execution B', variables: [kv('envName', 'preserved-b')] },
   ];
 
   const runnerRequests = [

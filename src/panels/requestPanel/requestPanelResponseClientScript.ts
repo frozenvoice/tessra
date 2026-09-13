@@ -330,16 +330,33 @@ function switchResponseTabInContent(mc, tabName) {
     tab.responseTab = tabName;
     debouncePersist();
   }
-  mc.querySelectorAll('.js-res-tabs .tab').forEach(function(x) { x.classList.toggle('active', x.dataset.tab === tabName); });
+  mc.querySelectorAll('.js-res-tabs .tab').forEach(function(x) {
+    var isActive = x.dataset.tab === tabName;
+    x.classList.toggle('active', isActive);
+    x.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    x.setAttribute('tabindex', isActive ? '0' : '-1');
+  });
   const isBody = tabName === 'resBody';
   const isPreview = tabName === 'resPreview';
 
-  mc.querySelectorAll('.js-res-body').forEach(function(el) { el.classList.add('hidden'); });
-  mc.querySelector('.js-res-headers')?.classList.add('hidden');
-  mc.querySelector('.js-res-cookies')?.classList.add('hidden');
-  mc.querySelector('.js-res-tests')?.classList.add('hidden');
+  mc.querySelectorAll('.js-res-body').forEach(function(el) {
+    el.classList.add('hidden');
+    el.setAttribute('aria-hidden', 'true');
+  });
+  var hideResponsePanel = function(selector) {
+    var panel = mc.querySelector(selector);
+    if (!panel) return;
+    panel.classList.add('hidden');
+    panel.setAttribute('aria-hidden', 'true');
+  };
+  hideResponsePanel('.js-res-headers');
+  hideResponsePanel('.js-res-cookies');
+  hideResponsePanel('.js-res-tests');
   const preview = mc.querySelector('.js-res-preview');
-  if (preview) preview.classList.add('hidden');
+  if (preview) {
+    preview.classList.add('hidden');
+    preview.setAttribute('aria-hidden', 'true');
+  }
   const toolbar = mc.querySelector('.js-res-body-toolbar');
   if (toolbar) toolbar.classList.add('hidden');
 
@@ -350,18 +367,34 @@ function switchResponseTabInContent(mc, tabName) {
     if (tree) {
       const mode = toolbar?.querySelector('.toggle-btn.active')?.dataset.mode || 'tree';
       tree.classList.toggle('hidden', mode !== 'tree');
+      tree.setAttribute('aria-hidden', mode === 'tree' ? 'false' : 'true');
       if (raw) raw.classList.toggle('hidden', mode !== 'raw');
+      if (raw) raw.setAttribute('aria-hidden', mode === 'raw' ? 'false' : 'true');
     } else if (raw) {
       raw.classList.remove('hidden');
+      raw.setAttribute('aria-hidden', 'false');
     }
   } else if (tabName === 'resHeaders') {
-    mc.querySelector('.js-res-headers')?.classList.remove('hidden');
+    var headersPanel = mc.querySelector('.js-res-headers');
+    if (headersPanel) {
+      headersPanel.classList.remove('hidden');
+      headersPanel.setAttribute('aria-hidden', 'false');
+    }
   } else if (tabName === 'resCookies') {
-    mc.querySelector('.js-res-cookies')?.classList.remove('hidden');
+    var cookiesPanel = mc.querySelector('.js-res-cookies');
+    if (cookiesPanel) {
+      cookiesPanel.classList.remove('hidden');
+      cookiesPanel.setAttribute('aria-hidden', 'false');
+    }
   } else if (tabName === 'resTests') {
-    mc.querySelector('.js-res-tests')?.classList.remove('hidden');
+    var testsPanel = mc.querySelector('.js-res-tests');
+    if (testsPanel) {
+      testsPanel.classList.remove('hidden');
+      testsPanel.setAttribute('aria-hidden', 'false');
+    }
   } else if (isPreview && preview) {
     preview.classList.remove('hidden');
+    preview.setAttribute('aria-hidden', 'false');
     if (tab?.response?.body) {
       syncPreviewFrame(preview, tab);
     }
@@ -370,6 +403,41 @@ function switchResponseTabInContent(mc, tabName) {
   if (tabName === 'resBody') {
     syncResponseSearch(mc);
   }
+}
+
+function handleResponseTabKeydown(mc, event) {
+  var target = event.target?.closest?.('.js-res-tabs .tab');
+  if (!target || !mc.contains(target)) return;
+  var tabEls = Array.prototype.slice.call(mc.querySelectorAll('.js-res-tabs .tab'));
+  var index = tabEls.indexOf(target);
+  if (index < 0) return;
+  var nextIndex = -1;
+  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+    nextIndex = (index + 1) % tabEls.length;
+  } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+    nextIndex = (index - 1 + tabEls.length) % tabEls.length;
+  } else if (event.key === 'Home') {
+    nextIndex = 0;
+  } else if (event.key === 'End') {
+    nextIndex = tabEls.length - 1;
+  } else if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    switchResponseTabInContent(mc, target.dataset.tab);
+    return;
+  } else {
+    return;
+  }
+  event.preventDefault();
+  var next = tabEls[nextIndex];
+  if (!next) return;
+  switchResponseTabInContent(mc, next.dataset.tab);
+  next.focus();
+}
+
+function responseTabMarkup(tabName, label, active, controls, count) {
+  var id = 'responseTab-' + tabName;
+  var countHtml = count == null ? '' : ' <span class="tab-count">' + count + '</span>';
+  return '<div class="tab' + (active ? ' active' : '') + '" id="' + id + '" data-tab="' + tabName + '" role="tab" tabindex="' + (active ? '0' : '-1') + '" aria-selected="' + (active ? 'true' : 'false') + '" aria-controls="' + controls + '">' + escapeHtml(label) + countHtml + '</div>';
 }
 
 function focusResponseSearchField() {
@@ -778,18 +846,18 @@ function buildHttpResponseAreaHtml(tab) {
       '</div>' +
       responseTimingMetaHtml +
       '</div>' +
-      '<div class="tabs js-res-tabs">' +
-        '<div class="tab' + (showBody ? ' active' : '') + '" data-tab="resBody">' + escapeHtml(tr('webview.body')) + '</div>' +
-        (cookieCount > 0 ? '<div class="tab' + (showCookies ? ' active' : '') + '" data-tab="resCookies">' + escapeHtml(tr('webview.cookies')) + ' <span class="tab-count">' + cookieCount + '</span></div>' : '<div class="tab' + (showCookies ? ' active' : '') + '" data-tab="resCookies">' + escapeHtml(tr('webview.cookies')) + '</div>') +
-        '<div class="tab' + (showHeaders ? ' active' : '') + '" data-tab="resHeaders">' + escapeHtml(tr('webview.headers')) + ' <span class="tab-count">' + headerCount + '</span></div>' +
-        ((tab.scriptResults?.tests?.length || 0) > 0 ? '<div class="tab' + (showTests ? ' active' : '') + '" data-tab="resTests">' + escapeHtml(tr('webview.tests')) + ' <span class="tab-count">' + tab.scriptResults.tests.length + '</span></div>' : '<div class="tab' + (showTests ? ' active' : '') + '" data-tab="resTests">' + escapeHtml(tr('webview.tests')) + '</div>') +
-        (previewAvailable ? '<div class="tab' + (showPreview ? ' active' : '') + '" data-tab="resPreview">' + escapeHtml(tr('webview.preview')) + '</div>' : '') +
+      '<div class="tabs js-res-tabs" role="tablist" aria-label="' + escapeAttr(tr('webview.responseTabs')) + '">' +
+        responseTabMarkup('resBody', tr('webview.body'), showBody, 'responseBodyPanel') +
+        responseTabMarkup('resCookies', tr('webview.cookies'), showCookies, 'responseCookiesPanel', cookieCount > 0 ? cookieCount : null) +
+        responseTabMarkup('resHeaders', tr('webview.headers'), showHeaders, 'responseHeadersPanel', headerCount) +
+        responseTabMarkup('resTests', tr('webview.tests'), showTests, 'responseTestsPanel', (tab.scriptResults?.tests?.length || 0) > 0 ? tab.scriptResults.tests.length : null) +
+        (previewAvailable ? responseTabMarkup('resPreview', tr('webview.preview'), showPreview, 'responsePreviewPanel') : '') +
       '</div>' +
       toolbarHtml +
       '</div>' +
-      (lang === 'json' ? '<div class="json-tree js-res-tree js-res-body' + (showBody ? '' : ' hidden') + '" data-testid="response-body-tree"></div>' : '') +
-      '<div class="json-body js-res-raw js-res-body' + ((lang === 'json' || !showBody) ? ' hidden' : '') + '" data-testid="response-body">' + rawBodyHtml + '</div>' +
-      '<div class="res-headers-panel' + (showHeaders ? '' : ' hidden') + ' js-res-headers">' +
+      (lang === 'json' ? '<div id="responseBodyPanel" role="tabpanel" aria-labelledby="responseTab-resBody" aria-hidden="' + (showBody ? 'false' : 'true') + '" class="json-tree js-res-tree js-res-body' + (showBody ? '' : ' hidden') + '" data-testid="response-body-tree"></div>' : '') +
+      '<div id="' + (lang === 'json' ? 'responseRawPanel' : 'responseBodyPanel') + '"' + (lang === 'json' ? '' : ' role="tabpanel" aria-labelledby="responseTab-resBody"') + ' aria-hidden="' + (lang === 'json' || !showBody ? 'true' : 'false') + '" class="json-body js-res-raw js-res-body' + ((lang === 'json' || !showBody) ? ' hidden' : '') + '" data-testid="response-body">' + rawBodyHtml + '</div>' +
+      '<div id="responseHeadersPanel" role="tabpanel" aria-labelledby="responseTab-resHeaders" aria-hidden="' + (showHeaders ? 'false' : 'true') + '" class="res-headers-panel' + (showHeaders ? '' : ' hidden') + ' js-res-headers">' +
         (tab.resolvedHeaders && tab.resolvedHeaders.length
           ? '<div class="resolved-headers-section"><div class="resolved-headers-title">' + escapeHtml(tr('webview.requestHeadersResolved')) + '</div>' +
             '<table class="res-header-table"><thead><tr><th class="res-header-key-col">' + escapeHtml(tr('webview.key')) + '</th><th>' + escapeHtml(tr('webview.value')) + '</th></tr></thead><tbody>' +
@@ -800,10 +868,10 @@ function buildHttpResponseAreaHtml(tab) {
           : '') +
         headersTableHtml +
       '</div>' +
-      '<div class="res-cookies-panel' + (showCookies ? '' : ' hidden') + ' js-res-cookies">' +
+      '<div id="responseCookiesPanel" role="tabpanel" aria-labelledby="responseTab-resCookies" aria-hidden="' + (showCookies ? 'false' : 'true') + '" class="res-cookies-panel' + (showCookies ? '' : ' hidden') + ' js-res-cookies">' +
         (cookieCount > 0 ? cookiesTableHtml : renderInlineEmptyState(tr('webview.inline.response.noCookies.kicker'), tr('webview.inline.response.noCookies.title'), tr('webview.inline.response.noCookies.copy'))) +
       '</div>' +
-      '<div class="res-headers-panel' + (showTests ? '' : ' hidden') + ' js-res-tests" data-testid="response-tests">' +
+      '<div id="responseTestsPanel" role="tabpanel" aria-labelledby="responseTab-resTests" aria-hidden="' + (showTests ? 'false' : 'true') + '" class="res-headers-panel' + (showTests ? '' : ' hidden') + ' js-res-tests" data-testid="response-tests">' +
         (testResults.length > 0
           ? testsSummaryHtml +
             testsAlertHtml +
@@ -823,7 +891,7 @@ function buildHttpResponseAreaHtml(tab) {
               : '')
           : renderInlineEmptyState(tr('webview.inline.tests.none.kicker'), tr('webview.inline.tests.none.title'), tr('webview.inline.tests.none.copy'))) +
       '</div>' +
-      (previewAvailable ? '<div class="res-preview' + (showPreview ? '' : ' hidden') + ' js-res-preview"></div>' : '') +
+      (previewAvailable ? '<div id="responsePreviewPanel" role="tabpanel" aria-labelledby="responseTab-resPreview" aria-hidden="' + (showPreview ? 'false' : 'true') + '" class="res-preview' + (showPreview ? '' : ' hidden') + ' js-res-preview"></div>' : '') +
       '</div>';
   } else {
     return '<div class="res-empty-shell">' + buildResponseTimingMetaHtml(tab) + (tab.url
@@ -1034,6 +1102,9 @@ function bindResponseViewerEvents(mc) {
     const t = e.target.closest('.tab');
     if (!t) return;
     switchResponseTabInContent(mc, t.dataset.tab);
+  });
+  mc.querySelector('.js-res-tabs')?.addEventListener('keydown', (e) => {
+    handleResponseTabKeydown(mc, e);
   });
 
   

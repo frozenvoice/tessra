@@ -60,8 +60,15 @@ export class CodegenService {
 
     lines.push(`fetch(${JSON.stringify(prepared.url)}, {`);
     lines.push(`  method: ${JSON.stringify(prepared.method)},`);
-    if (prepared.headers.length > 0 && !hasFormData) {
-      lines.push(`  headers: ${JSON.stringify(this.toHeaderObject(prepared.headers), null, 2).replace(/\n/g, '\n  ')},`);
+    if (prepared.headers.length > 0) {
+      // FormData가 boundary를 직접 계산하도록 Content-Type만 생략한다.
+      // 인증 및 사용자 지정 헤더까지 제거하면 생성 코드가 원본 요청과 달라진다.
+      const headers = hasFormData
+        ? prepared.headers.filter((header) => header.key.toLowerCase() !== 'content-type')
+        : prepared.headers;
+      if (headers.length > 0) {
+        lines.push(`  headers: ${JSON.stringify(this.toHeaderObject(headers), null, 2).replace(/\n/g, '\n  ')},`);
+      }
     }
     if (prepared.bodyType !== 'none') {
       if (hasFormData) {

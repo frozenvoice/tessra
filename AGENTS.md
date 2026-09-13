@@ -1,4 +1,4 @@
-﻿# Tessra — 프로젝트 규칙
+# Tessra — 프로젝트 규칙
 
 ## 프로젝트 개요
 Tessra는 VS Code 안에서 동작하는 offline-first API 클라이언트 확장이다.
@@ -131,7 +131,7 @@ tessra/
 
 ### 현재 품질 기준
 1. 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴가 키보드 접근과 명확한 포커스 상태를 유지해야 한다.
-2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다. 핵심 클릭 경로는 `npm run test:e2e` UI 자동화로도 검증한다 (`docs/testing.md`). stable UI E2E는 **20개**(Collection Runner 2개 + WebSocket 1개 + Environment autosave 1개 + Default Headers save/apply 1개 + Auth Bearer 1개 + Scripts template 1개 + Settings editor 1개 + Path Variables 1개 + Request More narrow geometry 1개 + Path Variable occurrence resolution UI 1개 + Body scroll ownership 1개 포함)를 유지한다. GitHub Actions e2e job은 전체 suite 전에 `npm run test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 별도 named step으로 실행한다.
+2. 수동 E2E 범위는 `docs/manual-e2e-checklist.md`를 기준으로 확장·관리한다. 핵심 클릭 경로는 `npm run test:e2e` UI 자동화로도 검증한다 (`docs/testing.md`). stable UI E2E는 **23개**(Collection Runner 2개 + WebSocket 1개 + Environment autosave 1개 + Default Headers save/apply 1개 + Auth Bearer 1개 + Scripts template 1개 + Settings editor 1개 + Path Variables 1개 + Request More narrow geometry 1개 + Path Variable occurrence resolution UI 1개 + Body scroll ownership 1개 + 응답 키보드 탐색 1개 + 즉시 닫기 초안 보존 1개 + 실행 환경·프로필 격리 1개 포함)를 유지한다. GitHub Actions e2e job은 전체 suite 전에 `npm run test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 별도 named step으로 실행한다.
 3. UI 품질 원칙: (1) DOM visible만으로 layout PASS 금지 (2) popup/menu는 viewport geometry 검증 (3) variable warning은 occurrence resolution 기준 (4) scrollable editor는 scroll owner 수 + wheel interaction 검증 (5) Request Panel layout은 narrow-width와 short-height BrowserWindow에서 검증.
 4. 요청 패널 시각 계약은 `DESIGN.md` Quiet Instrument를 따른다 (pill wall / soft-card / Send success-green 재도입 금지).
 5. Request Panel UI를 바꾸면 관련 `data-testid`와 `e2e/specs/*`를 함께 갱신한다. Collection Runner UI를 바꾸면 `e2e/specs/runner/*`도 함께 갱신한다. production backdoor(`window.__tessraTest` 등)는 넣지 않는다.
@@ -166,6 +166,10 @@ Tessra 저장소가 비어 있는 첫 활성화 시에는 이전 Arc Client 저�
 저장된 JSON 파일을 파싱할 수 없으면 원본 옆에 `.corrupt-*` 백업을 남기고 경고를 표시한 뒤, 해당 파일이 다시 저장될 때까지 기본값을 사용한다.
 
 ## 주의사항
+- 실행 컨텍스트는 프로필·환경·세대를 고정한다. 스크립트의 변경분(set/unset)만 원래 환경에 병합하고, 같은 키의 동시 수정은 보존·경고한다. 변경 없는 스크립트는 환경 파일을 쓰지 않는다.
+- 프로필 변경/패널 종료 시 HTTP(Body 준비·재시도 포함)·러너·WebSocket을 취소하고 이전 세대의 메시지·응답을 폐기한다. HTTP 전송은 리다이렉트를 포함해 http/https만 허용하며 러너의 WS 실행은 미지원이다.
+- 스크립트 입출력은 JSON 경계이며 호스트 객체·함수를 VM에 전달하지 않는다. Node VM을 OS 보안 샌드박스로 주장하지 않는다 (`docs/script-security.md`).
+- 일반 저장 파일도 구조 검증을 수행한다. 잘못된 원본의 백업·경고와 메모리 기본값 사용을 분리하고, 복구 목적으로 빈 데이터를 자동 저장하지 않는다.
 - 기존 기능을 건드릴 때는 webview 파싱 오류와 상태 복원 흐름을 가장 먼저 확인한다
 - `package.json`의 `engines.vscode` 버전은 임의로 올리지 않는다
 - 보안 관련 기본값은 안전한 쪽을 유지하고, 완화 옵션은 opt-in으로 둔다

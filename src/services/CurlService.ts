@@ -17,7 +17,7 @@ interface OptionToken {
 }
 
 const VALID_METHODS = new Set<HttpMethod>(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
-const VALUE_REQUIRED_SHORT_FLAGS = new Set(['-X', '-H', '-d', '-b', '-u', '-A', '-e']);
+const VALUE_REQUIRED_SHORT_FLAGS = new Set(['-X', '-H', '-d', '-b', '-u', '-A', '-e', '-F', '-c', '-D', '-K', '-m', '-o', '-x', '-U', '-w', '-z', '-T']);
 const BOOLEAN_SHORT_FLAGS = new Set(['-G', '-k', '-L', '-s', '-S', '-v', '-i']);
 const KNOWN_LONG_FLAGS = new Set([
   '--request',
@@ -27,6 +27,8 @@ const KNOWN_LONG_FLAGS = new Set([
   '--data-raw',
   '--data-binary',
   '--data-urlencode',
+  '--form',
+  '--form-string',
   '--get',
   '--url',
   '--cookie',
@@ -41,6 +43,20 @@ const KNOWN_LONG_FLAGS = new Set([
   '--show-error',
   '--verbose',
   '--include',
+]);
+
+// 로컬 파일·프록시·인증서·출력 파일 연동 없이는 재현할 수 없는 옵션이다.
+// 지원하지 않는 옵션의 인자를 소비해 요청 URL로 오인하지 않도록 한다.
+const UNSUPPORTED_VALUE_SHORT_FLAGS = new Set(['-c', '-D', '-K', '-m', '-o', '-x', '-U', '-w', '-z', '-T']);
+const UNSUPPORTED_VALUE_LONG_FLAGS = new Set([
+  '--cacert', '--capath', '--cert', '--cert-type', '--key', '--key-type',
+  '--config', '--connect-timeout', '--cookie-jar', '--dns-interface', '--dns-ipv4-addr',
+  '--dns-ipv6-addr', '--interface', '--max-time', '--netrc-file', '--output', '--proxy',
+  '--proxy-cacert', '--proxy-cert', '--proxy-key', '--proxy-service-name',
+  '--proxy-tlsauthtype', '--proxy-tlspassword', '--proxy-tlsuser', '--proxy-tlsv1', '--proxy-user',
+  '--resolve', '--retry', '--retry-delay', '--retry-max-time', '--stderr', '--trace', '--trace-ascii',
+  '--trace-time', '--upload-file', '--url-query', '--write-out', '--form-escape', '--form-quote',
+  '--request-target',
 ]);
 
 export class CurlService {
@@ -61,10 +77,12 @@ export class CurlService {
     const cookies: string[] = [];
     const bodyParts: string[] = [];
     const dataUrlEncodeParts: string[] = [];
+    const formData: NonNullable<Request['formData']> = [];
     const auth: AuthConfig = { type: 'none' };
     let methodExplicit = false;
     let getWithData = false;
     let bodyTypeHint: RequestBodyType | undefined;
+    let binaryFilePath = '';
     let followRedirects = false;
     let tlsValidation: Request['tlsValidation'] = 'default';
 
@@ -72,7 +90,7 @@ export class CurlService {
       const option = CurlService.splitOptionToken(tokens[index]);
       const tok = option.flag;
 
-      const readValue = (flag: string, kind: 'method' | 'header' | 'generic' = 'generic'): string | undefined => {
+      const readValue = (flag: string, kind: 'method' | 'header' | 'form' | 'generic' | 'unsupported' = 'generic'): string | undefined => {
         if (option.inlineValue !== undefined) { return option.inlineValue; }
         const next = tokens[index + 1];
         if (next === undefined || CurlService.shouldTreatAsMissingValue(kind, next)) {
@@ -111,9 +129,39 @@ export class CurlService {
         case '--data-binary': {
           const value = readValue(tok);
           if (value === undefined) { break; }
-          bodyParts.push(value);
-          if (tok === '--data-binary') { bodyTypeHint = 'raw'; }
+          if (tok === '--data-binary' && value.startsWith('@')) {
+            const filePath = value.slice(1);
+            if (!filePath) {
+              warnings.push('Empty --data-binary @file value cannot be imported.');
+              break;
+            }
+            if (bodyParts.length > 0 || binaryFilePath) {
+              warnings.push('Multiple cURL request bodies cannot be represented without loss; the last binary file is retained.');
+            }
+            binaryFilePath = filePath;
+            bodyTypeHint = 'binary';
+          } else {
+            if (binaryFilePath) {
+              warnings.push('Multiple cURL request bodies cannot be represented without loss; the binary file reference was replaced by inline data.');
+              binaryFilePath = '';
+            }
+            bodyParts.push(value);
+            if (tok === '--data-binary') { bodyTypeHint = 'raw'; }
+          }
           if (!methodExplicit && !getWithData) { method = 'POST'; }
+          break;
+        }
+        case '-F':
+        case '--form':
+        case '--form-string': {
+          const value = readValue(tok, 'form');
+          if (value === undefined) { break; }
+          const field = CurlService.parseFormField(value, tok === '--form-string', warnings);
+          if (field) {
+            formData.push(field);
+            bodyTypeHint = 'formdata';
+            if (!methodExplicit && !getWithData) { method = 'POST'; }
+          }
           break;
         }
         case '--data-urlencode': {
@@ -192,7 +240,12 @@ export class CurlService {
           break;
         default:
           if (tok.startsWith('-')) {
-            warnings.push(`Unsupported cURL flag ignored: ${tokens[index]}.`);
+            if (UNSUPPORTED_VALUE_SHORT_FLAGS.has(tok) || UNSUPPORTED_VALUE_LONG_FLAGS.has(tok)) {
+              const value = readValue(tok, 'unsupported');
+              warnings.push(`Unsupported cURL option ignored: ${tok}${value === undefined ? '' : ` (argument ${value} was ignored)`}.`);
+            } else {
+              warnings.push(`Unsupported cURL flag ignored: ${tokens[index]}.`);
+            }
           } else {
             url = tok;
           }
@@ -229,6 +282,12 @@ export class CurlService {
       }
       bodyParts.length = 0;
       dataUrlEncodeParts.length = 0;
+      if (formData.length > 0 || binaryFilePath) {
+        warnings.push('cURL form or binary data cannot be moved into query parameters and was ignored for -G/--get.');
+        formData.length = 0;
+        binaryFilePath = '';
+        bodyTypeHint = undefined;
+      }
       if (!methodExplicit) { method = 'GET'; }
     }
 
@@ -269,7 +328,8 @@ export class CurlService {
     }
 
     const ctHeader = headers.find((h) => h.key.toLowerCase() === 'content-type');
-    const bodyType: RequestBodyType = body
+    const hasBody = body.length > 0 || formData.length > 0 || binaryFilePath.length > 0;
+    const bodyType: RequestBodyType = hasBody
       ? (bodyTypeHint ?? this.inferBodyType(ctHeader?.value ?? ''))
       : 'none';
 
@@ -283,8 +343,8 @@ export class CurlService {
         params,
         body,
         bodyType,
-        formData: [],
-        binaryFilePath: '',
+        formData,
+        binaryFilePath,
         auth,
         followRedirects,
         tlsValidation,
@@ -365,7 +425,10 @@ export class CurlService {
     if (req.bodyType === 'formdata' && req.formData && req.formData.length > 0) {
       for (const field of req.formData.filter((field) => field.enabled && field.key)) {
         if (field.type === 'file') {
-          parts.push(`-F '${CurlService.shellEscape(field.key)}=@${CurlService.shellEscape(field.value)}'`);
+          const filePath = CurlService.escapeFormFilePath(field.value);
+          parts.push(`-F '${CurlService.shellEscape(field.key)}=@${CurlService.shellEscape(filePath)}'`);
+        } else if (CurlService.shouldUseFormString(field.value)) {
+          parts.push(`--form-string '${CurlService.shellEscape(field.key)}=${CurlService.shellEscape(field.value)}'`);
         } else {
           parts.push(`-F '${CurlService.shellEscape(field.key)}=${CurlService.shellEscape(field.value)}'`);
         }
@@ -433,8 +496,8 @@ export class CurlService {
     return out.length > 0 ? out : [token];
   }
 
-  private static shouldTreatAsMissingValue(kind: 'method' | 'header' | 'generic', next: string): boolean {
-    if ((kind === 'method' || kind === 'header') && CurlService.looksLikeUrl(next)) {
+  private static shouldTreatAsMissingValue(kind: 'method' | 'header' | 'form' | 'generic' | 'unsupported', next: string): boolean {
+    if ((kind === 'method' || kind === 'header' || kind === 'form' || kind === 'unsupported') && CurlService.looksLikeUrl(next)) {
       return true;
     }
 
@@ -465,6 +528,9 @@ export class CurlService {
       case '--data-raw':
       case '--data-binary':
       case '--data-urlencode':
+      case '-F':
+      case '--form':
+      case '--form-string':
       case '-b':
       case '--cookie':
       case '-u':
@@ -560,6 +626,49 @@ export class CurlService {
     }
   }
 
+  private static parseFormField(
+    raw: string,
+    forceText: boolean,
+    warnings: string[]
+  ): NonNullable<Request['formData']>[number] | null {
+    const equals = raw.indexOf('=');
+    if (equals <= 0) {
+      warnings.push(`Invalid cURL form field: ${raw}. Expected "name=value" or "name=@file".`);
+      return null;
+    }
+    const key = raw.slice(0, equals);
+    const value = raw.slice(equals + 1);
+    if (!forceText && value.startsWith('@')) {
+      const fileAndAttributes = value.slice(1);
+      const attributeIndex = CurlService.findUnescapedSemicolon(fileAndAttributes);
+      const filePath = attributeIndex >= 0 ? fileAndAttributes.slice(0, attributeIndex) : fileAndAttributes;
+      if (attributeIndex >= 0) {
+        warnings.push(`Unsupported cURL form attributes ignored: ${fileAndAttributes.slice(attributeIndex + 1)}.`);
+      }
+      if (!filePath) {
+        warnings.push(`Empty file path in cURL form field: ${raw}.`);
+        return null;
+      }
+      return {
+        id: `fd_${Math.random().toString(36).slice(2, 10)}`,
+        key,
+        value: CurlService.unescapeFormFilePath(filePath),
+        enabled: true,
+        type: 'file',
+      };
+    }
+    if (!forceText && value.startsWith('<')) {
+      warnings.push(`Unsupported cURL form file-content syntax preserved as text: ${raw}.`);
+    }
+    return {
+      id: `fd_${Math.random().toString(36).slice(2, 10)}`,
+      key,
+      value,
+      enabled: true,
+      type: 'text',
+    };
+  }
+
   private static encodeFormPart(raw: string, warnings: string[]): string {
     if (!raw) {
       warnings.push('Empty --data-urlencode value was ignored.');
@@ -570,6 +679,30 @@ export class CurlService {
       return `${encodeURIComponent(raw.slice(0, index))}=${encodeURIComponent(raw.slice(index + 1))}`;
     }
     return encodeURIComponent(raw);
+  }
+
+  private static shouldUseFormString(value: string): boolean {
+    return /^[<@]/.test(value) || value.includes(';');
+  }
+
+  private static escapeFormFilePath(value: string): string {
+    return value.replace(/;/g, '\\;');
+  }
+
+  private static unescapeFormFilePath(value: string): string {
+    return value.replace(/\\;/g, ';');
+  }
+
+  private static findUnescapedSemicolon(value: string): number {
+    for (let index = 0; index < value.length; index++) {
+      if (value[index] !== ';') { continue; }
+      let backslashes = 0;
+      for (let cursor = index - 1; cursor >= 0 && value[cursor] === '\\'; cursor--) {
+        backslashes++;
+      }
+      if (backslashes % 2 === 0) { return index; }
+    }
+    return -1;
   }
 
   private static normalizeCurl(raw: string): string {

@@ -6,6 +6,8 @@ import * as vm from 'vm';
 const TEST_STRINGS: Record<string, string> = {
   'webview.newTab': 'New tab',
   'webview.requestTabs': 'Request tabs',
+  'webview.responseTabs': 'Response tabs',
+  'webview.tabActions': 'Tab actions',
   'webview.environment': 'Environment:',
   'webview.environmentNone': 'None',
   'webview.unsavedChanges': 'Unsaved changes',
@@ -496,6 +498,8 @@ function renderHtml(template: string): string {
     'bodyConversionUri',
     'displayLanguage',
     'requestPanelTheme',
+    'sessionId',
+    'profileName',
     'localizedStrings',
     'dateLocale',
     'LocalizationService',
@@ -507,6 +511,8 @@ function renderHtml(template: string): string {
     bodyConversionUri: string,
     displayLanguage: string,
     requestPanelTheme: string,
+    sessionId: string,
+    profileName: string,
     localizedStrings: string,
     dateLocale: string,
     localizationService: { t: (key: string) => string }
@@ -518,6 +524,8 @@ function renderHtml(template: string): string {
     'hljs.js',
     'bodyConversion.js',
     'en',
+    'default',
+    'test-session',
     'default',
     JSON.stringify(TEST_STRINGS).replace(/</g, '\\u003c'),
     'en-US',
@@ -1640,7 +1648,7 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /let activeVarValues = \{\};/);
     assert.match(script, /function syncVariablePreviewHints\(scope\)/);
     assert.match(script, /function showVariablePreviewPopover\(target\)/);
-    assert.match(script, /let currentWorkspaceProfile = 'default';/);
+    assert.match(script, /let currentWorkspaceProfile = ["']default["'];/);
     assert.match(script, /msg\.varValues \|\| \{\}/);
     assert.match(script, /tr\('webview\.variablePreviewTitle'\)/);
     assert.match(script, /tr\('webview\.variablePreviewMissing'\)/);
@@ -2126,12 +2134,64 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /function buildPreviewDocument\(rawHtml, resolvedUrl\)/);
     assert.match(script, /function syncPreviewFrame\(preview, tab\)/);
     assert.match(script, /const previewAvailable = lang === 'html' && hasHtmlPreview\(tab\);/);
-    assert.match(script, /\(previewAvailable \? '<div class="tab' \+ \(showPreview \? ' active' : ''\) \+ '" data-tab="resPreview">/);
-    assert.match(script, /<div class="res-preview' \+ \(showPreview \? '' : ' hidden'\) \+ ' js-res-preview"><\/div>/);
+    assert.match(script, /responseTabMarkup\('resPreview', tr\('webview\.preview'\), showPreview, 'responsePreviewPanel'\)/);
+    assert.match(script, /<div id="responsePreviewPanel" role="tabpanel" aria-labelledby="responseTab-resPreview"/);
     assert.match(script, /preview\.innerHTML = buildPreviewDocument\(tab\.response\.body \|\| '', tab\.resolvedUrl \|\| tab\.url \|\| ''\);/);
     assert.match(script, /querySelectorAll\('script, style, noscript, iframe, object, embed, link, source, audio, video, track, base, meta\[http-equiv="refresh"\]'\)/);
     assert.match(script, /tf\('webview\.previewOfflineBlockedAssets', \{ count: String\(payload\.blockedAssets\) \}\)/);
     assert.match(script, /js-open-response-url/);
+  });
+
+  it('gives response tabs roving keyboard semantics and labelled tab panels', () => {
+    assert.match(script, /class="tabs js-res-tabs" role="tablist" aria-label="/);
+    assert.match(script, /function responseTabMarkup\(tabName, label, active, controls, count\)/);
+    assert.match(script, /role="tab" tabindex="' \+ \(active \? '0' : '-1'\)/);
+    assert.match(script, /function handleResponseTabKeydown\(mc, event\)/);
+    assert.match(script, /event\.key === 'ArrowRight' \|\| event\.key === 'ArrowDown'/);
+    assert.match(script, /event\.key === 'ArrowLeft' \|\| event\.key === 'ArrowUp'/);
+    assert.match(script, /event\.key === 'Home'/);
+    assert.match(script, /event\.key === 'End'/);
+    assert.match(script, /switchResponseTabInContent\(mc, next\.dataset\.tab\);\n  next\.focus\(\);/);
+    assert.match(script, /id="responseBodyPanel" role="tabpanel" aria-labelledby="responseTab-resBody"/);
+    assert.match(script, /id="responseHeadersPanel" role="tabpanel" aria-labelledby="responseTab-resHeaders"/);
+    assert.match(script, /mc\.querySelector\('\.js-res-tabs'\)\?\.addEventListener\('keydown'/);
+  });
+
+  it('keeps the latest tab draft in webview state and host memory before disk debounce', () => {
+    assert.match(script, /function buildWebviewDraftState\(\)/);
+    assert.match(script, /profileName: currentWorkspaceProfile \|\| 'default'/);
+    assert.match(script, /vscode\.setState\(draft\)/);
+    assert.match(script, /type: 'updateTabDraft'/);
+    assert.match(script, /function readInitialWebviewDraft\(\)/);
+    assert.match(script, /var normalizedProfile = typeof state\.profileName === 'string'/);
+    assert.match(script, /if \(normalizedProfile !== \(currentWorkspaceProfile \|\| 'default'\)\)/);
+    assert.match(script, /type: 'webviewReady',[\s\S]*webviewDraft: initialWebviewDraft/);
+    assert.match(script, /if \(webviewDraftRestored && msg\.replace !== true\)/);
+  });
+
+  it('keeps legacy status hooks inert and makes tab dialogs and menus keyboard-safe', () => {
+    const detail = extractScriptSegment(
+      script,
+      'function renderStatusStripExpandDetails(tab)',
+      'function renderLegacyStatusChipHooks(tab)'
+    );
+    assert.match(detail, /js-topline-status-chips visually-hidden" aria-hidden="true"><\/div>/);
+    // 스트립을 다시 그려도 unresolved 경고를 유지하되 숨김 영역에는 포커스 가능한 노드를 넣지 않는다.
+    assert.match(detail, /js-request-preflight-wrap visually-hidden" aria-hidden="true">'[\s\S]*renderRequestPreflight\(tab\)[\s\S]*'<\/div>/);
+    assert.doesNotMatch(detail, /renderLegacyStatusChipHooks\(tab\)/);
+    assert.match(script, /function refreshRequestPreflight\(mc\)[\s\S]*wrap\.innerHTML = renderRequestPreflight\(draftTab\)/);
+    assert.match(script, /return '<span class="preflight-pill/);
+    assert.match(script, /<span class="ghost-btn ripple-btn js-preflight-action"/);
+    assert.doesNotMatch(script, /return '<button class="preflight-pill/);
+    assert.match(script, /function setupDirtyConfirmOverlay\(overlay\)/);
+    assert.match(script, /aria-modal', 'true'/);
+    assert.match(script, /e\.key === 'Escape'/);
+    assert.match(script, /e\.key !== 'Tab'/);
+    assert.match(script, /showTabContextMenu\(rect\.left, rect\.bottom, tab\.id, el\)/);
+    assert.match(script, /e\.key === 'ContextMenu' \|\| \(e\.key === 'F10' && e\.shiftKey\)/);
+    assert.match(script, /menu\.setAttribute\('role', 'menu'\)/);
+    assert.match(script, /el\.setAttribute\('role', 'menuitem'\)/);
+    assert.match(script, /e\.key === 'ArrowDown'/);
   });
 
   it('surfaces workspace default headers directly in the request UI', () => {
@@ -2251,10 +2311,10 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /data-mode="tree"/);
     assert.match(script, /js-fmt-btn/);
     assert.match(script, /js-response-search/);
-    assert.match(script, /data-tab="resCookies"/);
-    assert.match(script, /data-tab="resHeaders"/);
-    assert.match(script, /data-tab="resTests"/);
-    assert.match(script, /data-tab="resPreview"/);
+    assert.match(script, /responseTabMarkup\('resCookies'/);
+    assert.match(script, /responseTabMarkup\('resHeaders'/);
+    assert.match(script, /responseTabMarkup\('resTests'/);
+    assert.match(script, /responseTabMarkup\('resPreview'/);
     assert.match(script, /xpathHint|webview\.xpathHint/);
   });
 
@@ -3023,8 +3083,10 @@ describe('RequestPanel Webview', () => {
   it('persists collection runner results to history when enabled', () => {
     assert.match(collectionRunnerSource, /let historyRequest: Request \| null = null;/);
     assert.match(collectionRunnerSource, /historyRequest = createHistoryRequestSnapshot\(/);
-    assert.match(collectionRunnerSource, /if \(!this\.isRunStopped\(input\.runId\) && settings\.saveToHistory && historyRequest\) \{/);
-    assert.match(collectionRunnerSource, /response \? \{ status: response\.status, statusText: response\.statusText, time: response\.time \} : null/);
+    // 실행 중단 여부와 저장 설정을 확인한 뒤 execution context까지 전달하는 계약을 검증한다.
+    assert.match(collectionRunnerSource, /if \(!isStopped\(\) && settings\.saveToHistory && historyRequest\) \{/);
+    assert.match(collectionRunnerSource, /this\.host\.saveToHistory\([\s\S]*?historyRequest,[\s\S]*?response \? \{ status: response\.status, statusText: response\.statusText, time: response\.time \} : null,[\s\S]*?createRequestTiming\(requestStartedAt\),[\s\S]*?input\.context/);
+    assert.match(collectionRunnerSource, /this\.host\.refreshHistory\(\);/);
   });
 
   it('renders collection runner options before starting a run', () => {

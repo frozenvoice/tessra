@@ -1,7 +1,20 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Collection, CollectionItem, HistoryEntry, Environment, KeyValue, Request, TabState, CompareSettings, StoredTabState } from '../models/types';
+import {
+  AuthConfig,
+  Collection,
+  CollectionItem,
+  CompareSettings,
+  Environment,
+  FormDataField,
+  HistoryEntry,
+  KeyValue,
+  Request,
+  RequestBodyType,
+  TabState,
+  StoredTabState,
+} from '../models/types';
 import { LocalizationService } from './LocalizationService';
 
 export interface WorkspaceBackupData {
@@ -30,6 +43,12 @@ export interface WorkspaceBackupImportResult {
   environments: number;
   activeEnvironmentRestored: boolean;
   preImportBackupPath: string;
+}
+
+export interface EnvironmentVariableChangesResult {
+  changed: boolean;
+  conflicts: string[];
+  appliedKeys: string[];
 }
 
 // globalStorage 경로에 JSON 파일로 데이터 영속화
@@ -240,11 +259,12 @@ export class StorageService {
     return path.join(this.getActiveStoragePath(), fileName);
   }
 
-  private readJson<T>(filePath: string, fallback: T): T {
+  private readJson<T>(filePath: string, fallback: T, normalize?: (value: unknown) => T): T {
     try {
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf-8');
-        return JSON.parse(raw);
+        const parsed: unknown = JSON.parse(raw);
+        return normalize ? normalize(parsed) : parsed as T;
       }
     } catch (err: unknown) {
       this.handleCorruptJson(filePath, err);
@@ -379,8 +399,10 @@ export class StorageService {
     throw new Error(`${label} must be a string-compatible value.`);
   }
 
-  private normalizeEnabled(value: unknown): boolean {
-    return typeof value === 'boolean' ? value : true;
+  private normalizeEnabled(value: unknown, label = 'enabled'): boolean {
+    if (typeof value === 'undefined' || value === null) { return true; }
+    if (typeof value !== 'boolean') { throw new Error(`${label} must be a boolean.`); }
+    return value;
   }
 
   private normalizeKeyValue(value: unknown, label: string): KeyValue {
@@ -397,7 +419,7 @@ export class StorageService {
       ...item,
       key,
       value: this.normalizeStringValue(item.value, `${label}.value`),
-      enabled: this.normalizeEnabled(item.enabled),
+      enabled: this.normalizeEnabled(item.enabled, `${label}.enabled`),
     } as KeyValue;
   }
 
@@ -408,7 +430,7 @@ export class StorageService {
   }
 
   private normalizeOptionalKeyValueArray(value: unknown, label: string): KeyValue[] {
-    if (typeof value === 'undefined') { return []; }
+    if (typeof value === 'undefined' || value === null) { return []; }
     return this.normalizeKeyValueArray(value, label);
   }
 
@@ -425,7 +447,8 @@ export class StorageService {
   }
 
   private normalizeCollectionItems(value: unknown, label: string): CollectionItem[] {
-    if (!Array.isArray(value)) { return []; }
+    if (typeof value === 'undefined' || value === null) { return []; }
+    if (!Array.isArray(value)) { throw new Error(`${label} must be an array.`); }
     return value.map((item, index) => this.normalizeCollectionItem(item, `${label}[${index}]`));
   }
 
@@ -455,24 +478,186 @@ export class StorageService {
     } as CollectionItem;
   }
 
-  private normalizeCollectionRequest(value: unknown, label: string): Request {
-    const request = this.asObject(value, label);
-    const auth = request.auth && typeof request.auth === 'object' && !Array.isArray(request.auth)
-      ? request.auth
-      : { type: 'none' };
+  private normalizeBodyType(value: unknown, label = 'bodyType'): RequestBodyType {
+    if (typeof value === 'undefined' || value === null) { return 'none'; }
+    const supported: RequestBodyType[] = ['none', 'json', 'xml', 'form', 'formdata', 'binary', 'raw', 'text'];
+    if (typeof value !== 'string' || !supported.includes(value as RequestBodyType)) {
+      throw new Error(`${label} has an unsupported value.`);
+    }
+    return value as RequestBodyType;
+  }
 
+  private normalizeAuth(value: unknown, label: string): AuthConfig {
+    if (typeof value === 'undefined' || value === null) { return { type: 'none' }; }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error(`${label} must be an object.`);
+    }
+
+    const auth = value as Record<string, unknown>;
+    const type = auth.type;
+    if (type === 'none' || typeof type === 'undefined' || type === null) {
+      return { ...auth, type: 'none' } as AuthConfig;
+    }
+    if (type === 'basic') {
+      const basic = auth.basic;
+      if (typeof basic === 'undefined' || basic === null) {
+        return { ...auth, type, basic: { username: '', password: '' } } as AuthConfig;
+      }
+      const config = this.asObject(basic, `${label}.basic`);
+      return {
+        ...auth,
+        type,
+        basic: {
+          username: this.normalizeStringValue(config.username, `${label}.basic.username`),
+          password: this.normalizeStringValue(config.password, `${label}.basic.password`),
+        },
+      } as AuthConfig;
+    }
+    if (type === 'bearer') {
+      const bearer = auth.bearer;
+      if (typeof bearer === 'undefined' || bearer === null) {
+        return { ...auth, type, bearer: { token: '' } } as AuthConfig;
+      }
+      const config = this.asObject(bearer, `${label}.bearer`);
+      return {
+        ...auth,
+        type,
+        bearer: { token: this.normalizeStringValue(config.token, `${label}.bearer.token`) },
+      } as AuthConfig;
+    }
+    if (type === 'apikey') {
+      const apikey = auth.apikey;
+      if (typeof apikey === 'undefined' || apikey === null) {
+        return { ...auth, type, apikey: { key: '', value: '', addTo: 'header' } } as AuthConfig;
+      }
+      const config = this.asObject(apikey, `${label}.apikey`);
+      const addTo = config.addTo === 'query' ? 'query' : 'header';
+      return {
+        ...auth,
+        type,
+        apikey: {
+          key: this.normalizeStringValue(config.key, `${label}.apikey.key`),
+          value: this.normalizeStringValue(config.value, `${label}.apikey.value`),
+          addTo,
+        },
+      } as AuthConfig;
+    }
+    throw new Error(`${label}.type must be "none", "basic", "bearer", or "apikey".`);
+  }
+
+  private normalizeOptionalFormData(value: unknown, label: string): FormDataField[] {
+    if (typeof value === 'undefined' || value === null) { return []; }
+    return this.asArray<unknown>(value, label).map((raw, index) => {
+      const field = this.asObject(raw, `${label}[${index}]`);
+      const type = field.type === 'file' ? 'file' : field.type === 'text' || typeof field.type === 'undefined'
+        ? 'text'
+        : null;
+      if (!type) { throw new Error(`${label}[${index}].type must be "text" or "file".`); }
+      return {
+        ...field,
+        id: this.asString(field.id, `${label}[${index}].id`),
+        key: this.normalizeStringValue(field.key, `${label}[${index}].key`),
+        value: this.normalizeStringValue(field.value, `${label}[${index}].value`),
+        enabled: this.normalizeEnabled(field.enabled, `${label}[${index}].enabled`),
+        type,
+      } as FormDataField;
+    });
+  }
+
+  private normalizeOptionalPathVariableOverrides(value: unknown, label: string): Array<{ key: string; value: string }> {
+    if (typeof value === 'undefined' || value === null) { return []; }
+    return this.asArray<unknown>(value, label).map((raw, index) => {
+      const override = this.asObject(raw, `${label}[${index}]`);
+      return {
+        ...override,
+        key: this.asString(override.key, `${label}[${index}].key`),
+        value: this.normalizeStringValue(override.value, `${label}[${index}].value`),
+      };
+    });
+  }
+
+  private normalizeOptionalScripts(value: unknown, label: string): { preRequest: string; test: string } | undefined {
+    if (typeof value === 'undefined' || value === null) { return undefined; }
+    const scripts = this.asObject(value, label);
     return {
+      ...scripts,
+      preRequest: this.normalizeStringValue(scripts.preRequest, `${label}.preRequest`),
+      test: this.normalizeStringValue(scripts.test, `${label}.test`),
+    };
+  }
+
+  private normalizeOptionalBoolean(value: unknown, label: string): boolean | undefined {
+    if (typeof value === 'undefined' || value === null) { return undefined; }
+    if (typeof value !== 'boolean') { throw new Error(`${label} must be a boolean.`); }
+    return value;
+  }
+
+  private normalizeOptionalNumber(value: unknown, label: string): number | undefined {
+    if (typeof value === 'undefined' || value === null) { return undefined; }
+    if (typeof value !== 'number' || !Number.isFinite(value)) { throw new Error(`${label} must be a finite number.`); }
+    return value;
+  }
+
+  private normalizeOptionalEnum<T extends string>(value: unknown, label: string, values: readonly T[]): T | undefined {
+    if (typeof value === 'undefined' || value === null) { return undefined; }
+    if (typeof value !== 'string' || !values.includes(value as T)) { throw new Error(`${label} has an unsupported value.`); }
+    return value as T;
+  }
+
+  private normalizeRequest(value: unknown, label: string, includeName: boolean): Request {
+    const request = this.asObject(value, label);
+    const result: Record<string, unknown> = {
       ...request,
       id: this.asString(request.id, `${label}.id`),
-      name: this.asString(request.name, `${label}.name`),
-      method: this.asString(request.method, `${label}.method`) as Request['method'],
+      name: includeName ? this.asString(request.name, `${label}.name`) : this.normalizeStringValue(request.name, `${label}.name`),
+      method: this.asString(request.method, `${label}.method`),
       url: this.asString(request.url, `${label}.url`),
       headers: this.normalizeOptionalKeyValueArray(request.headers, `${label}.headers`),
       params: this.normalizeOptionalKeyValueArray(request.params, `${label}.params`),
+      pathVariableOverrides: this.normalizeOptionalPathVariableOverrides(request.pathVariableOverrides, `${label}.pathVariableOverrides`),
       body: this.normalizeStringValue(request.body, `${label}.body`),
-      bodyType: typeof request.bodyType === 'string' ? request.bodyType as Request['bodyType'] : 'none',
-      auth: auth as Request['auth'],
-    } as Request;
+      bodyType: this.normalizeBodyType(request.bodyType, `${label}.bodyType`),
+      formData: this.normalizeOptionalFormData(request.formData, `${label}.formData`),
+      binaryFilePath: this.normalizeStringValue(request.binaryFilePath, `${label}.binaryFilePath`),
+      auth: this.normalizeAuth(request.auth, `${label}.auth`),
+      scripts: this.normalizeOptionalScripts(request.scripts, `${label}.scripts`),
+    };
+
+    result.requestType = this.normalizeOptionalEnum(request.requestType, `${label}.requestType`, ['http', 'websocket'] as const);
+    result.timeout = this.normalizeOptionalNumber(request.timeout, `${label}.timeout`);
+    for (const [key, values] of [
+      ['tlsValidation', ['default', 'strict', 'insecure'] as const],
+      ['requestEditorTab', ['params', 'headers', 'body', 'auth', 'scripts', 'settings'] as const],
+      ['jsonFormatStyle', ['pretty', 'compact'] as const],
+      ['xmlFormatStyle', ['pretty', 'compact', 'inline'] as const],
+      ['formatIndent', ['2', '4', 'tab'] as const],
+    ] as const) {
+      result[key] = this.normalizeOptionalEnum(request[key], `${label}.${key}`, values);
+    }
+    for (const key of [
+      'autoName', 'followRedirects', 'saveToHistory', 'stopAfterHeaders', 'skipDefaultHeaders',
+      'disableScripts', 'scriptsTrusted', 'webSocketKeepAliveEnabled', 'responseSearchCaseSensitive',
+      'responseSearchRegex', 'scriptHelpCollapsed', 'pinned',
+    ]) {
+      result[key] = this.normalizeOptionalBoolean(request[key], `${label}.${key}`);
+    }
+    for (const key of [
+      'maxResponseSizeKb', 'retryCount', 'retryDelayMs', 'webSocketKeepAliveIntervalSeconds',
+      'requestSplitHeightPx', 'responseSearchIndex', 'requestStartedAt', 'requestEndedAt', 'durationMs',
+    ]) {
+      result[key] = this.normalizeOptionalNumber(request[key], `${label}.${key}`);
+    }
+    result.responseSearchQuery = typeof request.responseSearchQuery === 'undefined' || request.responseSearchQuery === null
+      ? undefined
+      : this.normalizeStringValue(request.responseSearchQuery, `${label}.responseSearchQuery`);
+    result.webSocketKeepAliveMessage = typeof request.webSocketKeepAliveMessage === 'undefined' || request.webSocketKeepAliveMessage === null
+      ? undefined
+      : this.normalizeStringValue(request.webSocketKeepAliveMessage, `${label}.webSocketKeepAliveMessage`);
+    return result as unknown as Request;
+  }
+
+  private normalizeCollectionRequest(value: unknown, label: string): Request {
+    return this.normalizeRequest(value, label, true);
   }
 
   private normalizeEnvironmentArray(value: unknown, label: string): Environment[] {
@@ -487,10 +672,147 @@ export class StorageService {
     });
   }
 
+  private normalizeHistoryResponse(value: unknown, label: string): { status: number; statusText: string; time: number } | null {
+    if (value === null || typeof value === 'undefined') { return null; }
+    const response = this.asObject(value, label);
+    const status = response.status;
+    const time = response.time;
+    if (typeof status !== 'number' || !Number.isFinite(status)) {
+      throw new Error(`${label}.status must be a finite number.`);
+    }
+    if (typeof time !== 'number' || !Number.isFinite(time)) {
+      throw new Error(`${label}.time must be a finite number.`);
+    }
+    return {
+      ...response,
+      status,
+      statusText: this.normalizeStringValue(response.statusText, `${label}.statusText`),
+      time,
+    };
+  }
+
+  private normalizeHistoryArray(value: unknown, label: string): HistoryEntry[] {
+    return this.asArray<unknown>(value, label).map((raw, index) => {
+      const entry = this.asObject(raw, `${label}[${index}]`);
+      const timestamp = entry.timestamp;
+      if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
+        throw new Error(`${label}[${index}].timestamp must be a finite number.`);
+      }
+      return {
+        ...entry,
+        id: this.asString(entry.id, `${label}[${index}].id`),
+        request: this.normalizeRequest(entry.request, `${label}[${index}].request`, true),
+        response: this.normalizeHistoryResponse(entry.response, `${label}[${index}].response`),
+        timestamp,
+        startedAt: this.normalizeOptionalNumber(entry.startedAt, `${label}[${index}].startedAt`),
+        endedAt: this.normalizeOptionalNumber(entry.endedAt, `${label}[${index}].endedAt`),
+        durationMs: this.normalizeOptionalNumber(entry.durationMs, `${label}[${index}].durationMs`),
+        pinned: this.normalizeOptionalBoolean(entry.pinned, `${label}[${index}].pinned`),
+      } as HistoryEntry;
+    });
+  }
+
+  private normalizeCompareSettings(value: unknown, label: string): CompareSettings | undefined {
+    if (typeof value === 'undefined' || value === null) { return undefined; }
+    const settings = this.asObject(value, label);
+    const mode = settings.mode === 'raw' || settings.mode === 'pretty' || settings.mode === 'normalized'
+      ? settings.mode
+      : 'normalized';
+    const normalizeList = (list: unknown, field: string): string[] => {
+      if (typeof list === 'undefined' || list === null) { return []; }
+      if (typeof list === 'string') { return list.split(',').map((item) => item.trim()).filter(Boolean); }
+      return this.asArray<unknown>(list, field).map((item, index) =>
+        this.normalizeStringValue(item, `${field}[${index}]`).trim()
+      ).filter(Boolean);
+    };
+    return {
+      ...settings,
+      mode,
+      includeMetadataSummary: settings.includeMetadataSummary !== false,
+      foldUnchangedSections: settings.foldUnchangedSections !== false,
+      ignoreHeaders: normalizeList(settings.ignoreHeaders, `${label}.ignoreHeaders`),
+      ignoreJsonPaths: normalizeList(settings.ignoreJsonPaths, `${label}.ignoreJsonPaths`),
+    } as CompareSettings;
+  }
+
+  private normalizeTabState(value: unknown, label: string): TabState {
+    const tab = this.asObject(value, label);
+    const timeout = this.normalizeOptionalNumber(tab.timeout, `${label}.timeout`) ?? 0;
+    const normalized: Record<string, unknown> = {
+      ...tab,
+      name: this.asString(tab.name, `${label}.name`),
+      autoName: this.normalizeOptionalBoolean(tab.autoName, `${label}.autoName`),
+      requestType: this.normalizeOptionalEnum(tab.requestType, `${label}.requestType`, ['http', 'websocket'] as const),
+      requestEditorTab: this.normalizeOptionalEnum(tab.requestEditorTab, `${label}.requestEditorTab`, ['params', 'headers', 'body', 'auth', 'scripts', 'settings'] as const),
+      requestSplitHeightPx: this.normalizeOptionalNumber(tab.requestSplitHeightPx, `${label}.requestSplitHeightPx`),
+      method: this.asString(tab.method, `${label}.method`),
+      url: this.asString(tab.url, `${label}.url`),
+      headers: this.normalizeOptionalKeyValueArray(tab.headers, `${label}.headers`),
+      params: this.normalizeOptionalKeyValueArray(tab.params, `${label}.params`),
+      pathVariableOverrides: this.normalizeOptionalPathVariableOverrides(tab.pathVariableOverrides, `${label}.pathVariableOverrides`),
+      body: this.normalizeStringValue(tab.body, `${label}.body`),
+      bodyType: this.normalizeBodyType(tab.bodyType, `${label}.bodyType`),
+      formData: this.normalizeOptionalFormData(tab.formData, `${label}.formData`),
+      binaryFilePath: this.normalizeStringValue(tab.binaryFilePath, `${label}.binaryFilePath`),
+      auth: this.normalizeAuth(tab.auth, `${label}.auth`),
+      scripts: this.normalizeOptionalScripts(tab.scripts, `${label}.scripts`),
+      timeout,
+      tlsValidation: this.normalizeOptionalEnum(tab.tlsValidation, `${label}.tlsValidation`, ['default', 'strict', 'insecure'] as const),
+      jsonFormatStyle: this.normalizeOptionalEnum(tab.jsonFormatStyle, `${label}.jsonFormatStyle`, ['pretty', 'compact'] as const),
+      xmlFormatStyle: this.normalizeOptionalEnum(tab.xmlFormatStyle, `${label}.xmlFormatStyle`, ['pretty', 'compact', 'inline'] as const),
+      formatIndent: this.normalizeOptionalEnum(tab.formatIndent, `${label}.formatIndent`, ['2', '4', 'tab'] as const),
+      responseSearchQuery: typeof tab.responseSearchQuery === 'undefined' || tab.responseSearchQuery === null
+        ? undefined
+        : this.normalizeStringValue(tab.responseSearchQuery, `${label}.responseSearchQuery`),
+      responseSearchIndex: this.normalizeOptionalNumber(tab.responseSearchIndex, `${label}.responseSearchIndex`),
+      requestStartedAt: this.normalizeOptionalNumber(tab.requestStartedAt, `${label}.requestStartedAt`),
+      requestEndedAt: this.normalizeOptionalNumber(tab.requestEndedAt, `${label}.requestEndedAt`),
+      durationMs: this.normalizeOptionalNumber(tab.durationMs, `${label}.durationMs`),
+      requestId: typeof tab.requestId === 'undefined' || tab.requestId === null
+        ? undefined
+        : this.asString(tab.requestId, `${label}.requestId`),
+      webSocketKeepAliveMessage: typeof tab.webSocketKeepAliveMessage === 'undefined' || tab.webSocketKeepAliveMessage === null
+        ? undefined
+        : this.normalizeStringValue(tab.webSocketKeepAliveMessage, `${label}.webSocketKeepAliveMessage`),
+    };
+    for (const key of [
+      'followRedirects', 'saveToHistory', 'stopAfterHeaders', 'skipDefaultHeaders', 'disableScripts',
+      'scriptsTrusted', 'webSocketKeepAliveEnabled', 'responseSearchCaseSensitive', 'responseSearchRegex',
+      'scriptHelpCollapsed', 'pinned',
+    ]) {
+      normalized[key] = this.normalizeOptionalBoolean(tab[key], `${label}.${key}`);
+    }
+    for (const key of ['maxResponseSizeKb', 'retryCount', 'retryDelayMs', 'webSocketKeepAliveIntervalSeconds'] as const) {
+      normalized[key] = this.normalizeOptionalNumber(tab[key], `${label}.${key}`);
+    }
+    return normalized as unknown as TabState;
+  }
+
+  private normalizeStoredTabState(value: unknown, label: string): StoredTabState | null {
+    if (value === null || typeof value === 'undefined') { return null; }
+    const state = this.asObject(value, label);
+    const tabs = this.asArray<unknown>(state.tabs, `${label}.tabs`).map((tab, index) =>
+      this.normalizeTabState(tab, `${label}.tabs[${index}]`)
+    );
+    const rawActiveIndex = typeof state.activeIndex === 'undefined' || state.activeIndex === null ? 0 : state.activeIndex;
+    if (typeof rawActiveIndex !== 'number' || !Number.isFinite(rawActiveIndex)) {
+      throw new Error(`${label}.activeIndex must be a finite number.`);
+    }
+    const activeIndex = tabs.length === 0 ? 0 : Math.min(tabs.length - 1, Math.max(0, Math.floor(rawActiveIndex)));
+    return {
+      ...state,
+      tabs,
+      activeIndex,
+      compareSettings: this.normalizeCompareSettings(state.compareSettings, `${label}.compareSettings`),
+    } as StoredTabState;
+  }
+
   // === 컬렉션 ===
 
   getCollections(): Collection[] {
-    return this.readJson<Collection[]>(this.resolveFilePath('collections.json'), []);
+    return this.readJson<Collection[]>(this.resolveFilePath('collections.json'), [], (value) =>
+      this.normalizeCollectionArray(value, 'Collections')
+    );
   }
 
   saveCollections(collections: Collection[]): void {
@@ -500,7 +822,9 @@ export class StorageService {
   // === 히스토리 ===
 
   getHistory(): HistoryEntry[] {
-    return this.readJson<HistoryEntry[]>(this.resolveFilePath('history.json'), []);
+    return this.readJson<HistoryEntry[]>(this.resolveFilePath('history.json'), [], (value) =>
+      this.normalizeHistoryArray(value, 'History')
+    );
   }
 
   saveHistory(history: HistoryEntry[]): void {
@@ -544,7 +868,9 @@ export class StorageService {
   // === 환경변수 ===
 
   getEnvironments(): Environment[] {
-    return this.readJson<Environment[]>(this.resolveFilePath('environments.json'), []);
+    return this.readJson<Environment[]>(this.resolveFilePath('environments.json'), [], (value) =>
+      this.normalizeEnvironmentArray(value, 'Environments')
+    );
   }
 
   saveEnvironments(environments: Environment[]): void {
@@ -564,8 +890,102 @@ export class StorageService {
     }
   }
 
+  applyEnvironmentVariableChanges(
+    id: string,
+    baseVariables: KeyValue[],
+    nextVariables: KeyValue[]
+  ): EnvironmentVariableChangesResult {
+    const envs = this.getEnvironments();
+    const environment = envs.find((candidate) => candidate.id === id);
+    if (!environment) {
+      return { changed: false, conflicts: [], appliedKeys: [] };
+    }
+
+    const byKey = (variables: KeyValue[]): Map<string, KeyValue> => {
+      const result = new Map<string, KeyValue>();
+      for (const variable of variables) {
+        if (variable && typeof variable.key === 'string' && variable.key) {
+          result.set(variable.key, { ...variable });
+        }
+      }
+      return result;
+    };
+    const same = (left: KeyValue | undefined, right: KeyValue | undefined): boolean => {
+      if (!left || !right) { return left === right; }
+      return left.key === right.key && left.value === right.value && left.enabled === right.enabled;
+    };
+
+    const baseline = byKey(baseVariables);
+    const next = byKey(nextVariables);
+    const current = byKey(environment.variables);
+    const currentEntries = new Map<string, KeyValue[]>();
+    for (const variable of environment.variables) {
+      const entries = currentEntries.get(variable.key) ?? [];
+      entries.push(variable);
+      currentEntries.set(variable.key, entries);
+    }
+    const allMatch = (entries: KeyValue[] | undefined, expected: KeyValue | undefined): boolean => {
+      if (!entries || entries.length === 0) { return !expected; }
+      return Boolean(expected) && entries.every((entry) => same(entry, expected));
+    };
+    const keys = new Set<string>([...baseline.keys(), ...next.keys()]);
+    const conflicts: string[] = [];
+    const changes = new Map<string, KeyValue | undefined>();
+    for (const key of keys) {
+      const before = baseline.get(key);
+      const desired = next.get(key);
+      if (same(before, desired)) { continue; }
+
+      const now = current.get(key);
+      const entries = currentEntries.get(key);
+      if (!allMatch(entries, before)) {
+        if (!allMatch(entries, desired)) { conflicts.push(key); }
+        continue;
+      }
+      if (!same(now, desired)) {
+        changes.set(key, desired);
+      }
+    }
+
+    if (changes.size === 0) {
+      return { changed: false, conflicts, appliedKeys: [] };
+    }
+
+    let merged = environment.variables.map((variable) => ({ ...variable }));
+    const appliedKeys: string[] = [];
+    for (const [key, desired] of changes) {
+      const existingIndex = merged.findIndex((variable) => variable.key === key);
+      if (!desired) {
+        if (existingIndex >= 0) {
+          merged = merged.filter((variable) => variable.key !== key);
+          appliedKeys.push(key);
+        }
+      } else if (existingIndex >= 0) {
+        if (merged.some((variable) => !same(variable, desired) && variable.key === key)) {
+          merged = merged.filter((variable) => variable.key !== key);
+          merged.splice(existingIndex, 0, { ...desired });
+          appliedKeys.push(key);
+        }
+      } else {
+        merged.push({ ...desired });
+        appliedKeys.push(key);
+      }
+    }
+
+    if (appliedKeys.length === 0) {
+      return { changed: false, conflicts, appliedKeys: [] };
+    }
+    environment.variables = merged;
+    this.saveEnvironments(envs);
+    return { changed: true, conflicts, appliedKeys };
+  }
+
   getActiveEnvironmentId(): string | null {
-    return this.readJson<string | null>(this.resolveFilePath('active-environment.json'), null);
+    return this.readJson<string | null>(this.resolveFilePath('active-environment.json'), null, (value) => {
+      if (value === null) { return null; }
+      if (typeof value !== 'string') { throw new Error('Active environment ID must be a string or null.'); }
+      return value;
+    });
   }
 
   saveActiveEnvironmentId(id: string | null): void {
@@ -580,7 +1000,9 @@ export class StorageService {
   ];
 
   getDefaultHeaders(): KeyValue[] {
-    return this.readJson<KeyValue[]>(this.resolveFilePath('default-headers.json'), StorageService.DEFAULT_HEADERS);
+    return this.readJson<KeyValue[]>(this.resolveFilePath('default-headers.json'), StorageService.DEFAULT_HEADERS.map((header) => ({ ...header })), (value) =>
+      this.normalizeKeyValueArray(value, 'Default headers')
+    );
   }
 
   saveDefaultHeaders(headers: KeyValue[]): void {
@@ -588,7 +1010,9 @@ export class StorageService {
   }
 
   getVariables(): KeyValue[] {
-    return this.readJson<KeyValue[]>(this.resolveFilePath('variables.json'), []);
+    return this.readJson<KeyValue[]>(this.resolveFilePath('variables.json'), [], (value) =>
+      this.normalizeKeyValueArray(value, 'Variables')
+    );
   }
 
   saveVariables(variables: KeyValue[]): void {
@@ -693,8 +1117,14 @@ export class StorageService {
 
   // === 탭 상태 ===
 
+  validateTabState(value: unknown): StoredTabState | null {
+    return this.normalizeStoredTabState(value, 'Tab state');
+  }
+
   getTabState(): StoredTabState | null {
-    return this.readJson(this.resolveFilePath('tab-state.json'), null);
+    return this.readJson<StoredTabState | null>(this.resolveFilePath('tab-state.json'), null, (value) =>
+      this.normalizeStoredTabState(value, 'Tab state')
+    );
   }
 
   saveTabState(tabs: TabState[], activeIndex: number, compareSettings?: CompareSettings): void {

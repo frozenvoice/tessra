@@ -1,4 +1,4 @@
-﻿# Tessra 프로젝트 메모
+# Tessra 프로젝트 메모
 
 ## 제품 정체성
 Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
@@ -83,9 +83,12 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - Pre-request script
 - Test script
 - `pm.test`, `pm.expect`, `pm.environment`
-- Tessra Script utilities: `pm.crypto.sha256` / `hmacSha256`, `pm.encoding.base64Encode` / `base64Decode`, `pm.uuid`, `pm.time.unix` / `unixMs` (Node API는 sandbox에 미노출)
+- Tessra Script utilities: `pm.crypto.sha256` / `hmacSha256`, `pm.encoding.base64Encode` / `base64Decode`, `pm.uuid`, `pm.time.unix` / `unixMs` (JSON 입출력, VM 내부 API, 호스트 객체·함수 미노출; OS 샌드박스 보장은 아님: `docs/script-security.md`)
 - `tessra.scriptTimeoutMs` 기반 실행 제한 시간
 - import로 들어온 스크립트는 요청 탭에서 신뢰 처리하기 전까지 기본 비활성화
+- 실행 당시 프로필·환경·세대를 고정하며 스크립트의 set/unset 변경분만 저장한다. 같은 키의 동시 수정은 보존하고 경고하며, 변경 없는 실행은 환경 파일을 쓰지 않는다.
+- 프로필 변경/패널 종료 시 Body 준비·전송·재시도·러너·WebSocket을 취소하고 이전 결과를 폐기한다. HTTP/리다이렉트는 http/https만 허용하며 러너 WS 항목은 미지원 오류로 처리한다.
+- 일반 저장 JSON도 구조를 검증하고 잘못된 원본과 `.corrupt-*` 백업을 보존한다. 복구 기본값을 자동 저장하지 않는다.
 - 로그와 테스트 결과 표시
 - Scripts 탭 한 줄 흐름 안내와 Guide 링크, 각 스크립트 편집기의 예제 삽입 버튼
 
@@ -166,7 +169,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 품질 기준
 - 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다
-- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 1.2.2 smoke 포함). stable UI E2E는 `npm run test:e2e` 기준 **20개**(Collection Runner + WebSocket + Environment autosave + Default Headers save/apply + Auth Bearer + Scripts template + Settings editor + Path Variables + Request More narrow geometry + Path Variable occurrence resolution UI + Body scroll ownership 포함)다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
+- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 1.2.2 smoke 포함). stable UI E2E는 `npm run test:e2e` 기준 **23개**(Collection Runner + WebSocket + Environment autosave + Default Headers save/apply + Auth Bearer + Scripts template + Settings editor + Path Variables + Request More narrow geometry + Path Variable occurrence resolution UI + Body scroll ownership + 응답 키보드 탐색 + 즉시 닫기 초안 보존 + 실행 환경·프로필 격리 포함)다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
 - UI 품질 원칙: DOM visible만으로 layout PASS 금지, popup/menu viewport geometry 검증, variable warning은 occurrence resolution 기준, scrollable editor는 scroll owner 수 + wheel interaction 검증, Request Panel layout은 narrow-width/short-height BrowserWindow에서 검증.
 - Quiet Instrument 계약: pill wall / soft-card / Send success-green 재도입 금지
 

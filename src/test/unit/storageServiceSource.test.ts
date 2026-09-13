@@ -74,6 +74,20 @@ describe('storage service source', () => {
     assert.match(source, /fs\.renameSync\(tempPath, filePath\)/);
   });
 
+  it('validates persisted shapes before returning them and supports conflict-aware environment merges', () => {
+    assert.match(source, /private readJson<T>\(filePath: string, fallback: T, normalize\?: \(value: unknown\) => T\): T/);
+    assert.match(source, /normalizeCollectionArray\(value, 'Collections'\)/);
+    assert.match(source, /normalizeHistoryArray\(value, 'History'\)/);
+    assert.match(source, /normalizeEnvironmentArray\(value, 'Environments'\)/);
+    assert.match(source, /normalizeKeyValueArray\(value, 'Default headers'\)/);
+    assert.match(source, /normalizeKeyValueArray\(value, 'Variables'\)/);
+    assert.match(source, /normalizeStoredTabState\(value, 'Tab state'\)/);
+    assert.match(source, /validateTabState\(value: unknown\): StoredTabState \| null/);
+    assert.match(source, /applyEnvironmentVariableChanges\(/);
+    assert.match(source, /const conflicts: string\[\] = \[\];/);
+    assert.match(source, /this\.saveEnvironments\(envs\);/);
+  });
+
   it('supports Tessra workspace backup export and replace import', () => {
     assert.match(source, /interface WorkspaceBackupData/);
     assert.match(source, /WORKSPACE_BACKUP_SCHEMA_VERSION = 1/);

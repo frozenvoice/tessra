@@ -121,6 +121,8 @@ Body: {"env":"{{envName}}"}
 - Example: `pm.environment.set("signature", pm.crypto.hmacSha256(pm.environment.get("payload") || "", pm.environment.get("secret") || ""));`
 - Insertable examples and Open Guide are available from the Scripts tab
 - Imported scripts stay disabled until you explicitly trust them in the request tab
+- Script variable changes apply to the starting environment; concurrent edits to the same key are kept with a warning. Profile changes cancel active work.
+- Scripts do not receive host objects/functions. The VM is not an OS sandbox: run only scripts you understand and trust.
 - Script timeout is controlled by `tessra.scriptTimeoutMs`
 - Script logs and pass/fail test results appear in the response Tests tab
 

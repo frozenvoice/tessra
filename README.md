@@ -8,6 +8,11 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 
 ## Recent highlights
 
+- Requests keep their starting environment; script changes merge only changed keys and preserve concurrent edits with a warning. Switching profiles cancels running HTTP, collection runs, and WebSockets, and discards late results.
+- Stop also covers Body preparation. HTTP transport and redirects accept only HTTP/HTTPS; Collection Runner reports WebSocket requests as unsupported (connect from a request tab).
+- Multipart fetch code preserves authentication/custom headers. cURL import/export preserves form fields and binary file paths; Postman form export preserves `=` and space semantics.
+- Closing the request editor immediately after editing preserves its latest draft. Response sections support arrow/Home/End keyboard navigation.
+- Stored JSON is checked for structural damage as well as syntax errors, retaining the original and a `.corrupt-*` backup when recovery defaults are needed.
 - Path Variable URL warnings follow the actual send-time resolution: a Request-local path value is not shown as missing, while the same name in query or other fields can still be unresolved.
 - Long JSON / XML / Raw Body editors keep a single textarea scrollbar (no ghost or double scroll) on short windows.
 - Narrow Request panels keep Send and More (`...`) grouped, and More menus stay fully inside the Webview.
@@ -17,6 +22,8 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 - Tessra remains local-first: no login, no cloud sync, no telemetry.
 
 See the [Changelog](./CHANGELOG.md) for full release history.
+
+Scripts run with JSON data boundaries and no host objects/functions exposed to the script realm. Imported scripts still require explicit trust. This hardening is not an OS sandbox for hostile code; see [script execution boundaries](./docs/script-security.md).
 
 ## Screenshots
 

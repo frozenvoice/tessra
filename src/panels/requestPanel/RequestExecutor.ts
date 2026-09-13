@@ -13,6 +13,7 @@ import { AuthService } from '../../services/AuthService';
 import { RequestBodyService } from '../../services/RequestBodyService';
 import { ScriptRunner } from '../../services/ScriptRunner';
 import { LocalizationService } from '../../services/LocalizationService';
+import { ExecutionContext, hasEnvironmentChanges } from './executionContext';
 import {
   buildUrl,
   cloneFormDataFields,
@@ -35,16 +36,19 @@ import {
 } from './requestUtils';
 
 export interface RequestExecutorHost {
+  captureExecutionContext(): ExecutionContext;
+  isExecutionContextCurrent(context: ExecutionContext): boolean;
   postMessage(message: unknown): void;
   getActiveVariables(): KeyValue[];
   getDefaultHeaders(): KeyValue[];
   getAllowInsecureCertificates(): boolean;
   getScriptTimeoutMs(): number;
-  saveActiveEnvironmentVariables(variables: KeyValue[]): void;
+  saveEnvironmentChanges(context: ExecutionContext, before: KeyValue[], after: KeyValue[]): void;
   saveToHistory(
     request: Request,
     response: { status: number; statusText: string; time: number } | null,
-    timing?: RequestTiming
+    timing: RequestTiming | undefined,
+    context: ExecutionContext
   ): void;
   refreshHistory(): void;
 }
@@ -66,293 +70,323 @@ export class RequestExecutor {
     handle.abort();
   }
 
+  cancelAll(): void {
+    for (const tabId of this.activeRequests.keys()) { this.cancel(tabId); }
+    this.activeRequests.clear();
+    this.canceledRequestRuns.clear();
+  }
+
   async execute(message: SendRequestMessage): Promise<void> {
     const tabId = message.tabId;
+    this.cancel(tabId);
     const runId = this.nextRunId++;
     const runKey = this.getRunKey(tabId, runId);
+    const context = this.host.captureExecutionContext();
     const requestStartedAt = normalizeEpochMs(message.requestStartedAt) ?? Date.now();
-    const initialMethod = normalizeMethod(message.method);
-    const initialBodyType = normalizeBodyType(message.bodyType);
-    const settings = normalizeRequestSettings(message);
-    const scripts = normalizeScripts(message.scripts);
-    let vars = this.host.getActiveVariables();
-    let requestState = createScriptableRequest({
-      method: initialMethod,
-      url: message.url,
-      headers: message.headers ?? [],
-      params: message.params ?? [],
-      body: message.body ?? '',
-      bodyType: initialBodyType,
-      formData: message.formData ?? [],
-      binaryFilePath: message.binaryFilePath ?? '',
-      auth: message.auth ?? { type: 'none' },
-    });
-
-    if (isScriptExecutionBlocked(scripts, settings)) {
-      this.postTimedResponseError(tabId, LocalizationService.t('panel.importedScriptsBlocked'), requestStartedAt);
-      return;
-    }
-
-    if (!settings.disableScripts) {
-      try {
-        const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars, this.host.getScriptTimeoutMs());
-        requestState = preRequestResult.request;
-        vars = preRequestResult.envVariables;
-        this.host.saveActiveEnvironmentVariables(vars);
-      } catch (err: unknown) {
-        this.postTimedResponseError(tabId, err instanceof Error ? err.message : String(err), requestStartedAt);
-        return;
-      }
-    }
-
-    const method = normalizeMethod(requestState.method, initialMethod);
-    const bodyType = normalizeBodyType(requestState.bodyType);
-    requestState.method = method;
-    requestState.bodyType = bodyType;
-
-    const pathVariableOverrides = PathVariableService.pruneOverrides(
-      requestState.url,
-      message.pathVariableOverrides
-    );
-    const resolvedUrl = PathVariableService.resolveUrl(requestState.url, pathVariableOverrides, vars);
-    const resolvedHeaders = VariableService.resolveKeyValues(requestState.headers, vars);
-    const resolvedParams = VariableService.resolveKeyValues(requestState.params, vars);
-    const resolvedBody = VariableService.resolve(requestState.body ?? '', vars);
-    const resolvedFormData = cloneFormDataFields(requestState.formData ?? []).map((field) => ({
-      ...field,
-      key: VariableService.resolve(field.key, vars),
-      value: VariableService.resolve(field.value, vars),
-    }));
-    const resolvedBinaryFilePath = VariableService.resolve(requestState.binaryFilePath ?? '', vars);
-
-    const defaultHeaders = settings.skipDefaultHeaders
-      ? []
-      : VariableService.resolveKeyValues(this.host.getDefaultHeaders(), vars);
-    const requestKeySet = new Set(
-      resolvedHeaders.filter((header) => header.enabled && header.key).map((header) => header.key.toLowerCase())
-    );
-    const mergedDefaults = defaultHeaders.filter(
-      (header) => header.enabled && header.key && !requestKeySet.has(header.key.toLowerCase())
-    );
-    const finalHeaders = [...mergedDefaults, ...resolvedHeaders];
-    const finalParams = coalesceQueryParams(resolvedUrl, resolvedParams);
-    const unresolvedVariables = findUnresolvedVariables(
-      resolvedUrl,
-      finalHeaders,
-      finalParams,
-      resolvedBody,
-      requestState.auth,
-      vars
-    );
-    unresolvedVariables.push(...findPayloadUnresolvedVariables(resolvedFormData, resolvedBinaryFilePath, vars));
-    if (unresolvedVariables.length > 0) {
-      this.postTimedResponseError(tabId, createUnresolvedVariableError(unresolvedVariables), requestStartedAt);
-      return;
-    }
-
-    AuthService.applyAuth(requestState.auth, finalHeaders, finalParams, vars);
-
-    let url: string;
-    try {
-      url = buildUrl(resolvedUrl, finalParams);
-    } catch {
-      this.postTimedResponseError(tabId, `Invalid URL: ${resolvedUrl}`, requestStartedAt);
-      return;
-    }
-
-    let preparedBody: Awaited<ReturnType<typeof RequestBodyService.prepare>>;
-    try {
-      preparedBody = await RequestBodyService.prepare({
-        bodyType,
-        body: requestState.body ?? '',
-        formData: requestState.formData ?? [],
-        binaryFilePath: requestState.binaryFilePath ?? '',
-        headers: finalHeaders,
-        vars,
-      });
-    } catch (err: unknown) {
-      this.postTimedResponseError(tabId, err instanceof Error ? err.message : String(err), requestStartedAt);
-      return;
-    }
-
-    const executedRequest = createScriptableRequest({
-      method,
-      url,
-      headers: preparedBody.headers,
-      params: finalParams,
-      body: preparedBody.resolvedBody,
-      bodyType,
-      formData: preparedBody.resolvedFormData,
-      binaryFilePath: preparedBody.resolvedBinaryFilePath,
-      auth: { type: 'none' },
-    });
-
     let currentHandle: SendHandle | null = null;
     let cancelDelay: (() => void) | null = null;
     this.activeRequests.set(tabId, {
       runId,
-      abort: () => {
-        currentHandle?.abort();
-        cancelDelay?.();
-      },
+      abort: () => { currentHandle?.abort(); cancelDelay?.(); },
     });
-
-    try {
-      let response: Response | null = null;
-      for (let attempt = 0; attempt <= settings.retryCount; attempt++) {
-        currentHandle = this.httpService.send(
-          method,
-          url,
-          preparedBody.headers,
-          preparedBody.data,
-          {
-            timeoutSec: settings.timeout,
-            allowInsecureHttps: this.resolveAllowInsecureHttps(settings.tlsValidation),
-            followRedirects: settings.followRedirects,
-            maxResponseSizeBytes: settings.maxResponseSizeKb > 0 ? settings.maxResponseSizeKb * 1024 : 0,
-            stopAfterHeaders: settings.stopAfterHeaders,
-          }
-        );
-
-        try {
-          response = await currentHandle.promise;
-          currentHandle = null;
-        } catch (err: unknown) {
-          currentHandle = null;
-          if (this.canceledRequestRuns.has(runKey) || attempt >= settings.retryCount) {
-            throw err;
-          }
-          await createCancelableDelay(settings.retryDelayMs, (cancel) => {
-            cancelDelay = cancel;
-          });
-          cancelDelay = null;
-          continue;
-        }
-
-        if (response && attempt < settings.retryCount && shouldRetryResponse(response.status)) {
-          await createCancelableDelay(settings.retryDelayMs, (cancel) => {
-            cancelDelay = cancel;
-          });
-          cancelDelay = null;
-          response = null;
-          continue;
-        }
-
-        if (response) {
-          break;
-        }
+    const canPublish = () => this.isCurrentRun(tabId, runId) && this.host.isExecutionContextCurrent(context);
+    const wasCanceled = () => this.canceledRequestRuns.has(runKey) || !canPublish();
+    const publishCancellation = () => {
+      if (canPublish()) {
+        this.host.postMessage({ type: MessageType.RequestCanceled, tabId, ...createRequestTiming(requestStartedAt) });
       }
+    };
+    try {
+      if (!canPublish()) { return; }
+      const initialMethod = normalizeMethod(message.method);
+      const initialBodyType = normalizeBodyType(message.bodyType);
+      const settings = normalizeRequestSettings(message);
+      const scripts = normalizeScripts(message.scripts);
+      let vars = this.host.getActiveVariables();
+      let requestState = createScriptableRequest({
+        method: initialMethod,
+        url: message.url,
+        headers: message.headers ?? [],
+        params: message.params ?? [],
+        body: message.body ?? '',
+        bodyType: initialBodyType,
+        formData: message.formData ?? [],
+        binaryFilePath: message.binaryFilePath ?? '',
+        auth: message.auth ?? { type: 'none' },
+      });
 
-      if (this.canceledRequestRuns.delete(runKey)) {
-        if (this.isCurrentRun(tabId, runId)) {
-          this.host.postMessage({
-            type: MessageType.RequestCanceled,
-            tabId,
-            ...createRequestTiming(requestStartedAt),
-          });
-        }
+      if (isScriptExecutionBlocked(scripts, settings)) {
+        this.postTimedResponseError(tabId, LocalizationService.t('panel.importedScriptsBlocked'), requestStartedAt);
         return;
       }
-      if (!response) {
-        throw new Error('Request did not produce a response.');
-      }
-      if (!this.isCurrentRun(tabId, runId)) { return; }
 
-      const responseTiming = createRequestTiming(requestStartedAt);
-      let scriptResults: ScriptExecutionResult | undefined;
       if (!settings.disableScripts) {
         try {
-          const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars, this.host.getScriptTimeoutMs());
-          vars = testResult.envVariables;
-          this.host.saveActiveEnvironmentVariables(vars);
-          scriptResults = testResult.result;
+          const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars, this.host.getScriptTimeoutMs());
+          requestState = preRequestResult.request;
+          if (hasEnvironmentChanges(vars, preRequestResult.envVariables)) {
+            this.host.saveEnvironmentChanges(context, vars, preRequestResult.envVariables);
+          }
+          vars = preRequestResult.envVariables;
         } catch (err: unknown) {
-          scriptResults = {
-            logs: [],
-            tests: [{
-              name: LocalizationService.t('webview.testScript'),
-              passed: false,
-              error: err instanceof Error ? err.message : String(err),
-            }],
-          };
+          this.postTimedResponseError(tabId, err instanceof Error ? err.message : String(err), requestStartedAt);
+          return;
         }
       }
 
-      if (settings.saveToHistory) {
-        this.host.saveToHistory(
-          createHistoryRequestSnapshot(
-            method,
-            url,
-            preparedBody.headers,
-            preparedBody.resolvedBody,
-            bodyType,
-            preparedBody.resolvedFormData,
-            preparedBody.resolvedBinaryFilePath,
-            settings
-          ),
-          { status: response.status, statusText: response.statusText, time: response.time },
-          responseTiming
-        );
-        this.host.refreshHistory();
-      }
+      const method = normalizeMethod(requestState.method, initialMethod);
+      const bodyType = normalizeBodyType(requestState.bodyType);
+      requestState.method = method;
+      requestState.bodyType = bodyType;
 
-      const resolvedHeaderPairs = preparedBody.headers
-        .filter((header) => header.enabled && header.key)
-        .map((header) => ({ key: header.key, value: header.value }));
+      const pathVariableOverrides = PathVariableService.pruneOverrides(
+        requestState.url,
+        message.pathVariableOverrides
+      );
+      const resolvedUrl = PathVariableService.resolveUrl(requestState.url, pathVariableOverrides, vars);
+      const resolvedHeaders = VariableService.resolveKeyValues(requestState.headers, vars);
+      const resolvedParams = VariableService.resolveKeyValues(requestState.params, vars);
+      const resolvedBody = VariableService.resolve(requestState.body ?? '', vars);
+      const resolvedFormData = cloneFormDataFields(requestState.formData ?? []).map((field) => ({
+        ...field,
+        key: VariableService.resolve(field.key, vars),
+        value: VariableService.resolve(field.value, vars),
+      }));
+      const resolvedBinaryFilePath = VariableService.resolve(requestState.binaryFilePath ?? '', vars);
 
-      this.host.postMessage({
-        type: MessageType.ReceiveResponse,
-        tabId,
-        response,
-        resolvedUrl: url,
-        resolvedHeaders: resolvedHeaderPairs,
-        scriptResults,
-        ...responseTiming,
-      });
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      const wasCanceled = this.canceledRequestRuns.delete(runKey);
-      const errorTiming = createRequestTiming(requestStartedAt);
-
-      if (wasCanceled) {
-        if (this.isCurrentRun(tabId, runId)) {
-          this.host.postMessage({
-            type: MessageType.RequestCanceled,
-            tabId,
-            ...errorTiming,
-          });
-        }
+      const defaultHeaders = settings.skipDefaultHeaders
+        ? []
+        : VariableService.resolveKeyValues(this.host.getDefaultHeaders(), vars);
+      const requestKeySet = new Set(
+        resolvedHeaders.filter((header) => header.enabled && header.key).map((header) => header.key.toLowerCase())
+      );
+      const mergedDefaults = defaultHeaders.filter(
+        (header) => header.enabled && header.key && !requestKeySet.has(header.key.toLowerCase())
+      );
+      const finalHeaders = [...mergedDefaults, ...resolvedHeaders];
+      const finalParams = coalesceQueryParams(resolvedUrl, resolvedParams);
+      const unresolvedVariables = findUnresolvedVariables(
+        resolvedUrl,
+        finalHeaders,
+        finalParams,
+        resolvedBody,
+        requestState.auth,
+        vars
+      );
+      unresolvedVariables.push(...findPayloadUnresolvedVariables(resolvedFormData, resolvedBinaryFilePath, vars));
+      if (unresolvedVariables.length > 0) {
+        this.postTimedResponseError(tabId, createUnresolvedVariableError(unresolvedVariables), requestStartedAt);
         return;
       }
 
-      if (!this.isCurrentRun(tabId, runId)) { return; }
+      AuthService.applyAuth(requestState.auth, finalHeaders, finalParams, vars);
 
-      if (settings.saveToHistory) {
-        this.host.saveToHistory(
-          createHistoryRequestSnapshot(
+      let url: string;
+      try {
+        url = buildUrl(resolvedUrl, finalParams);
+      } catch {
+        this.postTimedResponseError(tabId, `Invalid URL: ${resolvedUrl}`, requestStartedAt);
+        return;
+      }
+
+      let preparedBody: Awaited<ReturnType<typeof RequestBodyService.prepare>>;
+      try {
+        preparedBody = await RequestBodyService.prepare({
+          bodyType,
+          body: requestState.body ?? '',
+          formData: requestState.formData ?? [],
+          binaryFilePath: requestState.binaryFilePath ?? '',
+          headers: finalHeaders,
+          vars,
+        });
+      } catch (err: unknown) {
+        if (wasCanceled()) { publishCancellation(); return; }
+        this.postTimedResponseError(tabId, err instanceof Error ? err.message : String(err), requestStartedAt);
+        return;
+      }
+
+      if (wasCanceled()) { publishCancellation(); return; }
+
+      const executedRequest = createScriptableRequest({
+        method,
+        url,
+        headers: preparedBody.headers,
+        params: finalParams,
+        body: preparedBody.resolvedBody,
+        bodyType,
+        formData: preparedBody.resolvedFormData,
+        binaryFilePath: preparedBody.resolvedBinaryFilePath,
+        auth: { type: 'none' },
+      });
+
+      try {
+        let response: Response | null = null;
+        for (let attempt = 0; attempt <= settings.retryCount; attempt++) {
+          if (wasCanceled()) { publishCancellation(); return; }
+          currentHandle = this.httpService.send(
             method,
             url,
             preparedBody.headers,
-            preparedBody.resolvedBody,
-            bodyType,
-            preparedBody.resolvedFormData,
-            preparedBody.resolvedBinaryFilePath,
-            settings
-          ),
-          null,
-          errorTiming
-        );
-        this.host.refreshHistory();
-      }
+            preparedBody.data,
+            {
+              timeoutSec: settings.timeout,
+              allowInsecureHttps: this.resolveAllowInsecureHttps(settings.tlsValidation),
+              followRedirects: settings.followRedirects,
+              maxResponseSizeBytes: settings.maxResponseSizeKb > 0 ? settings.maxResponseSizeKb * 1024 : 0,
+              stopAfterHeaders: settings.stopAfterHeaders,
+            }
+          );
 
-      this.host.postMessage({
-        type: MessageType.ResponseError,
-        tabId,
-        error: errorMsg,
-        ...errorTiming,
-      });
+          try {
+            response = await currentHandle.promise;
+            currentHandle = null;
+          } catch (err: unknown) {
+            currentHandle = null;
+            if (wasCanceled() || attempt >= settings.retryCount) {
+              throw err;
+            }
+            await createCancelableDelay(settings.retryDelayMs, (cancel) => {
+              cancelDelay = cancel;
+            });
+            cancelDelay = null;
+            continue;
+          }
+
+          if (wasCanceled()) { publishCancellation(); return; }
+
+          if (response && attempt < settings.retryCount && shouldRetryResponse(response.status)) {
+            await createCancelableDelay(settings.retryDelayMs, (cancel) => {
+              cancelDelay = cancel;
+            });
+            cancelDelay = null;
+            response = null;
+            continue;
+          }
+
+          if (response) {
+            break;
+          }
+        }
+
+        if (this.canceledRequestRuns.delete(runKey)) {
+          if (this.isCurrentRun(tabId, runId)) {
+            this.host.postMessage({
+              type: MessageType.RequestCanceled,
+              tabId,
+              ...createRequestTiming(requestStartedAt),
+            });
+          }
+          return;
+        }
+        if (!response) {
+          throw new Error('Request did not produce a response.');
+        }
+        if (!canPublish()) { return; }
+
+        const responseTiming = createRequestTiming(requestStartedAt);
+        let scriptResults: ScriptExecutionResult | undefined;
+        if (!settings.disableScripts) {
+          try {
+            const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars, this.host.getScriptTimeoutMs());
+            if (hasEnvironmentChanges(vars, testResult.envVariables)) {
+              this.host.saveEnvironmentChanges(context, vars, testResult.envVariables);
+            }
+            vars = testResult.envVariables;
+            scriptResults = testResult.result;
+          } catch (err: unknown) {
+            scriptResults = {
+              logs: [],
+              tests: [{
+                name: LocalizationService.t('webview.testScript'),
+                passed: false,
+                error: err instanceof Error ? err.message : String(err),
+              }],
+            };
+          }
+        }
+
+        if (settings.saveToHistory) {
+          this.host.saveToHistory(
+            createHistoryRequestSnapshot(
+              method,
+              url,
+              preparedBody.headers,
+              preparedBody.resolvedBody,
+              bodyType,
+              preparedBody.resolvedFormData,
+              preparedBody.resolvedBinaryFilePath,
+              settings
+            ),
+            { status: response.status, statusText: response.statusText, time: response.time },
+            responseTiming,
+            context
+          );
+          this.host.refreshHistory();
+        }
+
+        const resolvedHeaderPairs = preparedBody.headers
+          .filter((header) => header.enabled && header.key)
+          .map((header) => ({ key: header.key, value: header.value }));
+
+        this.host.postMessage({
+          type: MessageType.ReceiveResponse,
+          tabId,
+          response,
+          resolvedUrl: url,
+          resolvedHeaders: resolvedHeaderPairs,
+          scriptResults,
+          ...responseTiming,
+        });
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        const wasCanceled = this.canceledRequestRuns.delete(runKey);
+        const errorTiming = createRequestTiming(requestStartedAt);
+
+        if (wasCanceled) {
+          if (canPublish()) {
+            this.host.postMessage({
+              type: MessageType.RequestCanceled,
+              tabId,
+              ...errorTiming,
+            });
+          }
+          return;
+        }
+
+        if (!canPublish()) { return; }
+
+        if (settings.saveToHistory) {
+          this.host.saveToHistory(
+            createHistoryRequestSnapshot(
+              method,
+              url,
+              preparedBody.headers,
+              preparedBody.resolvedBody,
+              bodyType,
+              preparedBody.resolvedFormData,
+              preparedBody.resolvedBinaryFilePath,
+              settings
+            ),
+            null,
+            errorTiming,
+            context
+          );
+          this.host.refreshHistory();
+        }
+
+        this.host.postMessage({
+          type: MessageType.ResponseError,
+          tabId,
+          error: errorMsg,
+          ...errorTiming,
+        });
+      }
+    } catch (error: unknown) {
+      if (wasCanceled()) { publishCancellation(); return; }
+      this.postTimedResponseError(tabId, error instanceof Error ? error.message : String(error), requestStartedAt);
     } finally {
       cancelDelay = null;
+      this.canceledRequestRuns.delete(runKey);
       if (this.isCurrentRun(tabId, runId)) {
         this.activeRequests.delete(tabId);
       }

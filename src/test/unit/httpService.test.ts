@@ -6,6 +6,43 @@ import { EventEmitter } from 'events';
 import type { RequestOptions as HttpsRequestOptions } from 'https';
 import { HttpService, HttpSendOptions } from '../../services/HttpService';
 
+describe('HttpService protocol boundary', () => {
+  it('지원하지 않는 프로토콜은 소켓 연결 전에 거절한다', async () => {
+    let connections = 0;
+    const target = net.createServer((socket) => { connections++; socket.destroy(); });
+    await new Promise<void>((resolve) => target.listen(0, '127.0.0.1', resolve));
+    const port = (target.address() as net.AddressInfo).port;
+    try {
+      for (const url of [`ws://127.0.0.1:${port}/`, `wss://127.0.0.1:${port}/`, `ftp://127.0.0.1:${port}/`, 'file:///fixture']) {
+        await assert.rejects(new HttpService().send('GET', url, [], '', { timeoutSec: 1 }).promise, /Unsupported HTTP protocol/);
+      }
+      assert.strictEqual(connections, 0);
+    } finally {
+      await new Promise<void>((resolve) => target.close(() => resolve()));
+    }
+  });
+
+  it('리다이렉트 대상에도 같은 프로토콜 검증을 적용한다', async () => {
+    let connections = 0;
+    const target = net.createServer((socket) => { connections++; socket.destroy(); });
+    await new Promise<void>((resolve) => target.listen(0, '127.0.0.1', resolve));
+    const targetPort = (target.address() as net.AddressInfo).port;
+    let location = `wss://127.0.0.1:${targetPort}/secret`;
+    const redirect = http.createServer((_req, res) => { res.writeHead(302, { Location: location }); res.end(); });
+    await new Promise<void>((resolve) => redirect.listen(0, '127.0.0.1', resolve));
+    const redirectUrl = `http://127.0.0.1:${(redirect.address() as net.AddressInfo).port}/`;
+    try {
+      await assert.rejects(new HttpService().send('GET', redirectUrl, [], '', { followRedirects: true }).promise, /Unsupported HTTP protocol: wss:/);
+      assert.strictEqual(connections, 0);
+      location = 'http://[';
+      await assert.rejects(new HttpService().send('GET', redirectUrl, [], '', { followRedirects: true }).promise, /Invalid redirect URL/);
+    } finally {
+      await new Promise<void>((resolve) => redirect.close(() => resolve()));
+      await new Promise<void>((resolve) => target.close(() => resolve()));
+    }
+  });
+});
+
 // HttpService 테스트 (로컬 HTTP 서버 사용)
 describe('HttpService', () => {
   let server: http.Server;
