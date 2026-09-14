@@ -2169,6 +2169,36 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /if \(webviewDraftRestored && msg\.replace !== true\)/);
   });
 
+  it('publishes every latest draft with the disk timer held and flushes only the final state', () => {
+    const persistence = extractScriptSegment(script, 'function buildWebviewDraftState()', "window.addEventListener('beforeunload', flushPersist);");
+    const animation = createAnimationHarness();
+    const posted: Array<{ type: string; tabs: Array<{ url: string; body: string }> }> = [];
+    const states: Array<{ tabs: Array<{ url: string; body: string }> }> = [];
+    const tab = { id: 'tab', name: 'Draft', url: '/before', body: '', method: 'GET', bodyType: 'raw', headers: [], params: [], auth: { type: 'none' } };
+    const context = vm.createContext({
+      tabs: [tab], activeTabId: 'tab', currentWorkspaceProfile: 'default', compareSettings: {},
+      saveActiveTabState() {}, normalizeRequestType: () => 'http', normalizeRequestEditorTab: () => 'body',
+      normalizeRequestSplitHeight: () => 0, prunePathVariableOverrides: () => ({}), requestSettingsSnapshot: () => ({}),
+      cloneCompareSettings: () => ({}), setTimeout: animation.setTimeout, clearTimeout: animation.clearTimeout,
+      vscode: { setState: (value: typeof states[number]) => states.push(JSON.parse(JSON.stringify(value))),
+        postMessage: (value: typeof posted[number]) => posted.push(JSON.parse(JSON.stringify(value))) },
+    });
+    vm.runInContext(persistence, context);
+    for (const value of ['first', 'latest']) {
+      tab.url = '/' + value;
+      tab.body = value;
+      vm.runInContext('debouncePersist()', context);
+    }
+    assert.deepStrictEqual(posted.map(item => item.type), ['updateTabDraft', 'updateTabDraft']);
+    assert.strictEqual(posted[1].tabs[0].url, '/latest');
+    assert.strictEqual(states[1].tabs[0].body, 'latest');
+    vm.runInContext('flushPersist()', context);
+    assert.strictEqual(posted.filter(item => item.type === 'saveTabState').length, 1);
+    assert.strictEqual(posted[posted.length - 1].tabs[0].body, 'latest');
+    animation.flushTimers();
+    assert.strictEqual(posted.filter(item => item.type === 'saveTabState').length, 1);
+  });
+
   it('keeps legacy status hooks inert and makes tab dialogs and menus keyboard-safe', () => {
     const detail = extractScriptSegment(
       script,

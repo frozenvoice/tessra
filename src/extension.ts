@@ -1073,7 +1073,12 @@ export function activate(context: vscode.ExtensionContext) {
 
       if (nextProfile === current) { return; }
 
-      await RequestPanel.flushCurrentPanelState();
+      try {
+        await RequestPanel.flushCurrentPanelState();
+      } catch (error: unknown) {
+        vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+        return;
+      }
       await vscode.workspace.getConfiguration('tessra').update(
         'workspaceProfile',
         nextProfile,

@@ -229,7 +229,7 @@ export class StorageService {
       throw new Error(`Workspace profile "${profileName}" collides with existing profile "${current.name}".`);
     }
     if (current?.name === profileName) { return; }
-    fs.writeFileSync(metaPath, JSON.stringify({ name: profileName }, null, 2), 'utf-8');
+    this.writeJsonFile(metaPath, { name: profileName });
   }
 
   private toProfileDirectoryName(profileName: string): string {
@@ -264,8 +264,11 @@ export class StorageService {
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf-8');
         const parsed: unknown = JSON.parse(raw);
-        return normalize ? normalize(parsed) : parsed as T;
+        const result = normalize ? normalize(parsed) : parsed as T;
+        this.corruptJsonWarnings.delete(filePath);
+        return result;
       }
+      this.corruptJsonWarnings.delete(filePath);
     } catch (err: unknown) {
       this.handleCorruptJson(filePath, err);
     }
@@ -321,6 +324,7 @@ export class StorageService {
   }
 
   private writeJsonFile(filePath: string, data: unknown): void {
+    this.requireRecoveredJson(filePath);
     const dirPath = path.dirname(filePath);
     this.ensureDir(dirPath);
     const tempPath = path.join(
@@ -339,6 +343,12 @@ export class StorageService {
         // 임시 파일 정리 실패는 원래 쓰기 실패를 가리지 않는다.
       }
       throw err;
+    }
+  }
+
+  private requireRecoveredJson(filePath: string): void {
+    if (this.corruptJsonWarnings.has(filePath)) {
+      throw new Error(LocalizationService.t('error.storageJsonRecoveryRequired', { file: path.basename(filePath) }));
     }
   }
 
@@ -833,6 +843,8 @@ export class StorageService {
 
   addHistoryEntry(entry: HistoryEntry): number {
     const history = this.getHistory();
+    // 읽기 경고는 이미 표시됐다. 요청 결과는 유지하되 빈 fallback으로 원본을 덮지 않는다.
+    if (this.corruptJsonWarnings.has(this.resolveFilePath('history.json'))) { return 0; }
     history.unshift(entry);
     const removed = this.pruneHistory(history);
     this.saveHistory(history);
@@ -1020,7 +1032,7 @@ export class StorageService {
   }
 
   exportWorkspaceBackup(tessraVersion?: string): WorkspaceBackup {
-    return {
+    const backup: WorkspaceBackup = {
       app: StorageService.WORKSPACE_BACKUP_APP,
       schemaVersion: StorageService.WORKSPACE_BACKUP_SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
@@ -1038,6 +1050,11 @@ export class StorageService {
         history: null,
       },
     };
+    // 불완전한 fallback을 정상 백업으로 내보내거나 pre-import backup으로 사용하지 않는다.
+    for (const fileName of ['collections.json', 'environments.json', 'active-environment.json', 'default-headers.json', 'variables.json']) {
+      this.requireRecoveredJson(this.resolveFilePath(fileName));
+    }
+    return backup;
   }
 
   validateWorkspaceBackup(value: unknown): WorkspaceBackup {
@@ -1129,5 +1146,12 @@ export class StorageService {
 
   saveTabState(tabs: TabState[], activeIndex: number, compareSettings?: CompareSettings): void {
     this.writeJson(this.resolveFilePath('tab-state.json'), { tabs, activeIndex, compareSettings });
+  }
+
+  saveTabStateForProfile(profileName: string, tabs: TabState[], activeIndex: number, compareSettings?: CompareSettings): void {
+    const profilePath = profileName === StorageService.DEFAULT_PROFILE_NAME ? this.rootStoragePath : this.resolveProfilePath(profileName);
+    this.ensureDir(profilePath);
+    if (profileName !== StorageService.DEFAULT_PROFILE_NAME) { this.ensureProfileMeta(profilePath, profileName); }
+    this.writeJsonFile(path.join(profilePath, 'tab-state.json'), { tabs, activeIndex, compareSettings });
   }
 }

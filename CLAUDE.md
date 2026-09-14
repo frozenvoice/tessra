@@ -88,7 +88,8 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - import로 들어온 스크립트는 요청 탭에서 신뢰 처리하기 전까지 기본 비활성화
 - 실행 당시 프로필·환경·세대를 고정하며 스크립트의 set/unset 변경분만 저장한다. 같은 키의 동시 수정은 보존하고 경고하며, 변경 없는 실행은 환경 파일을 쓰지 않는다.
 - 프로필 변경/패널 종료 시 Body 준비·전송·재시도·러너·WebSocket을 취소하고 이전 결과를 폐기한다. HTTP/리다이렉트는 http/https만 허용하며 러너 WS 항목은 미지원 오류로 처리한다.
-- 일반 저장 JSON도 구조를 검증하고 잘못된 원본과 `.corrupt-*` 백업을 보존한다. 복구 기본값을 자동 저장하지 않는다.
+- 일반 저장 JSON의 파싱/구조 검증이 실패하면 원본의 `.corrupt-*` 백업 복사를 시도하고 경고한다. 메모리 기본값을 사용하되 해당 파일의 저장과 불완전한 workspace backup 생성을 차단한다. 손상 history의 추가 저장은 건너뛰고 HTTP 응답은 유지한다. 원본 복구 또는 별도 보관 후 재로드/정상 읽기로 보호를 해제한다.
+- 프로필 변경 전 flush는 요청 ID가 일치하는 응답의 디스크 저장 후에만 성공한다. 지연/실패 시 정상 변경 명령을 중단한다. 직접 설정 변경과 패널 종료에서도 캐시된 초안은 원래 프로필에 저장한다.
 - 로그와 테스트 결과 표시
 - Scripts 탭 한 줄 흐름 안내와 Guide 링크, 각 스크립트 편집기의 예제 삽입 버튼
 
@@ -165,7 +166,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - import/export는 `src/services/ImportExportService.ts`
 - compare는 `src/services/ResponseCompareService.ts`
 - 로컬 저장 분리와 Arc Client → Tessra 데이터 마이그레이션은 `src/services/StorageService.ts`
-- 저장 JSON 파싱 실패 시 `.corrupt-*` 백업과 사용자 경고 후 기본값으로 복구한다
+- 저장 JSON 파싱/구조 검증 실패 시 원본 보존과 백업 복사, 경고, 해당 파일 쓰기 차단을 함께 유지한다
 
 ## 품질 기준
 - 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다

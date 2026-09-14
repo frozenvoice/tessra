@@ -68,7 +68,7 @@ export class RequestPanel {
   private latestTabDraft: StoredTabState | null = null;
   private webviewReady = false;
   private pendingWebviewMessages: unknown[] = [];
-  private pendingFlushResolvers: Array<() => void> = [];
+  private pendingFlushResolvers = new Map<string, (error?: Error) => void>();
   private pendingCollectionRun: { name: string; items: CollectionItem[] } | null = null;
   private lastCollectionRunnerOptions: NormalizedCollectionRunnerOptions = { ...DEFAULT_COLLECTION_RUNNER_OPTIONS };
 
@@ -214,6 +214,7 @@ export class RequestPanel {
 
   public static reloadCurrentPanelForStorageChange(): void {
     if (!RequestPanel.currentPanel) { return; }
+    RequestPanel.currentPanel.persistLatestTabDraft();
     RequestPanel.currentPanel.invalidateExecutions();
     RequestPanel.currentPanel.latestTabDraft = null;
     RequestPanel.currentPanel.storageProfileName = RequestPanel.storage.getWorkspaceProfileName();
@@ -232,18 +233,20 @@ export class RequestPanel {
       return Promise.resolve();
     }
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      const requestId = RequestPanel.createNonce();
       let settled = false;
-      const finish = () => {
+      const finish = (error?: Error) => {
         if (settled) { return; }
         settled = true;
-        this.pendingFlushResolvers = this.pendingFlushResolvers.filter((item) => item !== finish);
-        resolve();
+        clearTimeout(timer);
+        this.pendingFlushResolvers.delete(requestId);
+        if (error) { reject(error); } else { resolve(); }
       };
 
-      this.pendingFlushResolvers.push(finish);
-      this.postMessage({ type: MessageType.FlushTabState });
-      setTimeout(finish, 250);
+      const timer = setTimeout(() => finish(new Error(LocalizationService.t('error.tabStateFlushFailed'))), 2000);
+      this.pendingFlushResolvers.set(requestId, finish);
+      this.postMessage({ type: MessageType.FlushTabState, requestId });
     });
   }
 
@@ -388,8 +391,17 @@ export class RequestPanel {
     }
     switch (message.type) {
       case MessageType.FlushedTabState: {
-        const resolver = this.pendingFlushResolvers.shift();
-        resolver?.();
+        const resolver = this.pendingFlushResolvers.get(message.requestId);
+        if (!resolver) { break; }
+        try {
+          const state = RequestPanel.storage.validateTabState(message);
+          if (!state) { throw new Error(LocalizationService.t('error.tabStateFlushFailed')); }
+          RequestPanel.storage.saveTabState(state.tabs, state.activeIndex, state.compareSettings);
+          this.latestTabDraft = state;
+          resolver();
+        } catch (error: unknown) {
+          resolver(error instanceof Error ? error : new Error(LocalizationService.t('error.tabStateFlushFailed')));
+        }
         break;
       }
       case MessageType.SendRequest:
@@ -642,7 +654,9 @@ export class RequestPanel {
     this.webSocketManager.disconnectAll();
     this.pendingCollectionRun = null;
     this.pendingWebviewMessages = [];
-    for (const resolve of this.pendingFlushResolvers.splice(0)) { resolve(); }
+    for (const finish of this.pendingFlushResolvers.values()) {
+      finish(new Error(LocalizationService.t('error.tabStateFlushFailed')));
+    }
   }
 
   private saveToHistory(
@@ -823,15 +837,19 @@ export class RequestPanel {
     return formatted.trimEnd();
   }
 
-  private dispose() {
-    if (this.isDisposed) { return; }
-    if (this.latestTabDraft && this.storageProfileName === RequestPanel.storage.getWorkspaceProfileName()) {
+  private persistLatestTabDraft(): void {
+    if (this.latestTabDraft) {
       try {
-        RequestPanel.storage.saveTabState(this.latestTabDraft.tabs, this.latestTabDraft.activeIndex, this.latestTabDraft.compareSettings);
+        RequestPanel.storage.saveTabStateForProfile(this.storageProfileName, this.latestTabDraft.tabs, this.latestTabDraft.activeIndex, this.latestTabDraft.compareSettings);
       } catch (error: unknown) {
         vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
       }
     }
+  }
+
+  private dispose() {
+    if (this.isDisposed) { return; }
+    this.persistLatestTabDraft();
     this.isDisposed = true;
     if (RequestPanel.currentPanel === this) { RequestPanel.currentPanel = undefined; }
     this.invalidateExecutions();

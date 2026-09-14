@@ -12,6 +12,12 @@ script는 Node.js `vm`의 별도 JavaScript realm에서 동기 실행된다. VM�
 
 이 경계는 실수로 Node API를 노출하는 것을 막고, script 데이터와 Tessra 호스트 상태를 분리한다. API 요청 전송, 파일 읽기, 프로세스 실행, 환경변수 읽기 같은 호스트 기능은 script API에 제공하지 않는다.
 
+## 비교와 인코딩 호환성
+
+`to.equal()`은 `Object.is` 의미를 유지한다 (`NaN`은 같고 `+0`과 `-0`은 다름). 배열 `to.include()`는 `includes` 의미를 유지해 `NaN`도 찾는다. `to.eql()`과 값이 지정된 `to.have.property()`는 prototype, 열거 가능한 문자열/symbol 속성, 배열 길이/빈 슬롯, Date, RegExp, Map/Set, typed array/ArrayBuffer, boxed primitive, Error 및 순환 참조를 비교한다. 서로 다른 Promise/WeakMap/WeakSet 같은 불투명 객체는 같다고 간주하지 않고 미지원 비교 오류를 낸다. 모든 JavaScript 객체에 대해 Node assertion과 완전히 같은 구현을 보장하는 계약은 아니다.
+
+Base64 decode는 일반 공백과 tab/CR/LF를 제거하며, 잘못된 UTF-8은 Node Buffer와 같이 대체 문자로 처리한다. 호스트 Buffer/assert를 검증 기준으로만 사용하고 VM에는 전달하지 않는다. Microtask 완료는 큐 안의 완료 마커가 아니라 시간 제한이 있는 `runInContext`가 반환됐는지로 판단한다.
+
 ## 한계
 
 Node.js `vm`은 OS 보안 샌드박스가 아니다. Tessra는 이 VM을 악성 코드 실행에 대한 완전한 격리 경계로 주장하지 않는다. VM 자체의 취약점이나 Node.js 런타임 결함, 메모리 고갈, 프로세스 수준의 자원 고갈까지 해결하지 않는다. 실행시간 제한은 동기 script 평가에 적용되지만, 메모리 사용량과 출력 크기를 별도로 보장하는 정책은 아니다.

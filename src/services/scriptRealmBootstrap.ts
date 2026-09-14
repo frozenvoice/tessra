@@ -18,7 +18,16 @@ export function createScriptRealmBootstrap(serializedInput: string): string {
   const objectHasOwn = Object.prototype.hasOwnProperty;
   const objectSetPrototypeOf = Object.setPrototypeOf;
   const jsonParse = JSON.parse.bind(JSON);
-  const promiseResolve = Promise.resolve.bind(Promise);
+  const objectIs = Object.is;
+  const objectGetPrototypeOf = Object.getPrototypeOf;
+  const objectToString = Object.prototype.toString;
+  const ownKeys = Reflect.ownKeys;
+  const propertyIsEnumerable = Object.prototype.propertyIsEnumerable;
+  const arrayBufferIsView = ArrayBuffer.isView;
+  const dateGetTime = Date.prototype.getTime;
+  const mapEntries = Map.prototype.entries;
+  const setValues = Set.prototype.values;
+  const Uint8ArrayCtor = Uint8Array;
   const string = String;
 
   const input = jsonParse(${JSON.stringify(serializedInput)});
@@ -253,22 +262,74 @@ export function createScriptRealmBootstrap(serializedInput: string): string {
   logger.warn = (...values) => addLog('warn', values);
   logger.error = (...values) => addLog('error', values);
 
-  function deepEqual(left, right, seen) {
-    if (left === right) { return left !== 0 || 1 / left === 1 / right; }
-    if (typeof left === 'number' && typeof right === 'number' && Number.isNaN(left) && Number.isNaN(right)) {
-      return true;
-    }
+  function deepEqual(left, right, leftPath = [], rightPath = []) {
+    if (objectIs(left, right)) { return true; }
     if (!left || !right || typeof left !== 'object' || typeof right !== 'object') { return false; }
-    if (arrayIsArray(left) !== arrayIsArray(right)) { return false; }
-    if (seen && seen(left, right)) { return true; }
-    const leftKeys = objectKeys(left);
-    const rightKeys = objectKeys(right);
-    if (leftKeys.length !== rightKeys.length) { return false; }
-    for (let index = 0; index < leftKeys.length; index += 1) {
-      const key = leftKeys[index];
-      if (!objectHasOwn.call(right, key) || !deepEqual(left[key], right[key], seen)) { return false; }
+    if (objectGetPrototypeOf(left) !== objectGetPrototypeOf(right)) { return false; }
+    const tag = objectToString.call(left);
+    if (tag !== objectToString.call(right)) { return false; }
+    // 현재 재귀 경로만 추적해 순환을 종료하고, Map/Set의 실패한 후보 비교는 남기지 않는다.
+    const leftIndex = leftPath.indexOf(left);
+    const rightIndex = rightPath.indexOf(right);
+    if (leftIndex >= 0 || rightIndex >= 0) { return leftIndex === rightIndex; }
+    leftPath.push(left);
+    rightPath.push(right);
+    const compare = (a, b) => deepEqual(a, b, leftPath, rightPath);
+    try {
+      if (arrayIsArray(left)) {
+        if (!arrayIsArray(right) || left.length !== right.length) { return false; }
+      } else if (tag === '[object Date]') {
+        if (dateGetTime.call(left) !== dateGetTime.call(right)) { return false; }
+      } else if (tag === '[object RegExp]') {
+        if (left.source !== right.source || left.flags !== right.flags || left.lastIndex !== right.lastIndex) { return false; }
+      } else if (tag === '[object Map]' || tag === '[object Set]') {
+        const isMap = tag === '[object Map]';
+        const values = isMap ? mapEntries : setValues;
+        const leftEntries = [...values.call(left)];
+        const rightEntries = [...values.call(right)];
+        if (leftEntries.length !== rightEntries.length) { return false; }
+        const matched = new Array(rightEntries.length).fill(false);
+        for (const entry of leftEntries) {
+          const matchIndex = rightEntries.findIndex((candidate, index) => !matched[index] && (
+            isMap ? compare(entry[0], candidate[0]) && compare(entry[1], candidate[1]) : compare(entry, candidate)
+          ));
+          if (matchIndex < 0) { return false; }
+          matched[matchIndex] = true;
+        }
+      } else if (arrayBufferIsView(left) || tag === '[object ArrayBuffer]' || tag === '[object SharedArrayBuffer]') {
+        if (left.byteLength !== right.byteLength) { return false; }
+        const bytes = (value) => arrayBufferIsView(value)
+          ? new Uint8ArrayCtor(value.buffer, value.byteOffset, value.byteLength)
+          : new Uint8ArrayCtor(value);
+        const leftBytes = bytes(left);
+        const rightBytes = bytes(right);
+        for (let index = 0; index < leftBytes.length; index += 1) {
+          if (leftBytes[index] !== rightBytes[index]) { return false; }
+        }
+      } else if (tag === '[object Number]' || tag === '[object String]' || tag === '[object Boolean]' || tag === '[object BigInt]' || tag === '[object Symbol]') {
+        const valueOf = { '[object Number]': Number.prototype.valueOf, '[object String]': String.prototype.valueOf,
+          '[object Boolean]': Boolean.prototype.valueOf, '[object BigInt]': BigInt.prototype.valueOf, '[object Symbol]': Symbol.prototype.valueOf }[tag];
+        if (!objectIs(valueOf.call(left), valueOf.call(right))) { return false; }
+      } else if (tag === '[object Error]') {
+        if (left.name !== right.name || left.message !== right.message) { return false; }
+        for (const key of ['cause', 'errors']) {
+          if (objectHasOwn.call(left, key) !== objectHasOwn.call(right, key) || !compare(left[key], right[key])) { return false; }
+        }
+      } else if (tag !== '[object Object]' && tag !== '[object Arguments]') {
+        throw new TypeError('Deep equality does not support ' + tag + '.');
+      }
+      const keys = (value) => ownKeys(value).filter(key => propertyIsEnumerable.call(value, key));
+      const leftKeys = keys(left);
+      const rightKeys = keys(right);
+      if (leftKeys.length !== rightKeys.length) { return false; }
+      for (const key of leftKeys) {
+        if (!propertyIsEnumerable.call(right, key) || !compare(left[key], right[key])) { return false; }
+      }
+      return true;
+    } finally {
+      leftPath.pop();
+      rightPath.pop();
     }
-    return true;
   }
 
   function expectation(actual) {
@@ -282,12 +343,12 @@ export function createScriptRealmBootstrap(serializedInput: string): string {
         return;
       }
       if (arrayIsArray(actual)) {
-        if (actual.indexOf(expected) < 0) { throw new Error('The array does not contain the expected value.'); }
+        if (!actual.includes(expected)) { throw new Error('The array does not contain the expected value.'); }
         return;
       }
       throw new Error('The include assertion only supports strings or arrays.');
     };
-    to.equal = (expected) => { if (actual !== expected) { throw new Error('Expected values to be strictly equal.'); } };
+    to.equal = (expected) => { if (!objectIs(actual, expected)) { throw new Error('Expected values to be strictly equal.'); } };
     to.eql = (expected) => { if (!deepEqual(actual, expected)) { throw new Error('Expected values to be deeply equal.'); } };
     to.include = assertInclude;
     to.match = (pattern) => {
@@ -359,13 +420,15 @@ export function createScriptRealmBootstrap(serializedInput: string): string {
       let valid = true;
       for (let part = 0; part < needed; part += 1) {
         const next = bytes[index];
-        if (next === undefined || (next & 0xc0) !== 0x80) { valid = false; break; }
+        // 범위를 벗어난 바이트는 소비하지 않고 다음 문자로 다시 처리한다.
+        const lower = part === 0 && first === 0xe0 ? 0xa0 : part === 0 && first === 0xf0 ? 0x90 : 0x80;
+        const upper = part === 0 && first === 0xed ? 0x9f : part === 0 && first === 0xf4 ? 0x8f : 0xbf;
+        if (next === undefined || next < lower || next > upper) { valid = false; break; }
         codePoint = (codePoint << 6) | (next & 0x3f);
         index += 1;
       }
-      if (!valid || (needed === 1 && codePoint < 0x80) || (needed === 2 && codePoint < 0x800) || (needed === 3 && codePoint < 0x10000) || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+      if (!valid) {
         result += '\ufffd';
-        if (!valid) { index -= needed; }
       } else if (codePoint <= 0xffff) {
         result += string.fromCharCode(codePoint);
       } else {
@@ -453,7 +516,7 @@ export function createScriptRealmBootstrap(serializedInput: string): string {
     return result;
   }
   function base64Decode(value) {
-    const text = utilityText(value, 'pm.encoding.base64Decode').replace(/[ \\t\\r\\n]/g, '');
+    const text = utilityText(value, 'pm.encoding.base64Decode').replace(/[ \t\r\n]/g, '');
     if (text.length === 0) { return ''; }
     if (text.length % 4 !== 0 || /[-_]/.test(text) || !/^[A-Za-z0-9+/]+={0,2}$/.test(text)) { throw new Error('Invalid Base64 input.'); }
     const firstPad = text.indexOf('=');
@@ -558,12 +621,6 @@ export function createScriptRealmBootstrap(serializedInput: string): string {
   function markAwaitingMicrotasks() {
     if (executionState === 'running') { executionState = 'awaiting'; }
   }
-  function markExecutionComplete() {
-    if (executionState === 'awaiting') { executionState = 'complete'; }
-  }
-  function queueExecutionCompletion() {
-    promiseResolve().then(markExecutionComplete);
-  }
   function readExecutionState() {
     const output = nullObject();
     output.state = executionState;
@@ -573,7 +630,6 @@ export function createScriptRealmBootstrap(serializedInput: string): string {
   Object.defineProperty(globalThis, '__tessraMarkExecutionStarted', { value: markExecutionStarted, writable: false, configurable: false, enumerable: false });
   Object.defineProperty(globalThis, '__tessraCaptureExecutionError', { value: captureExecutionError, writable: false, configurable: false, enumerable: false });
   Object.defineProperty(globalThis, '__tessraMarkAwaitingMicrotasks', { value: markAwaitingMicrotasks, writable: false, configurable: false, enumerable: false });
-  Object.defineProperty(globalThis, '__tessraQueueExecutionCompletion', { value: queueExecutionCompletion, writable: false, configurable: false, enumerable: false });
   Object.defineProperty(globalThis, '__tessraReadExecutionState', { value: readExecutionState, writable: false, configurable: false, enumerable: false });
   Object.defineProperty(globalThis, '__tessraSnapshot', { value: snapshot, writable: false, configurable: false, enumerable: false });
   delete globalThis.__tessraBootstrapInput;

@@ -313,7 +313,7 @@ All extension data is stored under VS Code `globalStorage` as JSON files. The de
 - `variables.json`
 - `tab-state.json`
 
-If a stored JSON file cannot be parsed, Tessra keeps a `.corrupt-*` backup beside the original file, warns you, and uses defaults for that file until it is saved again.
+If a stored JSON file cannot be parsed or fails structural validation, Tessra attempts to copy it to a `.corrupt-*` backup, keeps the original, and warns you. Defaults are shown in memory, but saves to that file are blocked; history recording skips a damaged history file without hiding the HTTP response. Workspace backup export/import also stops if its included stores cannot be fully read. Repair the original or move it aside for recovery, then reload the window to resume saving.
 
 Typical locations:
 

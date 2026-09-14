@@ -93,7 +93,7 @@ describe('StorageService persisted data validation', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('backs up malformed collections and keeps the original until an explicit save', () => {
+  it('blocks writes after a malformed read until the file is recovered and read successfully', () => {
     const storage = createStorage(tmpDir);
     const filePath = writeRaw(tmpDir, 'collections.json', { collections: 'invalid' });
 
@@ -103,9 +103,46 @@ describe('StorageService persisted data validation', () => {
     storage.getCollections();
     assert.strictEqual(corruptBackups(tmpDir, 'collections.json').length, 1);
 
-    storage.saveCollections(requestCollection());
+    assert.throws(() => storage.saveCollections(requestCollection()), /collections.json/);
+    assert.strictEqual(fs.readFileSync(filePath, 'utf8'), '{"collections":"invalid"}');
+    writeRaw(tmpDir, 'collections.json', requestCollection());
     assert.strictEqual(storage.getCollections()[0].items[0].request?.url, 'https://example.test');
+    storage.saveCollections(requestCollection());
     assert.strictEqual(corruptBackups(tmpDir, 'collections.json').length, 1);
+  });
+
+  it('never overwrites mixed valid and malformed history when adding a request', () => {
+    const storage = createStorage(tmpDir);
+    const entry = { id: 'valid', request: requestCollection()[0].items[0].request!, response: null, timestamp: 1 };
+    const filePath = writeRaw(tmpDir, 'history.json', [entry, { id: 'broken' }]);
+    const original = fs.readFileSync(filePath, 'utf8');
+    for (let index = 0; index < 2; index++) {
+      storage.addHistoryEntry({ ...entry, id: 'new' });
+      assert.strictEqual(fs.readFileSync(filePath, 'utf8'), original);
+    }
+    assert.strictEqual(corruptBackups(tmpDir, 'history.json').length, 1);
+    assert.strictEqual(fs.readFileSync(path.join(tmpDir, corruptBackups(tmpDir, 'history.json')[0]), 'utf8'), original);
+    assert.throws(() => storage.saveHistory([]), /history.json/);
+    writeRaw(tmpDir, 'history.json', [entry]);
+    storage.addHistoryEntry({ ...entry, id: 'new' });
+    assert.deepStrictEqual(storage.getHistory().map(item => item.id), ['new', 'valid']);
+  });
+
+  it('preflights incomplete backup stores before any replace import writes', () => {
+    const storage = createStorage(tmpDir);
+    const backup = storage.exportWorkspaceBackup();
+    storage.saveCollections(requestCollection());
+    const collectionsPath = path.join(tmpDir, 'collections.json');
+    const original = fs.readFileSync(collectionsPath, 'utf8');
+    const brokenPath = writeRaw(tmpDir, 'variables.json', [{ value: 'missing key' }]);
+    const broken = fs.readFileSync(brokenPath, 'utf8');
+    assert.throws(() => storage.exportWorkspaceBackup(), /variables.json/);
+    assert.throws(() => storage.importWorkspaceBackup(backup), /variables.json/);
+    assert.strictEqual(fs.readFileSync(collectionsPath, 'utf8'), original);
+    assert.strictEqual(fs.readFileSync(brokenPath, 'utf8'), broken);
+    assert.strictEqual(fs.existsSync(path.join(tmpDir, 'backups')), false);
+    writeRaw(tmpDir, 'variables.json', []);
+    assert.doesNotThrow(() => storage.importWorkspaceBackup(backup));
   });
 
   it('validates nested request data while preserving compatible optional fields', () => {
@@ -166,6 +203,12 @@ describe('StorageService persisted data validation', () => {
     for (const fileName of ['history.json', 'environments.json', 'active-environment.json', 'default-headers.json', 'variables.json', 'tab-state.json']) {
       assert.strictEqual(corruptBackups(tmpDir, fileName).length, 1, fileName);
     }
+    assert.throws(() => storage.saveHistory([]), /history.json/);
+    assert.throws(() => storage.saveEnvironments([]), /environments.json/);
+    assert.throws(() => storage.saveActiveEnvironmentId(null), /active-environment.json/);
+    assert.throws(() => storage.saveDefaultHeaders([]), /default-headers.json/);
+    assert.throws(() => storage.saveVariables([]), /variables.json/);
+    assert.throws(() => storage.saveTabState([], 0), /tab-state.json/);
   });
 
   it('normalizes a valid legacy tab state in memory without rewriting it', () => {

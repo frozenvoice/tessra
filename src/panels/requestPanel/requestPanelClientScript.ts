@@ -2877,7 +2877,6 @@ function bindContentEvents() {
         return;
       }
       refreshRequestPreflight(mc);
-      debouncePersist();
     });
     urlInputEl.addEventListener('keydown', function(e) {
       if (e.defaultPrevented) return;
@@ -3586,8 +3585,10 @@ window.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'flushTabState') {
-    persistTabState();
-    vscode.postMessage({ type: 'flushedTabState' });
+    if (_persistTimer) clearTimeout(_persistTimer);
+    _persistTimer = null;
+    var draft = persistWebviewDraftState();
+    vscode.postMessage({ type: 'flushedTabState', requestId: msg.requestId, tabs: draft.tabs, activeIndex: draft.activeIndex, compareSettings: draft.compareSettings });
     return;
   }
 

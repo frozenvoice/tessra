@@ -12,7 +12,7 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ## UI E2E prerequisites
 
-- Node 20+
+- Node 22+ (`@vscode/test-electron` requires Node 22; both CI jobs use Node 22)
 - Built extension: `npm run build`
 - First run downloads a pinned VS Code desktop build via `@vscode/test-electron` (default `1.99.3`, override with `VSCODE_E2E_VERSION`)
 - Windows local and Linux CI (xvfb) are supported
@@ -130,6 +130,12 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 ### Native file dialogs (`.env` import)
 
 `Tessra: Import Environment` uses the OS / VS Code open dialog. Automating that path under Playwright + Electron is flaky and must not introduce production backdoors. Cover `.env` import with unit tests (`DotEnvService`) plus the 1.0.13 manual smoke checklist instead of forcing a CI E2E.
+
+## Draft and script regressions
+
+The close-editor E2E verifies the restored value after filling the URL and immediately using the native close shortcut. It does not require the whole Playwright/workbench round trip to finish within one second. Unit tests hold the disk timer, verify that the latest draft is already in webview state and host messages, and exercise real panel disposal before any debounce callback. Panel tests also cover direct profile changes, delayed/missing flush acknowledgements, late replies, and storage write failures.
+
+Script regression tests execute the real `ScriptRunner`, compare malformed UTF-8 output against Node Buffer for 1,806 byte sequences, and compare deep assertion outcomes against Node assertions. Storage tests verify that automatic history recording and ordinary saves cannot replace unreadable originals, and that incomplete pre-import backups stop replacement before any store is changed.
 
 ## Bundle hygiene
 

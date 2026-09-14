@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Fix realm Base64 whitespace handling and malformed UTF-8 byte consumption; preserve replacement-character decoding without timeout loops.
+- Restore script equality checks for built-in values, enumerable symbols, sparse arrays, and cyclic structures, plus Object.is equality and NaN array inclusion. Unsupported opaque deep comparisons fail explicitly.
+- Block saves after incomplete storage reads and refuse incomplete workspace backups. Confirm profile-switch flushes only after matching acknowledgements are saved, and keep cached drafts in their original profile on direct configuration changes.
 - Pin HTTP and collection execution to the starting profile and environment. Merge only script-changed variables, preserve concurrent edits with a warning, and reject late results after profile switches or panel disposal.
 - Honor cancellation during request body preparation and restrict HTTP transports and redirects to HTTP/HTTPS. Collection Runner reports unsupported WebSocket requests before sending.
 - Remove host objects/functions from script VM input, disable dynamic code generation, and serialize results/errors inside timed VM evaluation. Document the remaining same-process isolation limits.
@@ -13,6 +16,8 @@
 
 ### Reliability
 
+- Align CI with the test tools' Node 22 requirement. Replace the close-editor E2E wall-clock gate with deterministic pre-debounce unit checks and real close/reopen verification.
+- Avoid sending the full draft twice for a single URL input event while retaining immediate draft preservation.
 - Add execution lifecycle, storage corruption/conflict, script boundary, transport protocol, and conversion roundtrip regressions.
 - Expand stable VS Code UI coverage to 23 tests, including response keyboard navigation, immediate draft preservation, and environment/profile execution isolation.
 

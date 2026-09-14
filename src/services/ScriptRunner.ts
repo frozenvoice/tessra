@@ -37,7 +37,7 @@ interface ScriptRealmSnapshot {
 }
 
 interface ScriptRealmExecutionState {
-  state: 'idle' | 'running' | 'capturing' | 'captured' | 'awaiting' | 'complete';
+  state: 'idle' | 'running' | 'capturing' | 'captured' | 'awaiting';
   message: string;
 }
 
@@ -140,7 +140,6 @@ export class ScriptRunner {
       '  __tessraCaptureExecutionError(__tessraCaughtError);',
       '}',
       '__tessraMarkAwaitingMicrotasks();',
-      '__tessraQueueExecutionCompletion();',
     ].join('\n');
 
     let compiledScript: vm.Script;
@@ -152,24 +151,21 @@ export class ScriptRunner {
       throw new Error(`Script execution failed: ${message}`);
     }
 
-    let scriptThrew = false;
     try {
       compiledScript.runInContext(context, {
         timeout: normalizedTimeoutMs,
       });
     } catch {
-      scriptThrew = true;
+      // 사용자 예외는 realm 안에서 잡는다. 평가와 microtask 배수가 중단되면 결과를 다시 평가하지 않는다.
+      throw new Error(`Script execution timed out after ${normalizedTimeoutMs} ms`);
     }
 
     const executionState = this.readScriptRealmExecutionState(context, normalizedTimeoutMs);
-    if (scriptThrew || executionState?.state === 'running' || executionState?.state === 'capturing' || executionState?.state === 'awaiting') {
-      if (executionState?.state === 'running' || executionState?.state === 'capturing' || executionState?.state === 'awaiting') {
-        throw new Error(`Script execution timed out after ${normalizedTimeoutMs} ms`);
-      }
-      throw new Error(`Script execution failed: ${executionState?.message || 'Script did not complete.'}`);
-    }
     if (executionState?.state === 'captured') {
       throw new Error(`Script execution failed: ${executionState.message || 'Unknown script error'}`);
+    }
+    if (executionState?.state !== 'awaiting') {
+      throw new Error('Script execution failed: Script did not complete.');
     }
 
     try {
@@ -202,7 +198,7 @@ export class ScriptRunner {
       if (!parsed || typeof parsed !== 'object') { return undefined; }
       const state = parsed as Partial<ScriptRealmExecutionState>;
       if (typeof state.state !== 'string' || typeof state.message !== 'string') { return undefined; }
-      if (!['idle', 'running', 'capturing', 'captured', 'awaiting', 'complete'].includes(state.state)) {
+      if (!['idle', 'running', 'capturing', 'captured', 'awaiting'].includes(state.state)) {
         return undefined;
       }
       return { state: state.state as ScriptRealmExecutionState['state'], message: state.message };

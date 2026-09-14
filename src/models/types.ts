@@ -461,8 +461,9 @@ export interface WebviewReadyMessage {
   type: 'webviewReady';
 }
 
-export interface FlushedTabStateMessage {
+export interface FlushedTabStateMessage extends Omit<SaveTabStateMessage, 'type'> {
   type: MessageType.FlushedTabState;
+  requestId: string;
 }
 
 export interface RestoreTabStateMessage {
@@ -582,6 +583,7 @@ export interface PickFileResultMessage {
 
 export interface FlushTabStateMessage {
   type: MessageType.FlushTabState;
+  requestId: string;
 }
 
 export interface WebSocketStatusMessage {

@@ -62,10 +62,10 @@ describe('실행 컨텍스트와 저장소 통합', () => {
       saveEnvironmentChanges(context: ExecutionContext, before: KeyValue[], after: KeyValue[]): void;
       saveToHistory: RequestExecutorHost['saveToHistory']; invalidateExecutions(): void;
       requestExecutor: typeof executor; collectionRunner: { reset(): void }; webSocketManager: { disconnectAll(): void };
-      pendingFlushResolvers: Array<() => void>;
+      pendingFlushResolvers: Map<string, (error?: Error) => void>;
     };
     Object.assign(panel, { storageProfileName: profile, executionGeneration: 0, isDisposed: false,
-      sendActiveVarsToWebview() {}, collectionRunner: { reset() {} }, webSocketManager: { disconnectAll() {} }, pendingFlushResolvers: [] });
+      sendActiveVarsToWebview() {}, collectionRunner: { reset() {} }, webSocketManager: { disconnectAll() {} }, pendingFlushResolvers: new Map() });
     host = {
       captureExecutionContext: () => panel.captureExecutionContext(),
       isExecutionContextCurrent: context => panel.isExecutionContextCurrent(context),
@@ -102,6 +102,17 @@ describe('실행 컨텍스트와 저장소 통합', () => {
     const pending = send(); await waitForSend(); envId = 'b'; resolveResponse(okResponse); await pending;
     assert.strictEqual(writes, 0);
     assert.deepStrictEqual(storage.getEnvironment('b')?.variables, [kv('value', 'B')]);
+  });
+
+  it('손상된 history 저장은 건너뛰고 성공한 HTTP 응답은 그대로 표시한다', async () => {
+    const historyPath = path.join(root, 'history.json');
+    const original = '[{"id":"broken"}]';
+    fs.writeFileSync(historyPath, original, 'utf8');
+    const pending = send(); await waitForSend(); resolveResponse(okResponse); await pending;
+    assert.strictEqual(fs.readFileSync(historyPath, 'utf8'), original);
+    assert.strictEqual(posted.filter(message => message.type === MessageType.ReceiveResponse).length, 1);
+    assert.strictEqual(posted.filter(message => message.type === MessageType.ResponseError).length, 0);
+    assert.strictEqual(fs.readdirSync(root).filter(name => name.startsWith('history.json.corrupt-')).length, 1);
   });
 
   it('스크립트 set/unset은 시작 환경에만 적용하고 무관한 사용자 편집을 보존한다', async () => {
