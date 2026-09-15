@@ -750,17 +750,6 @@ export class RequestPanel {
     }
   }
 
-  // Format response bodies for diff view.
-  private formatForDiff(body: string, ext: string): string {
-    if (ext === 'json') {
-      try { return JSON.stringify(JSON.parse(body), null, 2); } catch { /* Return original body when JSON parsing fails. */ }
-    }
-    if (ext === 'xml' || ext === 'html') {
-      return RequestPanel.prettyXml(body);
-    }
-    return body;
-  }
-
   private async generateCode(message: {
     method: Request['method'];
     url: string;
@@ -806,35 +795,6 @@ export class RequestPanel {
 
     await vscode.env.clipboard.writeText(code);
     vscode.window.showInformationMessage(LocalizationService.t('panel.copiedCode', { label: target.label }));
-  }
-
-  // Pretty-print XML/HTML with simple indentation.
-  private static prettyXml(xml: string): string {
-    // Normalize existing spacing.
-    let formatted = '';
-    let indent = 0;
-    const tab = '  ';
-    // Split by tags.
-    const parts = xml.replace(/>\s*</g, '><').split(/(<[^>]+>)/);
-    for (const part of parts) {
-      if (!part.trim()) continue;
-      // Closing tag.
-      if (part.match(/^<\/\w/)) {
-        indent = Math.max(0, indent - 1);
-        formatted += tab.repeat(indent) + part + '\n';
-      // Self-closing tag or declaration.
-      } else if (part.match(/\/>$/) || part.match(/^<\?/) || part.match(/^<!--/) || part.match(/^<!DOCTYPE/i)) {
-        formatted += tab.repeat(indent) + part + '\n';
-      // Opening tag.
-      } else if (part.match(/^<\w/)) {
-        formatted += tab.repeat(indent) + part + '\n';
-        indent++;
-      // Text node.
-      } else {
-        formatted += tab.repeat(indent) + part + '\n';
-      }
-    }
-    return formatted.trimEnd();
   }
 
   private persistLatestTabDraft(): void {

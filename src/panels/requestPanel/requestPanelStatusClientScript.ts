@@ -354,49 +354,6 @@ function renderStatusStripExpandDetails(tab) {
   return parts.join('');
 }
 
-function renderLegacyStatusChipHooks(tab) {
-  var chips = [];
-  chips.push(renderStatusChip(
-    renderProfileIndicator(currentWorkspaceProfile),
-    currentWorkspaceProfile === 'default' ? 'muted' : 'info',
-    'change-workspace-profile',
-    null,
-    tr(currentWorkspaceProfile === 'default' ? 'webview.profileDefaultTooltip' : 'webview.profileCustomTooltip')
-  ));
-  if (currentEnvName) {
-    chips.push(renderEnvironmentStatusChip(currentEnvName));
-  } else {
-    chips.push(renderStatusChip(tr('webview.noEnvironment'), 'muted', 'switch-environment'));
-  }
-  if (tab?.skipDefaultHeaders) {
-    chips.push(renderStatusChip(tr('webview.skipDefaultHeadersStatus'), 'warning', 'switch-tab', 'settings:skip-default-headers'));
-  } else {
-    var appliedDefaultHeaders = getAppliedDefaultHeaders(tab);
-    if (appliedDefaultHeaders.length > 0) {
-      chips.push(renderStatusChip(tfCount('webview.defaultHeadersStatus', appliedDefaultHeaders.length), 'info', 'open-default-headers'));
-    }
-  }
-  var chipHasScripts = hasExecutableScripts(tab?.scripts);
-  var chipScriptsOff = !!(tab?.disableScripts || (chipHasScripts && tab?.scriptsTrusted === false));
-  if (chipScriptsOff) {
-    chips.push(renderStatusChip(
-      tr('webview.disableScriptsStatus'),
-      'warning',
-      'switch-tab',
-      tab?.disableScripts ? 'settings:disable-scripts' : 'scripts:pre-request'
-    ));
-  } else if (chipHasScripts) {
-    chips.push(renderStatusChip(tr('webview.scriptsPresentStatus'), 'muted', 'switch-tab', 'scripts:pre-request'));
-  }
-  if (tab?.followRedirects) chips.push(renderStatusChip(tr('webview.followRedirectsStatus'), 'info', 'switch-tab', 'settings:follow-redirects'));
-  if (tab?.stopAfterHeaders) chips.push(renderStatusChip(tr('webview.stopAfterHeadersStatus'), 'warning', 'switch-tab', 'settings:stop-after-headers'));
-  if (tab?.saveToHistory === false) chips.push(renderStatusChip(tr('webview.saveToHistoryOffStatus'), 'muted', 'switch-tab', 'settings:save-history'));
-  if (normalizeTlsValidation(tab?.tlsValidation) === 'insecure') {
-    chips.push(renderStatusChip(tr('webview.tlsInsecureStatus'), 'warning', 'switch-tab', 'settings:tls-validation'));
-  }
-  return chips.join('');
-}
-
 function renderStatusStrip(tab) {
   var segments = buildStatusStripSegments(tab);
   var sep = '<span class="status-strip-sep" aria-hidden="true">│</span>';
@@ -407,14 +364,6 @@ function renderStatusStrip(tab) {
     '</div>' +
     '<div class="status-strip-panel js-status-strip-panel hidden">' + renderStatusStripExpandDetails(tab) + '</div>' +
   '</div>';
-}
-
-function renderToplineStatusChips(tab) {
-  return renderLegacyStatusChipHooks(tab);
-}
-
-function refreshToplineStatusChips(mc) {
-  refreshStatusStrip(mc);
 }
 
 function refreshStatusStrip(mc) {

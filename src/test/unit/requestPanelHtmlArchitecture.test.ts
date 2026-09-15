@@ -263,7 +263,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10/11 split)', 
     );
     assert.match(scriptJs, /renderStatusStrip\(tab\)/);
     assert.match(scriptJs, /refreshStatusStrip\(/);
-    assert.match(scriptJs, /refreshToplineStatusChips\(/);
+    assert.doesNotMatch(scriptJs + statusJs, /renderLegacyStatusChipHooks|renderToplineStatusChips|refreshToplineStatusChips|renderStatusChip|renderEnvironmentStatusChip|renderEnvironmentIndicator/);
 
     // Status-strip implementations live in the Status module once.
     assert.match(statusJs, /function renderStatusStrip\(/);

@@ -1114,7 +1114,6 @@ describe('RequestPanel Webview', () => {
       getRequestStageInfo: () => ({ tone: 'ready', label: TEST_STRINGS['webview.websocket'], detail: '' }),
       normalizeRequestEditorTab: (value: string) => value || 'params',
       renderStatusStrip: () => '<div class="status-strip js-status-strip"></div>',
-      renderToplineStatusChips: () => '',
       renderRequestPreflight: () => '',
       renderVariableUsage: () => '',
       websocketStatusLabel: () => TEST_STRINGS['webview.disconnected'],
@@ -2203,12 +2202,11 @@ describe('RequestPanel Webview', () => {
     const detail = extractScriptSegment(
       script,
       'function renderStatusStripExpandDetails(tab)',
-      'function renderLegacyStatusChipHooks(tab)'
+      'function renderStatusStrip(tab)'
     );
     assert.match(detail, /js-topline-status-chips visually-hidden" aria-hidden="true"><\/div>/);
     // 스트립을 다시 그려도 unresolved 경고를 유지하되 숨김 영역에는 포커스 가능한 노드를 넣지 않는다.
     assert.match(detail, /js-request-preflight-wrap visually-hidden" aria-hidden="true">'[\s\S]*renderRequestPreflight\(tab\)[\s\S]*'<\/div>/);
-    assert.doesNotMatch(detail, /renderLegacyStatusChipHooks\(tab\)/);
     assert.match(script, /function refreshRequestPreflight\(mc\)[\s\S]*wrap\.innerHTML = renderRequestPreflight\(draftTab\)/);
     assert.match(script, /return '<span class="preflight-pill/);
     assert.match(script, /<span class="ghost-btn ripple-btn js-preflight-action"/);
@@ -2524,12 +2522,10 @@ describe('RequestPanel Webview', () => {
   });
 
   it('shows the current environment with a localized label instead of raw template syntax', () => {
-    assert.match(script, /function renderEnvironmentIndicator\(envName\)/);
+    assert.doesNotMatch(script, /renderLegacyStatusChipHooks|renderToplineStatusChips|refreshToplineStatusChips/);
     assert.match(script, /function renderStatusStrip\(tab\)/);
     assert.match(script, /function buildStatusStripSegments\(tab\)/);
     assert.match(script, /function refreshStatusStrip\(mc\)/);
-    assert.match(script, /function renderToplineStatusChips\(tab\)/);
-    assert.match(script, /function refreshToplineStatusChips\(mc\)/);
     assert.match(script, /class="status-strip js-status-strip"/);
     assert.match(script, /class="request-status-chips js-topline-status-chips/);
     assert.match(script, /tr\('webview\.noEnvironment'\)/);
@@ -2541,8 +2537,54 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /'webview\.saveToHistoryOnStatus'/);
     assert.match(script, /'webview\.saveToHistoryOffStatus'/);
     assert.match(script, /tr\('webview\.tlsInsecureStatus'\)/);
-    assert.match(script, /tr\('webview\.environment'\)/);
+    assert.match(script, /tf\('webview\.summaryEnvironment', \{ name: currentEnvName \}\)/);
     assert.doesNotMatch(script, /<span class="var-name">\{\{env\}\}<\/span>/);
+  });
+
+  it('refreshes status from the current draft while preserving disclosure state', () => {
+    const context: Record<string, unknown> = {};
+    vm.createContext(context);
+    vm.runInContext(extractTaggedTemplate(
+      readSourceFile('src/panels/requestPanel/requestPanelStatusClientScript.ts'), '/*js*/'
+    ), context);
+    const refresh = context.refreshStatusStrip as (mc: unknown) => void;
+    const wrap = { innerHTML: '' };
+    const mc = { querySelector: (selector: string) => selector === '.js-status-strip-host' ? wrap : null };
+    const draft = { id: 'active', url: '/edited', saveToHistory: false };
+    let expanded = true;
+    const calls: string[] = [];
+    Object.assign(context, {
+      tabs: [{ id: 'active', url: '/saved', saveToHistory: true }],
+      activeTabId: 'active',
+      buildDraftTabFromContent: (content: unknown) => {
+        assert.strictEqual(content, mc);
+        return draft;
+      },
+      isStatusStripExpanded: () => expanded,
+      renderStatusStrip: (tab: unknown) => {
+        assert.strictEqual(tab, draft);
+        calls.push('render');
+        return 'updated';
+      },
+      setStatusStripExpanded: (open: boolean) => {
+        assert.strictEqual(open, true);
+        assert.strictEqual(wrap.innerHTML, 'updated');
+        calls.push('expand');
+      },
+      syncEnvironmentStripDisclosureState: () => calls.push('sync environment'),
+    });
+    refresh(mc);
+    assert.strictEqual(wrap.innerHTML, 'updated');
+    assert.deepStrictEqual(calls, ['render', 'expand', 'sync environment']);
+    calls.length = 0;
+    expanded = false;
+    refresh(mc);
+    assert.deepStrictEqual(calls, ['render', 'sync environment']);
+    calls.length = 0;
+    refresh(null);
+    context.activeTabId = 'missing';
+    refresh(mc);
+    assert.deepStrictEqual(calls, []);
   });
 
   it('keeps execution-affecting request settings on the status strip and demotes profile to disclosure', () => {
@@ -2851,7 +2893,7 @@ describe('RequestPanel Webview', () => {
     const expandHelpers = extractScriptSegment(
       script,
       'function renderStatusStripExpandDetails(tab)',
-      'function renderLegacyStatusChipHooks(tab)'
+      'function renderStatusStrip(tab)'
     );
     const expandHarness = `
       var currentEnvName = 'staging';
@@ -2904,7 +2946,6 @@ describe('RequestPanel Webview', () => {
             }).join('') + '</div></div>';
         }).join('') + '</div>';
       }
-      function renderLegacyStatusChipHooks() { return ''; }
       function renderRequestPreflight() { return ''; }
       ${expandHelpers}
     `;

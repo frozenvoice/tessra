@@ -63,7 +63,7 @@ document.getElementById('defaultHeadersSaveBtn').addEventListener('click', () =>
   const headers = collectKv(defaultHeaderRows);
   workspaceDefaultHeaders = headers;
   refreshDefaultHeadersBanner(mainContent);
-  refreshToplineStatusChips(mainContent);
+  refreshStatusStrip(mainContent);
   refreshRequestPreflight(mainContent);
   vscode.postMessage({ type: 'saveDefaultHeaders', headers: headers });
 });

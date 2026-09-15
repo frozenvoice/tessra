@@ -91,6 +91,8 @@ Execution context E2E (#23) holds a real HTTP response in the local `/held` fixt
 
 ### Execution and data regression tests
 
+`scriptUtilities.test.ts` runs the real `ScriptRunner` in both pre-request and test phases. It covers SHA-256/HMAC known vectors, Unicode and block boundaries, primitive coercion, invalid inputs, Base64 padding/whitespace, UUID pool format/exhaustion, and Unix timestamps. Expected hashes and encodings come from Node built-ins in the test process only; no host utility functions are passed into the script realm.
+
 `executionLifecycle.test.ts` combines the real storage merge and RequestPanel execution-context methods with deferred HTTP/body preparation. It checks zero environment writes for empty scripts, changes applied to the original environment, set/unset conflicts preserving newer user edits, zero sends after cancellation during preparation, and zero history/UI writes from obsolete executions. Collection Runner has corresponding reset, empty-script, and WebSocket rejection tests.
 
 Storage validation tests load syntactically valid but malformed nested data from temporary files and assert original bytes, corrupt backups, and in-memory fallback behavior. Conversion tests execute generated fetch code with real FormData and compare multipart/auth/file semantics; transport tests assert unsupported initial and redirect protocols make no target connection. Script boundary tests cover constructor chains, errors, dynamic compilation, result serialization, and timeout behavior. These tests do not establish an OS security sandbox; see [script security limits](script-security.md).

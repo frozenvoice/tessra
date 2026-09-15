@@ -397,24 +397,8 @@ function normalizeRequestEditorTab(value) {
   return REQUEST_EDITOR_TABS.indexOf(String(value || '')) >= 0 ? String(value) : 'params';
 }
 
-function renderEnvironmentIndicator(envName) {
-  return '<span class="env-label">' + escapeHtml(tr('webview.environment')) + '</span><span class="env-name">' + escapeHtml(envName) + '</span>';
-}
-
 function renderProfileIndicator(profileName) {
   return tf('webview.summaryProfile', { name: profileName || 'default' });
-}
-
-function renderStatusChip(label, tone, action, meta, tooltip) {
-  var attrs = action
-    ? ' type="button" data-action="' + escapeAttr(action) + '"' + (meta ? ' data-meta="' + escapeAttr(meta) + '"' : '')
-    : '';
-  var titleAttr = tooltip ? ' title="' + escapeAttr(tooltip) + '"' : '';
-  return '<button class="request-status-chip' + (tone ? ' ' + tone : '') + (action ? ' clickable' : '') + '"' + attrs + titleAttr + '>' + escapeHtml(label) + '</button>';
-}
-
-function renderEnvironmentStatusChip(envName) {
-  return '<button class="request-status-chip info clickable" type="button" data-action="switch-environment">' + renderEnvironmentIndicator(envName) + '</button>';
 }
 
 function renderPreflightPill(label, tone, action, meta) {
@@ -845,7 +829,7 @@ function refreshDraftInsights(mc, options) {
   var opts = options || {};
   syncSettingsToggleStates(mc);
   refreshDefaultHeadersBanner(mc);
-  refreshToplineStatusChips(mc);
+  refreshStatusStrip(mc);
   refreshRequestPreflight(mc);
   refreshVariableUsage(mc);
   refreshFormDataSummary(mc);
@@ -2516,7 +2500,7 @@ function refreshDefaultHeadersBanner(mc) {
   });
 
   wrap.innerHTML = renderDefaultHeadersBanner(draftTab);
-  refreshToplineStatusChips(mc);
+  refreshStatusStrip(mc);
 }
 
 
@@ -3820,7 +3804,7 @@ window.addEventListener('message', (event) => {
     workspaceDefaultHeaders = msg.headers || [];
     setDefaultHeadersEditorData(workspaceDefaultHeaders);
     refreshDefaultHeadersBanner(mainContent);
-    refreshToplineStatusChips(mainContent);
+    refreshStatusStrip(mainContent);
     refreshRequestPreflight(mainContent);
     if (msg.reveal !== false) {
       revealDefaultHeadersEditor();
@@ -3833,7 +3817,7 @@ window.addEventListener('message', (event) => {
     if (Object.prototype.hasOwnProperty.call(msg, 'envId')) {
       setEnvironmentEditorData(msg.envId || null, msg.envName || null, msg.variables || []);
     }
-    refreshToplineStatusChips(mainContent);
+    refreshStatusStrip(mainContent);
     refreshRequestPreflight(mainContent);
   }
 

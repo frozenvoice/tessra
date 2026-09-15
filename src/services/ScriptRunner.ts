@@ -1,4 +1,5 @@
 import * as vm from 'vm';
+import { randomUUID } from 'crypto';
 import {
   AuthConfig,
   FormDataField,
@@ -10,7 +11,6 @@ import {
   ScriptExecutionResult,
   ScriptLogEntry,
 } from '../models/types';
-import { ScriptUtilities } from './ScriptUtilities';
 import { createScriptRealmBootstrap } from './scriptRealmBootstrap';
 
 export interface ScriptableRequest {
@@ -117,7 +117,7 @@ export class ScriptRunner {
       request: this.cloneRequest(contextData.request),
       envVariables: this.cloneEnvVariables(contextData.envVariables),
       response: contextData.response ? this.cloneResponse(contextData.response) : undefined,
-      uuidPool: Array.from({ length: ScriptRunner.UUID_POOL_SIZE }, () => ScriptUtilities.uuidV4()),
+      uuidPool: Array.from({ length: ScriptRunner.UUID_POOL_SIZE }, () => randomUUID()),
     });
     const context = vm.createContext(Object.create(null) as Record<string, unknown>, {
       codeGeneration: { strings: false, wasm: false },
