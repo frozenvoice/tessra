@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tessra Promo</title>
+<style>
+  :root{
+    --bg:#0b0e14; --bg2:#10141c; --panel:#161b24; --panel2:#1b212c; --line:#262e3b;
+    --fg:#e6e9ef; --muted:#8a93a3; --dim:#5b6475;
+    --blue:#3794ff; --violet:#b180d7;
+    --get:#4EC94E; --post:#E5C07B; --put:#61AFEF; --del:#E06C75; --warn:#D19A66;
+    --grad:linear-gradient(90deg,var(--blue),var(--violet));
+    --ui:"Noto Sans CJK KR","DejaVu Sans",sans-serif;
+    --mono:"DejaVu Sans Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--fg);font-family:var(--ui)}
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden}
+  #bgcanvas,#herocanvas{position:absolute;inset:0}
+  .glow{position:absolute;border-radius:50%;filter:blur(120px);opacity:.28}
+  .scene{position:absolute;inset:0;opacity:0}
+  .center{display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  /* scene 1 */
+  #s1 .word{font-size:150px;font-weight:700;letter-spacing:-.02em;margin-top:380px}
+  #s1 .tag{font-size:40px;color:var(--muted);margin-top:14px;font-weight:400}
+
+  /* scene 2 */
+  #s2 .line{font-size:104px;font-weight:700;letter-spacing:-.02em;line-height:1.22;will-change:transform}
+  #s2 .line .no{margin-right:.28em}
+
+  /* captions */
+  .cap{position:absolute;left:0;right:0;top:64px;text-align:center;font-size:60px;font-weight:700;letter-spacing:-.015em}
+  .cap small{display:block;font-size:30px;font-weight:400;color:var(--muted);margin-top:10px;letter-spacing:0}
+
+  /* window */
+  .win{position:absolute;left:210px;top:238px;width:1500px;height:800px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.55);transform-origin:50% 60%}
+  .titlebar{height:38px;background:#0e1219;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 16px;gap:8px;font-size:15px;color:var(--dim)}
+  .dot{width:12px;height:12px;border-radius:50%}
+  .titlebar .t{flex:1;text-align:center;margin-right:60px}
+  .body{position:absolute;top:38px;bottom:0;left:0;right:0;display:flex}
+  .act{width:56px;background:#0e1219;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding-top:14px;gap:22px}
+  .act .ico{width:28px;height:28px;color:var(--dim)}
+  .act .ico.on{color:var(--fg)}
+  .side{width:330px;background:#121720;border-right:1px solid var(--line);padding:10px 0;font-size:16px}
+  .sec{font-size:12.5px;font-weight:700;letter-spacing:.08em;color:var(--muted);padding:12px 18px 8px}
+  .row{height:32px;display:flex;align-items:center;padding:0 18px;gap:10px;color:#c9ced8;white-space:nowrap;position:relative}
+  .row.ind{padding-left:40px}
+  .row.sel{background:rgba(55,148,255,.14)}
+  .m{font-family:var(--mono);font-size:12.5px;font-weight:700;width:52px}
+  .m.get{color:var(--get)} .m.post{color:var(--post)} .m.put{color:var(--put)} .m.del{color:var(--del)}
+  .envdot{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--dim)}
+  .envdot.on{background:var(--get);border-color:var(--get)}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .tabs{height:40px;background:#0e1219;border-bottom:1px solid var(--line);display:flex}
+  .tab{padding:0 20px;display:flex;align-items:center;gap:8px;font-size:15px;border-right:1px solid var(--line);color:var(--muted)}
+  .tab.on{background:var(--bg2);color:var(--fg);box-shadow:inset 0 2px 0 var(--blue)}
+  .reqbar{display:flex;gap:10px;padding:16px 20px 10px}
+  .meth{width:110px;height:48px;border:1px solid var(--line);border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;color:var(--get);font-size:18px;background:#0e1219}
+  .url{flex:1;height:48px;border:1px solid var(--line);border-radius:4px;background:#0e1219;display:flex;align-items:center;padding:0 16px;font-family:var(--mono);font-size:19px;position:relative}
+  .url.focus{border-color:var(--blue)}
+  .var{color:#b180d7}
+  .caret{display:inline-block;width:2px;height:24px;background:var(--fg);margin-left:1px;vertical-align:middle}
+  .send{width:124px;height:48px;border-radius:4px;background:#2b6fd6;color:#fff;font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center}
+  .strip{margin:0 20px;height:30px;display:flex;align-items:center;gap:18px;font-size:14px;color:var(--muted);border-top:1px solid var(--line);border-bottom:1px solid var(--line);position:relative}
+  .strip:before{content:"";position:absolute;left:0;top:-1px;width:160px;height:2px;background:var(--grad)}
+  .strip b{color:var(--fg);font-weight:600}
+  .rtabs{display:flex;gap:26px;padding:14px 20px 0;font-size:15px;color:var(--muted)}
+  .rtabs .on{color:var(--fg);border-bottom:2px solid var(--blue);padding-bottom:8px}
+  .kv{margin:12px 20px;font-family:var(--mono);font-size:15px;color:#c9ced8}
+  .kv div{height:32px;display:flex;align-items:center;border-bottom:1px solid #1d2430}
+  .kv span:first-child{width:260px;color:var(--muted)}
+  .progress{height:3px;margin:0 20px;background:#1d2430;position:relative;overflow:hidden}
+  .progress i{position:absolute;left:0;top:0;bottom:0;background:var(--grad)}
+  .resp{position:absolute;left:0;right:0;bottom:0;height:360px;border-top:1px solid var(--line);background:#0f131a}
+  .rsum{display:flex;gap:18px;align-items:center;padding:14px 20px;font-size:17px}
+  .ok{color:var(--get);font-weight:700;font-family:var(--mono)}
+  .rsum .meta{color:var(--muted);font-family:var(--mono);font-size:15px}
+  .code{font-family:var(--mono);font-size:18px;line-height:30px;padding:6px 26px;white-space:pre}
+  .code .k{color:#9cdcfe} .code .s{color:#ce9178} .code .n{color:#b5cea8} .code .b{color:#569cd6} .code .p{color:#8a93a3}
+  .empty{position:absolute;inset:60px 0 0;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:17px}
+  .tip{position:absolute;top:116px;left:150px;background:#1f2633;border:1px solid #334055;border-radius:6px;padding:12px 16px;font-family:var(--mono);font-size:15px;color:var(--fg);box-shadow:0 12px 30px rgba(0,0,0,.4);white-space:nowrap;z-index:5}
+  .tip .lab{color:var(--muted);font-family:var(--ui);font-size:13px;margin-bottom:4px}
+
+  /* runner */
+  .runner{position:absolute;left:460px;top:250px;width:1000px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.55)}
+  .rhead{display:flex;align-items:center;justify-content:space-between;padding:22px 28px;border-bottom:1px solid var(--line);font-size:22px;font-weight:700}
+  .rhead .opt{font-size:15px;color:var(--muted);font-weight:400}
+  .rrow{display:flex;align-items:center;height:72px;padding:0 28px;border-bottom:1px solid #1d2430;font-size:20px;gap:18px;position:relative}
+  .rrow .m{font-size:16px;width:80px}
+  .rrow .nm{flex:1}
+  .rrow .st{font-family:var(--mono);font-size:18px;width:170px;text-align:right}
+  .chk{width:22px;height:22px;border-radius:4px;background:var(--blue);display:flex;align-items:center;justify-content:center}
+  .rfoot{display:flex;align-items:center;justify-content:space-between;padding:22px 28px;font-size:18px;color:var(--muted)}
+  .btn2{border:1px solid #3a4a63;border-radius:4px;padding:10px 18px;color:var(--fg);font-size:17px}
+  .runbar{position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue)}
+
+  /* features */
+  .grid{position:absolute;left:210px;right:210px;top:300px;display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+  .feat{border:1px solid var(--line);background:rgba(22,27,36,.8);border-radius:10px;padding:30px 32px;min-height:170px}
+  .feat h3{font-size:30px;font-weight:700;margin-bottom:10px;letter-spacing:-.01em}
+  .feat p{font-size:21px;color:var(--muted);line-height:1.45}
+  .feat .bar{width:44px;height:3px;background:var(--grad);margin-bottom:18px}
+
+  /* local */
+  #s6 .big{font-size:96px;font-weight:700;letter-spacing:-.02em;text-align:center;line-height:1.15}
+  #s6 .sub{margin-top:34px;font-size:32px;color:var(--muted);display:flex;gap:40px}
+  #s6 .sub span:before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--get);margin-right:14px;vertical-align:middle}
+
+  /* end */
+  #s7 .word{font-size:130px;font-weight:700;letter-spacing:-.02em;margin-top:24px}
+  #s7 .tag{font-size:38px;color:var(--muted);margin-top:8px}
+  #s7 .cta{margin-top:56px;border:1px solid #3a4a63;border-radius:999px;padding:18px 40px;font-size:30px;display:flex;align-items:center;gap:18px;background:rgba(22,27,36,.8)}
+  #s7 .id{margin-top:22px;font-family:var(--mono);font-size:24px;color:var(--dim)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="glow" id="g1" style="width:900px;height:900px;background:#3794ff"></div>
+  <div class="glow" id="g2" style="width:800px;height:800px;background:#b180d7"></div>
+  <canvas id="bgcanvas" width="1920" height="1080"></canvas>
+
+  <!-- S1 intro -->
+  <div class="scene center" id="s1">
+    <div class="word" id="s1w">Tessra</div>
+    <div class="tag" id="s1t">The local-first API client for VS Code</div>
+  </div>
+  <canvas id="herocanvas" width="1920" height="1080"></canvas>
+
+  <!-- S2 manifesto -->
+  <div class="scene center" id="s2">
+    <div class="line" id="l1"><span class="no grad">No</span>login.</div>
+    <div class="line" id="l2"><span class="no grad">No</span>cloud sync.</div>
+    <div class="line" id="l3"><span class="no grad">No</span>paywalled core workflows.</div>
+  </div>
+
+  <!-- S3 editor -->
+  <div class="scene" id="s3">
+    <div class="cap" id="cap3a">Method → URL → Send.<small>Compose and inspect requests without leaving VS Code.</small></div>
+    <div class="cap" id="cap3b" style="opacity:0">Environments, resolved locally.<small>Switch local → staging. <span class="var">{{variables}}</span> follow.</small></div>
+    <div class="win" id="win">
+      <div class="titlebar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="t">demo-api — Visual Studio Code</span></div>
+      <div class="body">
+        <div class="act">
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4z" stroke="currentColor" stroke-width="1.6"/></svg>
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6" stroke="currentColor" stroke-width="1.6"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.6"/></svg>
+          <svg class="ico on" viewBox="0 0 24 24" fill="none"><path d="M12 2.9 19.1 7v10L12 21.1 4.9 17V7L12 2.9Zm0 0v18.2M4.9 7l7.1 4.1L19.1 7M4.9 17l7.1-4.2 7.1 4.2M4.9 7l7.1 5.8L4.9 17M19.1 7 12 12.8l7.1 4.2" stroke="url(#lg)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="lg" x1="0" x2="1"><stop stop-color="#3794ff"/><stop offset="1" stop-color="#b180d7"/></linearGradient></defs></svg>
+        </div>
+        <div class="side">
+          <div class="sec">COLLECTIONS</div>
+          <div class="row">▾ Demo API <span style="color:var(--dim);margin-left:auto;font-size:13px">4</span></div>
+          <div class="row ind"><span class="m get">GET</span>List users</div>
+          <div class="row ind sel"><span class="m get">GET</span>Get user</div>
+          <div class="row ind"><span class="m post">POST</span>Create user</div>
+          <div class="row ind"><span class="m del">DEL</span>Remove user</div>
+          <div class="sec" style="margin-top:14px">ENVIRONMENTS</div>
+          <div class="row"><span class="envdot" id="envL"></span>local</div>
+          <div class="row"><span class="envdot" id="envS"></span>staging</div>
+          <div class="sec" style="margin-top:14px">HISTORY</div>
+          <div class="row" id="hist1" style="opacity:0"><span class="m get">GET</span><span style="color:var(--muted)">/users/42</span><span class="ok" style="margin-left:auto;font-size:13px">200</span></div>
+          <div class="row"><span class="m post">POST</span><span style="color:var(--muted)">/users</span><span style="margin-left:auto;font-size:13px;color:var(--get);font-family:var(--mono);font-weight:700">201</span></div>
+        </div>
+        <div class="main" style="position:relative">
+          <div class="tabs"><div class="tab on"><span class="m get" style="width:auto">GET</span>Get user</div><div class="tab"><span class="m post" style="width:auto">POST</span>Create user</div></div>
+          <div class="reqbar">
+            <div class="meth">GET</div>
+            <div class="url" id="url"><span id="urltext"></span><span class="caret" id="caret"></span></div>
+            <div class="send" id="send">Send</div>
+          </div>
+          <div class="tip" id="tip" style="opacity:0"><div class="lab">baseUrl · <span id="tipenv">local</span></div><span id="tipval">http://localhost:3000</span></div>
+          <div class="strip"><span>Env <b id="stripenv">local</b> · 3 vars</span><span>Defaults 2</span><span>Used <b>1</b></span><span>Scripts on</span><span>History on</span></div>
+          <div class="progress"><i id="prog" style="width:0"></i></div>
+          <div class="rtabs"><span>Params</span><span class="on">Headers</span><span>Body</span><span>Auth</span><span>Scripts</span><span>Settings</span></div>
+          <div class="kv"><div><span>Accept</span><span>application/json</span></div><div><span>Authorization</span><span>Bearer ••••••••••••</span></div></div>
+          <div class="resp">
+            <div class="empty" id="empty">Send a request to see the response</div>
+            <div id="respwrap" style="opacity:0">
+              <div class="rsum"><span class="ok">200 OK</span><span class="meta" id="rmeta">84 ms · 312 B</span><span style="flex:1"></span><span class="meta">Body · Headers · Cookies · Tests · Preview</span></div>
+              <div class="code" id="code"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S4 runner -->
+  <div class="scene" id="s4">
+    <div class="cap">Run whole collections.<small>Delay, iterations, stop-on-failure — then rerun only what failed.</small></div>
+    <div class="runner" id="runner">
+      <div class="rhead"><span>Collection Runner · Demo API</span><span class="opt">4 selected · 1 iteration · delay 0 ms</span></div>
+      <div id="rrows"></div>
+      <div class="rfoot"><span id="rsum">Running…</span><span class="btn2" id="rerun" style="opacity:.35">↻ Rerun failed</span></div>
+    </div>
+  </div>
+
+  <!-- S5 features -->
+  <div class="scene" id="s5">
+    <div class="cap">Everyday workflows, all included.<small>Nothing behind an account. Nothing behind a paywall.</small></div>
+    <div class="grid" id="grid">
+      <div class="feat"><div class="bar"></div><h3>Import / Export</h3><p>cURL, OpenAPI, Postman collections & environments, .env</p></div>
+      <div class="feat"><div class="bar"></div><h3>WebSocket</h3><p>ws:// and wss:// connect, message log, keepalive</p></div>
+      <div class="feat"><div class="bar"></div><h3>Scripts</h3><p>Pre-request &amp; test scripts with pm.test / pm.expect</p></div>
+      <div class="feat"><div class="bar"></div><h3>Response compare</h3><p>Pin a response and diff it against the next one</p></div>
+      <div class="feat"><div class="bar"></div><h3>Code generation</h3><p>fetch, axios, Java HttpURLConnection</p></div>
+      <div class="feat"><div class="bar"></div><h3>History</h3><p>Pin, filter by status:, method:, host:</p></div>
+    </div>
+  </div>
+
+  <!-- S6 local -->
+  <div class="scene center" id="s6">
+    <div class="big" id="s6a">Your data stays<br><span class="grad">on your machine.</span></div>
+    <div class="sub" id="s6b"><span>Local JSON storage</span><span>No telemetry</span><span>Network only when you hit Send</span></div>
+  </div>
+
+  <!-- S7 end -->
+  <div class="scene center" id="s7">
+    <div style="height:270px"></div>
+    <div class="word">Tessra</div>
+    <div class="tag">The local-first API client for VS Code</div>
+    <div class="cta" id="cta"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6" stroke="#8a93a3" stroke-width="1.8"/><path d="m16 16 4 4" stroke="#8a93a3" stroke-width="1.8"/></svg><span>Search <b>“Tessra”</b> in VS Code Extensions</span></div>
+    <div class="id">frozenvoice.tessra</div>
+  </div>
+</div>
+
+<script>
+const cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const P=(t,a,b)=>cl((t-a)/(b-a));
+const eo=x=>1-Math.pow(1-x,3);
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const win=(t,a,b,c,d)=>Math.min(eo(P(t,a,b)),1-eio(P(t,c,d)));
+const $=id=>document.getElementById(id);
+
+/* ---------- 4D tesseract ---------- */
+const V=[];for(let i=0;i<16;i++)V.push([i&1?1:-1,i&2?1:-1,i&4?1:-1,i&8?1:-1]);
+const E=[];for(let i=0;i<16;i++)for(let b=0;b<4;b++){const j=i^(1<<b);if(j>i)E.push([i,j])}
+function tess(ctx,cx,cy,size,ang,alpha,draw=1,lw=2.4){
+  const c1=Math.cos(ang),s1=Math.sin(ang),c2=Math.cos(ang*.62),s2=Math.sin(ang*.62),c3=Math.cos(.55),s3=Math.sin(.55);
+  const pts=V.map(([x,y,z,w])=>{
+    let x1=x*c1-w*s1,w1=x*s1+w*c1;          // XW
+    let y1=y*c2-z*s2,z1=y*s2+z*c2;          // YZ
+    const k=2.6/(3.2-w1); let X=x1*k,Y=y1*k,Z=z1*k;
+    let Y2=Y*c3-Z*s3,Z2=Y*s3+Z*c3;          // tilt
+    const k2=5/(7-Z2);
+    return [cx+X*k2*size, cy+Y2*k2*size, w1];
+  });
+  const g=ctx.createLinearGradient(cx-size*1.6,cy,cx+size*1.6,cy);
+  g.addColorStop(0,`rgba(55,148,255,${alpha})`);g.addColorStop(1,`rgba(177,128,215,${alpha})`);
+  ctx.strokeStyle=g;ctx.lineWidth=lw;ctx.lineCap='round';
+  E.forEach(([a,b],idx)=>{
+    const f=cl(draw*E.length-idx);if(f<=0)return;
+    const A=pts[a],B=pts[b];ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(A[0]+(B[0]-A[0])*f,A[1]+(B[1]-A[1])*f);ctx.stroke();
+  });
+  ctx.fillStyle=`rgba(230,233,239,${alpha})`;
+  pts.forEach(p=>{if(draw>=1){ctx.beginPath();ctx.arc(p[0],p[1],lw*1.3,0,7);ctx.fill()}});
+}
+
+/* ---------- static content ---------- */
+const URL_STR='{{baseUrl}}/users/42';
+const JSON_LINES=[
+ '<span class="p">{</span>',
+ '  <span class="k">"id"</span><span class="p">:</span> <span class="n">42</span><span class="p">,</span>',
+ '  <span class="k">"name"</span><span class="p">:</span> <span class="s">"Ada Lovelace"</span><span class="p">,</span>',
+ '  <span class="k">"email"</span><span class="p">:</span> <span class="s">"ada@example.test"</span><span class="p">,</span>',
+ '  <span class="k">"role"</span><span class="p">:</span> <span class="s">"admin"</span><span class="p">,</span>',
+ '  <span class="k">"active"</span><span class="p">:</span> <span class="b">true</span>',
+ '<span class="p">}</span>'];
+$('code').innerHTML=JSON_LINES.map((l,i)=>`<div id="jl${i}" style="opacity:0">${l}</div>`).join('');
+const RUN=[['get','GET','List users','200 OK'],['post','POST','Create user','201 Created'],['get','GET','Get user','200 OK'],['del','DELETE','Remove user','404 Not Found']];
+$('rrows').innerHTML=RUN.map((r,i)=>`<div class="rrow" id="rr${i}"><span class="runbar" id="rb${i}" style="opacity:0"></span><span class="chk"><svg width="14" height="14" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10" stroke="#fff" stroke-width="3" fill="none"/></svg></span><span class="m ${r[0]}">${r[1]}</span><span class="nm">${r[2]}</span><span class="st" id="rs${i}" style="color:var(--dim)">queued</span></div>`).join('');
+
+function urlHTML(n){
+  const s=URL_STR.slice(0,n);
+  const m=s.match(/^(\{\{?[a-zA-Z]*\}?\}?)(.*)$/);
+  if(!m)return s;return `<span class="var">${m[1]}</span>${m[2]}`;
+}
+
+/* ---------- seek ---------- */
+const DURATION=32;
+function seek(t){
+  // background
+  $('g1').style.transform=`translate(${-200+Math.sin(t*.3)*120}px,${-300+Math.cos(t*.25)*80}px)`;
+  $('g2').style.transform=`translate(${1300+Math.cos(t*.28)*120}px,${500+Math.sin(t*.22)*90}px)`;
+  const bg=$('bgcanvas').getContext('2d');bg.clearRect(0,0,1920,1080);
+  const bgA=0.10*Math.max(P(t,3.6,4.6),0)*(1-P(t,28.6,29.4));
+  if(bgA>0)tess(bg,1640,860,300,t*.35,bgA,1,1.6);
+
+  // S1
+  const s1=win(t,0,.4,3.6,4.2); $('s1').style.opacity=s1;
+  const hc=$('herocanvas').getContext('2d');hc.clearRect(0,0,1920,1080);
+  const hA=win(t,0,.2,3.6,4.2);
+  if(hA>0)tess(hc,960,380,170,t*.6+.4,hA,eio(P(t,.1,1.6)),2.6);
+  $('s1w').style.opacity=eo(P(t,1.2,1.9));$('s1w').style.transform=`translateY(${(1-eo(P(t,1.2,1.9)))*30}px)`;
+  $('s1t').style.opacity=eo(P(t,1.8,2.5));$('s1t').style.transform=`translateY(${(1-eo(P(t,1.8,2.5)))*24}px)`;
+
+  // S2
+  $('s2').style.opacity=win(t,4.2,4.3,7.8,8.3);
+  [4.4,5.0,5.6].forEach((a,i)=>{const e=eo(P(t,a,a+.6));const l=$('l'+(i+1));l.style.opacity=e;l.style.transform=`translateX(${(1-e)*-80}px)`});
+
+  // S3 editor
+  const s3=win(t,8.3,8.8,17.2,17.7);$('s3').style.opacity=s3;
+  const wi=eo(P(t,8.3,9.1));$('win').style.transform=`translateY(${(1-wi)*60}px) scale(${.96+.04*wi})`;
+  const c3=1-P(t,13.8,14.2), c3b=P(t,14.1,14.5);
+  $('cap3a').style.opacity=c3; $('cap3b').style.opacity=c3b;
+  const n=Math.round(URL_STR.length*P(t,9.3,11.1));
+  $('urltext').innerHTML=urlHTML(n);
+  $('url').classList.toggle('focus',t>9.2&&t<11.6);
+  $('caret').style.opacity=(t>9.2&&t<11.6&&(t<11.1||Math.floor(t*2.5)%2===0))?1:0;
+  const press=P(t,11.5,11.6)*(1-P(t,11.7,11.85));
+  $('send').style.transform=`scale(${1-.05*press})`;$('send').style.background=press>0?'#3a82ec':'#2b6fd6';
+  $('prog').style.width=(eio(P(t,11.6,12.3))*100)+'%';$('prog').style.opacity=1-P(t,12.3,12.6);
+  $('empty').style.opacity=1-P(t,12.2,12.4);
+  $('respwrap').style.opacity=eo(P(t,12.3,12.6));
+  JSON_LINES.forEach((_,i)=>{$('jl'+i).style.opacity=eo(P(t,12.45+i*.09,12.75+i*.09))});
+  $('hist1').style.opacity=eo(P(t,12.4,12.8));
+  // env switch
+  const staging=t>=15.3;
+  $('envL').classList.toggle('on',!staging);$('envS').classList.toggle('on',staging);
+  $('stripenv').textContent=staging?'staging':'local';
+  $('tip').style.opacity=win(t,14.3,14.6,16.9,17.2);
+  $('tip').style.transform=`translateY(${(1-eo(P(t,14.3,14.6)))*8}px)`;
+  $('tipenv').textContent=staging?'staging':'local';
+  $('tipval').textContent=staging?'https://staging.example.test':'http://localhost:3000';
+  $('tipval').style.color=staging?'var(--post)':'var(--fg)';
+  if(t>=15.9){$('rmeta').textContent='126 ms · 312 B'}else{$('rmeta').textContent='84 ms · 312 B'}
+  if(t>15.4){$('prog').style.width=(eio(P(t,15.4,15.9))*100)+'%';$('prog').style.opacity=1-P(t,15.9,16.1)}
+
+  // S4 runner
+  const s4=win(t,17.6,18.1,22.3,22.8);$('s4').style.opacity=s4;
+  const ri=eo(P(t,17.6,18.3));$('runner').style.transform=`translateY(${(1-ri)*50}px)`;
+  const starts=[18.5,19.1,19.7,20.3];
+  RUN.forEach((r,i)=>{
+    const st=$('rs'+i),bar=$('rb'+i);let txt='queued',col='var(--dim)';
+    let active=t>=starts[i]&&t<starts[i]+.5;
+    if(active){txt='running…';col='var(--put)'}
+    else if(t>=starts[i]+.5){txt=r[3];col=i===3?'var(--del)':'var(--get)'}
+    if(i===3&&t>=21.6&&t<22.1){txt='running…';col='var(--put)';active=true}
+    if(i===3&&t>=22.1){txt='204 No Content';col='var(--get)'}
+    st.textContent=txt;st.style.color=col;bar.style.opacity=active?1:0;
+    $('rr'+i).style.background=active?'rgba(55,148,255,.07)':(i===3&&t>=20.8&&t<21.6?'rgba(224,108,117,.07)':'transparent');
+  });
+  let sum='Running…';
+  if(t>=20.8)sum='<span style="color:var(--get)">3 passed</span> · <span style="color:var(--del)">1 failed</span>';
+  if(t>=21.6)sum='Rerunning 1 failed request…';
+  if(t>=22.1)sum='<span style="color:var(--get)">4 passed</span> · 0 failed';
+  $('rsum').innerHTML=sum;
+  $('rerun').style.opacity=t>=20.8&&t<22.1?1:.35;
+  const rp=P(t,21.3,21.45)*(1-P(t,21.5,21.65));
+  $('rerun').style.transform=`scale(${1-.06*rp})`;$('rerun').style.borderColor=t>=21.2&&t<21.9?'var(--blue)':'#3a4a63';
+
+  // S5 features
+  $('s5').style.opacity=win(t,22.8,23.2,26.4,26.9);
+  [...$('grid').children].forEach((f,i)=>{const e=eo(P(t,23.0+i*.14,23.6+i*.14));f.style.opacity=e;f.style.transform=`translateY(${(1-e)*40}px)`});
+
+  // S6 local
+  $('s6').style.opacity=win(t,26.9,27.3,29.3,29.8);
+  const a6=eo(P(t,27.0,27.7));$('s6a').style.transform=`scale(${.97+.03*a6})`;$('s6a').style.opacity=a6;
+  $('s6b').style.opacity=eo(P(t,27.7,28.3));
+
+  // S7 end
+  $('s7').style.opacity=eo(P(t,29.8,30.4));
+  const hc2=t>=29.8;
+  if(hc2){tess(hc,960,330,120,t*.6+.4,eo(P(t,29.8,30.4)),1,2.4)}
+  $('cta').style.opacity=eo(P(t,30.5,31.1));$('cta').style.transform=`translateY(${(1-eo(P(t,30.5,31.1)))*16}px)`;
+}
+window.seek=seek;window.DURATION=DURATION;
+seek(parseFloat(new URLSearchParams(location.search).get('t')||'0'));
+if(new URLSearchParams(location.search).has('play')){const t0=performance.now();(function loop(){const t=((performance.now()-t0)/1000)%DURATION;seek(t);requestAnimationFrame(loop)})()}
+</script>
+</body>
+</html>
