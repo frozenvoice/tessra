@@ -3,6 +3,7 @@
 .agents/**
 .claude/**
 .impeccable/**
+.kilo/**
 DESIGN.md
 PRODUCT.md
 AGENTS.md
