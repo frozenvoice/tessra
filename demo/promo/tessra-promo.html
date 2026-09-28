@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tessra Promo</title>
+<style>
+  :root{
+    --bg:#0b0e14; --line:#262e3b;
+    --fg:#e6e9ef; --muted:#8a93a3; --dim:#5b6475;
+    --blue:#3794ff; --violet:#b180d7; --get:#4EC94E;
+    --grad:linear-gradient(90deg,var(--blue),var(--violet));
+    --ui:"Segoe UI","Noto Sans CJK KR","DejaVu Sans",sans-serif;
+    --mono:"Cascadia Mono","Consolas","DejaVu Sans Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--fg);font-family:var(--ui)}
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden}
+  #bgcanvas,#herocanvas{position:absolute;inset:0}
+  .glow{position:absolute;border-radius:50%;filter:blur(120px);opacity:.28}
+  .scene{position:absolute;inset:0;opacity:0}
+  .center{display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  /* intro */
+  #s1 .word{font-size:150px;font-weight:700;letter-spacing:-.02em;margin-top:380px}
+  #s1 .tag{font-size:40px;color:var(--muted);margin-top:14px;font-weight:400}
+
+  /* manifesto */
+  #s2 .line{font-size:104px;font-weight:700;letter-spacing:-.02em;line-height:1.22;will-change:transform}
+  #s2 .line .no{margin-right:.28em}
+
+  /* captions */
+  .cap{position:absolute;left:0;right:0;top:40px;text-align:center;font-size:54px;font-weight:700;letter-spacing:-.015em}
+  .cap small{display:block;font-size:28px;font-weight:400;color:var(--muted);margin-top:8px;letter-spacing:0}
+  .var{color:var(--violet);font-family:var(--mono);font-size:.92em}
+
+  /* real footage */
+  .shot{position:absolute;left:220px;top:196px;width:1480px;height:832.5px;border-radius:12px;overflow:hidden;
+        border:1px solid #2c3544;box-shadow:0 40px 120px rgba(0,0,0,.6);background:#1f1f1f;transform-origin:50% 60%}
+  .cam{position:absolute;left:0;top:0;width:1600px;height:900px;transform-origin:0 0;will-change:transform}
+  .cam img{position:absolute;inset:0;width:1600px;height:900px;display:block}
+  .pointer{position:absolute;left:0;top:0;width:22px;height:30px;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.55))}
+  .ripple{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:3px solid var(--blue);opacity:0}
+  .keys{position:absolute;left:0;right:0;top:1040px;display:flex;justify-content:center;opacity:0}
+  .keys span{font-family:var(--ui);font-size:22px;padding:2px 14px;border:1px solid #3a4a63;border-bottom-width:3px;border-radius:7px;background:#161b24;color:var(--fg)}
+  .realtag{position:absolute;right:230px;top:1040px;font-size:17px;color:var(--dim);letter-spacing:.02em;opacity:0}
+
+  /* features */
+  .grid{position:absolute;left:210px;right:210px;top:300px;display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+  .feat{border:1px solid var(--line);background:rgba(22,27,36,.8);border-radius:10px;padding:30px 32px;min-height:170px}
+  .feat h3{font-size:30px;font-weight:700;margin-bottom:10px;letter-spacing:-.01em}
+  .feat p{font-size:21px;color:var(--muted);line-height:1.45}
+  .feat .bar{width:44px;height:3px;background:var(--grad);margin-bottom:18px}
+  #s5 .cap{top:64px;font-size:60px}
+  #s5 .cap small{font-size:30px}
+
+  /* local */
+  #s6 .big{font-size:96px;font-weight:700;letter-spacing:-.02em;text-align:center;line-height:1.15}
+  #s6 .sub{margin-top:34px;font-size:32px;color:var(--muted);display:flex;gap:40px}
+  #s6 .sub span:before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--get);margin-right:14px;vertical-align:middle}
+
+  /* end */
+  #s7 .word{font-size:130px;font-weight:700;letter-spacing:-.02em;margin-top:24px}
+  #s7 .tag{font-size:38px;color:var(--muted);margin-top:8px}
+  #s7 .cta{margin-top:56px;border:1px solid #3a4a63;border-radius:999px;padding:18px 40px;font-size:30px;display:flex;align-items:center;gap:18px;background:rgba(22,27,36,.8)}
+  #s7 .id{margin-top:22px;font-family:var(--mono);font-size:24px;color:var(--dim)}
+</style>
+<script src=".capture/session/clip.js"></script>
+</head>
+<body>
+<div id="stage">
+  <div class="glow" id="g1" style="width:900px;height:900px;background:#3794ff"></div>
+  <div class="glow" id="g2" style="width:800px;height:800px;background:#b180d7"></div>
+  <canvas id="bgcanvas" width="1920" height="1080"></canvas>
+
+  <!-- S1 intro -->
+  <div class="scene center" id="s1">
+    <div class="word" id="s1w">Tessra</div>
+    <div class="tag" id="s1t">The local-first API client for VS Code</div>
+  </div>
+  <canvas id="herocanvas" width="1920" height="1080"></canvas>
+
+  <!-- S2 manifesto -->
+  <div class="scene center" id="s2">
+    <div class="line" id="l1"><span class="no grad">No</span>login.</div>
+    <div class="line" id="l2"><span class="no grad">No</span>cloud sync.</div>
+    <div class="line" id="l3"><span class="no grad">No</span>paywalled core workflows.</div>
+  </div>
+
+  <!-- S3 real extension footage -->
+  <div class="scene" id="s3">
+    <div class="cap" id="capA">Type a URL. Hit Send.<small><span class="var">{{variables}}</span> autocomplete from your active environment.</small></div>
+    <div class="cap" id="capB" style="opacity:0">Switch environments, keep the request.<small>local → staging. The same <span class="var">{{baseUrl}}</span> now points somewhere else.</small></div>
+    <div class="cap" id="capC" style="opacity:0">Run whole collections.<small>See what failed, then rerun only the failures.</small></div>
+    <div class="shot" id="shot">
+      <div class="cam" id="cam">
+        <img id="frame" alt="">
+        <div class="ripple" id="ripple"></div>
+        <svg class="pointer" id="pointer" viewBox="0 0 22 30"><path d="M2 2v22l6-5.5 4 9 4-1.8-4-8.7h8.2Z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+    <div class="keys" id="keys"><span id="keytext">Tab</span></div>
+    <div class="realtag" id="realtag">Recorded in VS Code · Tessra extension</div>
+  </div>
+
+  <!-- S5 features -->
+  <div class="scene" id="s5">
+    <div class="cap">Everyday workflows, all included.<small>Nothing behind an account. Nothing behind a paywall.</small></div>
+    <div class="grid" id="grid">
+      <div class="feat"><div class="bar"></div><h3>Import / Export</h3><p>cURL, OpenAPI, Postman collections &amp; environments, .env</p></div>
+      <div class="feat"><div class="bar"></div><h3>WebSocket</h3><p>ws:// and wss:// connect, message log, keepalive</p></div>
+      <div class="feat"><div class="bar"></div><h3>Scripts</h3><p>Pre-request &amp; test scripts with pm.test / pm.expect</p></div>
+      <div class="feat"><div class="bar"></div><h3>Response compare</h3><p>Pin a response and diff it against the next one</p></div>
+      <div class="feat"><div class="bar"></div><h3>Code generation</h3><p>fetch, axios, Java HttpURLConnection</p></div>
+      <div class="feat"><div class="bar"></div><h3>History</h3><p>Pin, filter by status:, method:, host:</p></div>
+    </div>
+  </div>
+
+  <!-- S6 local -->
+  <div class="scene center" id="s6">
+    <div class="big" id="s6a">Your data stays<br><span class="grad">on your machine.</span></div>
+    <div class="sub" id="s6b"><span>Local JSON storage</span><span>No telemetry</span><span>Network only when you hit Send</span></div>
+  </div>
+
+  <!-- S7 end -->
+  <div class="scene center" id="s7">
+    <div style="height:270px"></div>
+    <div class="word">Tessra</div>
+    <div class="tag">The local-first API client for VS Code</div>
+    <div class="cta" id="cta"><svg width="30" height="30" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6" stroke="#8a93a3" stroke-width="1.8"/><path d="m16 16 4 4" stroke="#8a93a3" stroke-width="1.8"/></svg><span>Search <b>“Tessra”</b> in VS Code Extensions</span></div>
+    <div class="id">frozenvoice.tessra</div>
+  </div>
+</div>
+
+<script>
+const cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const P=(t,a,b)=>cl((t-a)/(b-a));
+const eo=x=>1-Math.pow(1-x,3);
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const win=(t,a,b,c,d)=>Math.min(eo(P(t,a,b)),1-eio(P(t,c,d)));
+const $=id=>document.getElementById(id);
+
+/* ---------- 4D tesseract ---------- */
+const V=[];for(let i=0;i<16;i++)V.push([i&1?1:-1,i&2?1:-1,i&4?1:-1,i&8?1:-1]);
+const E=[];for(let i=0;i<16;i++)for(let b=0;b<4;b++){const j=i^(1<<b);if(j>i)E.push([i,j])}
+function tess(ctx,cx,cy,size,ang,alpha,draw=1,lw=2.4){
+  const c1=Math.cos(ang),s1=Math.sin(ang),c2=Math.cos(ang*.62),s2=Math.sin(ang*.62),c3=Math.cos(.55),s3=Math.sin(.55);
+  const pts=V.map(([x,y,z,w])=>{
+    let x1=x*c1-w*s1,w1=x*s1+w*c1;
+    let y1=y*c2-z*s2,z1=y*s2+z*c2;
+    const k=2.6/(3.2-w1); let X=x1*k,Y=y1*k,Z=z1*k;
+    let Y2=Y*c3-Z*s3,Z2=Y*s3+Z*c3;
+    const k2=5/(7-Z2);
+    return [cx+X*k2*size, cy+Y2*k2*size, w1];
+  });
+  const g=ctx.createLinearGradient(cx-size*1.6,cy,cx+size*1.6,cy);
+  g.addColorStop(0,`rgba(55,148,255,${alpha})`);g.addColorStop(1,`rgba(177,128,215,${alpha})`);
+  ctx.strokeStyle=g;ctx.lineWidth=lw;ctx.lineCap='round';
+  E.forEach(([a,b],idx)=>{
+    const f=cl(draw*E.length-idx);if(f<=0)return;
+    const A=pts[a],B=pts[b];ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(A[0]+(B[0]-A[0])*f,A[1]+(B[1]-A[1])*f);ctx.stroke();
+  });
+  ctx.fillStyle=`rgba(230,233,239,${alpha})`;
+  pts.forEach(p=>{if(draw>=1){ctx.beginPath();ctx.arc(p[0],p[1],lw*1.3,0,7);ctx.fill()}});
+}
+
+/* ---------- footage timeline (driven by marks from capture/record.capture.ts) ---------- */
+const C=window.CLIP;
+if(!C)document.body.insertAdjacentHTML('beforeend','<p style="position:absolute;top:20px;left:20px;color:#e06c75;font-size:28px">Missing .capture/session — run the capture first (see README.md).</p>');
+const M=n=>C.marks[n].t;
+const CLIP_END=C?C.frames/C.fps:0;
+const CLICK_DELAY=.65;           // harness pauses this long between mark and click
+const S3_IN=8.3;                 // video time the footage scene starts fading in
+// Footage segments: [clipStart, clipEnd, speed]. Speed-ups only trim waiting, never results.
+const SEGS=C?[[0.25,M('env-start'),1],[M('env-start'),M('runner-start'),1.2],[M('runner-start'),CLIP_END,1.2]]:[];
+let acc=S3_IN+.3;const SEGV=SEGS.map(([a,b,s])=>{const v0=acc;acc+=(b-a)/s;return [v0,acc,a,s]});
+const S3_OUT=acc;                // footage ends
+const clipAt=t=>{for(const [v0,v1,a,s] of SEGV){if(t<v1)return a+Math.max(0,t-v0)*s}return CLIP_END-1/C.fps};
+const videoAt=c=>{for(const [v0,v1,a,s] of SEGV){const b=a+(v1-v0)*s;if(c<b)return v0+(c-a)/s}return S3_OUT};
+
+// Camera keyframes in clip time: [t, centerX, centerY, scale] in 1600x900 window coords.
+const FULL=[800,450,1], URLBAR=[955,326,1.38], RESP=[970,540,1.25], PALETTE=[800,300,1.5], ENVRESP=[895,452,1.15], RUNNER=[985,346,1.3];
+const CAM=C?[
+  [0,...FULL],[M('click-url')+.1,...FULL],[M('click-url')+.9,...URLBAR],
+  [M('send-1')+CLICK_DELAY+.5,...URLBAR],[M('response-1')+.5,...RESP],
+  [M('env-start'),...RESP],[M('palette')+.6,...PALETTE],
+  [M('pick-staging')+CLICK_DELAY+.3,...PALETTE],[M('env-switched')+.7,...ENVRESP],
+  [M('runner-start')-.2,...ENVRESP],[M('runner-start')+.5,...FULL],
+  [M('runner-open')+.3,...FULL],[M('runner-open')+1.2,...RUNNER],[CLIP_END,...RUNNER],
+]:[];
+function camAt(c){
+  if(c<=CAM[0][0])return CAM[0].slice(1);
+  for(let i=1;i<CAM.length;i++){
+    if(c<=CAM[i][0]){const a=CAM[i-1],b=CAM[i],e=eio(P(c,a[0],b[0]));return [1,2,3].map(k=>a[k]+(b[k]-a[k])*e)}
+  }
+  return CAM[CAM.length-1].slice(1);
+}
+// Pointer: glides to each recorded click point, clicks CLICK_DELAY after the mark.
+const CLICKS=C?Object.entries(C.marks).filter(([,m])=>m.x!==undefined).map(([,m])=>({t:m.t,x:m.x,y:m.y})).sort((a,b)=>a.t-b.t):[];
+function pointerAt(c){
+  let px=1200,py=860,last=null;
+  for(const k of CLICKS){
+    if(c<k.t){break}
+    const e=eio(P(c,k.t+.05,k.t+CLICK_DELAY-.05));px=px+(k.x-px)*e;py=py+(k.y-py)*e;last=k;
+    if(c<k.t+CLICK_DELAY)return {x:px,y:py,ripple:null};
+    px=k.x;py=k.y;
+  }
+  return {x:px,y:py,ripple:last?c-(last.t+CLICK_DELAY):null};
+}
+const KEYS=C?[[M('tab-1'),'Tab'],[M('tab-2'),'Tab'],[M('palette'),'Ctrl + Shift + P']]:[];
+
+/* ---------- scene timing after the footage ---------- */
+const T5=S3_OUT+.1, T6=T5+4.1, T7=T6+2.9;
+const DURATION=Math.round((T7+3)*10)/10;
+
+let frameIdx=-1;
+function showFrame(i){
+  if(!C||i===frameIdx)return Promise.resolve();
+  frameIdx=i;const img=$('frame');
+  img.src=`.capture/session/${String(i).padStart(5,'0')}.jpg`;
+  return img.decode().catch(()=>undefined);
+}
+
+function seek(t){
+  $('g1').style.transform=`translate(${-200+Math.sin(t*.3)*120}px,${-300+Math.cos(t*.25)*80}px)`;
+  $('g2').style.transform=`translate(${1300+Math.cos(t*.28)*120}px,${500+Math.sin(t*.22)*90}px)`;
+  const bg=$('bgcanvas').getContext('2d');bg.clearRect(0,0,1920,1080);
+  const bgA=0.10*Math.max(P(t,3.6,4.6),0)*(1-P(t,T7-1.2,T7-.4));
+  if(bgA>0)tess(bg,1640,860,300,t*.35,bgA,1,1.6);
+
+  // S1
+  $('s1').style.opacity=win(t,0,.4,3.6,4.2);
+  const hc=$('herocanvas').getContext('2d');hc.clearRect(0,0,1920,1080);
+  const hA=win(t,0,.2,3.6,4.2);
+  if(hA>0)tess(hc,960,380,170,t*.6+.4,hA,eio(P(t,.1,1.6)),2.6);
+  $('s1w').style.opacity=eo(P(t,1.2,1.9));$('s1w').style.transform=`translateY(${(1-eo(P(t,1.2,1.9)))*30}px)`;
+  $('s1t').style.opacity=eo(P(t,1.8,2.5));$('s1t').style.transform=`translateY(${(1-eo(P(t,1.8,2.5)))*24}px)`;
+
+  // S2
+  $('s2').style.opacity=win(t,4.2,4.3,7.8,8.3);
+  [4.4,5.0,5.6].forEach((a,i)=>{const e=eo(P(t,a,a+.6));const l=$('l'+(i+1));l.style.opacity=e;l.style.transform=`translateX(${(1-e)*-80}px)`});
+
+  // S3 footage
+  let pending=Promise.resolve();
+  const s3=win(t,S3_IN,S3_IN+.5,S3_OUT-.2,S3_OUT+.3);$('s3').style.opacity=s3;
+  if(s3>0&&C){
+    const wi=eo(P(t,S3_IN,S3_IN+.8));$('shot').style.transform=`translateY(${(1-wi)*60}px) scale(${.96+.04*wi})`;
+    const c=clipAt(t);
+    pending=showFrame(Math.min(C.frames-1,Math.max(0,Math.round(c*C.fps))));
+    const [cx,cy,s]=camAt(c);const k=1480/1600;
+    $('cam').style.transform=`scale(${k*s}) translate(${-(cx-800/s)}px,${-(cy-450/s)}px)`;
+    const p=pointerAt(c);
+    $('pointer').style.transform=`translate(${p.x-2}px,${p.y-2}px) scale(${1/s})`;
+    $('pointer').style.transformOrigin='2px 2px';
+    const r=p.ripple;
+    $('ripple').style.opacity=r!==null&&r>=0&&r<.5?(1-r/.5)*.9:0;
+    $('ripple').style.transform=`translate(${p.x}px,${p.y}px) scale(${.4+1.4*cl((r||0)/.5)})`;
+    let key=null;for(const [kt,label] of KEYS){if(c>=kt-.1&&c<kt+1.1)key=[kt,label]}
+    $('keys').style.opacity=key?win(c,key[0]-.1,key[0]+.05,key[0]+.8,key[0]+1.1):0;
+    if(key)$('keytext').textContent=key[1];
+    $('realtag').style.opacity=eo(P(t,S3_IN+.6,S3_IN+1.4))*.9;
+    const vb=videoAt(M('env-start')),vc=videoAt(M('runner-start'));
+    $('capA').style.opacity=1-P(t,vb-.1,vb+.3);
+    $('capB').style.opacity=P(t,vb+.2,vb+.6)*(1-P(t,vc-.1,vc+.3));
+    $('capC').style.opacity=P(t,vc+.2,vc+.6);
+  }
+
+  // S5 features
+  $('s5').style.opacity=win(t,T5,T5+.4,T6-.5,T6);
+  [...$('grid').children].forEach((f,i)=>{const e=eo(P(t,T5+.2+i*.14,T5+.8+i*.14));f.style.opacity=e;f.style.transform=`translateY(${(1-e)*40}px)`});
+
+  // S6 local
+  $('s6').style.opacity=win(t,T6,T6+.4,T7-.5,T7);
+  const a6=eo(P(t,T6+.1,T6+.8));$('s6a').style.transform=`scale(${.97+.03*a6})`;$('s6a').style.opacity=a6;
+  $('s6b').style.opacity=eo(P(t,T6+.8,T6+1.4));
+
+  // S7 end
+  $('s7').style.opacity=eo(P(t,T7,T7+.6));
+  if(t>=T7){tess(hc,960,330,120,t*.6+.4,eo(P(t,T7,T7+.6)),1,2.4)}
+  $('cta').style.opacity=eo(P(t,T7+.7,T7+1.3));$('cta').style.transform=`translateY(${(1-eo(P(t,T7+.7,T7+1.3)))*16}px)`;
+  return pending;
+}
+window.seek=seek;window.DURATION=DURATION;
+// Video-time cue sheet for soundtrack.cjs.
+window.TIMELINE=C?{
+  duration:DURATION,s3In:S3_IN,s3Out:S3_OUT,t5:T5,t6:T6,t7:T7,
+  lines:[4.4,5.0,5.6],
+  keys:(C.keys||[]).map(videoAt),
+  clicks:CLICKS.map(k=>videoAt(k.t+CLICK_DELAY)),
+  success:['response-1','response-2','rerun-done'].map(n=>videoAt(M(n))),
+  failure:[videoAt(M('runner-done'))],
+  swaps:[videoAt(M('env-switched')),videoAt(M('runner-open'))],
+  cards:[0,1,2,3,4,5].map(i=>T5+.2+i*.14),
+}:null;
+const q=new URLSearchParams(location.search);
+seek(parseFloat(q.get('t')||'0'));
+if(q.has('play')){const t0=performance.now();(function loop(){seek(((performance.now()-t0)/1000)%DURATION);requestAnimationFrame(loop)})()}
+</script>
+</body>
+</html>
