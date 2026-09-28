@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Script assertion failures show the actual and expected values again (for example `Expected 1 to strictly equal 2.`), with cycle-safe, length-limited summaries built inside the script realm.
+
 ### Docs
 
 - The README demo video autoplays muted and loops; controls stay available to unmute.

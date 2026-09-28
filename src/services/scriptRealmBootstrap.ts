@@ -28,6 +28,9 @@ export function createScriptRealmBootstrap(serializedInput: string): string {
   const mapEntries = Map.prototype.entries;
   const setValues = Set.prototype.values;
   const Uint8ArrayCtor = Uint8Array;
+  const WeakSetCtor = WeakSet;
+  const numberIsFinite = Number.isFinite;
+  const DateCtor = Date;
   const string = String;
 
   const input = jsonParse(${JSON.stringify(serializedInput)});
@@ -175,6 +178,51 @@ export function createScriptRealmBootstrap(serializedInput: string): string {
     if (value && typeof value.message === 'string') { return value.message; }
     const serialized = safeJson(value);
     return serialized || primitiveText(value);
+  }
+
+  // 실패 메시지용 값 요약. 순환·BigInt·특수 숫자를 안전하게 표기하고 길이를 제한한다.
+  const DESCRIBE_LIMIT = 200;
+  function describeValue(value) {
+    let text;
+    try {
+      const type = typeof value;
+      if (type === 'string') {
+        text = jsonStringify(value);
+      } else if (type === 'number') {
+        text = objectIs(value, -0) ? '-0' : string(value);
+      } else if (type === 'bigint') {
+        text = string(value) + 'n';
+      } else if (type === 'function') {
+        text = '[Function' + (value.name ? ' ' + string(value.name) : '') + ']';
+      } else if (value === null || type !== 'object') {
+        text = string(value);
+      } else {
+        const tag = objectToString.call(value);
+        if (tag === '[object Map]' || tag === '[object Set]') {
+          text = tag.slice(8, -1) + '(' + string(value.size) + ')';
+        } else if (tag === '[object Date]') {
+          const time = dateGetTime.call(value);
+          text = time === time ? 'Date(' + jsonStringify(new DateCtor(time)) + ')' : 'Date(Invalid)';
+        } else if (tag === '[object RegExp]') {
+          text = '/' + string(value.source) + '/' + string(value.flags);
+        } else {
+          const seen = new WeakSetCtor();
+          text = jsonStringify(value, (key, item) => {
+            if (typeof item === 'bigint') { return string(item) + 'n'; }
+            if (typeof item === 'number' && !numberIsFinite(item)) { return string(item); }
+            if (item && typeof item === 'object') {
+              if (seen.has(item)) { return '[Circular]'; }
+              seen.add(item);
+            }
+            return item;
+          });
+        }
+      }
+    } catch {
+      text = undefined;
+    }
+    if (typeof text !== 'string') { text = '[unprintable value]'; }
+    return text.length > DESCRIBE_LIMIT ? text.slice(0, DESCRIBE_LIMIT) + '…' : text;
   }
 
   function utilityText(value, label) {
@@ -343,28 +391,28 @@ export function createScriptRealmBootstrap(serializedInput: string): string {
         return;
       }
       if (arrayIsArray(actual)) {
-        if (!actual.includes(expected)) { throw new Error('The array does not contain the expected value.'); }
+        if (!actual.includes(expected)) { throw new Error('Expected ' + describeValue(actual) + ' to include ' + describeValue(expected) + '.'); }
         return;
       }
       throw new Error('The include assertion only supports strings or arrays.');
     };
-    to.equal = (expected) => { if (!objectIs(actual, expected)) { throw new Error('Expected values to be strictly equal.'); } };
-    to.eql = (expected) => { if (!deepEqual(actual, expected)) { throw new Error('Expected values to be deeply equal.'); } };
+    to.equal = (expected) => { if (!objectIs(actual, expected)) { throw new Error('Expected ' + describeValue(actual) + ' to strictly equal ' + describeValue(expected) + '.'); } };
+    to.eql = (expected) => { if (!deepEqual(actual, expected)) { throw new Error('Expected ' + describeValue(actual) + ' to deeply equal ' + describeValue(expected) + '.'); } };
     to.include = assertInclude;
     to.match = (pattern) => {
       if (typeof actual !== 'string' || !pattern || typeof pattern.test !== 'function' || !pattern.test(actual)) {
-        throw new Error(string(actual) + ' does not match the supplied pattern.');
+        throw new Error(describeValue(actual) + ' does not match ' + describeValue(pattern) + '.');
       }
     };
     to.have = have;
     to.be = be;
     have.property = function (name, expectedValue) {
       if (actual === null || typeof actual !== 'object' || !(name in actual)) { throw new Error('Property \"' + string(name) + '\" does not exist.'); }
-      if (arguments.length >= 2 && !deepEqual(actual[name], expectedValue)) { throw new Error('Property \"' + string(name) + '\" did not match the expected value.'); }
+      if (arguments.length >= 2 && !deepEqual(actual[name], expectedValue)) { throw new Error('Property \"' + string(name) + '\" expected ' + describeValue(expectedValue) + ', received ' + describeValue(actual[name]) + '.'); }
     };
-    Object.defineProperty(be, 'true', { get: () => { if (actual !== true) { throw new Error('Expected true.'); } return api; } });
-    Object.defineProperty(be, 'false', { get: () => { if (actual !== false) { throw new Error('Expected false.'); } return api; } });
-    Object.defineProperty(be, 'ok', { get: () => { if (!actual) { throw new Error('The value is not truthy.'); } return api; } });
+    Object.defineProperty(be, 'true', { get: () => { if (actual !== true) { throw new Error('Expected true, received ' + describeValue(actual) + '.'); } return api; } });
+    Object.defineProperty(be, 'false', { get: () => { if (actual !== false) { throw new Error('Expected false, received ' + describeValue(actual) + '.'); } return api; } });
+    Object.defineProperty(be, 'ok', { get: () => { if (!actual) { throw new Error('Expected a truthy value, received ' + describeValue(actual) + '.'); } return api; } });
     api.to = to;
     return api;
   }

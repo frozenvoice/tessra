@@ -370,6 +370,58 @@ describe('ScriptRunner', () => {
     );
   });
 
+  it('failed assertions describe the actual and expected values', () => {
+    const errors = (script: string) => ScriptRunner.runTests({ preRequest: '', test: script }, request, okResponse, [])
+      .result.tests.map((t) => t.error);
+
+    assert.deepStrictEqual(errors(`
+      pm.test('equal', () => pm.expect(1).to.equal(2));
+      pm.test('string', () => pm.expect('a').to.equal('b'));
+      pm.test('eql', () => pm.expect({ a: 1 }).to.eql({ a: 2 }));
+      pm.test('array include', () => pm.expect([1, 2]).to.include(3));
+      pm.test('match', () => pm.expect('abc').to.match(/^x/i));
+      pm.test('property value', () => pm.expect({ id: 1 }).to.have.property('id', 2));
+      pm.test('be.true', () => { pm.expect('yes').to.be.true; });
+      pm.test('be.false', () => { pm.expect(0).to.be.false; });
+      pm.test('be.ok', () => { pm.expect(null).to.be.ok; });
+    `), [
+      'Expected 1 to strictly equal 2.',
+      'Expected "a" to strictly equal "b".',
+      'Expected {"a":1} to deeply equal {"a":2}.',
+      'Expected [1,2] to include 3.',
+      '"abc" does not match /^x/i.',
+      'Property "id" expected 2, received 1.',
+      'Expected true, received "yes".',
+      'Expected false, received 0.',
+      'Expected a truthy value, received null.',
+    ]);
+  });
+
+  it('describes special values safely in assertion failures', () => {
+    const errors = ScriptRunner.runTests({ preRequest: '', test: `
+      const cyclic = { name: 'loop' }; cyclic.self = cyclic;
+      pm.test('cyclic', () => pm.expect(cyclic).to.eql({}));
+      pm.test('bigint', () => pm.expect({ n: 10n }).to.eql({ n: 11n }));
+      pm.test('numbers', () => pm.expect(-0).to.equal(NaN));
+      pm.test('undefined', () => pm.expect(undefined).to.equal(null));
+      pm.test('function', () => pm.expect(function named() {}).to.equal(1));
+      pm.test('collections', () => pm.expect(new Map([[1, 2]])).to.equal(new Set()));
+      pm.test('long', () => pm.expect('x'.repeat(500)).to.equal(''));
+      pm.test('throwing getter', () => pm.expect({ get boom() { throw new Error('nope'); } }).to.equal(1));
+    ` }, request, okResponse, []).result.tests.map((t) => t.error);
+
+    assert.strictEqual(errors[0], 'Expected {"name":"loop","self":"[Circular]"} to deeply equal {}.');
+    assert.strictEqual(errors[1], 'Expected {"n":"10n"} to deeply equal {"n":"11n"}.');
+    assert.strictEqual(errors[2], 'Expected -0 to strictly equal NaN.');
+    assert.strictEqual(errors[3], 'Expected undefined to strictly equal null.');
+    assert.strictEqual(errors[4], 'Expected [Function named] to strictly equal 1.');
+    assert.strictEqual(errors[5], 'Expected Map(1) to strictly equal Set(0).');
+    assert.ok(errors[6]?.startsWith('Expected "xxxx'));
+    assert.ok(errors[6]?.includes('…'), 'long values are truncated');
+    assert.ok((errors[6]?.length ?? 0) < 260);
+    assert.strictEqual(errors[7], 'Expected [unprintable value] to strictly equal 1.');
+  });
+
   it('keeps pm.environment and pm.variables aliases working with utilities', () => {
     const result = ScriptRunner.runPreRequest(
       {
