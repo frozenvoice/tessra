@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Docs
+
+- The README demo video autoplays muted and loops; controls stay available to unmute.
+
 ## 1.2.3
 
 ### Docs

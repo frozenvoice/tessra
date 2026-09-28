@@ -33,7 +33,7 @@ The Marketplace renders `<video>` in the README only with an **absolute https** 
 ```html
 <video src="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-promo.mp4"
        poster="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-promo-poster.jpg"
-       controls width="100%">
+       autoplay muted loop playsinline controls width="100%">
   <a href="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-promo.mp4">
     <img src="https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/video/tessra-promo-poster.jpg" alt="Tessra demo video">
   </a>
