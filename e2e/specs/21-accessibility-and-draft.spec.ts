@@ -41,7 +41,9 @@ test.describe('E2E #21/#22 Request Panel accessibility and draft preservation', 
     await input.fill(url);
 
     // UI 왕복 시간은 CI 부하에 따라 달라진다. debounce 이전 보존은 fake timer 단위 테스트로 보장한다.
-    await tessra.page.keyboard.press(process.platform === 'darwin' ? 'Meta+w' : 'Control+w');
+    // The focused webview frame is torn down while the key is still being dispatched, which can leave
+    // keyboard.press waiting on a dead target. Wait for the editor to close instead of the key press.
+    void tessra.page.keyboard.press(process.platform === 'darwin' ? 'Meta+w' : 'Control+w').catch(() => undefined);
     await tessra.page.locator('iframe.webview.ready').waitFor({ state: 'detached' });
     const reopened = await openNewRequestPanel(tessra.page);
     await expect(reopened.locator('[data-testid="request-url"]')).toHaveValue(url, { timeout: 15000 });
