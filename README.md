@@ -12,7 +12,8 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 
 ## Recent highlights
 
-- The Marketplace page now opens with a demo video recorded in VS Code.
+- Failed script assertions show the actual and expected values, e.g. `Expected 1 to strictly equal 2.`
+- The Marketplace page opens with a demo video recorded in VS Code; it autoplays muted.
 - Requests keep their starting environment; script changes merge only changed keys and preserve concurrent edits with a warning. Switching profiles cancels running HTTP, collection runs, and WebSockets, and discards late results.
 - Stop also covers Body preparation. HTTP transport and redirects accept only HTTP/HTTPS; Collection Runner reports WebSocket requests as unsupported (connect from a request tab).
 - Multipart fetch code preserves authentication/custom headers. cURL import/export preserves form fields and binary file paths; Postman form export preserves `=` and space semantics.

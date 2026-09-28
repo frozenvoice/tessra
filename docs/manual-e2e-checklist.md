@@ -38,6 +38,14 @@ Unusual OS / display-scaling context-menu behavior can still be spot-checked man
 - Dirty-close dialog and request-tab context menu keyboard behavior across OS/display settings
 - Script trust prompts and error wording; see `docs/script-security.md` for execution limits
 
+## 1.2.4 Smoke (~5 min)
+
+Script assertion messages and the README video. Run this pass before Marketplace publish.
+
+- In a test script, add failing `pm.expect(1).to.equal(2)`, `pm.expect({ a: 1 }).to.eql({ a: 2 })`, and `pm.expect(null).to.be.ok`. Send and confirm the Tests tab shows the actual and expected values on one line each.
+- Add a passing `pm.expect(pm.response.json()).to.have.property(...)` and confirm it still passes.
+- Open the extension page in VS Code's Extensions view; confirm the README video starts muted and loops, and the controls can unmute it.
+
 ## 1.2.3 Smoke (~10 min)
 
 Execution isolation, storage protection, and the README demo video. Run this pass before Marketplace publish.
