@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.2.3
+
+### Docs
+
+- Add a demo video recorded in VS Code to the top of the README and Marketplace page.
 
 ### Fixed
 

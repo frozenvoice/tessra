@@ -38,6 +38,17 @@ Unusual OS / display-scaling context-menu behavior can still be spot-checked man
 - Dirty-close dialog and request-tab context menu keyboard behavior across OS/display settings
 - Script trust prompts and error wording; see `docs/script-security.md` for execution limits
 
+## 1.2.3 Smoke (~10 min)
+
+Execution isolation, storage protection, and the README demo video. Run this pass before Marketplace publish.
+
+- Send a slow request, switch the active environment mid-flight, and confirm the response and script changes land in the starting environment.
+- Start a Collection Runner run and change `tessra.workspaceProfile`; confirm the run stops and no late results appear.
+- Press Stop while a large Body is being prepared; confirm nothing is sent.
+- Edit a request and close the editor immediately; reopen and confirm the draft is intact.
+- Corrupt a copy of `collections.json` (valid JSON, wrong shape) in a scratch profile; confirm the warning, the `.corrupt-*` backup, and that the file is not overwritten.
+- Open the extension page in VS Code's Extensions view and confirm the README video plays, with the poster shown before playback.
+
 ## 1.2.2 Smoke (~10 min)
 
 Path Variable occurrence UI and Body single-scroll-owner. Run this pass before Marketplace publish.

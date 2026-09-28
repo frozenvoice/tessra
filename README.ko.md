@@ -8,8 +8,13 @@ VS Code 안에서 동작하는 로컬 우선 API 클라이언트입니다.
 
 Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게 요청을 만들고 실행하려는 개발자를 위한 확장입니다. 모든 데이터는 로컬에 남고, 네트워크 호출은 사용자가 직접 보내는 API 요청에서만 발생합니다.
 
+<video src="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-demo.mp4" poster="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-demo-poster.jpg" controls width="100%">
+  <a href="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-demo.mp4"><img src="https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/video/tessra-demo-poster.jpg" alt="Tessra 데모 영상: 요청 작성, 환경 전환, 컬렉션 실행"></a>
+</video>
+
 ## 최근 주요 변경
 
+- VS Code에서 녹화한 데모 영상을 README 맨 위에 추가했습니다.
 - 요청은 시작 시 환경을 유지합니다. 스크립트가 변경한 키만 저장하며, 실행 중 같은 키가 수정되면 현재 값을 유지하고 경고합니다. 프로필을 바꾸면 HTTP·러너·WebSocket을 취소하고 늦은 결과를 폐기합니다.
 - Body 준비 중에도 Stop이 적용됩니다. HTTP 전송과 리다이렉트는 HTTP/HTTPS만 허용하고, 러너의 WebSocket 요청은 미지원 결과로 표시합니다(요청 탭에서 연결).
 - multipart fetch 코드가 인증·사용자 헤더를 보존합니다. cURL 변환은 form 필드·binary 파일 경로를 보존하고, Postman form 내보내기는 `=`과 공백의 의미를 유지합니다.
