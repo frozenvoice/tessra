@@ -28,16 +28,17 @@ Claims are limited to what `PRODUCT.md` confirms. `demo/**` is excluded by `.vsc
 
 ## Marketplace embed
 
-The Marketplace renders `<video>` in the README only with an **absolute https** `src`. Relative paths are not rewritten (microsoft/vsmarketplace#494), and GitHub `user-attachments` URLs only play for signed-in GitHub users. Host the MP4 and poster next to the existing screenshots in `frozenvoice/frozenvoice-assets`, and serve them through jsDelivr so the MP4 gets a `video/mp4` content type:
+The Marketplace keeps `<video>` with an absolute https `src`, but its sanitizer strips `muted`, `playsinline`, and `controls` (only `src`, `poster`, `autoplay`, `loop`, and `width` survive). Chrome and Edge only autoplay muted media, and a video without an audio track still needs `muted`, so a README video can never autoplay there. Relative paths are not rewritten either (microsoft/vsmarketplace#494), and GitHub `user-attachments` URLs only play for signed-in GitHub users.
 
-```html
-<video src="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-promo.mp4"
-       poster="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-promo-poster.jpg"
-       autoplay muted loop playsinline controls width="100%">
-  <a href="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-promo.mp4">
-    <img src="https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/video/tessra-promo-poster.jpg" alt="Tessra demo video">
-  </a>
-</video>
+So the README uses two pieces, both hosted in `frozenvoice/frozenvoice-assets` under `tessra/video/` and served through jsDelivr for correct content types:
+
+- `tessra-demo.webp`: an animated WebP at the top (1280px, 15fps, about 3.3MB). Images animate without a click everywhere, including VS Code's extension page and GitHub. It links to the MP4.
+- `tessra-demo.mp4` with `tessra-demo-poster.jpg`: the full video with sound, as a `<video controls>` in the Screenshots section.
+
+Rebuild the WebP after a new render:
+
+```bash
+ffmpeg -i demo/promo/tessra-promo.mp4 -vf "fps=15,scale=1280:-1:flags=lanczos" -an -c:v libwebp_anim -lossless 0 -q:v 70 -compression_level 6 -loop 0 tessra-demo.webp
 ```
 
-The inner link and image are the fallback where `<video>` is stripped (GitHub's README renderer): the poster shows and links to the MP4. The Marketplace listing only changes when a new VSIX is published, because it renders the README packaged in the VSIX.
+Encoding takes several minutes at `-compression_level 6`. The Marketplace listing only changes when a new VSIX is published, because it renders the README packaged in the VSIX.

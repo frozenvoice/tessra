@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Docs
+
+- The README and Marketplace page open with a looping animated demo that plays without a click; the full video with sound moves to the Screenshots section. The Marketplace strips `muted` from `<video>`, so browsers never autoplayed it.
+
 ## 1.2.4
 
 ### Fixed

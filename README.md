@@ -6,14 +6,14 @@ No login. No cloud sync. No paywalled core workflows.
 
 Tessra is built for developers who want a fast Thunder Client-style workflow inside VS Code without accounts, sync requirements, or pricing gates around everyday features. Data stays on the machine, and network traffic only happens when the user explicitly sends an API request.
 
-<video src="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-demo.mp4" poster="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-demo-poster.jpg" autoplay muted loop playsinline controls width="100%">
-  <a href="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-demo.mp4"><img src="https://raw.githubusercontent.com/frozenvoice/frozenvoice-assets/main/tessra/video/tessra-demo-poster.jpg" alt="Tessra demo video: compose a request, switch environments, run a collection"></a>
-</video>
+<a href="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-demo.mp4"><img src="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-demo.webp" alt="Tessra demo: compose a request, switch environments, run a collection" width="100%"></a>
+
+[▶ Watch the full demo with sound](https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-demo.mp4)
 
 ## Recent highlights
 
 - Failed script assertions show the actual and expected values, e.g. `Expected 1 to strictly equal 2.`
-- The Marketplace page opens with a demo video recorded in VS Code; it autoplays muted.
+- The Marketplace page opens with a looping demo recorded in VS Code, plus the full video with sound.
 - Requests keep their starting environment; script changes merge only changed keys and preserve concurrent edits with a warning. Switching profiles cancels running HTTP, collection runs, and WebSockets, and discards late results.
 - Stop also covers Body preparation. HTTP transport and redirects accept only HTTP/HTTPS; Collection Runner reports WebSocket requests as unsupported (connect from a request tab).
 - Multipart fetch code preserves authentication/custom headers. cURL import/export preserves form fields and binary file paths; Postman form export preserves `=` and space semantics.
@@ -32,6 +32,10 @@ See the [Changelog](./CHANGELOG.md) for full release history.
 Scripts run with JSON data boundaries and no host objects/functions exposed to the script realm. Imported scripts still require explicit trust. This hardening is not an OS sandbox for hostile code; see [script execution boundaries](./docs/script-security.md).
 
 ## Screenshots
+
+### Demo video (with sound)
+
+<video src="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-demo.mp4" poster="https://cdn.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/tessra-demo-poster.jpg" controls width="100%"></video>
 
 ### Main workspace
 Collections, environments, variables, history, and the response viewer in one local workspace.
