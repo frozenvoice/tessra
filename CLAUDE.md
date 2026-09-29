@@ -9,7 +9,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - 사용자가 직접 보내는 API 요청 외의 네트워크 호출 없음
 - 모든 데이터는 로컬 JSON 파일로 저장
 
-## 현재 구현 범위 (2026-06-25 기준)
+## 현재 구현 범위
 
 ### 요청 작성 / 전송
 - `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
@@ -170,7 +170,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 품질 기준
 - 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다
-- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 1.2.4 smoke 포함). stable UI E2E는 `npm run test:e2e` 기준 **23개**(Collection Runner + WebSocket + Environment autosave + Default Headers save/apply + Auth Bearer + Scripts template + Settings editor + Path Variables + Request More narrow geometry + Path Variable occurrence resolution UI + Body scroll ownership + 응답 키보드 탐색 + 즉시 닫기 초안 보존 + 실행 환경·프로필 격리 포함)다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
+- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **23개**(Collection Runner + WebSocket + Environment autosave + Default Headers save/apply + Auth Bearer + Scripts template + Settings editor + Path Variables + Request More narrow geometry + Path Variable occurrence resolution UI + Body scroll ownership + 응답 키보드 탐색 + 즉시 닫기 초안 보존 + 실행 환경·프로필 격리 포함)다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
 - UI 품질 원칙: DOM visible만으로 layout PASS 금지, popup/menu viewport geometry 검증, variable warning은 occurrence resolution 기준, scrollable editor는 scroll owner 수 + wheel interaction 검증, Request Panel layout은 narrow-width/short-height BrowserWindow에서 검증.
 - Quiet Instrument 계약: pill wall / soft-card / Send success-green 재도입 금지
 
