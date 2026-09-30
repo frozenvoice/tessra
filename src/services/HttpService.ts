@@ -246,7 +246,6 @@ export class HttpService {
           }
 
           if (stopAfterHeaders) {
-            res.resume();
             safeResolve({
               status: statusCode,
               statusText: res.statusMessage ?? '',
@@ -256,6 +255,7 @@ export class HttpService {
               time: Date.now() - startTime,
               size: 0,
             });
+            res.destroy();
             return;
           }
 
