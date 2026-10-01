@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.6
+
+### Fixed
+
+- "Stop after headers" requests now close the response stream once the headers are returned, instead of draining the body in the background. Endless or very large bodies no longer keep the socket open after the result is shown.
+
 ## 1.2.5
 
 ### Docs

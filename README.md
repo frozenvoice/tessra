@@ -12,6 +12,7 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 
 ## Recent highlights
 
+- "Stop after headers" closes the response stream once headers arrive, so endless or very large bodies no longer keep the connection open in the background.
 - Failed script assertions show the actual and expected values, e.g. `Expected 1 to strictly equal 2.`
 - The Marketplace page opens with a looping demo recorded in VS Code, plus the full video with sound.
 - Requests keep their starting environment; script changes merge only changed keys and preserve concurrent edits with a warning. Switching profiles cancels running HTTP, collection runs, and WebSockets, and discards late results.

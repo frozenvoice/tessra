@@ -38,6 +38,17 @@ Unusual OS / display-scaling context-menu behavior can still be spot-checked man
 - Dirty-close dialog and request-tab context menu keyboard behavior across OS/display settings
 - Script trust prompts and error wording; see `docs/script-security.md` for execution limits
 
+## 1.2.6 Smoke (~5 min)
+
+Headers-only stream cleanup. Run this pass on the packaged VSIX before Marketplace publish.
+
+- Install the 1.2.6 VSIX and send a normal GET; confirm status, headers, and body render as before.
+- Enable Settings → Stop after headers against an endpoint that streams a long or endless body. Confirm the response shows status and headers with an empty body, and the request does not stay in a sending state.
+- Repeat the headers-only send several times; confirm each completes promptly.
+- Confirm a failing `pm.expect(1).to.equal(2)` still shows actual and expected values.
+- Edit a request, close the editor immediately, and reopen it; confirm the latest draft is kept.
+- Inspect the VSIX contents (`npx vsce ls`) and confirm no `.kilo`, `demo`, or test output is included.
+
 ## 1.2.4 Smoke (~5 min)
 
 Script assertion messages and the README video. Run this pass before Marketplace publish.
