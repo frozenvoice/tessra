@@ -154,14 +154,14 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 현재 구조 메모
 - 요청 패널 오케스트레이션은 `src/panels/RequestPanel.ts`에 있다
-- Webview HTML은 `requestPanelHtml.ts`가 CSP/URI/i18n을 조립하고, CSS는 `requestPanelStyles.ts`, shell markup은 `requestPanelMarkup.ts`, inline client JS는 `requestPanelClientScript.ts`(+ Body fragment `requestPanelBodyClientScript.ts`, Response Viewer fragment `requestPanelResponseClientScript.ts`, Collection Runner fragment `requestPanelRunnerClientScript.ts`, Environment Editor fragment `requestPanelEnvironmentClientScript.ts`, Default Headers Editor fragment `requestPanelDefaultHeadersClientScript.ts`, Status Strip fragment `requestPanelStatusClientScript.ts`, WebSocket fragment `requestPanelWebSocketClientScript.ts`, Auth Editor fragment `requestPanelAuthClientScript.ts`, Scripts Editor fragment `requestPanelScriptsClientScript.ts`, Settings Editor fragment `requestPanelSettingsClientScript.ts`, Path Variables fragment `requestPanelPathVariablesClientScript.ts`)에 둔다 (source split; runtime asset/CSP 변경 없음)
+- Webview HTML은 `requestPanelHtml.ts`가 CSP/URI/i18n을 조립하고, CSS는 `requestPanelStyles.ts`, shell markup은 `requestPanelMarkup.ts`, inline client JS는 `requestPanelClientScript.ts`와 기능별 fragment에 둔다. HTML Preview의 정제·외부 자원 집계·정적 본문 판별·DOM 렌더링은 `src/webview/htmlPreview.ts`의 browser 모듈이며, `htmlPreviewEntry.ts`를 `dist/htmlPreview.js`로 번들한다. 자산은 현재 Webview의 URI와 nonce로 main inline script 전에 로딩한다.
 - HTTP 실행은 `src/panels/requestPanel/RequestExecutor.ts`, 컬렉션 러너는 `src/panels/requestPanel/CollectionRunner.ts`, WebSocket 세션 관리는 `src/panels/requestPanel/WebSocketManager.ts`가 담당한다
 - highlight.js 관련 리소스는 `src/webview/hljs.ts`에서 관리한다
 - Body 타입 변환은 `src/services/BodyConversionService.ts`, webview 노출은 `src/webview/bodyConversion.ts` (`dist/bodyConversion.js`)
 - 요청 패널 시각 계약은 `DESIGN.md` Quiet Instrument; 제품 범위는 `PRODUCT.md`
 - HTTP 요청 실행은 `src/services/HttpService.ts`
 - WebSocket 프레임/handshake 처리는 Node.js 내장 `net` / `tls` 기반 `src/services/WebSocketService.ts`에서 담당한다
-- storage는 `src/services/StorageService.ts`
+- storage는 `src/services/StorageService.ts`. History는 파일 경로별 immutable snapshot과 count를 재사용하며 매 조회에서 metadata로 외부 변경·삭제·복원을 확인한다. 수정용 `getHistory()`는 중첩 복사본을 반환한다. 저장은 요청 완료 시 동기식 임시 파일+rename을 유지하며 성공 후에만 snapshot을 갱신한다.
 - scripts는 `src/services/ScriptRunner.ts`
 - import/export는 `src/services/ImportExportService.ts`
 - compare는 `src/services/ResponseCompareService.ts`
@@ -170,11 +170,13 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 품질 기준
 - 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다
-- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **23개**(Collection Runner + WebSocket + Environment autosave + Default Headers save/apply + Auth Bearer + Scripts template + Settings editor + Path Variables + Request More narrow geometry + Path Variable occurrence resolution UI + Body scroll ownership + 응답 키보드 탐색 + 즉시 닫기 초안 보존 + 실행 환경·프로필 격리 포함)다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
+- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **25개 / 24파일**이며 Collection Runner, WebSocket, 환경·헤더·Auth·Scripts·Settings·Path Variables, 좁은 패널 geometry, Body scroll ownership, 응답 키보드 탐색, 초안 보존, 실행 환경·프로필 격리, HTML Preview 자산·정제·CSP, History 연속 완료·핀·필터·삭제를 포함한다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
 - UI 품질 원칙: DOM visible만으로 layout PASS 금지, popup/menu viewport geometry 검증, variable warning은 occurrence resolution 기준, scrollable editor는 scroll owner 수 + wheel interaction 검증, Request Panel layout은 narrow-width/short-height BrowserWindow에서 검증.
 - Quiet Instrument 계약: pill wall / soft-card / Send success-green 재도입 금지
 
 ## 빌드 / 테스트
+`typecheck`는 extension, browser(`tsconfig.webview.json`, DOM/no Node globals), unit test를 각각 검사한다. 로컬 설치 VSIX smoke와 합성 History benchmark 절차는 `docs/testing.md`를 따른다.
+
 ```bash
 npm run typecheck
 npm run ci

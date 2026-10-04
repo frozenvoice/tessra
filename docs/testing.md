@@ -5,7 +5,7 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**24 tests in 23 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, execution context isolation, and HTML preview sanitization/CSP) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**25 tests in 24 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, execution context isolation, HTML preview bundle/sanitization/CSP, and History updates) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
@@ -21,7 +21,7 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (24 tests in 23 files)
+npm run test:e2e         # stable VS Code UI E2E (25 tests in 24 files)
 npm run test:e2e:ui-regressions  # critical UI contracts (#18/#19/#20): narrow geometry + path occurrence resolution + body scroll ownership
 npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
 npm run test:e2e:all     # stable suite then focused runner suite
@@ -30,6 +30,8 @@ npm run test:all         # unit + stable E2E
 ```
 
 `npm run ci` stays unit/typecheck/build only. GitHub Actions e2e job runs `test:e2e:ui-regressions` (named critical UI regression contracts) then `test:e2e:ci`.
+
+`npm run typecheck` checks the extension, browser modules, and unit tests separately. `tsconfig.webview.json` supplies DOM types with no ambient Node globals; the extension config also explicitly supplies DOM types for the shared Body conversion service's optional browser parser. `npm run build` and watch include `dist/htmlPreview.js` alongside the extension, Body conversion, and highlight.js bundles.
 
 CI also runs `npm test` on Windows. All jobs cache npm downloads; concurrency cancels older runs for the same PR or branch. Push and pull-request triggers have no path filter because unit tests also read guides, localization JSON, and E2E configuration/helpers/specs outside `src/`.
 
@@ -61,6 +63,22 @@ Each E2E run uses:
 
 User machine settings / other extensions / real Tessra storage are never reused.
 
+Specs can supply `test.use({ userSettings: { ... } })` to seed settings before VS Code launches; defaults stay unchanged for other specs. History #25 uses `window.dialogStyle: 'custom'` so Windows Delete confirmation runs through the real VS Code dialog DOM instead of an OS-native modal.
+
+### Installed VSIX smoke
+
+Set `TESSRA_E2E_VSIX` to an existing local VSIX to run the same specs against an installed extension. The harness installs it into each test's temporary extensions directory and omits `--extensionDevelopmentPath` and `--disable-extensions`. The default development-host mode is unchanged. This checks packaged asset loading, not just the files in the checkout.
+
+```powershell
+New-Item -ItemType Directory -Force tmp | Out-Null
+npm run package -- -o tmp/tessra-smoke.vsix
+$env:TESSRA_E2E_VSIX = (Resolve-Path tmp/tessra-smoke.vsix).Path
+npm run test:e2e -- e2e/specs/24-html-preview.spec.ts --retries=0
+Remove-Item Env:TESSRA_E2E_VSIX
+```
+
+Inspect the VSIX archive for `dist/extension.js`, `dist/htmlPreview.js`, `dist/bodyConversion.js`, and `dist/hljs.js`. Development sources, browser/test configs, benchmark scripts, E2E files, and promo assets must remain excluded. The preview spec checks the new bundle's webview URI and nonce and exercises its real sanitizer/rendering path.
+
 ## Local fixture server
 
 E2E never calls public demo APIs. A Node `http` server binds `127.0.0.1` on a random port and serves deterministic `/users`, `/echo`, `/html`, `/xml`, `/headers`, `/status/500`, `/slow`, `/large`.
@@ -91,7 +109,9 @@ Response keyboard E2E (#21) checks roving tabindex, Arrow/Home/End navigation, s
 
 Execution context E2E (#23) holds a real HTTP response in the local `/held` fixture, switches environments, and checks the new environment remains unchanged. It then switches profiles while another response is held and confirms late completion cannot populate the new profile's history or restored tabs. The fixture controls response completion; production code has no test backdoor.
 
-HTML preview E2E (#24) serves hostile and ordinary markup from a local fixture. It checks dangerous tags, consecutive event attributes, external HTML/SVG URLs (including SMIL animated links), the blocked-asset count, and nonce CSP enforcement in the real webview while preserving static content, rendered embedded images, and fragment links. Unit tests execute the generated sanitizer helpers against live attribute lists.
+HTML preview E2E (#24) serves hostile and ordinary markup from a local fixture. It checks the local `htmlPreview.js` asset URI/nonce, dangerous tags, consecutive event attributes, external HTML/SVG URLs (including SMIL animated links), the blocked-asset count, and nonce CSP enforcement in the real webview while preserving static content, rendered embedded images, and fragment links. Unit tests import the actual browser module and execute sanitizer, payload, localization, and preview DOM synchronization behavior against DOM fixtures.
+
+History E2E (#25) completes two local HTTP requests, checks disk history and sidebar counts, pins an entry, applies a pinned filter, clears unpinned entries, then unpins and clears the remainder.
 
 ### Execution and data regression tests
 
@@ -100,6 +120,10 @@ HTML preview E2E (#24) serves hostile and ordinary markup from a local fixture. 
 `executionLifecycle.test.ts` combines the real storage merge and RequestPanel execution-context methods with deferred HTTP/body preparation. It checks zero environment writes for empty scripts, changes applied to the original environment, set/unset conflicts preserving newer user edits, zero sends after cancellation during preparation, and zero history/UI writes from obsolete executions. Collection Runner has corresponding reset, empty-script, and WebSocket rejection tests.
 
 Storage validation tests load syntactically valid but malformed nested data from temporary files and assert original bytes, corrupt backups, and in-memory fallback behavior. Conversion tests execute generated fetch code with real FormData and compare multipart/auth/file semantics; transport tests assert unsupported initial and redirect protocols make no target connection. Script boundary tests cover constructor chains, errors, dynamic compilation, result serialization, and timeout behavior. These tests do not establish an OS security sandbox; see [script security limits](script-security.md).
+
+`historyStorage.test.ts` and `historyTreeProvider.test.ts` exercise path-specific snapshots, nested ownership, external replacement/deletion/recovery, profile changes, corrupt-file protection, atomic-save failure, pinned pruning, filtering/sorting, and consistent count notifications. History saves remain synchronous; no pending debounce queue needs flushing.
+
+Run `node scripts/history-benchmark.cjs` for a repeatable synthetic comparison. It drives the real extension activation callbacks, RequestPanel history save, StorageService, and HistoryTreeProvider using a minimal VS Code API fixture and an isolated temporary store. Defaults are 500 entries with 1 KiB request bodies, 100 completions per run, and three runs. `TESSRA_BENCH_ITEMS`, `TESSRA_BENCH_COMPLETIONS`, and `TESSRA_BENCH_RUNS` override these dimensions. Initialization/cold reads are outside the measured loop. Compare the same script and fixture on both revisions with no concurrent CPU-heavy jobs; report reads, parses, metadata checks, atomic writes/renames, notifications, and elapsed-time range/median. This measures the synthetic persistence/refresh path, not network or real Electron UI performance.
 
 ### Critical UI regression quality principles
 
@@ -130,7 +154,7 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 3. Reuse `e2e/helpers/*` and the local fixture server.
 4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
 5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
-6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **24 tests** (or intentionally adjust the count here).
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **25 tests** (or intentionally adjust the count here).
 7. Layout / variable-resolution / scroll-ownership regressions that users can see immediately should also stay in `npm run test:e2e:ui-regressions` (#18/#19/#20).
 
 ### Native file dialogs (`.env` import)

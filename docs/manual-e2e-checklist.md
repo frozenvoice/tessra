@@ -24,6 +24,8 @@ Covered by `e2e/specs/*` against a real VS Code Electron host + localhost fixtur
 - Body text single-scroll-owner (`e2e/specs/20-body-scroll-ownership.spec.ts`)
 - Response tab keyboard navigation and immediate editor-close draft preservation (`e2e/specs/21-accessibility-and-draft.spec.ts`, #21/#22)
 - Environment/profile switch during a held HTTP response, with storage isolation (`e2e/specs/23-execution-context.spec.ts`)
+- HTML Preview local bundle/nonce CSP and hostile HTML sanitization (`e2e/specs/24-html-preview.spec.ts`)
+- History consecutive completions, pin/unpin, pinned filter, and clear preserving pinned entries (`e2e/specs/25-history-sync.spec.ts`)
 - Critical UI regression gate (`npm run test:e2e:ui-regressions` → #18/#19/#20)
 
 Unusual OS / display-scaling context-menu behavior can still be spot-checked manually; the stable suite covers the keyboard context-menu path (see `docs/testing.md`).
@@ -34,7 +36,7 @@ Unusual OS / display-scaling context-menu behavior can still be spot-checked man
 - Marketplace screenshots
 - Unusual OS / display scaling behavior
 - Deep Guide locale reading pass
-- WebSocket edge cases / Backup / History pin / full application restart restore
+- WebSocket edge cases / Backup / full application restart restore
 - Dirty-close dialog and request-tab context menu keyboard behavior across OS/display settings
 - Script trust prompts and error wording; see `docs/script-security.md` for execution limits
 
@@ -189,11 +191,13 @@ Quiet Instrument layout and Body workflows. Keep as a deeper regression pass whe
 - Rerun failed requests only.
 - Confirm runner results save to history only when each request has Save to history enabled.
 - Pin, unpin, delete, and filter history using `status:`, `method:`, `host:`, and `pinned:` tokens.
+- Complete requests consecutively and confirm persisted entries and sidebar counts agree; clear history while preserving pinned entries, then unpin and clear the remainder (automated: `25-history-sync.spec.ts`, pinned filter and clear path).
 - Confirm History groups entries under Pinned, Today, Yesterday, This Week, and Older; empty groups stay hidden, group rows do not reopen requests, and leaf rows still reopen requests.
 - Open History Settings from the History view title bar and confirm VS Code Settings searches for `tessra.historyMaxItems`.
 - Set `tessra.historyMaxItems` low enough to confirm non-pinned pruning while pinned entries are preserved.
 - Switch `tessra.workspaceProfile`, create a custom profile, and confirm collections, history, environments, default headers, and saved tabs are isolated.
 - Corrupt one storage JSON file in a disposable profile and confirm Tessra creates a `.corrupt-*` backup, warns, and falls back to defaults.
+- In a disposable profile, replace, delete, restore, and corrupt `history.json`, then refresh/read History. Confirm stale entries disappear, recovered content reloads, and corrupt originals remain write-protected (automated at storage/provider level).
 
 ## Response Experience
 
