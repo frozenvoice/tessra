@@ -101,6 +101,14 @@ function seed(userDataDir: string, localUrl: string, stagingUrl: string): void {
  * (a development host would prefix the title bar with [Extension Development Host]).
  */
 function packageVsix(): string {
+  // 통합 검증에서 만든 동일 VSIX를 재사용해 캡처 중 재빌드를 피한다.
+  if (process.env.PROMO_VSIX) {
+    const existing = path.resolve(process.env.PROMO_VSIX);
+    if (path.extname(existing).toLowerCase() !== '.vsix' || !fs.existsSync(existing) || !fs.statSync(existing).isFile()) {
+      throw new Error(`PROMO_VSIX must point to an existing VSIX file: ${existing}`);
+    }
+    return existing;
+  }
   const out = path.join(CAPTURE_DIR, 'tessra-promo.vsix');
   fs.mkdirSync(CAPTURE_DIR, { recursive: true });
   const res = spawnSync('npx', ['@vscode/vsce', 'package', '--no-rewrite-relative-links', '-o', out], {
@@ -188,6 +196,7 @@ export class ScreenRecorder {
   private frames: Array<{ t: number; data: Buffer }> = [];
   private session?: CDPSession;
   private marks: Record<string, { t: number; x?: number; y?: number }> = {};
+  private regions: Record<string, { t: number; x: number; y: number; width: number; height: number }> = {};
   private keys: number[] = [];
   private startedAt = 0;
 
@@ -215,6 +224,11 @@ export class ScreenRecorder {
     this.marks[name] = { t: Date.now() / 1000 - this.startedAt, ...(at || {}) };
   }
 
+  /** 실제 UI의 표시 영역을 보관해 렌더링된 카메라의 잘림을 측정한다. */
+  region(name: string, rect: { x: number; y: number; width: number; height: number }): void {
+    this.regions[name] = { t: Date.now() / 1000 - this.startedAt, ...rect };
+  }
+
   /** Keystroke times, used by the soundtrack for typing ticks. */
   key(): void {
     this.keys.push(Date.now() / 1000 - this.startedAt);
@@ -236,7 +250,7 @@ export class ScreenRecorder {
       while (src + 1 < frames.length && frames[src + 1].t <= t) src += 1;
       fs.writeFileSync(path.join(dir, `${String(i).padStart(5, '0')}.jpg`), frames[src].data);
     }
-    const meta = JSON.stringify({ fps, frames: total, window: WINDOW, marks: this.marks, keys: this.keys }, null, 2);
+    const meta = JSON.stringify({ fps, frames: total, window: WINDOW, marks: this.marks, regions: this.regions, keys: this.keys }, null, 2);
     fs.writeFileSync(path.join(dir, 'clip.json'), meta, 'utf8');
     // Script form so the composition can load it from file:// without fetch.
     fs.writeFileSync(path.join(dir, 'clip.js'), `window.CLIP = ${meta};\n`, 'utf8');

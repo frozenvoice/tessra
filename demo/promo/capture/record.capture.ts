@@ -30,6 +30,12 @@ test('record promo footage', async () => {
     await (target ? target.press(key) : page.keyboard.press(key));
   }
 
+  async function recordRegion(name: string, target: Locator): Promise<void> {
+    const rect = await target.boundingBox();
+    if (!rect) throw new Error(`no visible region for ${name}`);
+    rec.region(name, rect);
+  }
+
   // --- setup (not recorded) ---
   await page.locator('.activitybar [aria-label*="Tessra"]').first().click();
   await page.locator('.monaco-list-row').filter({ hasText: 'Demo API' }).first().waitFor();
@@ -56,6 +62,7 @@ test('record promo footage', async () => {
   rec.mark('tab-2');
   await press('Tab', url);
   rec.mark('type-end');
+  await recordRegion('Help', page.locator('.menubar-menu-title').filter({ hasText: /^Help$/ }).first());
   await pause(700);
   await click(frame.locator('[data-testid="send-request"]'), 'send-1');
   await expect(frame.locator('[data-testid="response-status"]')).toContainText('200');
@@ -106,6 +113,8 @@ test('record promo footage', async () => {
   await expect(runner.locator('[data-testid="runner-failed"]')).toHaveText('1', { timeout: 30000 });
   await expect(runner.locator('.js-runner-rerun')).toBeVisible({ timeout: 30000 });
   rec.mark('runner-done');
+  await recordRegion('Run: Demo API', runner.locator('.runner-header h3'));
+  await recordRegion('Total', runner.locator('[data-testid="runner-summary"] > span').first());
   await pause(1800);
   await click(runner.locator('.js-runner-rerun'), 'rerun-failed');
   await expect(runner.locator('[data-testid="runner-failed"]')).toHaveText('0', { timeout: 30000 });

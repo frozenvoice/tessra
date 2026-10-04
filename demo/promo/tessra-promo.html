@@ -179,7 +179,8 @@ const clipAt=t=>{for(const [v0,v1,a,s] of SEGV){if(t<v1)return a+Math.max(0,t-v0
 const videoAt=c=>{for(const [v0,v1,a,s] of SEGV){const b=a+(v1-v0)*s;if(c<b)return v0+(c-a)/s}return S3_OUT};
 
 // Camera keyframes in clip time: [t, centerX, centerY, scale] in 1600x900 window coords.
-const FULL=[800,450,1], URLBAR=[955,326,1.38], RESP=[970,540,1.25], PALETTE=[800,300,1.5], ENVRESP=[895,452,1.15], RUNNER=[985,346,1.3];
+// 사이드바를 제외하고 Help/Runner 제목 앞에 여백을 남긴다 (보이는 원본 범위 x=350..1600).
+const FULL=[800,450,1], URLBAR=[975,351.5625,1.28], RESP=[970,540,1.25], PALETTE=[800,300,1.5], ENVRESP=[895,452,1.15], RUNNER=[975,351.5625,1.28];
 const CAM=C?[
   [0,...FULL],[M('click-url')+.1,...FULL],[M('click-url')+.9,...URLBAR],
   [M('send-1')+CLICK_DELAY+.5,...URLBAR],[M('response-1')+.5,...RESP],

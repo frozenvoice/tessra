@@ -5,6 +5,7 @@
 - `tessra-promo.html`: the composition. Intro, manifesto, feature grid and end card are HTML animation. The middle section is **real footage** of the extension recorded in a VS Code Extension Development Host. Open with `?play` to preview in a browser, or `?t=12.5` to view one moment (needs the capture below).
 - `capture/`: Playwright script that packages this repo as a VSIX, installs it into a clean VS Code 1.99.3 (so the title bar reads like a normal install, not a development host), seeds a demo collection plus `local` / `staging` environments, runs two tiny local APIs (`capture/demoServer.ts`), and records the window with a CDP screencast.
 - `render.cjs`: renders the HTML frame by frame (Playwright + ffmpeg), then muxes the soundtrack. `--audio-only` reuses the last picture and rebuilds only the sound.
+- `check-camera.cjs`: projects the recorded Help, Runner title and Total label bounds through the actual composition transform, saves representative frames, and fails if any label crosses the footage viewport.
 - `soundtrack.cjs`: synthesizes the music and UI sound effects in code from the video's cue sheet (`window.TIMELINE`). There are no third-party audio assets, so there are no licensing concerns. The drop lands on the first footage frame; key ticks, clicks and success/failure chimes follow the recorded events.
 
 ## Rebuild
@@ -17,6 +18,24 @@ node demo/promo/render.cjs
 ```
 
 The capture writes a JPEG frame sequence plus timing marks to `demo/promo/.capture/session/` (git-ignored, about 170MB). The composition reads those marks from `clip.js`, so captions, camera zoom, the pointer and key hints stay in sync after a re-record. `ffmpeg` needs libx264 (`scoop install ffmpeg` on Windows).
+
+## Local preview and camera checks
+
+Keep unpublished media under the ignored `.capture/preview/` directory. The URL and Runner cameras show source x=350..1600 at 1.28× zoom, leaving room before Help, Run: Demo API and Total while retaining the right-side action buttons and excluding sidebar text. Their prior crops started at x=375.3 and x=369.6 respectively.
+
+To reuse an already validated VSIX without invoking package/build again (PowerShell):
+
+```powershell
+$env:PROMO_VSIX = (Resolve-Path 'tmp/tessra-validated.vsix').Path
+npx playwright test -c demo/promo/capture/playwright.config.ts
+Remove-Item Env:PROMO_VSIX
+node demo/promo/check-camera.cjs
+node demo/promo/render.cjs --preview
+```
+
+`PROMO_VSIX` must name an existing `.vsix` file; an invalid value fails instead of falling back to a rebuild. Without it, the original packaging workflow still applies. The capture now records actual label bounds in `clip.json` for geometry checks. `check-camera.cjs --source path/to/old-composition.html --out demo/promo/.capture/preview/before/geometry.json` compares an earlier camera against the same recording.
+
+`--preview` writes `demo/promo/.capture/preview/tessra-promo-preview.mp4` at 1280×720 / 15fps with the full recorded timeline and soundtrack. Use `--fps 30 --width 1920` for a full-resolution preview. `--stills` writes full-resolution PNGs under `.capture/preview/stills/`; override with `--stills-dir` if needed. Review the geometry JSON and representative images before separately deploying media and changing public README links.
 
 ## What is real, what is added
 
