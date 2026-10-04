@@ -161,7 +161,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - 요청 패널 시각 계약은 `DESIGN.md` Quiet Instrument; 제품 범위는 `PRODUCT.md`
 - HTTP 요청 실행은 `src/services/HttpService.ts`
 - WebSocket 프레임/handshake 처리는 Node.js 내장 `net` / `tls` 기반 `src/services/WebSocketService.ts`에서 담당한다
-- storage는 `src/services/StorageService.ts`. History는 파일 경로별 immutable snapshot과 count를 재사용하며 매 조회에서 metadata로 외부 변경·삭제·복원을 확인한다. 수정용 `getHistory()`는 중첩 복사본을 반환한다. 저장은 요청 완료 시 동기식 임시 파일+rename을 유지하며 성공 후에만 snapshot을 갱신한다.
+- storage는 `src/services/StorageService.ts`. History는 파일 경로별 immutable snapshot과 count를 재사용하며 매 조회에서 metadata로 외부 변경·삭제·복원을 확인한다. 수정용 `getHistory()`는 중첩 복사본을 반환한다. 저장은 요청 완료 시 동기식 임시 파일+rename을 유지하며 성공 후 캐시를 무효화한다. 다음 조회에서 실제 파일을 읽고 검증한 snapshot을 생성하며, 저장했던 메모리 내용에 외부 교체 파일의 metadata를 연결하지 않는다.
 - scripts는 `src/services/ScriptRunner.ts`
 - import/export는 `src/services/ImportExportService.ts`
 - compare는 `src/services/ResponseCompareService.ts`

@@ -63,7 +63,101 @@ describe('History storage snapshots', () => {
 
   function write(entries: HistoryEntry[]): void { fs.writeFileSync(historyPath, JSON.stringify(entries), 'utf8'); }
 
-  it('reads/parses a cold file once and reuses it across consecutive synchronous completions', () => {
+  function saveAndReplace(entries: HistoryEntry[], externalRaw: string, timing: 'before-return' | 'after-return'): void {
+    const replacement = path.join(directory, 'external-history.json');
+    fs.writeFileSync(replacement, externalRaw, 'utf8');
+    const realRename = nativeFs.renameSync;
+    let replaced = false;
+    nativeFs.renameSync = ((from: fs.PathLike, to: fs.PathLike) => {
+      realRename(from, to);
+      if (timing === 'before-return' && to === historyPath && !replaced) {
+        assert.deepStrictEqual(JSON.parse(fs.readFileSync(historyPath, 'utf8')), entries);
+        // 실제 로컬 rename 완료와 저장 후 metadata 조회 사이에 외부 writer를 실행한다.
+        realRename(replacement, historyPath);
+        replaced = true;
+      }
+    }) as typeof fs.renameSync;
+    try {
+      storage.saveHistory(entries);
+    } finally { nativeFs.renameSync = realRename; }
+    if (timing === 'after-return') {
+      realRename(replacement, historyPath);
+      replaced = true;
+    }
+    assert.ok(replaced, 'external replacement must actually reach the filesystem');
+    assert.strictEqual(fs.readFileSync(historyPath, 'utf8'), externalRaw);
+  }
+
+  for (const timing of ['before-return', 'after-return'] as const) {
+    it(`reads an external replacement ${timing} and preserves its unique entry on the next completion`, () => {
+      storage.saveHistory([entry('history-a')]);
+      const initial = storage.getHistorySnapshot();
+      const local = [entry('history-b')];
+      const external = [entry('external-c'), ...local];
+      saveAndReplace(local, JSON.stringify(external), timing);
+
+      const replaced = storage.getHistorySnapshot();
+      assert.notStrictEqual(replaced, initial);
+      const mutable = storage.getHistory();
+      storage.addHistoryEntry(entry('local-d'));
+      const persisted = JSON.parse(fs.readFileSync(historyPath, 'utf8')) as HistoryEntry[];
+      assert.deepStrictEqual(persisted.map((item) => item.id), ['local-d', 'external-c', 'history-b']);
+      assert.deepStrictEqual(replaced.entries.map((item) => item.id), ['external-c', 'history-b'],
+        'the snapshot must contain C, not stale B');
+      assert.strictEqual(replaced.entries[0].request.url, external[0].request.url);
+      assert.deepStrictEqual(mutable, replaced.entries);
+    });
+
+    for (const [kind, broken] of [['invalid JSON', '{invalid'], ['invalid structure', '[{"id":"broken"}]']]) {
+      it(`detects ${kind} replaced ${timing}, preserves it and blocks writes until recovery`, () => {
+        storage.saveHistory([entry('healthy')]);
+        const healthy = storage.getHistorySnapshot();
+        saveAndReplace([entry('local-b')], broken, timing);
+
+        const corrupted = storage.getHistorySnapshot();
+        assert.notStrictEqual(corrupted, healthy);
+        assert.deepStrictEqual(corrupted.entries, [], 'stale healthy history must not hide corruption');
+        assert.strictEqual(warnings.length, 1);
+        assert.match(warnings[0], /history\.json/);
+        const backups = fs.readdirSync(directory).filter((name) => name.startsWith('history.json.corrupt-'));
+        assert.strictEqual(backups.length, 1);
+        assert.strictEqual(fs.readFileSync(path.join(directory, backups[0]), 'utf8'), broken);
+        assert.strictEqual(storage.getHistorySnapshot(), corrupted);
+        assert.throws(() => storage.saveHistory([]), /history\.json/);
+        assert.strictEqual(storage.addHistoryEntry(entry('blocked')), 0);
+        assert.strictEqual(fs.readFileSync(historyPath, 'utf8'), broken);
+        assert.strictEqual(warnings.length, 1, 'cached corrupt reads must not duplicate warnings');
+
+        write([entry('recovered')]);
+        assert.strictEqual(storage.getHistory()[0].id, 'recovered');
+        storage.addHistoryEntry(entry('after-recovery'));
+        assert.deepStrictEqual((JSON.parse(fs.readFileSync(historyPath, 'utf8')) as HistoryEntry[])
+          .map((item) => item.id), ['after-recovery', 'recovered']);
+        assert.strictEqual(fs.readFileSync(path.join(directory, backups[0]), 'utf8'), broken);
+      });
+    }
+  }
+
+  it('reuses the identical snapshot without reads or parses while the file stays unchanged', () => {
+    write([entry('unchanged')]);
+    const snapshot = storage.getHistorySnapshot();
+    const realRead = nativeFs.readFileSync;
+    const realParse = JSON.parse;
+    let reads = 0;
+    let parses = 0;
+    nativeFs.readFileSync = ((file: fs.PathOrFileDescriptor, ...args: unknown[]) => {
+      if (file === historyPath) reads++;
+      return (realRead as (...args: unknown[]) => unknown)(file, ...args);
+    }) as typeof fs.readFileSync;
+    JSON.parse = ((...args: Parameters<typeof JSON.parse>) => { parses++; return realParse(...args); }) as typeof JSON.parse;
+    try {
+      for (let index = 0; index < 10; index++) assert.strictEqual(storage.getHistorySnapshot(), snapshot);
+      assert.strictEqual(reads, 0);
+      assert.strictEqual(parses, 0);
+    } finally { nativeFs.readFileSync = realRead; JSON.parse = realParse; }
+  });
+
+  it('reads/parses a cold file and each completed save once, reusing all intervening reads', () => {
     write([entry('initial')]);
     const realRead = nativeFs.readFileSync;
     const realParse = JSON.parse;
@@ -75,15 +169,26 @@ describe('History storage snapshots', () => {
     }) as typeof fs.readFileSync;
     JSON.parse = ((...args: Parameters<typeof JSON.parse>) => { parses++; return realParse(...args); }) as typeof JSON.parse;
     try {
+      assert.strictEqual(storage.getHistorySnapshot().count, 1);
+      assert.strictEqual(reads, 1);
+      assert.strictEqual(parses, 1);
       for (let index = 0; index < 5; index++) {
         storage.addHistoryEntry(entry(`completed-${index}`));
-        assert.strictEqual(storage.getHistorySnapshot().count, index + 2);
+        assert.strictEqual(reads, index + 1, 'saving reuses the current validated snapshot');
+        assert.strictEqual(parses, index + 1);
+        const snapshot = storage.getHistorySnapshot();
+        assert.strictEqual(snapshot.count, index + 2);
+        assert.strictEqual(reads, index + 2, 'the first read after saving must validate disk contents');
+        assert.strictEqual(parses, index + 2);
+        assert.strictEqual(storage.getHistorySnapshot(), snapshot);
         assert.strictEqual(storage.getHistory()[0].id, `completed-${index}`);
+        assert.strictEqual(reads, index + 2, 'unchanged snapshots and mutable copies must reuse the cache');
+        assert.strictEqual(parses, index + 2);
         const persisted = realParse(realRead(historyPath, 'utf8')) as HistoryEntry[];
         assert.strictEqual(persisted[0].id, `completed-${index}`, 'completion has already reached disk');
       }
-      assert.strictEqual(reads, 1);
-      assert.strictEqual(parses, 1);
+      assert.strictEqual(reads, 6);
+      assert.strictEqual(parses, 6);
     } finally {
       nativeFs.readFileSync = realRead;
       JSON.parse = realParse;

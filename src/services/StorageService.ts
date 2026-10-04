@@ -872,19 +872,11 @@ export class StorageService {
     const current = this.getHistorySnapshot();
     // 외부 손상도 쓰기 전에 검증한다. 정상 복구/삭제가 읽혔을 때만 보호가 해제된다.
     this.requireRecoveredJson(current.filePath);
-    const snapshot = this.createHistorySnapshot(current.filePath,
-      this.normalizeHistoryArray(this.copyHistoryValue(history), 'History'));
+    this.normalizeHistoryArray(this.copyHistoryValue(history), 'History');
     this.writeJson(current.filePath, history);
-    // 디스크 저장이 성공한 뒤에만 새 상태를 공개한다. 실패한 쓰기는 이전 snapshot을 유지한다.
+    // 저장 직후 외부 교체가 가능하므로 다음 읽기에서 실제 내용과 metadata를 함께 검증한다.
+    // 실패한 쓰기는 이전 snapshot을 유지한다.
     this.historySnapshots.delete(current.filePath);
-    try {
-      const fingerprint = this.getHistoryFingerprint(current.filePath);
-      if (fingerprint !== 'missing') {
-        this.historySnapshots.set(current.filePath, { fingerprint, snapshot });
-      }
-    } catch {
-      // 저장은 완료됐다. metadata 조회 실패 시 다음 조회에서 다시 검증한다.
-    }
   }
 
   private getHistoryFingerprint(filePath: string): string {
