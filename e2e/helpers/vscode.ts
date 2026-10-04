@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { downloadAndUnzipVSCode } from '@vscode/test-electron';
+import { downloadAndUnzipVSCode, runVSCodeCommand } from '@vscode/test-electron';
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import { ARTIFACTS_DIR, REPO_ROOT, VSCODE_E2E_VERSION } from './paths';
 import { seedTessraStorage } from '../fixtures/seed';
@@ -22,7 +22,11 @@ function rmrf(target: string): void {
   fs.rmSync(target, { recursive: true, force: true });
 }
 
-export async function launchTessraHarness(testId: string): Promise<TessraHarness> {
+export async function launchTessraHarness(testId: string, options: { userSettings?: Record<string, unknown> } = {}): Promise<TessraHarness> {
+  const vsixPath = process.env.TESSRA_E2E_VSIX ? path.resolve(process.env.TESSRA_E2E_VSIX) : undefined;
+  if (vsixPath && (!vsixPath.toLowerCase().endsWith('.vsix') || !fs.statSync(vsixPath).isFile())) {
+    throw new Error(`TESSRA_E2E_VSIX must point to a local VSIX file: ${vsixPath}`);
+  }
   fs.mkdirSync(ARTIFACTS_DIR, { recursive: true });
   const runRoot = fs.mkdtempSync(path.join(os.tmpdir(), `tessra-e2e-${testId}-`));
   const userDataDir = path.join(runRoot, 'user-data');
@@ -34,15 +38,28 @@ export async function launchTessraHarness(testId: string): Promise<TessraHarness
   fs.writeFileSync(path.join(workspaceDir, 'README.md'), '# Tessra E2E workspace\n', 'utf8');
 
   const server = await startFixtureServer({ slowMs: 3000 });
-  seedTessraStorage({ userDataDir, baseUrl: server.baseUrl });
+  seedTessraStorage({ userDataDir, baseUrl: server.baseUrl, userSettings: options.userSettings });
 
   const executablePath = await downloadAndUnzipVSCode(VSCODE_E2E_VERSION);
+  if (vsixPath) {
+    try {
+      // 설치 검증도 사용자 프로필 대신 매 테스트의 격리 디렉터리만 사용한다.
+      await runVSCodeCommand([
+        '--install-extension', vsixPath,
+        `--user-data-dir=${userDataDir}`,
+        `--extensions-dir=${extensionsDir}`,
+      ], { version: VSCODE_E2E_VERSION, spawn: { windowsHide: true } });
+    } catch (error) {
+      await server.close();
+      rmrf(runRoot);
+      throw error;
+    }
+  }
   const args = [
     workspaceDir,
-    `--extensionDevelopmentPath=${REPO_ROOT}`,
+    ...(vsixPath ? [] : [`--extensionDevelopmentPath=${REPO_ROOT}`, '--disable-extensions']),
     `--user-data-dir=${userDataDir}`,
     `--extensions-dir=${extensionsDir}`,
-    '--disable-extensions',
     '--disable-workspace-trust',
     '--skip-welcome',
     '--skip-release-notes',

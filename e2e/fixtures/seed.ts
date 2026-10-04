@@ -5,6 +5,7 @@ export interface SeedOptions {
   userDataDir: string;
   baseUrl: string;
   extensionStorageId?: string;
+  userSettings?: Record<string, unknown>;
 }
 
 function kv(key: string, value: string) {
@@ -96,6 +97,7 @@ export function seedTessraStorage(options: SeedOptions): string {
         'extensions.autoCheckUpdates': false,
         'update.mode': 'none',
         'workbench.startupEditor': 'none',
+        ...options.userSettings,
       },
       null,
       2

@@ -3,11 +3,13 @@ import { captureFailureArtifacts, launchTessraHarness, type TessraHarness } from
 
 type TessraFixtures = {
   tessra: TessraHarness;
+  userSettings: Record<string, unknown>;
 };
 
 export const test = base.extend<TessraFixtures>({
-  tessra: async ({}, use, testInfo) => {
-    const harness = await launchTessraHarness(`${testInfo.parallelIndex}`);
+  userSettings: [{}, { option: true }],
+  tessra: async ({ userSettings }, use, testInfo) => {
+    const harness = await launchTessraHarness(`${testInfo.parallelIndex}`, { userSettings });
     await use(harness);
     if (testInfo.status !== testInfo.expectedStatus) {
       await captureFailureArtifacts(harness, testInfo.title);
