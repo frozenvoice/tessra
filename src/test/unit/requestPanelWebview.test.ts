@@ -2136,7 +2136,7 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /responseTabMarkup\('resPreview', tr\('webview\.preview'\), showPreview, 'responsePreviewPanel'\)/);
     assert.match(script, /<div id="responsePreviewPanel" role="tabpanel" aria-labelledby="responseTab-resPreview"/);
     assert.match(script, /preview\.innerHTML = buildPreviewDocument\(tab\.response\.body \|\| '', tab\.resolvedUrl \|\| tab\.url \|\| ''\);/);
-    assert.match(script, /querySelectorAll\('script, style, noscript, iframe, object, embed, link, source, audio, video, track, base, meta\[http-equiv="refresh"\]'\)/);
+    assert.match(script, /querySelectorAll\('script, style, noscript, iframe, object, embed, link, source, audio, video, track, base, set, animate, meta\[http-equiv="refresh"\]'\)/);
     assert.match(script, /tf\('webview\.previewOfflineBlockedAssets', \{ count: String\(payload\.blockedAssets\) \}\)/);
     assert.match(script, /js-open-response-url/);
   });

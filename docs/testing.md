@@ -5,14 +5,14 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**23 tests in 22 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, and execution context isolation) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**24 tests in 23 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, execution context isolation, and HTML preview sanitization/CSP) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
 
 ## UI E2E prerequisites
 
-- Node 22+ (`@vscode/test-electron` requires Node 22; both CI jobs use Node 22)
+- Node 22+ (`@vscode/test-electron` requires Node 22; all CI jobs use Node 22)
 - Built extension: `npm run build`
 - First run downloads a pinned VS Code desktop build via `@vscode/test-electron` (default `1.99.3`, override with `VSCODE_E2E_VERSION`)
 - Windows local and Linux CI (xvfb) are supported
@@ -21,7 +21,7 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (23 tests in 22 files)
+npm run test:e2e         # stable VS Code UI E2E (24 tests in 23 files)
 npm run test:e2e:ui-regressions  # critical UI contracts (#18/#19/#20): narrow geometry + path occurrence resolution + body scroll ownership
 npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
 npm run test:e2e:all     # stable suite then focused runner suite
@@ -30,6 +30,8 @@ npm run test:all         # unit + stable E2E
 ```
 
 `npm run ci` stays unit/typecheck/build only. GitHub Actions e2e job runs `test:e2e:ui-regressions` (named critical UI regression contracts) then `test:e2e:ci`.
+
+CI also runs `npm test` on Windows. All jobs cache npm downloads; concurrency cancels older runs for the same PR or branch. Push and pull-request triggers have no path filter because unit tests also read guides, localization JSON, and E2E configuration/helpers/specs outside `src/`.
 
 Do **not** add a bare `**/runner/**` Playwright `testIgnore` — GitHub Actions absolute paths contain `/home/runner/work/...` and that pattern would drop every stable spec (`No tests found`). Collection Runner specs live under `e2e/specs/runner/` and are part of the default suite.
 
@@ -89,6 +91,8 @@ Response keyboard E2E (#21) checks roving tabindex, Arrow/Home/End navigation, s
 
 Execution context E2E (#23) holds a real HTTP response in the local `/held` fixture, switches environments, and checks the new environment remains unchanged. It then switches profiles while another response is held and confirms late completion cannot populate the new profile's history or restored tabs. The fixture controls response completion; production code has no test backdoor.
 
+HTML preview E2E (#24) serves hostile and ordinary markup from a local fixture. It checks dangerous tags, consecutive event attributes, external HTML/SVG URLs (including SMIL animated links), the blocked-asset count, and nonce CSP enforcement in the real webview while preserving static content, rendered embedded images, and fragment links. Unit tests execute the generated sanitizer helpers against live attribute lists.
+
 ### Execution and data regression tests
 
 `scriptUtilities.test.ts` runs the real `ScriptRunner` in both pre-request and test phases. It covers SHA-256/HMAC known vectors, Unicode and block boundaries, primitive coercion, invalid inputs, Base64 padding/whitespace, UUID pool format/exhaustion, and Unix timestamps. Expected hashes and encodings come from Node built-ins in the test process only; no host utility functions are passed into the script realm.
@@ -126,7 +130,7 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 3. Reuse `e2e/helpers/*` and the local fixture server.
 4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
 5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
-6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **23 tests** (or intentionally adjust the count here).
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **24 tests** (or intentionally adjust the count here).
 7. Layout / variable-resolution / scroll-ownership regressions that users can see immediately should also stay in `npm run test:e2e:ui-regressions` (#18/#19/#20).
 
 ### Native file dialogs (`.env` import)

@@ -198,7 +198,7 @@ Quiet Instrument layout and Body workflows. Keep as a deeper regression pass whe
 ## Response Experience
 
 - Verify response body modes: Raw, Pretty, JSON tree, XML path view, Cookies, Headers, Tests, and HTML Preview.
-- Confirm HTML preview blocks external scripts, styles, images, iframes, embeds, media, refresh meta tags, and base tags.
+- Confirm HTML preview blocks external scripts, styles, images, iframes, embeds, media, refresh meta tags, base tags, consecutive event attributes, SVG external links and animated URL changes, and HTML background/ping URLs, while preserving static content, embedded images, and fragment links (automated: `24-html-preview.spec.ts`).
 - Confirm response find supports plain text, case-sensitive search, regex search, previous/next, clear, and persisted state.
 - Copy response body, URL, status, headers, JSONPath, XPath, and cURL.
 - Save a response body to disk.

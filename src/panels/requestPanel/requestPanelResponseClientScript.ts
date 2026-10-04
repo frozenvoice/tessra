@@ -479,14 +479,18 @@ function isPreviewSafeUrl(value) {
   return value.startsWith('#') || value.startsWith('data:') || value.startsWith('blob:');
 }
 
+function isPreviewUrlAttribute(name) {
+  return ['src', 'href', 'xlink:href', 'srcset', 'poster', 'action', 'formaction', 'background', 'ping'].indexOf(name) >= 0;
+}
+
 function countPreviewExternalAssets(doc) {
   var count = 0;
-  doc.querySelectorAll('[src],[href],[srcset],[poster],[action],[formaction]').forEach(function(el) {
+  doc.querySelectorAll('*').forEach(function(el) {
     Array.from(el.attributes).forEach(function(attr) {
       var name = attr.name.toLowerCase();
-      if (['src', 'href', 'srcset', 'poster', 'action', 'formaction'].indexOf(name) === -1) return;
+      if (!isPreviewUrlAttribute(name)) return;
       var value = String(attr.value || '').trim();
-      if (!value || isPreviewSafeUrl(value)) return;
+      if (!value || (name !== 'ping' && isPreviewSafeUrl(value))) return;
       count += 1;
     });
   });
@@ -494,18 +498,18 @@ function countPreviewExternalAssets(doc) {
 }
 
 function sanitizePreviewDocument(doc) {
-  doc.querySelectorAll('script, style, noscript, iframe, object, embed, link, source, audio, video, track, base, meta[http-equiv="refresh"]').forEach(function(node) {
+  doc.querySelectorAll('script, style, noscript, iframe, object, embed, link, source, audio, video, track, base, set, animate, meta[http-equiv="refresh"]').forEach(function(node) {
     node.remove();
   });
   doc.querySelectorAll('*').forEach(function(el) {
     Array.from(el.attributes).forEach(function(attr) {
       var name = attr.name.toLowerCase();
       var value = String(attr.value || '').trim();
-      if (name.startsWith('on') || name === 'style' || name === 'srcset') {
+      if (name.startsWith('on') || name === 'style' || name === 'srcset' || name === 'ping') {
         el.removeAttribute(attr.name);
         return;
       }
-      if (['src', 'href', 'poster', 'action', 'formaction'].indexOf(name) >= 0 && value && !isPreviewSafeUrl(value)) {
+      if (isPreviewUrlAttribute(name) && value && !isPreviewSafeUrl(value)) {
         el.removeAttribute(attr.name);
       }
     });
@@ -579,7 +583,7 @@ function buildPreviewDocument(rawHtml, resolvedUrl) {
       '</div>' +
       '<div class="preview-card">' +
         '<div class="preview-card-label">' + escapeHtml(blockedAssetsLabel) + '</div>' +
-        '<div class="preview-card-value">' + escapeHtml(String(payload.blockedAssets)) + '</div>' +
+        '<div class="preview-card-value" data-testid="preview-blocked-assets">' + escapeHtml(String(payload.blockedAssets)) + '</div>' +
       '</div>' +
     '</div>' +
     '<div class="preview-section">' +
