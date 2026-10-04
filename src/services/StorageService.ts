@@ -51,6 +51,13 @@ export interface EnvironmentVariableChangesResult {
   appliedKeys: string[];
 }
 
+// 조회용 snapshot은 내부 중첩 객체까지 동결한다. 수정하려면 getHistory()의 복사본을 사용한다.
+export interface HistorySnapshot {
+  readonly filePath: string;
+  readonly entries: readonly HistoryEntry[];
+  readonly count: number;
+}
+
 // globalStorage 경로에 JSON 파일로 데이터 영속화
 export class StorageService {
   private static readonly DEFAULT_PROFILE_NAME = 'default';
@@ -79,6 +86,7 @@ export class StorageService {
   private migratedLegacyStorage = false;
   private legacyMigrationError: string | null = null;
   private readonly corruptJsonWarnings = new Set<string>();
+  private readonly historySnapshots = new Map<string, { fingerprint: string; snapshot: HistorySnapshot }>();
 
   constructor(context: vscode.ExtensionContext) {
     this.rootStoragePath = context.globalStorageUri.fsPath;
@@ -832,13 +840,81 @@ export class StorageService {
   // === 히스토리 ===
 
   getHistory(): HistoryEntry[] {
-    return this.readJson<HistoryEntry[]>(this.resolveFilePath('history.json'), [], (value) =>
-      this.normalizeHistoryArray(value, 'History')
-    );
+    return this.copyHistoryValue(this.getHistorySnapshot().entries) as HistoryEntry[];
+  }
+
+  getHistorySnapshot(): HistorySnapshot {
+    const filePath = this.resolveFilePath('history.json');
+    try {
+      const fingerprint = this.getHistoryFingerprint(filePath);
+      const cached = this.historySnapshots.get(filePath);
+      if (cached?.fingerprint === fingerprint) { return cached.snapshot; }
+
+      const history = this.readJson<HistoryEntry[]>(filePath, [], (value) =>
+        this.normalizeHistoryArray(value, 'History')
+      );
+      const snapshot = this.createHistorySnapshot(filePath, history);
+      // 읽는 동안 외부에서 교체한 파일의 새 metadata를 이전 내용에 연결하지 않는다.
+      if (fingerprint === this.getHistoryFingerprint(filePath)) {
+        this.historySnapshots.set(filePath, { fingerprint, snapshot });
+      } else {
+        this.historySnapshots.delete(filePath);
+      }
+      return snapshot;
+    } catch (error: unknown) {
+      this.historySnapshots.delete(filePath);
+      this.handleCorruptJson(filePath, error);
+      return this.createHistorySnapshot(filePath, []);
+    }
   }
 
   saveHistory(history: HistoryEntry[]): void {
-    this.writeJson(this.resolveFilePath('history.json'), history);
+    const current = this.getHistorySnapshot();
+    // 외부 손상도 쓰기 전에 검증한다. 정상 복구/삭제가 읽혔을 때만 보호가 해제된다.
+    this.requireRecoveredJson(current.filePath);
+    const snapshot = this.createHistorySnapshot(current.filePath,
+      this.normalizeHistoryArray(this.copyHistoryValue(history), 'History'));
+    this.writeJson(current.filePath, history);
+    // 디스크 저장이 성공한 뒤에만 새 상태를 공개한다. 실패한 쓰기는 이전 snapshot을 유지한다.
+    this.historySnapshots.delete(current.filePath);
+    try {
+      const fingerprint = this.getHistoryFingerprint(current.filePath);
+      if (fingerprint !== 'missing') {
+        this.historySnapshots.set(current.filePath, { fingerprint, snapshot });
+      }
+    } catch {
+      // 저장은 완료됐다. metadata 조회 실패 시 다음 조회에서 다시 검증한다.
+    }
+  }
+
+  private getHistoryFingerprint(filePath: string): string {
+    try {
+      const stat = fs.statSync(filePath, { bigint: true });
+      return [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(':');
+    } catch (error: unknown) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT' || code === 'ENOTDIR') { return 'missing'; }
+      throw error;
+    }
+  }
+
+  private createHistorySnapshot(filePath: string, entries: HistoryEntry[]): HistorySnapshot {
+    this.freezeHistoryValue(entries);
+    return Object.freeze({ filePath, entries, count: entries.length });
+  }
+
+  private freezeHistoryValue(value: unknown): void {
+    if (!value || typeof value !== 'object' || Object.isFrozen(value)) { return; }
+    Object.freeze(value);
+    for (const child of Object.values(value)) { this.freezeHistoryValue(child); }
+  }
+
+  private copyHistoryValue<T>(value: T): T {
+    if (Array.isArray(value)) { return value.map((child) => this.copyHistoryValue(child)) as T; }
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, this.copyHistoryValue(child)])) as T;
+    }
+    return value;
   }
 
   addHistoryEntry(entry: HistoryEntry): number {

@@ -76,18 +76,16 @@ export function activate(context: vscode.ExtensionContext) {
     collectionTreeView.description = parts.length > 0 ? parts.join(' | ') : undefined;
   }
 
-  function updateHistoryDescription(): void {
-    const count = storage.getHistory().length;
-    const visible = historyProvider.visibleCount;
+  function updateHistoryDescription(counts = historyProvider.getCounts()): void {
+    const { total: count, visible } = counts;
     const filter = historyProvider.filterText.trim();
     const parts: string[] = [];
     if (count > 0) { parts.push(filter ? `${visible}/${count}` : String(count)); }
     if (filter) { parts.push(filter); }
     historyTreeView.description = parts.length > 0 ? parts.join(' | ') : undefined;
   }
-  historyProvider.onCountChanged = () => updateHistoryDescription();
+  historyProvider.onCountChanged = (total, visible) => updateHistoryDescription({ total, visible });
   collectionProvider.onDidChangeTreeData(() => updateCollectionDescription());
-  historyProvider.onDidChangeTreeData(() => updateHistoryDescription());
   updateCollectionDescription();
   updateHistoryDescription();
   const environmentTreeView = vscode.window.createTreeView('tessra-environments', {
@@ -144,7 +142,6 @@ export function activate(context: vscode.ExtensionContext) {
     historyProvider.refresh();
     environmentProvider.refresh();
     updateCollectionDescription();
-    updateHistoryDescription();
     updateStatusBar(envStatusBar, environmentProvider);
 
     if (options.reloadPanel) {
@@ -754,7 +751,6 @@ export function activate(context: vscode.ExtensionContext) {
       inputBox.title = t('filter.history.title');
       inputBox.onDidChangeValue((value) => {
         historyProvider.filterText = value;
-        updateHistoryDescription();
         vscode.commands.executeCommand('setContext', 'tessra.historyFilterActive', !!value);
       });
       inputBox.onDidAccept(() => inputBox.hide());
@@ -766,7 +762,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('tessra.clearHistoryFilter', () => {
       historyProvider.filterText = '';
-      updateHistoryDescription();
       vscode.commands.executeCommand('setContext', 'tessra.historyFilterActive', false);
     })
   );

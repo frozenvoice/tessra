@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { StorageService } from '../services/StorageService';
+import { HistorySnapshot, StorageService } from '../services/StorageService';
 import { HistoryEntry } from '../models/types';
 import { LocalizationService } from '../services/LocalizationService';
 import { buildHistoryDescription, buildHistoryTooltip, getRequestMethodIcon } from './requestTreeVisuals';
@@ -41,14 +41,23 @@ export class HistoryTreeProvider
     this.refresh();
   }
 
-  onCountChanged: ((count: number) => void) | undefined;
+  private snapshot: HistorySnapshot | undefined;
+  private filteredText = '';
+  private filteredEntries: HistoryEntry[] = [];
+
+  onCountChanged: ((count: number, visibleCount: number) => void) | undefined;
 
   constructor(private storage: StorageService) {}
 
   refresh(): void {
+    // 이벤트 전에 같은 snapshot의 건수를 확정해 설명 라벨과 트리를 맞춘다.
+    this.getFilteredEntries();
     this._onDidChangeTreeData.fire(undefined);
-    const count = this.storage.getHistory().length;
-    this.onCountChanged?.(count);
+  }
+
+  getCounts(): { total: number; visible: number } {
+    const visible = this.getFilteredEntries().length;
+    return { total: this.snapshot!.count, visible };
   }
 
   get visibleCount(): number {
@@ -93,18 +102,24 @@ export class HistoryTreeProvider
 
   getChildren(element?: HistoryTreeNode): HistoryTreeNode[] {
     if (this.isGroupNode(element)) {
-      return element.entries;
+      // 프로필 전환 전에 받은 group node도 현재 파일의 항목으로 다시 해석한다.
+      return this.groupEntries(this.getFilteredEntries()).find((group) => group.id === element.id)?.entries ?? [];
     }
     return this.groupEntries(this.getFilteredEntries());
   }
 
   private getFilteredEntries(): HistoryEntry[] {
-    let entries = this.storage.getHistory();
-    const filter = this.parseFilter(this._filterText);
-    if (this.hasActiveFilter(filter)) {
-      entries = entries.filter((entry) => this.matchesEntry(entry, filter));
+    const snapshot = this.storage.getHistorySnapshot();
+    if (snapshot !== this.snapshot || this.filteredText !== this._filterText) {
+      const filter = this.parseFilter(this._filterText);
+      this.filteredEntries = this.hasActiveFilter(filter)
+        ? snapshot.entries.filter((entry) => this.matchesEntry(entry, filter))
+        : [...snapshot.entries];
+      this.snapshot = snapshot;
+      this.filteredText = this._filterText;
+      this.onCountChanged?.(snapshot.count, this.filteredEntries.length);
     }
-    return entries;
+    return this.filteredEntries;
   }
 
   private groupEntries(entries: HistoryEntry[]): HistoryGroupNode[] {
