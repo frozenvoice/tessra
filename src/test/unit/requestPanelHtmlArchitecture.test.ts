@@ -33,6 +33,18 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10/11 split)', 
     assert.doesNotMatch(html, /acquireVsCodeApi\(\)/);
   });
 
+  it('loads the browser preview asset before the inline client and keeps only adapters in the string fragment', () => {
+    const html = read('src/panels/requestPanel/requestPanelHtml.ts');
+    const response = read('src/panels/requestPanel/requestPanelResponseClientScript.ts');
+    assert.match(html, /const htmlPreviewUri = webview\.asWebviewUri\(\s*vscode\.Uri\.joinPath\(extensionUri, 'dist', 'htmlPreview\.js'\)/);
+    const asset = html.indexOf('<script nonce="${nonce}" src="${htmlPreviewUri}"></script>');
+    const inline = html.indexOf('<script nonce="${nonce}">');
+    assert.ok(asset >= 0 && inline > asset, 'the real preview module must load before draft/response restoration');
+    assert.match(response, /TessraHtmlPreview\.hasMeaningfulStaticPreview\(/);
+    assert.match(response, /TessraHtmlPreview\.syncPreviewFrame\(/);
+    assert.doesNotMatch(response, /function (?:sanitizePreviewDocument|buildPreviewPayload|buildPreviewDocument|buildPreviewDocKey)\(/);
+  });
+
   it('ships dedicated styles, markup, client script, Body, Response, Runner, Environment, Default Headers, Status, WebSocket, Auth, Scripts, and Settings client modules', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelStyles.ts')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'src/panels/requestPanel/requestPanelMarkup.ts')));

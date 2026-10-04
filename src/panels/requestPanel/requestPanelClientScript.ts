@@ -875,21 +875,6 @@ function renderRequestPreflight(tab) {
   '</div>';
 }
 
-function collapseWhitespace(text) {
-  var cr = String.fromCharCode(13);
-  var lf = String.fromCharCode(10);
-  var tab = String.fromCharCode(9);
-  var ff = String.fromCharCode(12);
-  return String(text || '')
-    .split(cr).join(' ')
-    .split(lf).join(' ')
-    .split(tab).join(' ')
-    .split(ff).join(' ')
-    .split(' ')
-    .filter(function(part) { return part.length > 0; })
-    .join(' ');
-}
-
 function formatShortTime(date) {
   try {
     return new Intl.DateTimeFormat(appDateLocale, {

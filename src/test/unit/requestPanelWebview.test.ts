@@ -459,7 +459,8 @@ function extractHtmlTemplate(): string {
     '</head>\n',
     '<body data-panel-theme="${requestPanelTheme}">\n',
     markup,
-    '\n\n<script nonce="${nonce}">\n',
+    '\n\n<script nonce="${nonce}" src="${htmlPreviewUri}"></script>\n',
+    '<script nonce="${nonce}">\n',
     clientScript,
     '\n</script>\n',
     '<script nonce="${nonce}" src="${bodyConversionUri}"></script>\n',
@@ -496,6 +497,7 @@ function renderHtml(template: string): string {
     'nonce',
     'hljsUri',
     'bodyConversionUri',
+    'htmlPreviewUri',
     'displayLanguage',
     'requestPanelTheme',
     'sessionId',
@@ -509,6 +511,7 @@ function renderHtml(template: string): string {
     nonce: string,
     hljsUri: string,
     bodyConversionUri: string,
+    htmlPreviewUri: string,
     displayLanguage: string,
     requestPanelTheme: string,
     sessionId: string,
@@ -523,6 +526,7 @@ function renderHtml(template: string): string {
     'test-nonce',
     'hljs.js',
     'bodyConversion.js',
+    'htmlPreview.js',
     'en',
     'default',
     'test-session',
@@ -2123,21 +2127,20 @@ describe('RequestPanel Webview', () => {
   });
 
   it('opens HTML preview automatically when meaningful static HTML exists', () => {
-    assert.match(script, /function collapseWhitespace\(text\)/);
     assert.match(script, /function hasMeaningfulStaticPreview\(rawHtml\)/);
     assert.match(script, /function hasHtmlPreview\(tab\)/);
     assert.match(script, /tab\.responseTab = \(contentType\.indexOf\('html'\) >= 0 && hasMeaningfulStaticPreview\(msg\.response\.body \|\| ''\)\) \? 'resPreview' : 'resBody';/);
     assert.match(script, /function switchResponseTabInContent\(mc, tabName\)/);
     assert.match(script, /const tab = tabs\.find\(function\(tt\) \{ return tt\.id === activeTabId; \}\);[\s\S]*tab\.responseTab = tabName;/);
     assert.match(script, /switchResponseTabInContent\(mc, t\.dataset\.tab\);/);
-    assert.match(script, /function buildPreviewDocument\(rawHtml, resolvedUrl\)/);
+    assert.match(script, /TessraHtmlPreview\.hasMeaningfulStaticPreview\(rawHtml, getHtmlPreviewLocale\(\)\)/);
+    assert.match(script, /return \{ displayLanguage: currentDisplayLanguage, translate: tr, format: tf \};/);
     assert.match(script, /function syncPreviewFrame\(preview, tab\)/);
     assert.match(script, /const previewAvailable = lang === 'html' && hasHtmlPreview\(tab\);/);
     assert.match(script, /responseTabMarkup\('resPreview', tr\('webview\.preview'\), showPreview, 'responsePreviewPanel'\)/);
     assert.match(script, /<div id="responsePreviewPanel" role="tabpanel" aria-labelledby="responseTab-resPreview"/);
-    assert.match(script, /preview\.innerHTML = buildPreviewDocument\(tab\.response\.body \|\| '', tab\.resolvedUrl \|\| tab\.url \|\| ''\);/);
-    assert.match(script, /querySelectorAll\('script, style, noscript, iframe, object, embed, link, source, audio, video, track, base, set, animate, meta\[http-equiv="refresh"\]'\)/);
-    assert.match(script, /tf\('webview\.previewOfflineBlockedAssets', \{ count: String\(payload\.blockedAssets\) \}\)/);
+    assert.match(script, /TessraHtmlPreview\.syncPreviewFrame\(preview, tab, getHtmlPreviewLocale\(\)\);/);
+    assert.doesNotMatch(script, /function (?:collapseWhitespace|buildPreviewPayload|sanitizePreviewDocument|buildPreviewDocument)\(/);
     assert.match(script, /js-open-response-url/);
   });
 

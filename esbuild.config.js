@@ -40,21 +40,35 @@ const webviewBodyConversionOptions = {
   minify: true,
 };
 
+/** @type {import('esbuild').BuildOptions} */
+const webviewHtmlPreviewOptions = {
+  entryPoints: ['src/webview/htmlPreviewEntry.ts'],
+  bundle: true,
+  outfile: 'dist/htmlPreview.js',
+  format: 'iife',
+  platform: 'browser',
+  target: 'es2020',
+  sourcemap: false,
+  minify: true,
+};
+
 async function main() {
   if (isWatch) {
-    const [extCtx, hljsCtx, bodyConvCtx] = await Promise.all([
+    const [extCtx, hljsCtx, bodyConvCtx, htmlPreviewCtx] = await Promise.all([
       esbuild.context(extensionOptions),
       esbuild.context(webviewHljsOptions),
       esbuild.context(webviewBodyConversionOptions),
+      esbuild.context(webviewHtmlPreviewOptions),
     ]);
     console.log('[esbuild] build started');
-    await Promise.all([extCtx.watch(), hljsCtx.watch(), bodyConvCtx.watch()]);
+    await Promise.all([extCtx.watch(), hljsCtx.watch(), bodyConvCtx.watch(), htmlPreviewCtx.watch()]);
     console.log('[esbuild] watching...');
   } else {
     await Promise.all([
       esbuild.build(extensionOptions),
       esbuild.build(webviewHljsOptions),
       esbuild.build(webviewBodyConversionOptions),
+      esbuild.build(webviewHtmlPreviewOptions),
     ]);
     console.log('[esbuild] build complete');
   }

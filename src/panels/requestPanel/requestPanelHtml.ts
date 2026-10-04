@@ -24,6 +24,9 @@ export function getRequestPanelHtml(input: RequestPanelHtmlInput): string {
   const bodyConversionUri = webview.asWebviewUri(
     vscode.Uri.joinPath(extensionUri, 'dist', 'bodyConversion.js')
   );
+  const htmlPreviewUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, 'dist', 'htmlPreview.js')
+  );
   const displayLanguage = LocalizationService.getDisplayLanguage();
   const requestPanelTheme = LocalizationService.getRequestPanelTheme();
   const localizedStrings = JSON.stringify(LocalizationService.getStrings(displayLanguage)).replace(/</g, '\\u003c');
@@ -61,6 +64,7 @@ ${styles}
 <body data-panel-theme="${requestPanelTheme}">
 ${markup}
 
+<script nonce="${nonce}" src="${htmlPreviewUri}"></script>
 <script nonce="${nonce}">
 ${clientScript}
 </script>

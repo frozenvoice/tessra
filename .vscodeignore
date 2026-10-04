@@ -8,6 +8,7 @@ DESIGN.md
 PRODUCT.md
 AGENTS.md
 demo/**
+scripts/**
 src/**
 node_modules/**
 dist/test/**
@@ -16,6 +17,7 @@ e2e/**
 .vscode-test/**
 **/.artifacts/**
 tsconfig.json
+tsconfig.webview.json
 esbuild.config.js
 CLAUDE.md
 .gitignore

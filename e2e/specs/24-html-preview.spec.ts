@@ -63,6 +63,17 @@ test.describe('E2E #24 Offline HTML preview', () => {
       await waitForResponseStatus(frame, /^200/);
       const preview = frame.locator('#responsePreviewPanel');
       const snapshot = preview.locator('.preview-snapshot');
+      const previewScript = frame.locator('script[src*="/dist/htmlPreview.js"]');
+      await expect(previewScript).toHaveCount(1);
+      const previewAsset = await previewScript.evaluate((element) => {
+        const script = element as HTMLScriptElement;
+        const policy = script.ownerDocument.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content') || '';
+        return { url: script.src, nonce: script.nonce, policy };
+      });
+      expect(previewAsset.url).toMatch(/^https:\/\/[^/]+\.vscode-cdn\.net\//);
+      expect(previewAsset.url).toContain('/dist/htmlPreview.js');
+      expect(previewAsset.nonce).toBeTruthy();
+      expect(previewAsset.policy).toContain(`'nonce-${previewAsset.nonce}'`);
       await expect(preview).toBeVisible();
       await expect(frame.locator('[data-tab="resPreview"]')).toHaveAttribute('aria-selected', 'true');
       await expect(preview.locator('.preview-title')).toHaveText('Offline fixture preview');

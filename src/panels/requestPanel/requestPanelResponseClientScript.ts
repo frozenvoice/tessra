@@ -475,81 +475,12 @@ function renderInlineEmptyState(_kicker, title, copy) {
   '</div>';
 }
 
-function isPreviewSafeUrl(value) {
-  return value.startsWith('#') || value.startsWith('data:') || value.startsWith('blob:');
-}
-
-function isPreviewUrlAttribute(name) {
-  return ['src', 'href', 'xlink:href', 'srcset', 'poster', 'action', 'formaction', 'background', 'ping'].indexOf(name) >= 0;
-}
-
-function countPreviewExternalAssets(doc) {
-  var count = 0;
-  doc.querySelectorAll('*').forEach(function(el) {
-    Array.from(el.attributes).forEach(function(attr) {
-      var name = attr.name.toLowerCase();
-      if (!isPreviewUrlAttribute(name)) return;
-      var value = String(attr.value || '').trim();
-      if (!value || (name !== 'ping' && isPreviewSafeUrl(value))) return;
-      count += 1;
-    });
-  });
-  return count;
-}
-
-function sanitizePreviewDocument(doc) {
-  doc.querySelectorAll('script, style, noscript, iframe, object, embed, link, source, audio, video, track, base, set, animate, meta[http-equiv="refresh"]').forEach(function(node) {
-    node.remove();
-  });
-  doc.querySelectorAll('*').forEach(function(el) {
-    Array.from(el.attributes).forEach(function(attr) {
-      var name = attr.name.toLowerCase();
-      var value = String(attr.value || '').trim();
-      if (name.startsWith('on') || name === 'style' || name === 'srcset' || name === 'ping') {
-        el.removeAttribute(attr.name);
-        return;
-      }
-      if (isPreviewUrlAttribute(name) && value && !isPreviewSafeUrl(value)) {
-        el.removeAttribute(attr.name);
-      }
-    });
-  });
-}
-
-function extractPreviewDescription(doc) {
-  var meta = doc.querySelector('meta[name="description"], meta[property="og:description"]');
-  if (meta && meta.getAttribute('content')) {
-    return meta.getAttribute('content').trim();
-  }
-  var bodyText = collapseWhitespace((doc.body && doc.body.textContent) || '');
-  return bodyText ? truncate(bodyText, 220) : '';
-}
-
-function buildPreviewPayload(rawHtml) {
-  var parser = new DOMParser();
-  var doc = parser.parseFromString(rawHtml || '', 'text/html');
-  var blockedAssets = countPreviewExternalAssets(doc);
-  sanitizePreviewDocument(doc);
-
-  var docLang = (doc.documentElement && doc.documentElement.getAttribute('lang')) || currentDisplayLanguage || 'en';
-  var title = ((doc.querySelector('title') && doc.querySelector('title').textContent) || '').trim() || tr('webview.preview');
-  var description = extractPreviewDescription(doc);
-  var bodyHtml = (doc.body && doc.body.innerHTML ? doc.body.innerHTML.trim() : '');
-  var bodyText = collapseWhitespace((doc.body && doc.body.textContent) || '');
-  var hasStaticSnapshot = !!bodyHtml && bodyText.length >= 24;
-
-  return {
-    docLang: docLang,
-    title: title,
-    description: description,
-    bodyHtml: bodyHtml,
-    blockedAssets: blockedAssets,
-    hasStaticSnapshot: hasStaticSnapshot,
-  };
+function getHtmlPreviewLocale() {
+  return { displayLanguage: currentDisplayLanguage, translate: tr, format: tf };
 }
 
 function hasMeaningfulStaticPreview(rawHtml) {
-  return buildPreviewPayload(rawHtml).hasStaticSnapshot;
+  return TessraHtmlPreview.hasMeaningfulStaticPreview(rawHtml, getHtmlPreviewLocale());
 }
 
 function hasHtmlPreview(tab) {
@@ -559,60 +490,8 @@ function hasHtmlPreview(tab) {
   return hasMeaningfulStaticPreview(tab.response.body || '');
 }
 
-function buildPreviewDocument(rawHtml, resolvedUrl) {
-  var payload = buildPreviewPayload(rawHtml);
-  var docLang = payload.docLang;
-  var title = payload.title;
-  var description = payload.description;
-  var bodyHtml = payload.bodyHtml;
-  var hasStaticSnapshot = payload.hasStaticSnapshot;
-  var blockedAssetsLabel = tf('webview.previewOfflineBlockedAssets', { count: String(payload.blockedAssets) });
-
-  return '<div class="preview-shell" lang="' + escapeAttr(docLang) + '">' +
-    '<div class="preview-kicker">' + escapeHtml(tr('webview.previewOfflineTitle')) + '</div>' +
-    '<h1 class="preview-title">' + escapeHtml(title) + '</h1>' +
-    '<p class="preview-copy">' + escapeHtml(tr('webview.previewOfflineCopy')) + '</p>' +
-    '<div class="preview-grid">' +
-      '<div class="preview-card">' +
-        '<div class="preview-card-label">' + escapeHtml(tr('webview.previewOfflineSource')) + '</div>' +
-        '<div class="preview-card-value">' + escapeHtml(resolvedUrl || '') + '</div>' +
-      '</div>' +
-      '<div class="preview-card">' +
-        '<div class="preview-card-label">' + escapeHtml(tr('webview.previewOfflineDescription')) + '</div>' +
-        '<div class="preview-card-value' + (description ? '' : ' muted') + '">' + escapeHtml(description || '-') + '</div>' +
-      '</div>' +
-      '<div class="preview-card">' +
-        '<div class="preview-card-label">' + escapeHtml(blockedAssetsLabel) + '</div>' +
-        '<div class="preview-card-value" data-testid="preview-blocked-assets">' + escapeHtml(String(payload.blockedAssets)) + '</div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="preview-section">' +
-      '<div class="preview-section-title">' + escapeHtml(tr('webview.previewOfflineStaticSnapshot')) + '</div>' +
-      (hasStaticSnapshot
-        ? '<div class="preview-snapshot">' + bodyHtml + '</div>'
-        : '<div class="preview-empty">' + escapeHtml(tr('webview.previewOfflineNoStatic')) + '</div>') +
-    '</div>' +
-  '</div>';
-}
-
-function buildPreviewDocKey(tab) {
-  if (!tab || !tab.response) return '';
-  var body = tab.response.body || '';
-  return [
-    tab.response.status || 0,
-    tab.response.size || 0,
-    tab.resolvedUrl || tab.url || '',
-    body.length,
-    body.slice(0, 120)
-  ].join('|');
-}
-
 function syncPreviewFrame(preview, tab) {
-  if (!preview || !tab?.response) return;
-  var key = buildPreviewDocKey(tab);
-  if (preview.dataset.previewKey === key) return;
-  preview.innerHTML = buildPreviewDocument(tab.response.body || '', tab.resolvedUrl || tab.url || '');
-  preview.dataset.previewKey = key;
+  TessraHtmlPreview.syncPreviewFrame(preview, tab, getHtmlPreviewLocale());
 }
 
 function buildHttpResponseAreaHtml(tab) {

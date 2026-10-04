@@ -499,7 +499,10 @@
   "scripts": {
     "build": "node esbuild.config.js",
     "watch": "node esbuild.config.js --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "npm run typecheck:extension && npm run typecheck:webview && npm run typecheck:tests",
+    "typecheck:extension": "tsc --noEmit",
+    "typecheck:webview": "tsc -p tsconfig.webview.json",
+    "typecheck:tests": "tsc -p src/test/tsconfig.test.json --noEmit",
     "ci": "npm run typecheck && npm test && npm run build",
     "vscode:prepublish": "npm run build",
     "package": "npx @vscode/vsce package --no-rewrite-relative-links",
