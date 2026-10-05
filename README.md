@@ -170,6 +170,7 @@ Group request history by date and run collections with status summaries.
 - XML formatting with `Pretty`, `Compact`, and `Inline Children`
 - Content-Type based syntax highlighting
 - Automatic gzip, deflate, and Brotli response decoding
+- Text response charset decoding (including UTF-8, EUC-KR, and Shift_JIS), with warnings and original-byte saving for unsupported charsets or invalid bytes. See the [encoding policy](docs/http-response-encoding.md).
 - Quick copy actions for resolved URL, status line, raw headers, and response body
 - Save response body to file
 - Response compare with `Raw`, `Normalized`, and `Pretty` modes

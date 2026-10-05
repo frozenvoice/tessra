@@ -70,6 +70,7 @@ function createResponseSnapshot(tab, response, label) {
     label: label,
     body: response.body || '',
     bodyBase64: response.bodyBase64 || '',
+    decodingWarning: response.decodingWarning || null,
     contentType: ct,
     status: response.status,
     statusText: response.statusText,
@@ -475,6 +476,18 @@ function renderInlineEmptyState(_kicker, title, copy) {
   '</div>';
 }
 
+function responseDecodingWarningText(response) {
+  var warning = response && response.decodingWarning;
+  if (!warning || (warning.reason !== 'unsupported-charset' && warning.reason !== 'invalid-bytes')) return '';
+  var key = warning.reason === 'unsupported-charset' ? 'webview.responseCharsetUnsupported' : 'webview.responseCharsetInvalidBytes';
+  return tf(key, { charset: warning.charset }) + ' ' + tr('webview.responseOriginalBytesPreserved');
+}
+
+function renderResponseDecodingWarning(response) {
+  var text = responseDecodingWarningText(response);
+  return text ? '<div class="request-stage-hint" role="status" data-testid="response-decoding-warning" style="padding:4px 6px;color:var(--vscode-editorWarning-foreground,var(--tessra-tone-warning,#d19a66));overflow-wrap:anywhere">' + escapeHtml(text) + '</div>' : '';
+}
+
 function getHtmlPreviewLocale() {
   return { displayLanguage: currentDisplayLanguage, translate: tr, format: tf };
 }
@@ -728,6 +741,7 @@ function buildHttpResponseAreaHtml(tab) {
         resolvedUrlDisplay +
       '</div>' +
       responseTimingMetaHtml +
+      renderResponseDecodingWarning(r) +
       '</div>' +
       '<div class="tabs js-res-tabs" role="tablist" aria-label="' + escapeAttr(tr('webview.responseTabs')) + '">' +
         responseTabMarkup('resBody', tr('webview.body'), showBody, 'responseBodyPanel') +

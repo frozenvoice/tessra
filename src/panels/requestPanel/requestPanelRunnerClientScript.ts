@@ -295,7 +295,8 @@ function showRunner(msg) {
       }
       if (body.length > 2000) body = body.substring(0, 2000) + '\\n... (truncated)';
       detail.textContent = tr('webview.runStatus') + ': ' + r.response.status + ' ' + r.response.statusText +
-        '\\n' + tr('webview.size') + ': ' + formatSize(r.response.size) + '\\n\\n' + body;
+        '\\n' + tr('webview.size') + ': ' + formatSize(r.response.size) +
+        (responseDecodingWarningText(r.response) ? '\\n' + responseDecodingWarningText(r.response) : '') + '\\n\\n' + body;
     }
     row.after(detail);
   });

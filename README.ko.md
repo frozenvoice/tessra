@@ -171,6 +171,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - XML `Pretty`, `Compact`, `Inline Children` 포맷
 - Content-Type 기반 문법 강조
 - gzip, deflate, Brotli 응답 자동 해제
+- UTF-8·EUC-KR·Shift_JIS 등 텍스트 charset 해독. 미지원 charset·잘못된 바이트는 경고하며 원문 바이트로 저장할 수 있음. [인코딩 정책](docs/http-response-encoding.md) 참고.
 - resolved URL, status line, raw headers, body를 바로 복사하는 빠른 액션
 - 응답 본문 저장
 - `Raw`, `Normalized`, `Pretty` 모드 응답 비교

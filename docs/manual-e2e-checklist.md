@@ -26,6 +26,7 @@ Covered by `e2e/specs/*` against a real VS Code Electron host + localhost fixtur
 - Environment/profile switch during a held HTTP response, with storage isolation (`e2e/specs/23-execution-context.spec.ts`)
 - HTML Preview local bundle/nonce CSP and hostile HTML sanitization (`e2e/specs/24-html-preview.spec.ts`)
 - History consecutive completions, pin/unpin, pinned filter, and clear preserving pinned entries (`e2e/specs/25-history-sync.spec.ts`)
+- Response EUC-KR/Shift_JIS/gzip/BOM decoding, invalid/unsupported warnings, and tab/pin preservation (`e2e/specs/26-response-charset.spec.ts`)
 - Critical UI regression gate (`npm run test:e2e:ui-regressions` → #18/#19/#20)
 
 Unusual OS / display-scaling context-menu behavior can still be spot-checked manually; the stable suite covers the keyboard context-menu path (see `docs/testing.md`).

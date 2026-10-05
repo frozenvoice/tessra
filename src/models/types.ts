@@ -158,6 +158,7 @@ export interface Response {
   rawSetCookies?: string[];
   body: string;
   bodyBase64?: string;
+  decodingWarning?: { reason: 'unsupported-charset' | 'invalid-bytes'; charset: string };
   time: number;
   size: number;
 }

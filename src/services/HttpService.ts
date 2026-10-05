@@ -3,6 +3,7 @@ import * as https from 'https';
 import * as zlib from 'zlib';
 import { URL } from 'url';
 import { HttpMethod, KeyValue, Response } from '../models/types';
+import { decodeResponseText } from './responseTextDecoder';
 
 export interface SendHandle {
   promise: Promise<Response>;
@@ -286,14 +287,16 @@ export class HttpService {
             }
             const contentType = responseHeaders['content-type'] ?? responseHeaders['Content-Type'] ?? '';
             const isBinary = HttpService.isBinaryContentType(contentType);
+            const decodedText = isBinary
+              ? { body: buffer.toString('utf-8'), bodyBase64: buffer.toString('base64') }
+              : decodeResponseText(buffer, contentType);
 
             safeResolve({
               status: statusCode,
               statusText: res.statusMessage ?? '',
               headers: responseHeaders,
               rawSetCookies: headerInfo.rawSetCookies,
-              body: buffer.toString('utf-8'),
-              bodyBase64: isBinary ? buffer.toString('base64') : undefined,
+              ...decodedText,
               time: Date.now() - startTime,
               size: buffer.length,
             });
