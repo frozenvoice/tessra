@@ -508,6 +508,7 @@ function syncPreviewFrame(preview, tab) {
 }
 
 function buildHttpResponseAreaHtml(tab) {
+  if (tab.sseView) return buildSseResponseAreaHtml(tab);
   if (tab.loading) {
     return '<div class="res-empty-shell">' +
       '<div class="js-loading-summary" style="padding:6px"><span class="spinner"></span>' + escapeHtml(tr('webview.loading')) + '</div>' +
@@ -813,6 +814,7 @@ function buildHttpResponseAreaHtml(tab) {
 }
 
 function bindResponseViewerEvents(mc) {
+  bindSseResponseViewer(mc);
   mc.querySelector('.js-copy-response')?.addEventListener('click', function() {
     const tab = tabs.find(t => t.id === activeTabId);
     if (!tab?.response) return;

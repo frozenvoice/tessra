@@ -219,6 +219,7 @@ function showRunner(msg) {
   if (runnerOverlay) runnerOverlay.remove();
   runnerOverlay = document.createElement('div');
   runnerOverlay.className = 'runner-overlay';
+  runnerOverlay._sseRunId = msg.runId || null;
   runnerOverlay.innerHTML =
     '<div class="runner-header">' +
       '<h3>' + escapeHtml(tf('webview.runTitle', { name: msg.name })) + '</h3>' +

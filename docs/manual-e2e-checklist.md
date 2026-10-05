@@ -55,6 +55,18 @@ Use synthetic values in an isolated profile and a local fixture only. Final inte
 - Send to a local echo endpoint. Verify actual wire bytes contain the synthetic value, while app-generated request metadata/code/history/logs are masked or preserve references. A server echo remains visible as response data.
 - Run EN/KO/JA with keyboard-only controls and a narrow panel. Check labels, focus, reveal lifecycle, and manual screen-reader speech output.
 
+## SSE smoke
+
+Use the local fixture server in an isolated VS Code host; do not use paid streams or real tokens. Final automated results remain in [the dated validation record](ui-secrets-sse-validation-2026-10-05.md).
+
+- Receive a slow event stream and confirm events appear before EOF. Switch Events/Raw with keyboard controls; Raw copy/save is available at terminal state and represents the bounded retained prefix.
+- Check split UTF-8/BOM, CR/LF/CRLF, multiline data, event/id/retry, comments, and unfinished EOF. Confirm HTML-looking/vendor JSON event data stays text and `retry` causes no automatic reconnect.
+- Exercise one oversized event/line, pending buffer limits, event retention, and Raw truncation. Confirm explicit loss notices and subsequent complete events; no invented completion of a partial block.
+- Stop, expire the existing deadline, switch profiles, close the panel, and use Runner Stop. Confirm partial Aborted/Timeout/Error states and closed fixture sockets; late events must not enter a new run.
+- Set timeout=0 explicitly for a long stream, then Stop. Check finite deadlines and response-size limits remain active when enabled.
+- With retry enabled, serve a stream that starts with HTTP 500 or POST and then fails. Confirm a single request and no automatic resend after stream start.
+- Repeat ordinary HTTP charset/binary, History cache, TLS and redirect credential regressions. Proxy behavior is only checked when reproducible with a local fixture and isolated host.
+
 ## 1.2.6 Smoke (~5 min)
 
 Headers-only stream cleanup. Run this pass on the packaged VSIX before Marketplace publish.

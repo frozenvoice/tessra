@@ -22,9 +22,9 @@ function extractHeadings(markdown: string): string[] {
 const GUIDE_FILES = ['GUIDE.md', 'GUIDE.ko.md', 'GUIDE.ja.md'] as const;
 
 const EXPECTED_SECTION_COUNT = {
-  'GUIDE.md': 17,
-  'GUIDE.ko.md': 17,
-  'GUIDE.ja.md': 17,
+  'GUIDE.md': 18,
+  'GUIDE.ko.md': 18,
+  'GUIDE.ja.md': 18,
 } as const;
 
 const STALE_PHRASES = [

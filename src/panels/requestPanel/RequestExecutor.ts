@@ -1,5 +1,6 @@
 import { HttpService, SendHandle } from '../../services/HttpService';
 import { RequestDeadline, RequestTimeoutError } from '../../services/RequestDeadline';
+import { getSseSnapshot, SseStreamUpdate } from '../../services/SseStream';
 import { VariableService } from '../../services/VariableService';
 import { PathVariableService } from '../../services/PathVariableService';
 import {
@@ -238,6 +239,19 @@ export class RequestExecutor {
 
       try {
         let response: Response | null = null;
+        let sseStarted = false;
+        const publishSseUpdate = (update: SseStreamUpdate) => {
+          if (update.phase === 'started') { sseStarted = true; }
+          // Stop의 terminal partial은 같은 실행에 전달하고, 이전 세대/새 실행에는 버린다.
+          if (!canPublish() || (update.phase !== 'ended' && wasCanceled())) { return; }
+          this.host.postMessage({
+            type: MessageType.ReceiveSseUpdate,
+            tabId,
+            runId,
+            requestStartedAt,
+            update,
+          });
+        };
         const deadline = new RequestDeadline(settings.timeout);
         const waitForRetryDelay = async () => {
           deadline.throwIfExpired();
@@ -267,15 +281,17 @@ export class RequestExecutor {
               followRedirects: settings.followRedirects,
               maxResponseSizeBytes: settings.maxResponseSizeKb > 0 ? settings.maxResponseSizeKb * 1024 : 0,
               stopAfterHeaders: settings.stopAfterHeaders,
+              onSseUpdate: publishSseUpdate,
             }
           );
+          if (wasCanceled()) { currentHandle.abort(); }
 
           try {
             response = await currentHandle.promise;
             currentHandle = null;
           } catch (err: unknown) {
             currentHandle = null;
-            if (wasCanceled() || err instanceof RequestTimeoutError || attempt >= settings.retryCount) {
+            if (wasCanceled() || sseStarted || getSseSnapshot(err) || err instanceof RequestTimeoutError || attempt >= settings.retryCount) {
               throw err;
             }
             await waitForRetryDelay();
@@ -284,7 +300,7 @@ export class RequestExecutor {
 
           if (wasCanceled()) { publishCancellation(); return; }
 
-          if (response && attempt < settings.retryCount && shouldRetryResponse(response.status)) {
+          if (response && !sseStarted && !getSseSnapshot(response) && attempt < settings.retryCount && shouldRetryResponse(response.status)) {
             await waitForRetryDelay();
             response = null;
             continue;

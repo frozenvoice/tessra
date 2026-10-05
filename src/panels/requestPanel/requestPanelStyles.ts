@@ -1058,6 +1058,21 @@ body[data-panel-theme="bold-color"]{
 @media (max-height: 820px){
   .script-card textarea{min-height:120px;max-height:32vh}
 }
+
+/* SSE의 이벤트 보관은 전송 상태와 분리하며 각 표시 패널만 스크롤한다. */
+.sse-view{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;overflow:hidden;padding:8px 12px;gap:6px}
+.sse-summary{display:flex;align-items:baseline;flex-wrap:wrap;gap:12px;font-variant-numeric:tabular-nums}
+.js-sse-http-status{font-weight:600}.js-sse-state{color:var(--vscode-descriptionForeground)}
+.sse-counts,.sse-loss{font-size:11px;line-height:1.5;overflow-wrap:anywhere;color:var(--vscode-descriptionForeground)}
+.sse-loss:empty{display:none}.sse-loss:not(:empty){color:var(--vscode-editorWarning-foreground,var(--vscode-foreground))}
+.sse-toolbar{flex-shrink:0}.sse-events,.sse-raw{flex:1;min-height:0;overflow:auto;margin:0;padding:0;font-family:var(--vscode-editor-font-family,monospace)}
+.sse-event{padding:8px 0;border-bottom:1px solid var(--vscode-panel-border);min-width:0}
+.sse-event-meta{font-size:11px;color:var(--vscode-descriptionForeground);overflow-wrap:anywhere}
+.sse-event-data,.sse-raw{font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.sse-event-data{margin:4px 0 0}.sse-view .hidden{display:none}
+.runner-sse-response{padding:8px 14px;border-top:1px solid var(--vscode-panel-border);font-size:12px;line-height:1.5}
+.runner-sse-events{max-height:180px;overflow:auto;font-family:var(--vscode-editor-font-family,monospace)}
+
 @media (prefers-reduced-motion: reduce){
   .bullet-progress .bullet-glow,
   .skeleton-line,

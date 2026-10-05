@@ -110,6 +110,15 @@ Body: {"env":"{{envName}}"}
 - import 전에 Tessra가 pre-import backup을 자동으로 만듭니다.
 - 백업 파일에는 token, API key 등 민감정보가 들어갈 수 있으니 안전하게 보관하세요.
 
+## Server-Sent Events (SSE)
+
+- `text/event-stream` 응답은 수신 중 이벤트를 보여줍니다. `Events`에는 data와 표준 `event`, `id`, `retry` 필드가 표시되며 이 필드로 자동 재연결·재전송하지 않습니다. 이벤트 내용은 텍스트로 표시하고 특정 vendor JSON 형식을 가정하지 않습니다.
+- 수신 중 `Stop`을 사용할 수 있습니다. 응답은 수신 중·완료·중단·시간 초과·오류 상태를 구분하고 받은 부분 데이터를 유지합니다. 프로필 전환·패널 종료·Runner Stop은 스트림을 취소하며 해당 실행의 늦은 갱신을 폐기합니다.
+- 전체 요청 timeout과 응답 크기 제한이 계속 적용됩니다. deadline 없이 수신하려면 timeout `0`을 명시적으로 선택하세요. 스트리밍이라고 제한이나 TLS 검증을 끄지 않으며, 수신이 시작된 뒤 자동 재시도·재연결·POST 재전송을 하지 않습니다.
+- UTF-8 chunk 경계, BOM, CR/LF/CRLF, 여러 `data` 줄, comment, 빈 줄 이벤트 경계를 증분 처리합니다. EOF에서 미완성 마지막 이벤트를 완성하지 않고 transport 오류를 오류로 유지합니다.
+- 이벤트 크기·대기 입력·보관 이벤트·Raw 바이트에 상한이 있고 잘림·유실을 표시합니다. `Raw`는 스트림 종료 후 사용할 수 있으며 복사·저장은 보관한 앞부분만 포함합니다. 화면은 묶음으로 갱신합니다.
+- 현재 상한과 취소 동작은 [SSE 수신과 제한](docs/sse.md)을 참조하세요.
+
 ## WebSocket
 
 - `ws://` 또는 `wss://` URL(원문 또는 `{{variable}}` 해석 후)을 입력하면 WebSocket 모드로 전환됩니다.

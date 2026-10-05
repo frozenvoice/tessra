@@ -1,5 +1,6 @@
 import { HttpService, SendHandle } from '../../services/HttpService';
 import { RequestDeadline, RequestTimeoutError } from '../../services/RequestDeadline';
+import { getSseSnapshot, SseStreamUpdate } from '../../services/SseStream';
 import { VariableService } from '../../services/VariableService';
 import { PathVariableService } from '../../services/PathVariableService';
 import {
@@ -276,6 +277,7 @@ export class CollectionRunner {
     const selectedTotal = selectionTotals?.selectedTotal ?? requests.length;
     this.host.postMessage({
       type: MessageType.RunCollectionStart,
+      runId,
       name,
       total: requests.length,
       collectionTotal,
@@ -543,6 +545,21 @@ export class CollectionRunner {
 
       const totalAttempts = Math.max(1, settings.retryCount + 1);
       const deadline = new RequestDeadline(settings.timeout);
+      let sseStarted = false;
+      const publishSseUpdate = (update: SseStreamUpdate) => {
+        if (update.phase === 'started') { sseStarted = true; }
+        const current = input.runId === this.activeRunId && this.host.isExecutionContextCurrent(input.context);
+        if (!current || (update.phase !== 'ended' && isStopped())) { return; }
+        this.host.postMessage({
+          type: MessageType.RunCollectionSseUpdate,
+          runId: input.runId,
+          index: input.runIndex,
+          requestIndex: input.requestIndex,
+          iteration: input.iteration,
+          name: redactor.mask(reqName),
+          update,
+        });
+      };
       for (let attempt = 0; attempt <= settings.retryCount; attempt++) {
         if (isStopped()) {
           throw new Error('Request was canceled');
@@ -576,16 +593,18 @@ export class CollectionRunner {
             followRedirects: settings.followRedirects,
             maxResponseSizeBytes: settings.maxResponseSizeKb > 0 ? settings.maxResponseSizeKb * 1024 : 0,
             stopAfterHeaders: settings.stopAfterHeaders,
+            onSseUpdate: publishSseUpdate,
           }
         );
         this.currentCollectionRequest = handle;
+        if (isStopped()) { handle.abort(); }
 
         try {
           response = await handle.promise;
           if (this.currentCollectionRequest === handle) { this.currentCollectionRequest = null; }
         } catch (err: unknown) {
           if (this.currentCollectionRequest === handle) { this.currentCollectionRequest = null; }
-          if (isStopped() || err instanceof RequestTimeoutError || attempt >= settings.retryCount) {
+          if (isStopped() || sseStarted || getSseSnapshot(err) || err instanceof RequestTimeoutError || attempt >= settings.retryCount) {
             throw err;
           }
           this.host.postMessage({
@@ -609,7 +628,7 @@ export class CollectionRunner {
 
         if (isStopped()) { return null; }
 
-        if (response && attempt < settings.retryCount && shouldRetryResponse(response.status)) {
+        if (response && !sseStarted && !getSseSnapshot(response) && attempt < settings.retryCount && shouldRetryResponse(response.status)) {
           this.host.postMessage({
             type: 'runCollectionStatus',
             phase: 'retry',
@@ -655,14 +674,30 @@ export class CollectionRunner {
       }
     } catch (err: unknown) {
       if (isStopped()) { return null; }
-      if (err instanceof RequestTimeoutError) { response = null; }
+      const partial = getSseSnapshot(err);
+      if (partial) {
+        response = {
+          status: partial.status,
+          statusText: partial.statusText,
+          headers: partial.headers,
+          body: partial.rawBody,
+          bodyBase64: partial.rawBodyBase64,
+          size: partial.decodedBytes,
+          time: partial.time,
+          sse: partial,
+        };
+        status = partial.status;
+        statusText = partial.statusText;
+        time = partial.time;
+      } else if (err instanceof RequestTimeoutError) { response = null; }
       error = secretDiagnostic(err, redactor);
     } finally {
       if (input.runId === this.activeRunId) { this.currentCollectionRequest = null; }
       if (!isStopped() && settings.saveToHistory && historyRequest) {
         this.host.saveToHistory(
           historyRequest,
-          response ? { status: response.status, statusText: response.statusText, time: response.time } : null,
+          response && (!getSseSnapshot(response) || getSseSnapshot(response)!.state === 'completed')
+            ? { status: response.status, statusText: response.statusText, time: response.time } : null,
           createRequestTiming(requestStartedAt),
           input.context
         );

@@ -110,6 +110,15 @@ Body: {"env":"{{envName}}"}
 - Before import, Tessra writes an automatic pre-import backup
 - Backup files may contain tokens, API keys, and other secrets — store them securely
 
+## Server-Sent Events (SSE)
+
+- A `text/event-stream` response shows events as they arrive. `Events` shows event data and standard `event`, `id`, and `retry` fields; these fields do not enable automatic reconnect or replay. Event content is displayed as text, without assuming a vendor JSON format.
+- Use `Stop` during reception. The response distinguishes receiving, completed, stopped, timeout, and error states and keeps received partial data. Profile changes, panel closure, and Runner Stop cancel the stream and discard late updates from that execution.
+- The overall request timeout and response-size limit still apply. Choose timeout `0` explicitly for a stream without a deadline; streaming does not silently disable limits or TLS checks. Once streaming has started, Tessra does not automatically retry, reconnect, or resend a POST.
+- UTF-8 chunk boundaries, BOM, CR/LF/CRLF, multiple `data` lines, comments, and blank-line event boundaries are handled incrementally. An unfinished final event is not invented on EOF; transport errors remain errors.
+- Event size, pending input, retained events, and Raw bytes are bounded. Truncation or dropped events are shown explicitly. `Raw` becomes available after the stream ends and copy/save contains only its retained prefix; the screen is updated in batches.
+- See [SSE reception and limits](docs/sse.md) for the current limits and cancellation behavior.
+
 ## WebSocket
 
 - Enter a `ws://` or `wss://` URL (raw or after `{{variable}}` resolution) to switch into WebSocket mode

@@ -15,6 +15,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 ## 최근 주요 변경
 
 - 환경/Workspace 변수에서 **비밀 보호**를 명시적으로 선택하면 확인된 값을 VS Code SecretStorage에 보관합니다. **값 설정**, 일시적인 **값 보기**, 정확한 변수의 삭제를 제공합니다. [비밀 변수와 복구](docs/secret-variables.md)를 참고하세요.
+- `text/event-stream` 응답은 수신 중 Events를 표시하고 종료 후 Raw를 제공합니다. Stop과 완료/중단/시간 초과/오류 상태를 구분합니다. 보관량 제한과 유실/잘림을 알리고 장기 스트림의 timeout 선택은 사용자가 명시적으로 합니다.
 - "헤더까지만 받기"는 헤더를 받은 뒤 응답 스트림을 닫습니다. 끝나지 않거나 매우 큰 본문이 백그라운드에서 연결을 계속 붙잡지 않습니다.
 - 스크립트 테스트가 실패하면 실제값과 기대값을 함께 보여줍니다. 예: `Expected 1 to strictly equal 2.`
 - README 맨 위에 VS Code에서 녹화한 데모가 자동으로 반복 재생되고, 소리가 있는 전체 영상도 볼 수 있습니다.
@@ -185,6 +186,14 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 비교 활성/비기본 Mode·Metadata를 작은 문맥 텍스트로 표시 (칩 월 없음)
 - ignore headers / ignore JSON paths 기반 비교 설정
 - 본문 줄 수와 changed / left-only / right-only 개수를 요약하는 비교 요약
+
+### Server-sent events (SSE)
+
+HTTP 응답의 Content-Type이 `text/event-stream`이면 **Events / Raw** 증분 뷰를 사용합니다. 수신 중 이벤트가 보이고 **Stop**은 부분 수신을 중단 상태로 보존합니다. deadline과 transport 실패는 각각 시간 초과/오류로 표시합니다. Raw 복사/저장은 종료 후 보관된 바이트 prefix에 제공하며 잘림을 표시합니다. vendor JSON이나 HTML처럼 보이는 데이터도 텍스트로 표시하고 명령이나 특정 vendor 프로토콜로 해석하지 않습니다.
+
+UTF-8 다중 바이트/chunk/BOM, CR/LF/CRLF, 빈 줄 이벤트 경계, 여러 `data` 줄, `event`·`id`·`retry`·comment를 처리합니다. 불완전한 마지막 블록은 임의 완성하지 않습니다. `retry`는 metadata이며 자동 재연결하지 않습니다. POST나 HTTP 500 응답을 포함해 시작된 스트림을 자동 재전송하지 않습니다.
+
+행/이벤트 256 KiB, 파서 대기 512 KiB, 이벤트 보관 500개/2 MiB, Raw prefix 1 MiB를 제한하고 블록 유실·이벤트 퇴출·Raw 잘림을 표시합니다. 갱신은 묶음 처리합니다. 기존 전체 네트워크 deadline·응답 크기·TLS·리다이렉트·취소 정책을 유지하며 무제한 deadline은 사용자가 `timeout=0`을 선택해야 합니다. Runner Stop도 진행 중 스트림을 종료합니다. [SSE 사용과 제한](docs/sse.md)을 참고하세요.
 
 ### Scripts
 - Pre-request script

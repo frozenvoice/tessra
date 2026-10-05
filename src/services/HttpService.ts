@@ -2,9 +2,11 @@
 import * as https from 'https';
 import * as zlib from 'zlib';
 import { URL } from 'url';
+import { Transform } from 'stream';
 import { HttpMethod, KeyValue, Response } from '../models/types';
 import { decodeResponseText } from './responseTextDecoder';
 import { RequestDeadline, RequestTimeoutError } from './RequestDeadline';
+import { SseStream, SseStreamOptions, SseStreamUpdate } from './SseStream';
 
 export interface SendHandle {
   promise: Promise<Response>;
@@ -19,6 +21,9 @@ export interface HttpSendOptions {
   stopAfterHeaders?: boolean;
   // 호출자의 자동 재시도도 같은 네트워크 실행 예산을 공유한다. 저장 설정에는 포함하지 않는다.
   deadline?: RequestDeadline;
+  onSseUpdate?: (update: SseStreamUpdate) => void;
+  // 외부 설정을 변경하지 않는 전송별 보관 상한이다. SSE에도 전체 응답 제한은 별도로 적용한다.
+  sseOptions?: SseStreamOptions;
 }
 
 // Node.js 내장 http/https 모듈로 HTTP 요청 실행
@@ -67,6 +72,8 @@ export class HttpService {
     let settled = false;
     let aborted = false;
     let abortRequest: () => void = () => undefined;
+    let sseRef: SseStream | undefined;
+    let decoderRefs: Transform[] = [];
 
     const promise = new Promise<Response>((resolve, reject) => {
       const cleanup = (destroy: boolean) => {
@@ -76,9 +83,12 @@ export class HttpService {
         attemptId++;
         const request = reqRef;
         const response = resRef;
+        const decoders = decoderRefs;
         reqRef = undefined;
         resRef = undefined;
+        decoderRefs = [];
         request?.setTimeout(0);
+        for (const decoder of decoders) { decoder.destroy(); }
         if (destroy) {
           response?.destroy();
           request?.destroy();
@@ -90,6 +100,10 @@ export class HttpService {
         // 동기 압축 해제/문자 디코딩 동안 timer가 실행되지 못했어도 만료는 검사한다.
         try { deadline.throwIfExpired(); } catch (error: unknown) { safeReject(error); return; }
         settled = true;
+        if (sseRef) {
+          const sse = sseRef.end('completed');
+          Object.assign(value, { sse, body: sse.rawBody, bodyBase64: sse.rawBodyBase64 });
+        }
         cleanup(!resRef?.complete);
         resolve(value);
       };
@@ -97,6 +111,13 @@ export class HttpService {
       const safeReject = (error: unknown) => {
         if (settled) { return; }
         settled = true;
+        if (sseRef) {
+          const sse = sseRef.end(aborted ? 'aborted' : error instanceof RequestTimeoutError ? 'timeout' : 'error');
+          if (error && typeof error === 'object') {
+            // 원래 Error 클래스/이름을 유지해 기존 timeout 판별을 보존한다.
+            try { Object.assign(error, { sse }); } catch { /* terminal callback도 부분 응답을 전달한다. */ }
+          }
+        }
         cleanup(true);
         reject(error);
       };
@@ -312,6 +333,79 @@ export class HttpService {
               size: 0,
             });
             res.destroy();
+            return;
+          }
+
+          const contentType = Object.entries(responseHeaders).find(([key]) => key.toLowerCase() === 'content-type')?.[1] ?? '';
+          if (contentType.split(';')[0].trim().toLowerCase() === 'text/event-stream') {
+            const sse = new SseStream(
+              { status: statusCode, statusText: res.statusMessage ?? '', headers: responseHeaders },
+              startTime,
+              (update) => {
+                // 한 chunk 안에 많은 이벤트가 있어도 배치 경계에서 전체 예산을 다시 검사한다.
+                if (update.phase !== 'ended' && !checkDeadline()) { return; }
+                options.onSseUpdate?.(update);
+              },
+              options.sseOptions,
+            );
+            sseRef = sse;
+            sse.start();
+            if (!isCurrentAttempt() || !checkDeadline()) { return; }
+            let wireSize = 0;
+            let decodedSize = 0;
+            let source: NodeJS.ReadableStream = res;
+
+            // 압축 응답도 EOF까지 기다리지 않고 해제한다. 각 중간 layer에도 크기 제한을 적용한다.
+            for (const encoding of HttpService.getContentEncodings(responseHeaders).reverse()) {
+              if (encoding === 'identity') { continue; }
+              let decoder: Transform;
+              switch (encoding) {
+                case 'gzip':
+                case 'x-gzip': decoder = zlib.createGunzip(); break;
+                case 'deflate': decoder = zlib.createInflate(); break;
+                case 'br': decoder = zlib.createBrotliDecompress(); break;
+                default: safeReject(new Error(`Unsupported content encoding: ${encoding}`)); return;
+              }
+              decoderRefs.push(decoder);
+              let layerSize = 0;
+              decoder.on('data', (chunk: Buffer) => {
+                if (!isCurrentAttempt() || !checkDeadline()) { return; }
+                layerSize += chunk.length;
+                if (layerSize > maxResponseSizeBytes) { safeReject(HttpService.createMaxSizeError(maxResponseSizeBytes)); }
+              });
+              decoder.on('error', (error) => {
+                if (isCurrentAttempt() && checkDeadline()) {
+                  safeReject(new Error(`Failed to decompress ${encoding} response: ${error.message}`));
+                }
+              });
+              source = source.pipe(decoder);
+            }
+
+            res.on('data', (chunk: Buffer) => {
+              if (!isCurrentAttempt() || !checkDeadline()) { return; }
+              wireSize += chunk.length;
+              sse.addWireBytes(chunk.length);
+              if (wireSize > maxResponseSizeBytes) { safeReject(HttpService.createMaxSizeError(maxResponseSizeBytes)); }
+            });
+            source.on('data', (chunk: Buffer) => {
+              if (!isCurrentAttempt() || !checkDeadline()) { return; }
+              decodedSize += chunk.length;
+              if (decodedSize > maxResponseSizeBytes) { safeReject(HttpService.createMaxSizeError(maxResponseSizeBytes)); return; }
+              sse.push(chunk);
+              checkDeadline();
+            });
+            source.on('end', () => {
+              if (!isCurrentAttempt() || !checkDeadline()) { return; }
+              safeResolve({
+                status: statusCode,
+                statusText: res.statusMessage ?? '',
+                headers: responseHeaders,
+                rawSetCookies: headerInfo.rawSetCookies,
+                body: '',
+                time: Date.now() - startTime,
+                size: decodedSize,
+              });
+            });
             return;
           }
 

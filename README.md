@@ -13,6 +13,7 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 ## Recent highlights
 
 - Explicit **Protect** for environment/workspace variables keeps confirmed values in VS Code SecretStorage. **Set value**, temporary **Reveal**, and exact-variable deletion are available in the variable editor; see [secret variables](docs/secret-variables.md).
+- `text/event-stream` responses display events while receiving, with **Stop** and explicit completed/aborted/timeout/error states. The bounded Events/Raw view reports dropped, evicted, and truncated data; long streams still require an explicit timeout choice.
 - "Stop after headers" closes the response stream once headers arrive, so endless or very large bodies no longer keep the connection open in the background.
 - Failed script assertions show the actual and expected values, e.g. `Expected 1 to strictly equal 2.`
 - The Marketplace page opens with a looping demo recorded in VS Code, plus the full video with sound.
@@ -184,6 +185,14 @@ App-generated request metadata, history, code copies, diagnostics, and script lo
 - Response summary Pin / Compare ghost actions, with compact contextual mode/metadata cues (no chip wall)
 - Compare settings with ignored headers and ignored JSON paths
 - Compare summaries with body line counts and changed / left-only / right-only totals
+
+### Server-sent events (SSE)
+
+An HTTP response with `Content-Type: text/event-stream` opens an incremental **Events / Raw** view. Events appear during reception; **Stop** preserves partial reception as aborted, while deadline and transport failures remain timeout/error. Raw copy/save becomes available after the stream ends and includes only the retained byte prefix, with truncation shown. Received content is displayed as text, including vendor JSON or HTML-looking data; it is not interpreted as a command or a vendor-specific protocol.
+
+SSE uses UTF-8 with split multibyte/BOM handling, CR/LF/CRLF lines, blank-line event boundaries, multiple `data` lines, `event`, `id`, `retry`, and comments. An unfinished final block is reported rather than completed artificially. `retry` is metadata: Tessra does not reconnect automatically or resend POST after a stream has started, including an HTTP 500 stream.
+
+Limits remain active: 256 KiB per line/event, 512 KiB pending parser data, 500 retained events / 2 MiB event text, and a 1 MiB Raw prefix. Dropped blocks, evicted events, and Raw truncation are explicit. Updates are batched. The configured total network deadline, response-size limit, TLS validation, redirects, and cancellation policies still apply; select `timeout=0` yourself for an unlimited deadline. Runner Stop also ends an active stream. See [SSE usage and limits](docs/sse.md).
 
 ### Scripts
 - Pre-request scripts

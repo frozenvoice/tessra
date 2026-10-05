@@ -1,5 +1,6 @@
 import { getRequestPanelBodyClientScript } from './requestPanelBodyClientScript';
 import { getRequestPanelResponseClientScript } from './requestPanelResponseClientScript';
+import { getRequestPanelSseClientScript } from './requestPanelSseClientScript';
 import { getRequestPanelRunnerClientScript } from './requestPanelRunnerClientScript';
 import { getRequestPanelEnvironmentClientScript, getRequestPanelEnvironmentBindingsScript } from './requestPanelEnvironmentClientScript';
 import { getRequestPanelDefaultHeadersClientScript, getRequestPanelDefaultHeadersBindingsScript } from './requestPanelDefaultHeadersClientScript';
@@ -1335,6 +1336,8 @@ function isEditableTarget(target) {
 }
 
 ${getRequestPanelBodyClientScript()}
+
+${getRequestPanelSseClientScript()}
 
 ${getRequestPanelResponseClientScript()}
 
@@ -3119,6 +3122,7 @@ function sendActiveTab() {
 
   
   const allHeaders = collectAllKv(mc.querySelector('.js-header-rows'));
+  tab.sseView = null;
   tab.loading = true;
   tab.lastEvent = 'sending';
   tab.error = null;
@@ -3588,9 +3592,19 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  if (msg.type === 'receiveSseUpdate') {
+    handleSseUpdateMessage(msg);
+    return;
+  }
+
+  if (msg.type === 'runCollectionSseUpdate') {
+    handleRunnerSseUpdate(msg);
+    return;
+  }
+
   if (msg.type === 'requestCanceled') {
     const tab = tabs.find(t => t.id === msg.tabId);
-    if (!tab) return;
+    if (!tab || (msg.requestStartedAt && msg.requestStartedAt !== tab.requestStartedAt)) return;
     clearTabRequestState(tab);
     applyResponseTiming(tab, msg);
     tab.lastEvent = 'canceled';
@@ -3606,7 +3620,7 @@ window.addEventListener('message', (event) => {
 
   if (msg.type === 'receiveResponse' || msg.type === 'responseError') {
     const tab = tabs.find(t => t.id === msg.tabId);
-    if (!tab) return;
+    if (!tab || (msg.requestStartedAt && msg.requestStartedAt !== tab.requestStartedAt)) return;
     clearTabRequestState(tab);
     applyResponseTiming(tab, msg);
     tab.slideIn = true;
@@ -3625,6 +3639,10 @@ window.addEventListener('message', (event) => {
         );
       }
       tab.response = msg.response;
+      if (msg.response.sse) {
+        tab.sseView = tab.sseView || createSseViewState('completed-' + tab.requestStartedAt, msg.response.sse);
+        applySseViewUpdate(tab.sseView, { summary: msg.response.sse, snapshot: msg.response.sse });
+      } else tab.sseView = null;
       tab.lastEvent = 'success';
       tab.resolvedUrl = msg.resolvedUrl || '';
       tab.resolvedHeaders = msg.resolvedHeaders || [];

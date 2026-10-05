@@ -64,6 +64,9 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ### Response Viewer
 - Body / Headers / Cookies / Tests / Preview
+- text/event-stream 증분 Events/Raw 표시: Receiving/Completed/Aborted/Timeout/Error를 구분하고 부분 수신을 보존한다. UTF-8 chunk/BOM, CR/LF/CRLF, 빈 줄, 여러 data, event/id/retry/comment를 처리하며 불완전 EOF 블록은 완성하지 않는다 (`docs/sse.md`).
+- SSE의 행/이벤트 256 KiB·대기 512 KiB·보관 500개/2 MiB·Raw prefix 1 MiB 상한과 유실/잘림을 표시하며 묶음 갱신한다. 이벤트는 텍스트이고 vendor JSON/HTML/명령으로 실행하지 않는다. 자동 재연결/스트림 시작 후 retry/POST 재전송은 없으며 HTTP 500 SSE도 그대로다.
+- 스트리밍에서 timeout/응답 제한/TLS/교차 origin 자격 증명 제거를 몰래 해제하지 않는다. timeout=0은 명시적 사용자 선택이며 Stop/profile change/panel close/Runner Stop은 transport·timer·subscription을 정리하고 늦은 실행 데이터를 거부한다. Raw 복사/저장은 종료된 보관 prefix에 한정한다.
 - JSON tree viewer
 - XML format options: `Pretty`, `Compact`, `Inline Children`
 - Content-Type 기반 하이라이트
@@ -175,7 +178,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 품질 기준
 - 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다
-- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **29개 / 28파일**이며 Collection Runner, WebSocket, 환경·헤더·Auth·Scripts·Settings·Path Variables, 좁은 패널 geometry, Body scroll ownership, 응답 키보드 탐색, 초안 보존, 실행 환경·프로필 격리, HTML Preview 자산·정제·CSP, History 연속 완료·핀·필터·삭제, 응답 charset·경고, 전체 네트워크 deadline을 포함한다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
+- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **33개 / 30파일**이며 Collection Runner, WebSocket, 환경·헤더·Auth·Scripts·Settings·Path Variables, 좁은 패널 geometry, Body scroll ownership, 응답 키보드 탐색, 초안 보존, 실행 환경·프로필 격리, HTML Preview 자산·정제·CSP, History 연속 완료·핀·필터·삭제, 응답 charset·경고, 전체 네트워크 deadline을 포함한다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
 - UI 품질 원칙: DOM visible만으로 layout PASS 금지, popup/menu viewport geometry 검증, variable warning은 occurrence resolution 기준, scrollable editor는 scroll owner 수 + wheel interaction 검증, Request Panel layout은 narrow-width/short-height BrowserWindow에서 검증.
 - Quiet Instrument 계약: pill wall / soft-card / Send success-green 재도입 금지
 

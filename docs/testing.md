@@ -5,7 +5,7 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**29 tests in 28 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, execution context isolation, HTML preview bundle/sanitization/CSP, History updates, response charsets, network deadlines, and explicit secret variables) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**33 tests in 30 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, execution context isolation, HTML preview bundle/sanitization/CSP, History updates, response charsets, network deadlines, explicit secret variables, and incremental SSE responses) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
@@ -21,9 +21,9 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (29 tests in 28 files)
+npm run test:e2e         # stable VS Code UI E2E (33 tests in 30 files)
 npm run test:e2e:ui-regressions  # critical UI contracts (#18/#19/#20): narrow geometry + path occurrence resolution + body scroll ownership
-npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
+npm run test:e2e:runner  # focused Collection Runner suite (3 specs; same paths as stable)
 npm run test:e2e:all     # stable suite then focused runner suite
 npm run test:e2e:ci      # CI stable suite
 npm run test:all         # unit + stable E2E
@@ -49,7 +49,7 @@ Automation strategy (no production backdoors):
 - Activate the command inside the visible `.context-view.monaco-menu-container` with **Enter** (Monaco menus often focus on mouse click without running the action under Electron automation)
 - Wait for Runner UI via `data-testid` (`runner-start`, `runner-selected-count`), not CSS-class-only coupling
 
-`npm run test:e2e:runner` remains available for fast local re-runs of the two Runner specs.
+`npm run test:e2e:runner` remains available for fast local re-runs of the three Runner specs.
 
 ## Isolation
 
@@ -121,6 +121,8 @@ UI clarity E2E (#28) checks request-context meanings, empty Params/Add behavior,
 
 Secret variables E2E (#29) protects an existing synthetic variable, sets a replacement through the native password input, checks stable reference IDs after renaming, and verifies actual localhost request bytes, masked request messages/cURL, ref-only backup JSON, temporary Reveal cleanup, and the workspace-variable editor command.
 
+SSE fixtures exercise incremental UTF-8/BOM and CR/LF framing, multiline fields/comments, incomplete EOF, individual/pending/retained bounds, bounded Raw saving, normal/error EOF distinction, batch delivery, Stop/deadline/profile disposal, and no retry after streaming starts (including POST and HTTP 500). Parser/transport tests use synthetic bytes and actual localhost sockets; real VS Code Webview checks (#30, three tests) and Runner SSE Stop (#09) cover intermediate Events, terminal Raw/partial state, inert untrusted data, retention, and cleanup. Results are recorded in [the dated validation record](ui-secrets-sse-validation-2026-10-05.md). Configured request deadlines and response limits stay independent of fixture/test safety deadlines.
+
 Request timeouts use a monotonic clock from the first network attempt through the final response, including DNS, connection/TLS, upload, redirects, automatic retries and retry waits. Body preparation and pre/post scripts are outside this budget; scripts retain their existing separate time limit. Collection items each get a new budget and inter-item delays are excluded. `timeout=0` remains unlimited. A deadline error is terminal and is not retried. Timers cannot preempt synchronous JavaScript/decompression, so completion also checks the deadline; this is not a hard real-time guarantee.
 
 ### Execution and data regression tests
@@ -168,7 +170,7 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 3. Reuse `e2e/helpers/*` and the local fixture server.
 4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
 5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
-6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **29 tests** (or intentionally adjust the count here).
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **33 tests** (or intentionally adjust the count here).
 7. Layout / variable-resolution / scroll-ownership regressions that users can see immediately should also stay in `npm run test:e2e:ui-regressions` (#18/#19/#20).
 
 ### Native file dialogs (`.env` import)

@@ -343,6 +343,7 @@ function expandClientScriptTemplate(
     'requestPanelClientScript should compose getRequestPanelPathVariablesClientScript()'
   );
   return clientScript
+    .split('${getRequestPanelSseClientScript()}').join(extractTaggedTemplate(readSourceFile('src/panels/requestPanel/requestPanelSseClientScript.ts'), '/*js*/'))
     .split(bodyMarker).join(bodyClientScript)
     .split(responseMarker).join(responseClientScript)
     .split(runnerMarker).join(runnerClientScript)
@@ -478,6 +479,7 @@ function readRequestPanelHtmlSources(): string {
     'src/panels/requestPanel/requestPanelClientScript.ts',
     'src/panels/requestPanel/requestPanelBodyClientScript.ts',
     'src/panels/requestPanel/requestPanelResponseClientScript.ts',
+    'src/panels/requestPanel/requestPanelSseClientScript.ts',
     'src/panels/requestPanel/requestPanelRunnerClientScript.ts',
     'src/panels/requestPanel/requestPanelEnvironmentClientScript.ts',
     'src/panels/requestPanel/requestPanelDefaultHeadersClientScript.ts',
@@ -3160,7 +3162,7 @@ describe('RequestPanel Webview', () => {
     assert.match(collectionRunnerSource, /historyRequest = redactor\.hasSecrets\s*\? createSecretHistorySnapshot\([\s\S]*?: createHistoryRequestSnapshot\(/);
     // 실행 중단 여부와 저장 설정을 확인한 뒤 execution context까지 전달하는 계약을 검증한다.
     assert.match(collectionRunnerSource, /if \(!isStopped\(\) && settings\.saveToHistory && historyRequest\) \{/);
-    assert.match(collectionRunnerSource, /this\.host\.saveToHistory\([\s\S]*?historyRequest,[\s\S]*?response \? \{ status: response\.status, statusText: response\.statusText, time: response\.time \} : null,[\s\S]*?createRequestTiming\(requestStartedAt\),[\s\S]*?input\.context/);
+    assert.match(collectionRunnerSource, /this\.host\.saveToHistory\([\s\S]*?historyRequest,[\s\S]*?response && \(!getSseSnapshot\(response\) \|\| getSseSnapshot\(response\)!\.state === 'completed'\)\s*\? \{ status: response\.status, statusText: response\.statusText, time: response\.time \} : null,[\s\S]*?createRequestTiming\(requestStartedAt\),[\s\S]*?input\.context/);
     assert.match(collectionRunnerSource, /this\.host\.refreshHistory\(\);/);
   });
 

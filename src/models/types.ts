@@ -158,6 +158,7 @@ export interface Request extends RequestSettings {
 
 // HTTP 응답
 export interface Response {
+  sse?: import('./sse').SseSnapshot;
   status: number;
   statusText: string;
   headers: Record<string, string>;
@@ -257,6 +258,8 @@ export enum MessageType {
   // Extension -> Webview
   RestoreTabState = 'restoreTabState',
   ReceiveResponse = 'receiveResponse',
+  ReceiveSseUpdate = 'receiveSseUpdate',
+  RunCollectionSseUpdate = 'runCollectionSseUpdate',
   ResponseError = 'responseError',
   RequestCanceled = 'requestCanceled',
   LoadRequest = 'loadRequest',
