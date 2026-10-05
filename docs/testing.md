@@ -5,7 +5,7 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**27 tests in 26 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, execution context isolation, HTML preview bundle/sanitization/CSP, History updates, response charsets, and network deadlines) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**28 tests in 27 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, execution context isolation, HTML preview bundle/sanitization/CSP, History updates, response charsets, and network deadlines) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
@@ -21,7 +21,7 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (27 tests in 26 files)
+npm run test:e2e         # stable VS Code UI E2E (28 tests in 27 files)
 npm run test:e2e:ui-regressions  # critical UI contracts (#18/#19/#20): narrow geometry + path occurrence resolution + body scroll ownership
 npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
 npm run test:e2e:all     # stable suite then focused runner suite
@@ -117,6 +117,8 @@ Response charset E2E (#26) serves fixed EUC-KR/Shift_JIS bytes, gzip and BOM res
 
 Network deadline E2E (#27) uses a local server that continuously streams a body, returns a retryable status, or holds a response. It verifies one shared timeout across body reception/retry waits, no extra attempt after expiry, Stop cleanup, and a successful subsequent request. Controlled-clock/transport unit tests cover uploads, redirect chains, exact/fractional deadline boundaries, unlimited timeout, synchronous decompression overruns, timer cleanup, and late callbacks; local sockets cover delayed DNS callbacks and stalled TLS. Both RequestExecutor and CollectionRunner tests cover shared retry budgets, per-item budgets, script exclusion, and cancellation/profile isolation. Test safety deadlines are separate from request deadlines.
 
+UI clarity E2E (#28) checks request-context meanings, empty Params/Add behavior, column headings, JSON keyboard folding/copy preservation, and narrow geometry with EN/KO/JA display languages. It captures the real VS Code window in `e2e/.artifacts/ui-clarity/`. Accessible names, native buttons, and sidebar accessibility labels are checked; actual NVDA/JAWS speech output is a separate manual check.
+
 Request timeouts use a monotonic clock from the first network attempt through the final response, including DNS, connection/TLS, upload, redirects, automatic retries and retry waits. Body preparation and pre/post scripts are outside this budget; scripts retain their existing separate time limit. Collection items each get a new budget and inter-item delays are excluded. `timeout=0` remains unlimited. A deadline error is terminal and is not retried. Timers cannot preempt synchronous JavaScript/decompression, so completion also checks the deadline; this is not a hard real-time guarantee.
 
 ### Execution and data regression tests
@@ -160,7 +162,7 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 3. Reuse `e2e/helpers/*` and the local fixture server.
 4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
 5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
-6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **27 tests** (or intentionally adjust the count here).
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **28 tests** (or intentionally adjust the count here).
 7. Layout / variable-resolution / scroll-ownership regressions that users can see immediately should also stay in `npm run test:e2e:ui-regressions` (#18/#19/#20).
 
 ### Native file dialogs (`.env` import)

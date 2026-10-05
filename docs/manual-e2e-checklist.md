@@ -28,6 +28,7 @@ Covered by `e2e/specs/*` against a real VS Code Electron host + localhost fixtur
 - History consecutive completions, pin/unpin, pinned filter, and clear preserving pinned entries (`e2e/specs/25-history-sync.spec.ts`)
 - Response EUC-KR/Shift_JIS/gzip/BOM decoding, invalid/unsupported warnings, and tab/pin preservation (`e2e/specs/26-response-charset.spec.ts`)
 - Total network deadline while body chunks arrive or retry waits, plus Stop/late-response cleanup (`e2e/specs/27-network-deadline.spec.ts`)
+- Clear context labels/column headings, JSON fold keyboard controls/copy bytes, and EN/KO/JA narrow layouts (`e2e/specs/28-ui-clarity.spec.ts`)
 - Critical UI regression gate (`npm run test:e2e:ui-regressions` → #18/#19/#20)
 
 Unusual OS / display-scaling context-menu behavior can still be spot-checked manually; the stable suite covers the keyboard context-menu path (see `docs/testing.md`).

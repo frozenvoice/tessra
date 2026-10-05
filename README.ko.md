@@ -167,7 +167,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - Pin / Compare를 항상 노출하는 sticky 응답 요약과 `⋯`의 복사·저장·Mode 유틸
 - 활성 환경(`N vars`), 스크립트/히스토리 on·off, 기본헤더·요청 `Used N`, 위험 설정(TLS 비보안, 기본헤더 건너뜀 등)을 한눈에 구분하는 상태 스트립; Environment 세그먼트로 변수 편집기 토글; 워크스페이스 프로필은 스트립 확장 영역에 유지
 - 이전 / 다음 이동, 대소문자 구분, 정규식 옵션을 갖춘 응답 본문 검색
-- JSON 트리 뷰어
+- Enter/Space·좌우 화살표로 접고 펼치는 JSON 트리 뷰어, 원문 복사·저장 바이트 보존
 - XML `Pretty`, `Compact`, `Inline Children` 포맷
 - Content-Type 기반 문법 강조
 - gzip, deflate, Brotli 응답 자동 해제

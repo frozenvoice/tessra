@@ -166,7 +166,7 @@ Group request history by date and run collections with status summaries.
 - Sticky response toolbar for finding text, compare, and response actions
 - Quiet status strip with glanceable editor indicators for the active environment (`N vars`), Scripts/History on·off, Defaults/`Used N` counts, and risk overrides (TLS insecure, defaults skipped, redirects, headers-only); workspace profile lives in strip expand disclosure; Environment segment toggles the inline variable editor
 - Find text within the response body with next/previous navigation, case-sensitive mode, and regex mode
-- JSON tree viewer
+- JSON tree viewer with keyboard fold buttons (Enter/Space and Left/Right), preserving original copy/save bytes
 - XML formatting with `Pretty`, `Compact`, and `Inline Children`
 - Content-Type based syntax highlighting
 - Automatic gzip, deflate, and Brotli response decoding

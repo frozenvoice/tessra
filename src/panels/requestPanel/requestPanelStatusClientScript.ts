@@ -193,7 +193,7 @@ function buildStatusStripSegments(tab) {
     historyOn ? 'is-on' : 'is-off',
     'switch-tab',
     'settings:save-history',
-    tr(historyOn ? 'webview.summaryHistoryOn' : 'webview.summaryHistoryOff'),
+    tr(historyOn ? 'webview.historyRecordingOnTooltip' : 'webview.historyRecordingOffTooltip'),
     { cue: historyOn ? 'on-check' : 'off', priority: 'high' }
   ));
 
@@ -215,7 +215,7 @@ function buildStatusStripSegments(tab) {
         'is-info',
         'open-default-headers',
         null,
-        tr('webview.defaultHeaders'),
+        tf('webview.defaultHeadersContextTooltip', { names: appliedDefaultHeaders.map(function(h) { return h.key; }).join(', ') }),
         { priority: 'medium', count: appliedDefaultHeaders.length }
       ));
     }
@@ -278,7 +278,7 @@ function buildStatusStripSegments(tab) {
       'is-info',
       'reveal-variable-usage',
       null,
-      usage.map(function(u) { return '{{' + u.name + '}}'; }).join(', '),
+      tf('webview.requestVarsContextTooltip', { names: usage.map(function(u) { return '{{' + u.name + '}}'; }).join(', ') }),
       {
         priority: 'low',
         count: usage.length,

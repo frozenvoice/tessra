@@ -82,7 +82,7 @@ export class CollectionTreeProvider
           node.item.name,
           vscode.TreeItemCollapsibleState.None
         );
-        item.description = buildRequestTreeDescription(req);
+        item.description = buildRequestTreeDescription(req, node.item.name);
         item.tooltip = buildRequestTreeTooltip(req);
         item.iconPath = getRequestMethodIcon(req.method, req);
         item.contextValue = 'request';

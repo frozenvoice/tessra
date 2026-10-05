@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { HistorySnapshot, StorageService } from '../services/StorageService';
 import { HistoryEntry } from '../models/types';
 import { LocalizationService } from '../services/LocalizationService';
-import { buildHistoryDescription, buildHistoryTooltip, getRequestMethodIcon } from './requestTreeVisuals';
+import { buildHistoryDescription, buildHistoryTooltip, getHistoryStatusIcon } from './requestTreeVisuals';
 
 const MIME = 'application/vnd.tessra.history-entry';
 
@@ -88,7 +88,8 @@ export class HistoryTreeProvider
     const item = new vscode.TreeItem(localizedPinLabel + label, vscode.TreeItemCollapsibleState.None);
     item.description = buildHistoryDescription(entry);
     item.tooltip = buildHistoryTooltip(entry);
-    item.iconPath = getRequestMethodIcon(method, entry.request);
+    item.iconPath = getHistoryStatusIcon(entry);
+    item.accessibilityInformation = { label: `${localizedPinLabel}${label}, ${item.description}` };
     item.contextValue = entry.pinned ? 'history-pinned' : 'history';
 
     item.command = {

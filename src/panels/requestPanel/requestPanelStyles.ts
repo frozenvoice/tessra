@@ -318,6 +318,11 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 /* KV ??*/
 .kv-section{padding:3px 0}
 .kv-row{display:flex;gap:3px;margin-bottom:2px;align-items:center}
+.kv-column-headings{display:flex;gap:3px;align-items:center;margin-bottom:4px;color:var(--vscode-descriptionForeground);font-size:11px}
+.kv-column-headings .kv-column-label{flex:1;min-width:0;padding:0 5px}
+.kv-column-check{width:20px;flex:none}
+.kv-column-action{width:16px;flex:none}
+.request-editor-panel .kv-row input[type="text"],.request-editor-panel .kv-row input[type="password"]{min-width:0}
 .kv-row input[type="checkbox"]{width:14px;height:14px;accent-color:var(--vscode-focusBorder)}
 .kv-row input[type="text"],.kv-row input[type="password"]{flex:1;padding:3px 5px;background:var(--vscode-input-background);color:var(--vscode-input-foreground);border:1px solid var(--vscode-input-border,transparent);border-radius:2px;font-size:13px;font-family:var(--vscode-editor-font-family,monospace)}
 .kv-row .rm{background:transparent;border:none;color:var(--vscode-errorForeground,#f44);cursor:pointer;font-size:13px;padding:0 3px;line-height:1}
@@ -547,17 +552,23 @@ body{font-family:var(--vscode-font-family);font-size:var(--vscode-font-size);col
 
 .json-tree{background:var(--vscode-editor-background);padding:8px 10px;border-radius:2px;border:1px solid var(--vscode-panel-border,#444);font-family:var(--vscode-editor-font-family,monospace);font-size:13px;overflow:auto;flex:1;min-height:0;line-height:1.3;user-select:text;box-shadow:none}
 .jt-node{padding-left:16px}
-.jt-row{display:flex;align-items:baseline;white-space:nowrap;gap:6px;padding:2px 8px;border-radius:10px;transition:background .12s ease}
+.jt-row{display:flex;align-items:baseline;white-space:nowrap;gap:0;padding:2px 4px;border-radius:2px;transition:background .12s ease}
 .jt-row[data-copy-path]{cursor:pointer}
 .jt-row:hover{background:rgba(255,255,255,.04)}
 .copy-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(8px);z-index:9999;padding:8px 14px;border-radius:8px;background:rgba(20,24,31,.96);border:1px solid rgba(87,166,255,.35);color:var(--vscode-foreground);font-size:13px;font-family:var(--vscode-editor-font-family,monospace);box-shadow:0 12px 28px rgba(0,0,0,.4),0 0 0 1px rgba(87,166,255,.12);pointer-events:none;opacity:0;transition:opacity .18s ease,transform .18s ease;max-width:80vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .copy-toast.visible{opacity:1;transform:translateX(-50%) translateY(0)}
-.jt-toggle{display:inline-block;width:14px;cursor:pointer;text-align:center;color:var(--vscode-foreground);opacity:.5;flex-shrink:0;user-select:none}
+.jt-toggle{display:inline-flex;align-items:center;justify-content:center;width:18px;height:20px;margin-right:4px;padding:0;border:none;background:transparent;color:var(--vscode-foreground);flex-shrink:0;user-select:none}
+.jt-toggle[aria-expanded]{cursor:pointer;opacity:.8}
+.jt-toggle .jt-chevron{display:inline-block;font-size:18px;line-height:1;transform:rotate(90deg)}
+.jt-toggle[aria-expanded="false"] .jt-chevron{transform:rotate(0deg)}
+.jt-toggle:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:1px}
+.jt-separator{white-space:pre}
 .jt-toggle:hover{opacity:1}
 .jt-copy-path{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:2px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--vscode-descriptionForeground,#bdbdbd);font-size:10px;letter-spacing:.02em;cursor:pointer;opacity:0;transition:opacity .12s ease,transform .12s ease;border:none}
 .jt-row:hover .jt-copy-path,.jt-copy-path:focus{opacity:1}
 .jt-copy-path:hover{transform:none;background:rgba(87,166,255,.12);color:#93c8ff}
-.jt-key{color:#9cdcfe;margin-right:4px}
+.jt-key{color:#9cdcfe}
+.jt-copy-path{margin-left:8px}
 .jt-str{color:#ce9178}.jt-num{color:#b5cea8}.jt-bool{color:#569cd6}.jt-null{color:#569cd6}
 .jt-brace{color:var(--vscode-foreground);opacity:.6}
 .jt-children{overflow:hidden}
@@ -889,6 +900,7 @@ body{background:var(--tessra-surface-tint,var(--vscode-editor-background))}
 .default-headers-banner{display:flex;flex-direction:column;gap:4px;padding:4px 0;margin-bottom:6px;border:none;border-radius:0;background:transparent;box-shadow:none}
 .default-headers-banner.active,.default-headers-banner.warning{border:none;background:transparent;box-shadow:none}
 .default-headers-oneline{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:22px}
+.default-headers-oneline .js-open-default-headers{flex-shrink:0;white-space:nowrap}
 .default-headers-summary{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;border:none;background:transparent;color:var(--vscode-descriptionForeground);font:inherit;cursor:pointer;padding:0;text-align:left;border-radius:2px}
 .default-headers-summary:hover{color:var(--vscode-foreground)}
 .default-headers-banner-title{font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85;color:var(--tessra-label-accent,var(--vscode-descriptionForeground))}

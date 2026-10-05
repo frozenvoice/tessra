@@ -1124,6 +1124,7 @@ describe('RequestPanel Webview', () => {
       formatLocalTime: () => '12:00',
       formatSize: () => '0 B',
       kvRowsHtml: () => '',
+      kvColumnHeadingsHtml: () => '',
       renderDefaultHeadersBanner: () => '',
       authHtml: () => '',
       renderScriptsEditorContents: () => '',

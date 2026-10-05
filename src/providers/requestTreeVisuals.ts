@@ -70,11 +70,12 @@ export function summarizeRequestLocation(url: string): string {
   }
 }
 
-export function buildRequestTreeDescription(request: Pick<Request, 'requestType' | 'method' | 'url' | 'bodyType'>): string {
-  const parts = [
-    isWebSocketRequest(request) ? 'WS' : String(request.method || 'GET').toUpperCase(),
-    summarizeRequestLocation(request.url),
-  ];
+export function buildRequestTreeDescription(request: Pick<Request, 'requestType' | 'method' | 'url' | 'bodyType'>, label = ''): string {
+  const method = isWebSocketRequest(request) ? 'WS' : String(request.method || 'GET').toUpperCase();
+  // 이름에 이미 적힌 메서드는 보조 설명에서 반복하지 않는다. 저장된 이름은 바꾸지 않는다.
+  const hasMethodPrefix = label === method || label.startsWith(method + ' ');
+  const parts = hasMethodPrefix ? [] : [method];
+  parts.push(summarizeRequestLocation(request.url));
   if (request.bodyType && request.bodyType !== 'none' && request.bodyType !== 'raw') {
     parts.push(summarizeBodyType(request.bodyType));
   }
@@ -107,10 +108,10 @@ export function buildRequestTreeTooltip(request: Request): string {
 
 export function buildHistoryDescription(entry: HistoryEntry): string {
   const parts = [
-    entry.response ? String(entry.response.status) : LocalizationService.t('history.errorShort'),
+    entry.response ? `${entry.response.status} ${historyStatusLabel(entry.response.status)}` : LocalizationService.t('history.errorShort'),
   ];
   if (entry.response?.time !== undefined) {
-    parts.push(`${entry.response.time}ms`);
+    parts.push(`${entry.response.time} ms`);
   }
   if (entry.pinned) {
     parts.push(LocalizationService.t('webview.pin'));
@@ -118,9 +119,23 @@ export function buildHistoryDescription(entry: HistoryEntry): string {
   return parts.join(' · ');
 }
 
+function historyStatusLabel(status: number): string {
+  const key = status >= 500 ? 'ServerError' : status >= 400 ? 'ClientError'
+    : status >= 300 ? 'Redirect' : status >= 200 ? 'Success' : 'Informational';
+  return LocalizationService.t('history.status' + key);
+}
+
+export function getHistoryStatusIcon(entry: HistoryEntry): vscode.ThemeIcon {
+  const status = entry.response?.status;
+  if (status === undefined || status >= 400) return new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'));
+  if (status >= 300) return new vscode.ThemeIcon('arrow-right', new vscode.ThemeColor('charts.orange'));
+  if (status >= 200) return new vscode.ThemeIcon('pass', new vscode.ThemeColor('charts.green'));
+  return new vscode.ThemeIcon('info', new vscode.ThemeColor('charts.blue'));
+}
+
 export function buildHistoryTooltip(entry: HistoryEntry): string {
   const responseLine = entry.response
-    ? `${entry.response.status} ${entry.response.statusText} · ${entry.response.time}ms`
+    ? `${entry.response.status} ${entry.response.statusText} (${historyStatusLabel(entry.response.status)}) · ${LocalizationService.t('history.elapsed')}: ${entry.response.time} ms`
     : LocalizationService.t('history.errorShort');
 
   return [

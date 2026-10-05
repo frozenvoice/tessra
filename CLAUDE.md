@@ -78,7 +78,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ### Environment UX
 - URL / Headers / Body / Auth / Scripts 등 편집 가능한 텍스트 입력에서 `{{variable}}` 자동완성
-- 활성 환경(`N vars`)·Scripts/History on·off·Defaults/`Used N`·위험 설정은 상태 스트립에서 한눈에 구분되며, Env에는 Tessra 시그니처 액센트와 작은 테서랙트 마크가 붙고, Environment 세그먼트(또는 스트립 확장/Environments 뷰)에서 환경 변수 편집기를 연다
+- 활성 환경(`N vars`)·스크립트·히스토리 저장·기본 헤더·요청 변수·위험 설정은 상태 스트립에서 구분된다. 기본 헤더 수는 실제 적용할 활성 헤더, 요청 변수 수는 참조한 고유 변수이며 tooltip에서 의미/이름을 설명한다. Environment 세그먼트(또는 Environments 뷰)에서 환경 변수 편집기를 연다.
 
 ### Scripts
 - Pre-request script
@@ -171,7 +171,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 품질 기준
 - 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다
-- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **27개 / 26파일**이며 Collection Runner, WebSocket, 환경·헤더·Auth·Scripts·Settings·Path Variables, 좁은 패널 geometry, Body scroll ownership, 응답 키보드 탐색, 초안 보존, 실행 환경·프로필 격리, HTML Preview 자산·정제·CSP, History 연속 완료·핀·필터·삭제, 응답 charset·경고, 전체 네트워크 deadline을 포함한다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
+- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **28개 / 27파일**이며 Collection Runner, WebSocket, 환경·헤더·Auth·Scripts·Settings·Path Variables, 좁은 패널 geometry, Body scroll ownership, 응답 키보드 탐색, 초안 보존, 실행 환경·프로필 격리, HTML Preview 자산·정제·CSP, History 연속 완료·핀·필터·삭제, 응답 charset·경고, 전체 네트워크 deadline을 포함한다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
 - UI 품질 원칙: DOM visible만으로 layout PASS 금지, popup/menu viewport geometry 검증, variable warning은 occurrence resolution 기준, scrollable editor는 scroll owner 수 + wheel interaction 검증, Request Panel layout은 narrow-width/short-height BrowserWindow에서 검증.
 - Quiet Instrument 계약: pill wall / soft-card / Send success-green 재도입 금지
 

@@ -1072,14 +1072,14 @@ function bindResponseViewerEvents(mc) {
   // Expand All
   mc.querySelector('.js-expand-all')?.addEventListener('click', () => {
     mc.querySelectorAll('.js-res-tree .jt-children').forEach(el => el.classList.remove('collapsed'));
-    mc.querySelectorAll('.js-res-tree .jt-toggle').forEach(el => { el.textContent = '-'; });
+    mc.querySelectorAll('.js-res-tree button.jt-toggle').forEach(el => { el.setAttribute('aria-expanded', 'true'); });
     mc.querySelectorAll('.js-res-tree .jt-ellipsis').forEach(el => el.classList.add('hidden'));
   });
 
   // Collapse All
   mc.querySelector('.js-collapse-all')?.addEventListener('click', () => {
     mc.querySelectorAll('.js-res-tree .jt-children').forEach(el => el.classList.add('collapsed'));
-    mc.querySelectorAll('.js-res-tree .jt-toggle').forEach(el => { el.textContent = '+'; });
+    mc.querySelectorAll('.js-res-tree button.jt-toggle').forEach(el => { el.setAttribute('aria-expanded', 'false'); });
     mc.querySelectorAll('.js-res-tree .jt-ellipsis').forEach(el => el.classList.remove('hidden'));
   });
 
@@ -1147,7 +1147,7 @@ function appendJsonPath(basePath, segment, isArray) {
 
 function buildJsonTree(val, key, isLast, path) {
   const comma = isLast ? '' : '<span class="jt-comma">,</span>';
-  const keyHtml = key !== '' ? '<span class="jt-key">' + escapeHtml('"' + key + '"') + '</span>: ' : '';
+  const keyHtml = key !== '' ? '<span class="jt-key">' + escapeHtml('"' + key + '"') + '</span><span class="jt-separator">: </span>' : '';
   const copyPath = path || '$';
   const pathAttr = ' data-copy-path="' + escapeAttr(copyPath) + '"';
   const rowTitle = ' title="' + escapeAttr(tf('webview.copyJsonPathValue', { path: copyPath })) + '"';
@@ -1184,10 +1184,10 @@ function buildJsonTree(val, key, isLast, path) {
     childrenHtml += buildJsonTree(v, childKey, idx === count - 1, childPath);
   });
 
-  const summary = isArr ? count + ' items' : count + ' keys';
+  const summary = tfCount(isArr ? 'webview.jsonItems' : 'webview.jsonKeys', count);
 
   return '<div class="jt-row"' + pathAttr + rowTitle + '>' +
-      '<span class="jt-toggle">-</span>' + keyHtml +
+      '<button class="jt-toggle" type="button" aria-expanded="true" aria-label="' + escapeAttr(tf('webview.toggleJsonNode', { path: copyPath })) + '" title="' + escapeAttr(tf('webview.toggleJsonNode', { path: copyPath })) + '"><span class="jt-chevron" aria-hidden="true">›</span></button>' + keyHtml +
       '<span class="jt-brace">' + open + '</span>' +
       '<span class="jt-ellipsis hidden" title="' + summary + '"> ... ' + summary + ' </span>' +
       copyBtn +
@@ -1241,6 +1241,24 @@ function bindTreeToggles(container) {
     }
   };
 
+  var setFoldState = function(toggle, collapsed) {
+    const row = toggle.closest('.jt-row');
+    const children = row?.nextElementSibling;
+    if (!children || !children.classList.contains('jt-children')) return;
+    children.classList.toggle('collapsed', collapsed);
+    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    row.querySelector('.jt-ellipsis')?.classList.toggle('hidden', !collapsed);
+  };
+  container.addEventListener('keydown', function(e) {
+    const toggle = e.target.closest('button.jt-toggle');
+    if (!toggle) return;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      cancelPendingRowClick();
+      setFoldState(toggle, e.key === 'ArrowLeft');
+    }
+  });
+
   container.addEventListener('click', (e) => {
     const copyPathBtn = e.target.closest('.jt-copy-path');
     if (copyPathBtn && copyPathBtn.dataset.copyPath) {
@@ -1262,15 +1280,12 @@ function bindTreeToggles(container) {
       const row = (toggle || ellipsis).closest('.jt-row');
       if (!row) return;
       const tgl = row.querySelector('.jt-toggle');
-      if (!tgl || !tgl.textContent.trim()) return;
+      if (!tgl || !tgl.hasAttribute('aria-expanded')) return;
 
       const children = row.nextElementSibling;
       if (!children || !children.classList.contains('jt-children')) return;
 
-      const collapsed = children.classList.toggle('collapsed');
-      tgl.textContent = collapsed ? '+' : '-';
-      const ell = row.querySelector('.jt-ellipsis');
-      if (ell) ell.classList.toggle('hidden', !collapsed);
+      setFoldState(tgl, !children.classList.contains('collapsed'));
       return;
     }
 

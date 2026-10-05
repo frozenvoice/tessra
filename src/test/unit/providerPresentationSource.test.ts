@@ -21,7 +21,7 @@ describe('Provider presentation source', () => {
     assert.match(collectionSource, /getRequestMethodIcon/);
     assert.match(historySource, /buildHistoryDescription/);
     assert.match(historySource, /buildHistoryTooltip/);
-    assert.match(historySource, /getRequestMethodIcon/);
+    assert.match(historySource, /getHistoryStatusIcon/);
   });
 
   it('groups history entries by pinned state and local date without changing storage order', () => {

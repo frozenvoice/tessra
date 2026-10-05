@@ -2578,6 +2578,7 @@ function renderContent() {
           '<div class="tab' + (isSettingsTab ? ' active' : '') + (isSettingsTab && !requestEditorExpanded ? ' collapsed' : '') + '" data-tab="settings" role="tab" tabindex="0" aria-selected="' + (isSettingsTab ? 'true' : 'false') + '" aria-expanded="' + (showSettingsEditor ? 'true' : 'false') + '">' + escapeHtml(tr('webview.settings')) + '</div>' +
         '</div>' +
         '<div class="js-params-panel request-editor-panel kv-section' + (showParamsEditor ? '' : ' hidden') + '">' +
+          kvColumnHeadingsHtml('params') +
           '<div class="js-param-rows" data-testid="request-params">' + kvRowsHtml(tab.params) + '</div>' +
           '<div class="kv-actions">' +
             '<button class="add-btn js-add-param">' + escapeHtml(tr('webview.addParam')) + '</button>' +
@@ -2594,6 +2595,7 @@ function renderContent() {
         '</div>' +
         '<div class="js-headers-panel request-editor-panel kv-section' + (showHeadersEditor ? '' : ' hidden') + '">' +
           '<div class="js-default-headers-banner-wrap">' + renderDefaultHeadersBanner(tab) + '</div>' +
+          kvColumnHeadingsHtml('headers') +
           '<div class="js-header-rows" data-testid="request-headers">' + kvRowsHtml(tab.headers) + '</div>' +
           '<div class="kv-actions">' +
             '<button class="add-btn js-add-header">' + escapeHtml(tr('webview.addHeader')) + '</button>' +
@@ -3163,15 +3165,21 @@ function sendActiveTab() {
 // === KV ??===
 function kvValueControlHtml(key, value) {
   var sensitive = isSensitiveKeyName(key);
-  return '<input type="' + (sensitive ? 'password' : 'text') + '" class="js-kv-value" placeholder="' + escapeAttr(tr('webview.value')) + '" value="' + escapeAttr(value) + '"/>' +
+  return '<input type="' + (sensitive ? 'password' : 'text') + '" class="js-kv-value" aria-label="' + escapeAttr(tr('webview.value')) + '" placeholder="' + escapeAttr(tr('webview.value')) + '" value="' + escapeAttr(value) + '"/>' +
     '<button class="kv-reveal' + (sensitive ? '' : ' hidden') + '" type="button" title="' + escapeAttr(tr('webview.revealValue')) + '">' + escapeHtml(tr('webview.revealShort')) + '</button>';
+}
+
+function kvColumnHeadingsHtml(target) {
+  return '<div class="kv-column-headings" data-testid="' + target + '-column-headings" aria-hidden="true">' +
+    '<span class="kv-column-check"></span><span class="kv-column-label">' + escapeHtml(tr('webview.key')) + '</span>' +
+    '<span class="kv-column-label">' + escapeHtml(tr('webview.value')) + '</span><span class="kv-column-action"></span></div>';
 }
 
 function kvRowsHtml(items) {
   return (items || []).map(kv =>
     '<div class="kv-row">' +
-      '<input type="checkbox"' + (kv.enabled !== false ? ' checked' : '') + '/>' +
-      '<input type="text" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(kv.key) + '"/>' +
+      '<input type="checkbox" aria-label="' + escapeAttr(tr('webview.enableRow')) + '"' + (kv.enabled !== false ? ' checked' : '') + '/>' +
+      '<input type="text" aria-label="' + escapeAttr(tr('webview.key')) + '" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(kv.key) + '"/>' +
       kvValueControlHtml(kv.key, kv.value) +
       '<button class="rm" type="button" title="' + escapeAttr(tr('webview.remove')) + '" aria-label="' + escapeAttr(tr('webview.remove')) + '">&times;</button>' +
     '</div>'
@@ -3183,8 +3191,8 @@ function addKvRow(container, key, value) {
   const row = document.createElement('div');
   row.className = 'kv-row';
   row.innerHTML =
-    '<input type="checkbox" checked/>' +
-    '<input type="text" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(key || '') + '"/>' +
+    '<input type="checkbox" aria-label="' + escapeAttr(tr('webview.enableRow')) + '" checked/>' +
+    '<input type="text" aria-label="' + escapeAttr(tr('webview.key')) + '" placeholder="' + escapeAttr(tr('webview.key')) + '" value="' + escapeAttr(key || '') + '"/>' +
     kvValueControlHtml(key || '', value || '') +
     '<button class="rm" type="button" title="' + escapeAttr(tr('webview.remove')) + '" aria-label="' + escapeAttr(tr('webview.remove')) + '">&times;</button>';
   row.querySelector('.rm').addEventListener('click', () => row.remove());
