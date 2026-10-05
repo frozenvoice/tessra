@@ -65,7 +65,7 @@ describe('실행 컨텍스트와 저장소 통합', () => {
       pendingFlushResolvers: Map<string, (error?: Error) => void>;
     };
     Object.assign(panel, { storageProfileName: profile, executionGeneration: 0, isDisposed: false,
-      sendActiveVarsToWebview() {}, collectionRunner: { reset() {} }, webSocketManager: { disconnectAll() {} }, pendingFlushResolvers: new Map() });
+      sendActiveVarsToWebview() {}, collectionRunner: { reset() {} }, webSocketManager: { disconnectAll() {} }, secretEditor: { invalidate() {} }, pendingFlushResolvers: new Map() });
     host = {
       captureExecutionContext: () => panel.captureExecutionContext(),
       isExecutionContextCurrent: context => panel.isExecutionContextCurrent(context),

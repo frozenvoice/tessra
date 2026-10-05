@@ -7,7 +7,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - 클라우드 동기화 없음
 - 텔레메트리 없음
 - 사용자가 직접 보내는 API 요청 외의 네트워크 호출 없음
-- 모든 데이터는 로컬 JSON 파일로 저장
+- 요청·metadata는 로컬 JSON, 확인된 비밀 변수 값은 VS Code SecretStorage에 저장
 
 ## 현재 구현 범위
 
@@ -45,6 +45,9 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - URL / Headers / Params / Body / Auth / 파일 경로 치환
 - Path Variables: URL path의 full-segment `{{variable}}` Request-local override (Environment fallback / Reset; query·headers·body·auth 비영향)
 - Environments 제목 영역의 `Import Environment`로 Postman Environment JSON 또는 `.env` 파일 가져오기 (일회성 로컬 복사, 자동 active 전환 없음)
+- 명시적인 비밀 보호/값 설정/값 보기/삭제: 확인된 값은 ExtensionContext.secrets, JSON에는 안정적인 프로필·환경·변수·참조 ID와 metadata만 저장한다. pending 변환 원문은 복구를 위해 남기되 실행·새 export는 차단/참조 처리한다. 확인 후 현재 평문을 제거하고 실패 시 재시도/명시적 취소를 제공한다 (`docs/secret-variables.md`).
+- 기존 평문을 자동 분류/삭제하지 않으며 과거 사본을 검색하지 않는다. Workspace 변수도 보호/편집 가능하지만 백업 보존 용도이며 요청 치환에 섞지 않는다.
+- Webview 기본 전달은 마스킹/존재 상태다. Set은 native password 입력, Reveal은 명시적 scope/세대 권한과 일시적 화면 표시이며 프로필 전환/패널 종료 때 해제한다. 필요한 값 미설정/키체인 오류는 전송 전에 실패한다.
 
 ### Collections / History
 - Collection / folder / request CRUD
@@ -102,6 +105,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - Tessra workspace backup export / import
 - Postman collection import / export
 - Postman environment import / export
+- 보호 변수의 workspace/Postman 환경 export는 참조만 포함하고 import/restore는 새 참조로 값 입력 필요 상태를 만든다. 앱이 생성하는 history/요청 metadata/코드/진단/스크립트 로그는 알려진 값과 일반 인코딩을 마스킹 또는 변수 참조로 보존한다. 실제 통신/서버 응답은 변경하지 않으며 신뢰된 script의 임의 변환/서버 echo를 완전히 검출한다는 보장은 없다.
 
 ### 코드 생성
 - `fetch`
@@ -171,7 +175,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 품질 기준
 - 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다
-- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **28개 / 27파일**이며 Collection Runner, WebSocket, 환경·헤더·Auth·Scripts·Settings·Path Variables, 좁은 패널 geometry, Body scroll ownership, 응답 키보드 탐색, 초안 보존, 실행 환경·프로필 격리, HTML Preview 자산·정제·CSP, History 연속 완료·핀·필터·삭제, 응답 charset·경고, 전체 네트워크 deadline을 포함한다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
+- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **29개 / 28파일**이며 Collection Runner, WebSocket, 환경·헤더·Auth·Scripts·Settings·Path Variables, 좁은 패널 geometry, Body scroll ownership, 응답 키보드 탐색, 초안 보존, 실행 환경·프로필 격리, HTML Preview 자산·정제·CSP, History 연속 완료·핀·필터·삭제, 응답 charset·경고, 전체 네트워크 deadline을 포함한다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
 - UI 품질 원칙: DOM visible만으로 layout PASS 금지, popup/menu viewport geometry 검증, variable warning은 occurrence resolution 기준, scrollable editor는 scroll owner 수 + wheel interaction 검증, Request Panel layout은 narrow-width/short-height BrowserWindow에서 검증.
 - Quiet Instrument 계약: pill wall / soft-card / Send success-green 재도입 금지
 

@@ -5,6 +5,7 @@ export interface ExecutionContext {
   readonly profileName: string;
   readonly environmentId: string | null;
   readonly generation: number;
+  readonly profileId?: string;
 }
 
 export function hasEnvironmentChanges(before: KeyValue[], after: KeyValue[]): boolean {

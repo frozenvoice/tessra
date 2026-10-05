@@ -11,6 +11,7 @@ import {
   RequestScripts,
 } from '../models/types';
 import { buildUrl, coalesceQueryParams } from '../panels/requestPanel/requestUtils';
+import { importSecretVariables, isSecretId } from './secretVariables';
 
 interface PostmanAuthAttribute {
   key?: string;
@@ -701,12 +702,22 @@ export class ImportExportService {
     return {
       id: environment.id,
       name: environment.name,
-      values: environment.variables.map((variable) => ({
-        key: variable.key,
-        value: variable.value,
-        enabled: variable.enabled !== false,
-        type: 'text',
-      })),
+      values: environment.variables.map((variable) => {
+        const reference = variable.secretPendingRef ?? variable.secretRef;
+        if (reference) {
+          if (!isSecretId(variable.id) || !isSecretId(reference.id)) {
+            throw new Error('Protected environment variable requires stable IDs.');
+          }
+          return {
+            key: variable.key,
+            value: '',
+            enabled: variable.enabled !== false,
+            type: 'secret',
+            _tessraSecret: { version: 1, variableId: variable.id, referenceId: reference.id },
+          };
+        }
+        return { key: variable.key, value: variable.value, enabled: variable.enabled !== false, type: 'text' };
+      }),
       _postman_variable_scope: 'environment',
     };
   }
@@ -742,7 +753,7 @@ export class ImportExportService {
       id: typeof document.id === 'string' && document.id ? document.id : this.generateId(),
       name: document.name.trim(),
       variables: document.values
-        .map((value) => this.importKeyValue(value))
+        .map((value) => this.importEnvironmentKeyValue(value))
         .filter((value): value is KeyValue => value !== null),
     };
   }
@@ -1170,6 +1181,20 @@ export class ImportExportService {
         enabled: true,
       };
     });
+  }
+
+  private static importEnvironmentKeyValue(value: unknown): KeyValue | null {
+    const entry = this.asObject(value);
+    if (!entry || !Object.prototype.hasOwnProperty.call(entry, '_tessraSecret')) { return this.importKeyValue(value); }
+    const marker = this.asObject(entry._tessraSecret);
+    if (!marker || marker.version !== 1 || !isSecretId(marker.variableId) || !isSecretId(marker.referenceId)
+      || typeof entry.key !== 'string') {
+      throw new Error('Invalid Tessra protected variable reference.');
+    }
+    // 외부 Postman type=secret은 기존 평문 가져오기 계약을 유지한다.
+    // 명시적 Tessra marker만 새 참조로 가져오고 값은 사용자가 다시 입력한다.
+    return importSecretVariables([{ id: marker.variableId, key: entry.key, value: '',
+      enabled: entry.disabled !== true && entry.enabled !== false, secretRef: { id: marker.referenceId } }])[0];
   }
 
   private static readAuthAttributes(value: unknown): Record<string, string> {

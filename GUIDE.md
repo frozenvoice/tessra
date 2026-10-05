@@ -26,9 +26,9 @@ Body: {"env":"{{envName}}"}
 - Request tabs: `Params`, `Headers`, `Body`, `Auth`, `Scripts`, `Settings`
 - Multi-tab editing with pinned tabs
 - `Enter` in the URL field or `Ctrl+Enter` / `Cmd+Enter` sends the active request
-- The status strip under the URL bar shows the active Environment (`N vars`), Scripts, History on/off, Defaults, risk overrides, and request `Used N`
+- The status strip under the URL bar shows the active environment variable count, scripts, history saving, applied default headers, risk overrides, and referenced request variables
 - Click the Environment segment to edit its variables, or to pick an environment when none is active
-- Click `Used N` (or unresolved Vars) to open variable-usage details for the current request
+- Click the request-variable segment (including unresolved-variable warnings) to open variable-usage details for the current request
 - Expand the status strip for workspace profile, environment switching, Default Headers, and more detail
 - Sensitive auth values stay masked until you reveal them
 - You can bulk-paste headers or query params instead of adding them one row at a time
@@ -79,9 +79,18 @@ Body: {"env":"{{envName}}"}
 - URL warnings follow the same occurrence-level rule: a Request-local path value is not marked missing, but the same name in query, headers, body, or auth can still be unresolved
 - Path overrides apply only to matching path segments — not query, headers, body, or auth — and they also apply to WebSocket URLs and Collection Runner / cURL / codegen resolution
 - Variable autocomplete works in URL, headers, body, auth, scripts, and other editable fields
-- Environment `N vars` is the active environment size; request `Used N` is how many variables this request uses
+- The environment count is the active environment size; the request-variable count is the number of unique variable names referenced by this request
 - Workspace variables can be preserved in backups, but request resolution still follows the active environment
 - Import `.env` / `.env.*` / `*.env` files with `Tessra: Import Environment` as a one-time local copy; Tessra does not modify the source file or auto-activate the imported environment
+
+## Secret variables
+
+- In environment or workspace-variable editors, choose `Protect` explicitly; existing variables are not automatically classified. `Set` enters or replaces a protected value in VS Code's password input, `Reveal` temporarily displays it, and `Delete` removes the selected variable and its exact secret references.
+- Confirmed values use VS Code SecretStorage; JSON keeps stable profile/environment/variable IDs and references. Renaming a variable does not change its identity. The Webview receives masks and value-presence metadata by default; profile changes and panel closure clear revealed values.
+- Protection verifies SecretStorage before removing the current plaintext. If interrupted or unavailable, the original remains in a blocked pending conversion: use `Retry` to finish or `Cancel` to return to plaintext. Missing or unavailable secrets stop execution before Send.
+- New environment/workspace exports contain protected references only. Imported or restored protected variables require `Set`, including when restored on the same computer. Existing backups, exports, and plaintext variables are not scanned or deleted. Workspace variables remain backup-only; requests use the active environment.
+- Generated request previews, code, request history, errors, and script logs mask known resolved secret values or preserve variable references. Actual requests and received responses, including server echoes, remain unchanged. Trusted scripts can read environment secrets at runtime; arbitrary transformed values cannot be reliably detected, and the VM is not an OS sandbox.
+- See [Secret variable storage and exposure boundaries](docs/secret-variables.md) for recovery and export details.
 
 ## Workspace profiles
 
@@ -173,7 +182,7 @@ On macOS, use `Cmd` instead of `Ctrl`.
 
 ## Local storage
 
-All Tessra data is stored locally in VS Code `globalStorage` JSON files. The default profile stores files at the root; other profiles use `profiles/<name>/`.
+Requests and metadata are stored locally in VS Code `globalStorage` JSON files. Confirmed protected-variable values are stored separately in VS Code SecretStorage; JSON retains their references. The default profile stores files at the root; other profiles use encoded directories under `profiles/`.
 
 - `collections.json`
 - `history.json`

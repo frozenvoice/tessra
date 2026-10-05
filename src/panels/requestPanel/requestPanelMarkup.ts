@@ -25,8 +25,11 @@ export function getRequestPanelMarkup(input: RequestPanelMarkupInput): string {
     <button class="rm" id="envCloseBtn" data-testid="environment-disclosure-close" type="button" title="${LocalizationService.t('webview.close', undefined, displayLanguage)}" aria-label="${LocalizationService.t('webview.close', undefined, displayLanguage)}" style="cursor:pointer;font-size:14px;opacity:.6">&times;</button>
   </div>
   <div class="env-editor-body" id="envEditorBody">
+    <p id="workspaceVariablesNote" class="hidden" style="font-size:12px;color:var(--vscode-descriptionForeground)">${LocalizationService.t('webview.workspaceVariablesBackupOnly', undefined, displayLanguage)}</p>
+    <p id="secretConversionHelp" style="font-size:12px;color:var(--vscode-descriptionForeground)">${LocalizationService.t('webview.secretConversionHelp', undefined, displayLanguage)}</p>
     <div id="envVarRows" class="kv-section" data-testid="environment-var-rows"></div>
     <button class="add-btn" id="addEnvVarBtn" data-testid="environment-add-variable" disabled>${LocalizationService.t('webview.addVariable', undefined, displayLanguage)}</button>
+    <button class="ghost-btn" id="openWorkspaceVariablesBtn" type="button" data-testid="workspace-variables-open">${LocalizationService.t('webview.openWorkspaceVariables', undefined, displayLanguage)}</button>
   </div>
 </div>
 

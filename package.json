@@ -211,6 +211,10 @@
         "icon": "$(settings-gear)"
       },
       {
+        "command": "tessra.editWorkspaceVariables",
+        "title": "%command.editWorkspaceVariables%"
+      },
+      {
         "command": "tessra.importData",
         "title": "%command.importData%",
         "icon": "$(cloud-download)"

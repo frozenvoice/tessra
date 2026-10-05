@@ -6,6 +6,12 @@ export interface KeyValue {
   key: string;
   value: string;
   enabled: boolean;
+  /** 환경/workspace 변수의 안정적인 식별자. 요청 헤더/Params에는 필요하지 않다. */
+  id?: string;
+  /** 실제 값은 ExtensionContext.secrets에만 저장한다. */
+  secretRef?: { id: string };
+  /** 변환이 끝날 때까지 원본을 보존하되 실행/내보내기에서는 평문 fallback을 금지한다. */
+  secretPendingRef?: { id: string };
 }
 
 /** Request-local path override. Presence of an entry means override is active (value may be empty). */
@@ -221,6 +227,9 @@ export enum MessageType {
   SendRequest = 'sendRequest',
   SaveRequest = 'saveRequest',
   SaveEnvironmentVars = 'saveEnvironmentVars',
+  SaveWorkspaceVariables = 'saveWorkspaceVariables',
+  OpenWorkspaceVariables = 'openWorkspaceVariables',
+  SecretVariableAction = 'secretVariableAction',
   CopyAsCurl = 'copyAsCurl',
   CopyResponseBody = 'copyResponseBody',
   CopyToClipboard = 'copyToClipboard',
@@ -307,7 +316,25 @@ export interface SaveEnvironmentVarsMessage {
   type: MessageType.SaveEnvironmentVars;
   envId: string;
   variables: KeyValue[];
+  scopeToken?: string;
 }
+
+export interface SaveWorkspaceVariablesMessage {
+  type: MessageType.SaveWorkspaceVariables;
+  variables: KeyValue[];
+  scopeToken?: string;
+}
+
+export interface SecretVariableActionMessage {
+  type: MessageType.SecretVariableAction;
+  envId: string | null;
+  variableId: string;
+  scopeToken?: string;
+  action: string;
+  revealRequestId?: string;
+}
+
+export interface OpenWorkspaceVariablesMessage { type: MessageType.OpenWorkspaceVariables }
 
 export interface CopyAsCurlMessage {
   type: MessageType.CopyAsCurl;
@@ -551,6 +578,8 @@ export interface LoadEnvironmentMessage {
   envId: string;
   envName: string;
   variables: KeyValue[];
+  scopeToken?: string;
+  reveal?: boolean;
 }
 
 export interface UpdateActiveEnvMessage {
@@ -625,6 +654,9 @@ export type IncomingWebviewMessage =
   | SendRequestMessage
   | SaveRequestMessage
   | SaveEnvironmentVarsMessage
+  | SaveWorkspaceVariablesMessage
+  | SecretVariableActionMessage
+  | OpenWorkspaceVariablesMessage
   | CopyAsCurlMessage
   | CopyResponseBodyMessage
   | CopyToClipboardMessage

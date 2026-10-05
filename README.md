@@ -1,4 +1,4 @@
-﻿# Tessra
+# Tessra
 
 The local-first API client for VS Code.
 
@@ -12,6 +12,7 @@ Tessra is built for developers who want a fast Thunder Client-style workflow ins
 
 ## Recent highlights
 
+- Explicit **Protect** for environment/workspace variables keeps confirmed values in VS Code SecretStorage. **Set value**, temporary **Reveal**, and exact-variable deletion are available in the variable editor; see [secret variables](docs/secret-variables.md).
 - "Stop after headers" closes the response stream once headers arrive, so endless or very large bodies no longer keep the connection open in the background.
 - Failed script assertions show the actual and expected values, e.g. `Expected 1 to strictly equal 2.`
 - The Marketplace page opens with a looping demo recorded in VS Code, plus the full video with sound.
@@ -63,7 +64,7 @@ Group request history by date and run collections with status summaries.
 - Offline-first workflow
 - No login required
 - No cloud dependency
-- Local JSON storage only
+- Local JSON metadata and VS Code SecretStorage for protected values
 - cURL, OpenAPI, and Postman import/export
 - Scripts, collections, environments, response compare, and code generation
 - WebSocket `ws://` / `wss://` connect, message, safety limit, and keepalive workflow
@@ -81,11 +82,11 @@ Group request history by date and run collections with status summaries.
 - `Ctrl+Enter` / `Cmd+Enter` also sends the request
 - Cancel in-flight requests without discarding the last good response
 - Request stage feedback, richer empty states, status-aware response feedback, and polished response actions
-- Quiet status strip for environment (`N vars`), Defaults, request `Used N`, Scripts/History on·off, and risk overrides; click the Environment segment (or strip expand / Environments view) to open the variable editor
+- Quiet status strip for the environment variable count, applied default headers, referenced request variables, scripts, history saving, and risk overrides; click the Environment segment (or strip expand / Environments view) to open the variable editor
 - Preflight warnings for unresolved `{{variables}}` before you send
 - Clickable status chips that jump to the relevant request area, focus it, and briefly highlight the linked card
 - Draft change chips that summarize which request sections changed before you save or send
-- Variable Usage disclosure (via strip `Used N` / Vars) showing where each `{{variable}}` is used across the request
+- Variable Usage disclosure (via the request-variable segment) showing where each `{{variable}}` is used across the request
 - Masked auth and sensitive key/value inputs with reveal controls
 - Bulk paste for headers and query params
 - Empty-state quick actions for a sample request, the guide, environment switching, and URL focus
@@ -141,6 +142,12 @@ Group request history by date and run collections with status summaries.
 - `Import Environment` from the Environments title bar for Postman Environment JSON or `.env` files
 - Workspace-local storage profiles for isolating collections, history, environments, default headers, and saved tabs
 
+Choose **Protect** on an existing variable to move its current value into VS Code SecretStorage. The editor normally receives only metadata and existence state; **Set value** uses a native password input, and **Reveal** is an explicit temporary action cleared when the editor scope/profile changes or the panel closes. Missing values and keychain failures block requests that need the secret instead of sending an empty string.
+
+Protection first persists a recovery marker, then stores and verifies the secret before replacing the current JSON plaintext with a reference. Interrupted or failed protection retains the original for **Retry protection** or explicit **Cancel protection**, and blocks its use. Existing variables are never automatically classified. Workspace variables have the same protection controls but remain backup-only; request substitution uses the active environment.
+
+App-generated request metadata, history, code copies, diagnostics, and script logs mask known secret values or retain `{{variable}}` references. Actual outgoing bytes and received response bodies are preserved. Trusted scripts can read runtime secrets and servers can echo them; arbitrary transformations cannot be reliably detected. Details and recovery instructions: [secret variables](docs/secret-variables.md).
+
 ### Collections and history
 - Collection / folder / request CRUD
 - Drag and drop ordering
@@ -164,7 +171,7 @@ Group request history by date and run collections with status summaries.
 - Dynamic HTML pages stay in Body while `Open URL` remains available for HTTP/HTTPS resolved pages
 - Readable response durations with requested/received timestamps in the response metadata
 - Sticky response toolbar for finding text, compare, and response actions
-- Quiet status strip with glanceable editor indicators for the active environment (`N vars`), Scripts/History on·off, Defaults/`Used N` counts, and risk overrides (TLS insecure, defaults skipped, redirects, headers-only); workspace profile lives in strip expand disclosure; Environment segment toggles the inline variable editor
+- Quiet status strip with indicators for the active environment variable count, scripts, history saving, applied default headers, referenced request variables, and risk overrides (TLS insecure, defaults skipped, redirects, headers-only); workspace profile lives in strip expand disclosure; Environment segment toggles the inline variable editor
 - Find text within the response body with next/previous navigation, case-sensitive mode, and regex mode
 - JSON tree viewer with keyboard fold buttons (Enter/Space and Left/Right), preserving original copy/save bytes
 - XML formatting with `Pretty`, `Compact`, and `Inline Children`
@@ -217,7 +224,7 @@ Workspace variables are preserved in Tessra backups, but request variable resolu
 
 Import replaces data in the current active profile with the backup contents; it is not a merge import. Before restoring, Tessra automatically writes a pre-import backup under `globalStorage/backups/tessra-preimport-YYYYMMDD-HHmmss.tessra-backup.json`.
 
-Workspace Backup / Restore v1 does not include request history or open tabs / tab state. Backup files may contain secrets such as tokens, API keys, Authorization headers, and environment values. Store them securely and avoid uploading them to public repositories, shared folders, or issue attachments.
+Workspace Backup / Restore v1 does not include request history or open tabs / tab state. Explicitly protected variables export only references, including pending conversions. Import/restore creates fresh references and leaves their values needing input, even on the same machine. Postman environment exports retain Tessra reference metadata for this purpose. Plain variables, literal Authorization headers, and other unprotected values can still contain sensitive data; store backups securely. Protection does not scan or remove earlier backups, exports, history, or other copies.
 
 ### Code generation
 - `fetch`
@@ -315,7 +322,7 @@ On macOS, use `Cmd` instead of `Ctrl`.
 
 ## Local storage
 
-All extension data is stored under VS Code `globalStorage` as JSON files. The default profile stores files at the root, and custom workspace profiles store the same files under `profiles/<profile-name>/`.
+Local request and variable metadata is stored under VS Code `globalStorage` as JSON files. Confirmed protected variable values live in VS Code SecretStorage instead. The default profile stores JSON files at the root, and custom workspace profiles use encoded directories under `profiles/`. Stable profile, environment, variable, and reference identities keep values separated across duplicate names, renames, profile switches, and imports.
 
 - `collections.json`
 - `history.json`

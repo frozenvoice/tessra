@@ -5,7 +5,7 @@
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
-| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**28 tests in 27 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, execution context isolation, HTML preview bundle/sanitization/CSP, History updates, response charsets, and network deadlines) |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**29 tests in 28 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, execution context isolation, HTML preview bundle/sanitization/CSP, History updates, response charsets, network deadlines, and explicit secret variables) |
 | Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
 
 Unit tests remain valuable. UI E2E does **not** replace them.
@@ -21,7 +21,7 @@ Unit tests remain valuable. UI E2E does **not** replace them.
 
 ```bash
 npm test                 # unit only (also used by npm run ci)
-npm run test:e2e         # stable VS Code UI E2E (28 tests in 27 files)
+npm run test:e2e         # stable VS Code UI E2E (29 tests in 28 files)
 npm run test:e2e:ui-regressions  # critical UI contracts (#18/#19/#20): narrow geometry + path occurrence resolution + body scroll ownership
 npm run test:e2e:runner  # focused Collection Runner suite (2 specs; same paths as stable)
 npm run test:e2e:all     # stable suite then focused runner suite
@@ -119,9 +119,15 @@ Network deadline E2E (#27) uses a local server that continuously streams a body,
 
 UI clarity E2E (#28) checks request-context meanings, empty Params/Add behavior, column headings, JSON keyboard folding/copy preservation, and narrow geometry with EN/KO/JA display languages. It captures the real VS Code window in `e2e/.artifacts/ui-clarity/`. Accessible names, native buttons, and sidebar accessibility labels are checked; actual NVDA/JAWS speech output is a separate manual check.
 
+Secret variables E2E (#29) protects an existing synthetic variable, sets a replacement through the native password input, checks stable reference IDs after renaming, and verifies actual localhost request bytes, masked request messages/cURL, ref-only backup JSON, temporary Reveal cleanup, and the workspace-variable editor command.
+
 Request timeouts use a monotonic clock from the first network attempt through the final response, including DNS, connection/TLS, upload, redirects, automatic retries and retry waits. Body preparation and pre/post scripts are outside this budget; scripts retain their existing separate time limit. Collection items each get a new budget and inter-item delays are excluded. `timeout=0` remains unlimited. A deadline error is terminal and is not retried. Timers cannot preempt synchronous JavaScript/decompression, so completion also checks the deadline; this is not a hard real-time guarantee.
 
 ### Execution and data regression tests
+
+Secret-variable fixtures use synthetic values only. `secretVariableService.test.ts` covers verified keychain writes, durable pending conversion, Retry/Cancel, CAS conflicts, serialized conversion/cancel races, scoped identities, replacement/deletion/restore, and missing/unavailable values. `secretStorageIntegration.test.ts` uses real temporary StorageService JSON to check stable profile UUIDs, ref-only current files/new backups, fresh missing imports, and conversion completion in the captured profile after a switch. `secretExecution.test.ts` checks actual Path override/body usage, typed reference-preserving history, and duplicate-name precedence. `secretVariableEditor.test.ts` checks scope tokens, forged save rejection, metadata-only data, late Reveal suppression, and native-input invalidation. Postman tests preserve legacy plaintext imports while validating explicit Tessra reference exports/imports.
+
+The secret fixtures run against fake SecretStorage failures and local HTTP/WebSocket echo only. They do not use real tokens, proxy credentials, or paid APIs. Actual Windows VS Code Webview checks and the final integrated results are recorded in [the dated validation record](ui-secrets-sse-validation-2026-10-05.md).
 
 `scriptUtilities.test.ts` runs the real `ScriptRunner` in both pre-request and test phases. It covers SHA-256/HMAC known vectors, Unicode and block boundaries, primitive coercion, invalid inputs, Base64 padding/whitespace, UUID pool format/exhaustion, and Unix timestamps. Expected hashes and encodings come from Node built-ins in the test process only; no host utility functions are passed into the script realm.
 
@@ -162,7 +168,7 @@ Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). D
 3. Reuse `e2e/helpers/*` and the local fixture server.
 4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
 5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
-6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **28 tests** (or intentionally adjust the count here).
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **29 tests** (or intentionally adjust the count here).
 7. Layout / variable-resolution / scroll-ownership regressions that users can see immediately should also stay in `npm run test:e2e:ui-regressions` (#18/#19/#20).
 
 ### Native file dialogs (`.env` import)

@@ -2866,10 +2866,10 @@ describe('RequestPanel Webview', () => {
     assert.match(script, /tfCount\('webview\.stripUsedCount', usage\.length\)/);
     assert.match(script, /data-action="edit-environment"/);
     assert.match(script, /tr\('webview\.editEnvironmentVariables'\)/);
-    assert.match(script, /setEnvironmentEditorData\(msg\.envId \|\| null, msg\.envName \|\| null, msg\.variables \|\| \[\]\)/);
+    assert.match(script, /setEnvironmentEditorData\(msg\.envId \|\| null, msg\.envName \|\| null, msg\.variables \|\| \[\], msg\.scopeToken, 'environment'\)/);
     assert.match(script, /revealEnvironmentEditor\(\);/);
     assert.match(script, /toggleEnvironmentEditor\(\)/);
-    assert.match(source, /variables,\s*profileName: RequestPanel\.storage\.getWorkspaceProfileName\(\)/);
+    assert.match(source, /\.\.\.data,\s*profileName: RequestPanel\.storage\.getWorkspaceProfileName\(\)/);
     assert.ok(
       script.indexOf('const envEditorName = document.getElementById') < script.lastIndexOf('updateStaticLocalizedText();'),
       'initial localized text refresh should run after environment editor elements are bound'
@@ -3157,7 +3157,7 @@ describe('RequestPanel Webview', () => {
 
   it('persists collection runner results to history when enabled', () => {
     assert.match(collectionRunnerSource, /let historyRequest: Request \| null = null;/);
-    assert.match(collectionRunnerSource, /historyRequest = createHistoryRequestSnapshot\(/);
+    assert.match(collectionRunnerSource, /historyRequest = redactor\.hasSecrets\s*\? createSecretHistorySnapshot\([\s\S]*?: createHistoryRequestSnapshot\(/);
     // 실행 중단 여부와 저장 설정을 확인한 뒤 execution context까지 전달하는 계약을 검증한다.
     assert.match(collectionRunnerSource, /if \(!isStopped\(\) && settings\.saveToHistory && historyRequest\) \{/);
     assert.match(collectionRunnerSource, /this\.host\.saveToHistory\([\s\S]*?historyRequest,[\s\S]*?response \? \{ status: response\.status, statusText: response\.statusText, time: response\.time \} : null,[\s\S]*?createRequestTiming\(requestStartedAt\),[\s\S]*?input\.context/);

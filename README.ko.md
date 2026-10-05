@@ -1,4 +1,4 @@
-﻿# Tessra
+# Tessra
 
 VS Code 안에서 동작하는 로컬 우선 API 클라이언트입니다.
 
@@ -14,6 +14,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 
 ## 최근 주요 변경
 
+- 환경/Workspace 변수에서 **비밀 보호**를 명시적으로 선택하면 확인된 값을 VS Code SecretStorage에 보관합니다. **값 설정**, 일시적인 **값 보기**, 정확한 변수의 삭제를 제공합니다. [비밀 변수와 복구](docs/secret-variables.md)를 참고하세요.
 - "헤더까지만 받기"는 헤더를 받은 뒤 응답 스트림을 닫습니다. 끝나지 않거나 매우 큰 본문이 백그라운드에서 연결을 계속 붙잡지 않습니다.
 - 스크립트 테스트가 실패하면 실제값과 기대값을 함께 보여줍니다. 예: `Expected 1 to strictly equal 2.`
 - README 맨 위에 VS Code에서 녹화한 데모가 자동으로 반복 재생되고, 소리가 있는 전체 영상도 볼 수 있습니다.
@@ -65,7 +66,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 오프라인 우선 워크플로
 - 로그인 불필요
 - 클라우드 의존성 없음
-- 로컬 JSON 저장
+- 로컬 JSON metadata와 보호된 값의 VS Code SecretStorage 저장
 - cURL / OpenAPI / Postman import / export 지원
 - Scripts, collections, environments, response compare, code generation 지원
 - WebSocket `ws://` / `wss://` 연결, 메시지 송수신, 안전 제한, keepalive 워크플로 지원
@@ -83,11 +84,11 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - `Ctrl+Enter` / macOS에서는 `Cmd+Enter` 전송
 - 마지막 정상 응답을 유지한 채 진행 중 요청 취소
 - 요청 단계 피드백, 빈 상태 화면, 응답 상태 피드백, 정돈된 액션 버튼 UI
-- 환경(`N vars`), Defaults, 요청 `Used N`, Scripts/History on·off, 위험 설정을 보여주는 Quiet 상태 스트립; Environment 세그먼트(또는 스트립 확장 / Environments 뷰)에서 변수 편집기를 연다
+- 환경 변수 수, 적용할 기본 헤더 수, 요청에서 참조한 변수 수, 스크립트, 히스토리 저장, 위험 설정을 보여주는 Quiet 상태 스트립; Environment 세그먼트(또는 스트립 확장 / Environments 뷰)에서 변수 편집기를 연다
 - 전송 전 미해결 `{{variable}}`을 알려주는 프리플라이트 경고
 - 관련 탭으로 바로 이동하고, 연결된 카드에 포커스와 잠깐의 하이라이트를 주는 클릭형 상태 배지
 - 저장하거나 보내기 전에 어느 영역이 바뀌었는지 보여주는 요청 변경 칩
-- 상태 스트립 `Used N` / Vars로 여는 Variable Usage disclosure — `{{variable}}`이 URL / 헤더 / 바디 / 인증 / 스크립트 어디에 쓰였는지 표시
+- 상태 스트립의 요청 변수 영역으로 여는 Variable Usage disclosure — `{{variable}}`이 URL / 헤더 / 바디 / 인증 / 스크립트 어디에 쓰였는지 표시
 - 인증값과 민감한 key/value 입력 마스킹 및 reveal 버튼
 - 헤더 / 파라미터 일괄 붙여넣기
 - 샘플 요청 불러오기, 가이드 열기, 환경 전환, URL 포커스 같은 빈 상태 퀵 액션
@@ -142,6 +143,12 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - Environments 제목 영역의 `Import Environment`로 Postman Environment JSON 또는 `.env` 파일 가져오기
 - collections / history / environments / default headers / saved tabs를 분리하는 워크스페이스 로컬 저장 프로필
 
+기존 변수의 **비밀 보호**를 선택하면 현재 값을 VS Code SecretStorage로 옮깁니다. 편집기는 기본적으로 metadata와 값 존재 상태만 받습니다. **값 설정**은 native 비밀번호 입력을 사용하고, 명시적인 **값 보기**는 편집 범위/프로필 전환이나 패널 종료 때 해제됩니다. 필요한 비밀값이 없거나 키체인을 사용할 수 없으면 빈 문자열을 보내지 않고 실행 전에 알려줍니다.
+
+먼저 복구 표식을 저장하고 키체인 저장·읽기 확인을 마친 뒤 현재 JSON 평문을 참조로 바꿉니다. 실패나 중단 시 원문은 **보호 재시도** 또는 명시적인 **보호 취소**를 위해 유지하며 실행을 차단합니다. 기존 변수를 자동 분류하지 않습니다. Workspace 변수에도 같은 보호 기능을 제공하지만 요청 치환에는 참여하지 않으며, 활성 환경 기준 치환을 유지합니다.
+
+앱이 생성하는 요청 metadata·history·코드 복사·진단·스크립트 로그는 알려진 비밀값을 마스킹하거나 `{{변수}}` 참조로 보존합니다. 실제 전송 바이트와 수신 응답은 그대로 유지합니다. 신뢰된 스크립트가 실제 값을 읽거나 서버가 echo할 수 있고, 임의 변환된 값을 모두 검출할 수는 없습니다. [비밀 변수 경계와 복구](docs/secret-variables.md)를 참고하세요.
+
 ### Collections / History
 - Collection / folder / request CRUD
 - Drag & Drop 정렬
@@ -165,7 +172,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 동적인 HTML 페이지는 Body 탭에 남고, HTTP/HTTPS 원본 페이지는 `URL 열기` 액션으로 열 수 있음
 - 읽기 좋은 응답 시간과 요청/수신 시각을 응답 메타데이터에 표시
 - Pin / Compare를 항상 노출하는 sticky 응답 요약과 `⋯`의 복사·저장·Mode 유틸
-- 활성 환경(`N vars`), 스크립트/히스토리 on·off, 기본헤더·요청 `Used N`, 위험 설정(TLS 비보안, 기본헤더 건너뜀 등)을 한눈에 구분하는 상태 스트립; Environment 세그먼트로 변수 편집기 토글; 워크스페이스 프로필은 스트립 확장 영역에 유지
+- 활성 환경 변수 수, 스크립트·히스토리 저장, 적용할 기본 헤더 수·요청에서 참조한 변수 수, 위험 설정(TLS 비보안, 기본헤더 건너뜀 등)을 한눈에 구분하는 상태 스트립; Environment 세그먼트로 변수 편집기 토글; 워크스페이스 프로필은 스트립 확장 영역에 유지
 - 이전 / 다음 이동, 대소문자 구분, 정규식 옵션을 갖춘 응답 본문 검색
 - Enter/Space·좌우 화살표로 접고 펼치는 JSON 트리 뷰어, 원문 복사·저장 바이트 보존
 - XML `Pretty`, `Compact`, `Inline Children` 포맷
@@ -218,7 +225,7 @@ Command Palette에서 `Tessra: Export Workspace Backup`과 `Tessra: Import Works
 
 가져오기는 현재 활성 프로필의 데이터를 백업 내용으로 교체합니다. merge import가 아닙니다. 복원하기 전 기존 데이터는 `globalStorage/backups/tessra-preimport-YYYYMMDD-HHmmss.tessra-backup.json` 위치에 자동으로 사전 백업됩니다.
 
-Workspace Backup / Restore v1에는 요청 히스토리와 열린 탭 / 탭 상태가 포함되지 않습니다. 백업 파일에는 토큰, API 키, Authorization 헤더, 환경 값 같은 민감정보가 들어갈 수 있으니 안전한 위치에 보관하고 public repo, 공유 폴더, 이슈 첨부파일 등에 올리지 마세요.
+Workspace Backup / Restore v1에는 요청 히스토리와 열린 탭 / 탭 상태가 포함되지 않습니다. 명시적으로 보호한 변수는 진행 중 변환을 포함해 참조만 내보냅니다. 가져오기/복원은 같은 PC에서도 새 참조를 만들고 비밀값 입력 필요 상태로 남깁니다. Postman 환경 export에는 이를 위한 Tessra 참조 metadata를 유지합니다. 평문 변수·직접 입력한 Authorization 헤더 등에는 여전히 민감정보가 들어갈 수 있으므로 안전하게 보관하세요. 보호 기능은 과거 백업·export·history나 다른 사본을 검색하거나 자동 삭제하지 않습니다.
 
 ### 코드 생성
 - `fetch`
@@ -316,7 +323,7 @@ macOS에서는 `Cmd`를 사용합니다.
 
 ## 로컬 저장 위치
 
-모든 데이터는 VS Code `globalStorage` 아래 JSON 파일로 저장됩니다. 기본 프로필은 루트에 저장되고, 사용자 지정 워크스페이스 프로필은 `profiles/<프로필명>/` 아래 같은 파일 구조로 분리 저장됩니다.
+요청·변수 metadata는 VS Code `globalStorage` 아래 JSON 파일로 저장하며, 확인된 비밀 변수 값은 VS Code SecretStorage에 보관합니다. 기본 프로필의 JSON은 루트에 저장되고, 사용자 지정 프로필은 `profiles/` 아래 인코딩된 디렉터리로 분리합니다. 안정적인 프로필·환경·변수·참조 ID가 중복 이름, 이름 변경, 프로필 전환과 import를 분리합니다.
 
 - `collections.json`
 - `history.json`

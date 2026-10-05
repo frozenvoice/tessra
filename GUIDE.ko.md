@@ -26,9 +26,9 @@ Body: {"env":"{{envName}}"}
 - 요청 탭: `Params`, `Headers`, `Body`, `Auth`, `Scripts`, `Settings`
 - 고정 탭이 있는 멀티 탭 편집
 - URL 입력창의 `Enter` 또는 `Ctrl+Enter` / `Cmd+Enter`로 활성 요청을 보냅니다.
-- URL 아래 status strip에는 활성 Environment(`변수 N개`), Scripts, History on/off, Defaults, risk override, 요청 `사용 N`이 표시됩니다.
+- URL 아래 status strip에는 활성 환경 변수 수, 스크립트, 히스토리 저장, 적용할 기본 헤더 수, 위험 설정, 요청에서 참조한 변수 수이 표시됩니다.
 - Environment 세그먼트를 클릭하면 변수 편집이 열리고, 활성 환경이 없으면 환경을 고를 수 있습니다.
-- `사용 N`(또는 미해결 Vars)을 클릭하면 현재 요청의 변수 사용처를 볼 수 있습니다.
+- 요청 변수 영역(미해결 변수 경고 포함)을 클릭하면 현재 요청의 변수 사용처를 볼 수 있습니다.
 - status strip을 펼치면 workspace profile, 환경 전환, Default Headers, 추가 상세를 확인할 수 있습니다.
 - 민감한 인증 값은 reveal 하기 전까지 마스킹됩니다.
 - 헤더나 쿼리 파라미터를 한 줄씩 추가하지 않고 일괄 붙여넣을 수 있습니다.
@@ -79,9 +79,18 @@ Body: {"env":"{{envName}}"}
 - URL 경고도 같은 occurrence 규칙을 따릅니다. Request-local path 값은 missing으로 표시되지 않고, 같은 이름이 query / headers / body / auth에 있으면 Environment에 없을 때 unresolved로 남을 수 있습니다.
 - Path override는 해당 path segment에만 적용되며 query / headers / body / auth에는 영향을 주지 않습니다. WebSocket URL과 Collection Runner / cURL / codegen 해석에도 동일하게 적용됩니다.
 - URL, headers, body, auth, scripts 등 입력 필드에서 변수 autocomplete를 사용할 수 있습니다.
-- Environment `변수 N개`는 활성 환경의 변수 수이고, 요청 `사용 N`은 현재 요청이 쓰는 변수 수입니다.
+- 환경 변수 수는 활성 환경의 크기이고, 요청 변수 수는 현재 요청에서 참조한 고유 변수 이름 수입니다.
 - workspace variables는 백업에 보존될 수 있지만, 요청 해석은 여전히 활성 environment를 따릅니다.
 - `Tessra: Import Environment`로 `.env` / `.env.*` / `*.env` 파일을 한 번만 로컬 Environment로 가져옵니다. 원본 파일을 수정하지 않으며, 가져온 환경을 자동으로 활성으로 바꾸지 않습니다.
+
+## 비밀 변수
+
+- 환경 또는 workspace-variable 편집기에서 `보호(Protect)`를 명시적으로 선택합니다. 기존 변수는 자동 분류하지 않습니다. `값 설정(Set)`은 VS Code 암호 입력창에서 값을 입력·교체하고, `보기(Reveal)`는 잠시 표시하며, `삭제(Delete)`는 선택한 변수와 정확히 연결된 비밀 참조를 삭제합니다.
+- 확인된 값은 VS Code SecretStorage에 저장하고 JSON에는 안정적인 프로필·환경·변수 ID와 참조를 남깁니다. 이름 변경은 변수 ID를 바꾸지 않습니다. Webview는 기본적으로 마스킹과 값 존재 여부만 받으며, 프로필 전환·패널 종료 시 표시한 값을 해제합니다.
+- SecretStorage 저장을 확인한 뒤 현재 평문을 제거합니다. 중단되거나 사용할 수 없으면 원문을 보존한 전환 대기 상태로 실행을 막습니다. `재시도(Retry)`로 완료하거나 `취소(Cancel)`로 평문 상태로 돌아갈 수 있습니다. 비밀값 미설정·저장소 오류는 전송 전에 알립니다.
+- 새 환경·워크스페이스 내보내기는 보호된 변수의 참조만 포함합니다. 가져오기·복원 후에는 같은 컴퓨터에서도 `값 설정`이 필요합니다. 기존 백업·내보내기·평문 변수는 자동 검사하거나 삭제하지 않습니다. Workspace variables는 백업용이며 요청 치환은 활성 환경을 따릅니다.
+- 앱이 만드는 요청 미리보기·코드·요청 히스토리·오류·스크립트 로그는 확인된 비밀값을 마스킹하거나 변수 참조를 보존합니다. 실제 요청과 서버 echo를 포함한 수신 응답은 바꾸지 않습니다. 신뢰한 스크립트는 실행 중 환경 비밀값을 읽을 수 있고, 임의 변환값까지 완벽히 검출할 수 없으며 VM은 OS 샌드박스가 아닙니다.
+- 복구·내보내기 상세는 [비밀 변수 저장과 노출 경계](docs/secret-variables.md)를 참조하세요.
 
 ## 워크스페이스 프로필
 
@@ -173,7 +182,7 @@ macOS에서는 `Ctrl` 대신 `Cmd`를 사용합니다.
 
 ## 로컬 저장
 
-모든 Tessra 데이터는 VS Code `globalStorage` JSON 파일로 로컬 저장됩니다. default 프로필은 루트에, 다른 프로필은 `profiles/<name>/`에 같은 파일을 둡니다.
+요청과 metadata는 VS Code `globalStorage` JSON 파일로 로컬 저장됩니다. 확인된 비밀 변수 값은 별도의 VS Code SecretStorage에 저장하고 JSON에는 참조를 남깁니다. default 프로필은 루트에, 다른 프로필은 `profiles/` 아래 인코딩된 디렉터리에 같은 파일을 둡니다.
 
 - `collections.json`
 - `history.json`

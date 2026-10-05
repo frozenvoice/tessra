@@ -1,5 +1,7 @@
 ﻿import * as vscode from 'vscode';
 
+import { SECRET_VARIABLE_STRINGS } from './secretVariableLocalization';
+
 export const SUPPORTED_DISPLAY_LANGUAGES = [
   'en',
   'ko',
@@ -1911,6 +1913,8 @@ export class LocalizationService {
     return {
       ...EN_STRINGS,
       ...((LANGUAGE_OVERRIDES[language] ?? {}) as TranslationDictionary),
+      ...SECRET_VARIABLE_STRINGS.en,
+      ...(SECRET_VARIABLE_STRINGS[language] ?? {}),
     };
   }
 

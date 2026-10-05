@@ -11,7 +11,7 @@ Covered by `e2e/specs/*` against a real VS Code Electron host + localhost fixtur
 - Basic Send (`/users` JSON response)
 - URL / Params canonical serialization (single `_limit`, duplicate `tag` keys)
 - Environment disclosure (status strip → variable editor)
-- Variable Usage `Used N` disclosure
+- Variable Usage from the request-variable segment
 - Body JSON→XML Convert + undo
 - Response Pin / Compare primary discoverability (+ overflow utilities smoke)
 - Send Stop / cancellation (slow endpoint)
@@ -42,6 +42,18 @@ Unusual OS / display-scaling context-menu behavior can still be spot-checked man
 - WebSocket edge cases / Backup / full application restart restore
 - Dirty-close dialog and request-tab context menu keyboard behavior across OS/display settings
 - Script trust prompts and error wording; see `docs/script-security.md` for execution limits
+
+## Secret variables smoke
+
+Use synthetic values in an isolated profile and a local fixture only. Final integrated automated coverage is recorded in [the dated validation record](ui-secrets-sse-validation-2026-10-05.md).
+
+- Protect a plain environment variable. Confirm metadata/masked state, native Set value input, and explicit Reveal/Hide; rename the variable/environment and confirm the same secret identity remains usable.
+- Switch profiles or close the panel while Reveal/Set is active. Confirm revealed text is cleared, native input closes, and delayed results cannot appear in the next profile.
+- Simulate unavailable SecretStorage in the unit fixture: pending protection retains the original for Retry/Cancel, appears masked, and blocks execution; missing imported values also block requests that need them.
+- Inspect current JSON after confirmed protection and new workspace/Postman exports: secret values must be absent. Import/restore must ask for values rather than treating a mask string as the value. Check earlier copies separately; this feature does not delete them.
+- Delete one exact secret variable with a duplicate name. Confirm other IDs remain; restoring that deleted reference is missing. Check Workspace variables stay outside active-environment request substitution.
+- Send to a local echo endpoint. Verify actual wire bytes contain the synthetic value, while app-generated request metadata/code/history/logs are masked or preserve references. A server echo remains visible as response data.
+- Run EN/KO/JA with keyboard-only controls and a narrow panel. Check labels, focus, reveal lifecycle, and manual screen-reader speech output.
 
 ## 1.2.6 Smoke (~5 min)
 
@@ -123,17 +135,17 @@ Guide currency, URL/Params serialization, and Pin/Compare discoverability.
 - Open `Tessra: Open Guide` in English, Korean, and Japanese; confirm status strip / Pin+Compare+`⋯` / Body conversion / Workspace Backup / WebSocket wording matches the live panel (no topline chip-wall language).
 - With a URL that already has `?a=1` and a Params row `a=1`, Send once and confirm the final request URL does not duplicate `a`.
 - Confirm Response sticky summary still shows Pin / Compare; Copy / Save / Mode / metadata remain under `⋯`.
-- Spot-check Quiet Instrument primary path (Method → URL → Send), status strip Env/`Used N`, one Body Convert/Keep/Cancel path, and Workspace Backup export validation (`schemaVersion` 1).
+- Spot-check Quiet Instrument primary path (Method → URL → Send), status strip environment/request-variable segments, one Body Convert/Keep/Cancel path, and Workspace Backup export validation (`schemaVersion` 1).
 
 ## 1.0.10 Smoke (~10–15 min)
 
 Quiet Instrument layout and Body workflows. Keep as a deeper regression pass when touching request-panel chrome.
 
 - Confirm Method → URL → Send reads as the primary path; infrequent actions sit in overflow; no pill-wall meta chrome.
-- Confirm the status strip shows environment (`N vars`), Defaults, request `Used N`, Scripts/History cues, and risk overrides; Env shows Tessra accent + tiny tesseract mark; click Environment to toggle the variable editor; click `Used N` / Vars to toggle Variable Usage in strip disclosure; expand disclosure for workspace profile / details.
+- Confirm the status strip shows the environment variable count, applied default headers, referenced request variables, scripts/history-saving cues, and risk overrides; Env shows Tessra accent + tiny tesseract mark; click Environment to toggle the variable editor; click the request-variable segment to toggle Variable Usage in strip disclosure; expand disclosure for workspace profile / details.
 - Toggle environment (or none); confirm strip updates and `{{variable}}` resolution still works.
-- Toggle Scripts present/off and History on/off; confirm strip cues update.
-- Confirm Defaults count / Defaults skipped appear correctly; enable TLS insecure and confirm a warning segment.
+- Toggle script availability and Save to history; confirm strip cues update.
+- Confirm the applied default-header count and skipped-header state appear correctly; enable TLS insecure and confirm a warning segment.
 - Send a request and Stop an in-flight request; confirm response sticky summary owns success/error emphasis (Send stays host action color).
 - Confirm JSON Body mirror overlay highlights while typing; switch to XML and confirm overlay language switches; switch to raw and confirm overlay is off.
 - With non-empty JSON, change type to XML → Convert; confirm result. Undo restores previous type + content together.
@@ -170,7 +182,7 @@ Quiet Instrument layout and Body workflows. Keep as a deeper regression pass whe
 ## Variables And Scripts
 
 - Create, edit, switch, and delete environments.
-- Confirm the request panel status strip shows the active environment and its defined variable count (`N vars`), separate from request `Used N`; the variable editor opens from the Environment segment (keyboard Enter/Space), strip expand, or Environments view (not a permanent collapsed card above the compose path).
+- Confirm the request panel status strip shows the active environment and its defined variable count, separate from the unique variable names referenced by the request; the variable editor opens from the Environment segment (keyboard Enter/Space), strip expand, or Environments view (not a permanent collapsed card above the compose path).
 - Confirm requests still resolve environment variables while the editor is closed, and after editing variables while open.
 - Resolve `{{variable}}` values across URL, params, headers, body, auth, and scripts.
 - Confirm Path Variables appear under the URL bar for full path-segment placeholders (e.g. `{{baseUrl}}/users/{{userId}}` shows `userId` only).
@@ -262,9 +274,7 @@ Quiet Instrument layout and Body workflows. Keep as a deeper regression pass whe
 
 ## Final Checks
 
-- Run `npm test`.
-- Run `npm run typecheck`.
-- Run `npm run ci`.
-- Run `npm run build`.
+- Run `npm run ci` once after changes converge (typecheck, unit tests, build).
+- Run the relevant actual VS Code E2E suite against that build; follow `docs/testing.md`.
 - Run `git diff --check`.
 - Review `README.md`, `README.ko.md`, `AGENTS.md`, and `CLAUDE.md` whenever a user-visible behavior or setting changed.

@@ -14,6 +14,8 @@ import { RequestBodyService } from '../../services/RequestBodyService';
 import { ScriptRunner } from '../../services/ScriptRunner';
 import { LocalizationService } from '../../services/LocalizationService';
 import { ExecutionContext, hasEnvironmentChanges } from './executionContext';
+import { SecretRedactor } from '../../services/secretVariables';
+import { SecretExecutionHost, requestVariableTexts, secretDiagnostic, createSecretHistorySnapshot, reprotectScriptVariables } from './secretExecution';
 import {
   buildUrl,
   cloneAllKeyValues,
@@ -36,7 +38,7 @@ import {
   shouldRetryResponse,
 } from './requestUtils';
 
-export interface CollectionRunnerHost {
+export interface CollectionRunnerHost extends SecretExecutionHost {
   captureExecutionContext(): ExecutionContext;
   isExecutionContextCurrent(context: ExecutionContext): boolean;
   postMessage(message: unknown): void;
@@ -45,7 +47,7 @@ export interface CollectionRunnerHost {
   getAllowInsecureCertificates(): boolean;
   getScriptTimeoutMs(): number;
   showInformationMessage?(message: string): void;
-  saveEnvironmentChanges(context: ExecutionContext, before: KeyValue[], after: KeyValue[]): void;
+  saveEnvironmentChanges(context: ExecutionContext, before: KeyValue[], after: KeyValue[], redactor?: SecretRedactor): void;
   saveToHistory(
     request: Request,
     response: { status: number; statusText: string; time: number } | null,
@@ -402,9 +404,12 @@ export class CollectionRunner {
     context: ExecutionContext;
   }): Promise<{ result: CollectionRequestRunResult; vars: KeyValue[] } | null> {
     let vars = input.vars;
+    const sourceVariables = vars.map((variable) => ({ ...variable }));
+    let redactor = new SecretRedactor([]);
     const { name: reqName, request: req } = input.entry;
     const settings = normalizeRequestSettings(req);
     const scripts = normalizeScripts(req.scripts);
+    const sourceDefaults = settings.skipDefaultHeaders ? [] : this.host.getDefaultHeaders().map((header) => ({ ...header }));
     const initialMethod = normalizeMethod(req.method);
     const initialBodyType = normalizeBodyType(req.bodyType);
     const requestStartedAt = Date.now();
@@ -438,11 +443,19 @@ export class CollectionRunner {
       if (isScriptExecutionBlocked(scripts, settings)) {
         throw new Error(LocalizationService.t('panel.importedScriptsBlocked'));
       }
+      if (this.host.resolveSecretVariables) {
+        const resolved = await this.host.resolveSecretVariables(input.context, sourceVariables,
+          requestVariableTexts({ ...requestState, pathVariableOverrides: req.pathVariableOverrides }, sourceDefaults),
+          !settings.disableScripts && !!(scripts.preRequest.trim() || scripts.test.trim()));
+        if (isStopped()) { return null; }
+        vars = resolved.variables;
+        redactor = resolved.redactor;
+      }
       if (!settings.disableScripts) {
         const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars, this.host.getScriptTimeoutMs());
         requestState = preRequestResult.request;
         if (hasEnvironmentChanges(vars, preRequestResult.envVariables)) {
-          this.host.saveEnvironmentChanges(input.context, vars, preRequestResult.envVariables);
+          this.host.saveEnvironmentChanges(input.context, vars, preRequestResult.envVariables, redactor);
         }
         vars = preRequestResult.envVariables;
       }
@@ -469,9 +482,7 @@ export class CollectionRunner {
         value: VariableService.resolve(field.value, vars),
       }));
       const resolvedBinaryFilePath = VariableService.resolve(requestState.binaryFilePath ?? '', vars);
-      const defaultHeaders = settings.skipDefaultHeaders
-        ? []
-        : VariableService.resolveKeyValues(this.host.getDefaultHeaders(), vars);
+      const defaultHeaders = VariableService.resolveKeyValues(sourceDefaults, vars);
       const requestKeySet = new Set(
         resolvedHeaders.filter((header) => header.enabled && header.key).map((header) => header.key.toLowerCase())
       );
@@ -496,7 +507,7 @@ export class CollectionRunner {
       AuthService.applyAuth(requestState.auth, finalHeaders, finalParams, vars);
       const url = buildUrl(resolvedUrl, finalParams);
       progressMethod = method;
-      progressUrl = url;
+      progressUrl = redactor.mask(url);
       const preparedBody = await RequestBodyService.prepare({
         bodyType,
         body: requestState.body ?? '',
@@ -517,7 +528,9 @@ export class CollectionRunner {
         binaryFilePath: preparedBody.resolvedBinaryFilePath,
         auth: { type: 'none' },
       });
-      historyRequest = createHistoryRequestSnapshot(
+      historyRequest = redactor.hasSecrets
+        ? createSecretHistorySnapshot({ ...requestState, method, bodyType, pathVariableOverrides }, sourceDefaults, settings, redactor)
+        : createHistoryRequestSnapshot(
         method,
         url,
         preparedBody.headers,
@@ -632,7 +645,7 @@ export class CollectionRunner {
       if (!settings.disableScripts) {
         const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars, this.host.getScriptTimeoutMs());
         if (hasEnvironmentChanges(vars, testResult.envVariables)) {
-          this.host.saveEnvironmentChanges(input.context, vars, testResult.envVariables);
+          this.host.saveEnvironmentChanges(input.context, vars, testResult.envVariables, redactor);
         }
         vars = testResult.envVariables;
         const failedTests = testResult.result.tests.filter((test) => !test.passed).length;
@@ -643,7 +656,7 @@ export class CollectionRunner {
     } catch (err: unknown) {
       if (isStopped()) { return null; }
       if (err instanceof RequestTimeoutError) { response = null; }
-      error = err instanceof Error ? err.message : String(err);
+      error = secretDiagnostic(err, redactor);
     } finally {
       if (input.runId === this.activeRunId) { this.currentCollectionRequest = null; }
       if (!isStopped() && settings.saveToHistory && historyRequest) {
@@ -658,7 +671,7 @@ export class CollectionRunner {
     }
 
     return {
-      vars,
+      vars: this.host.resolveSecretVariables ? reprotectScriptVariables(vars, sourceVariables, redactor) : vars,
       result: {
         name: reqName,
         method: progressMethod,

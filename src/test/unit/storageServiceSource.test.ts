@@ -80,7 +80,7 @@ describe('storage service source', () => {
     assert.match(source, /normalizeHistoryArray\(value, 'History'\)/);
     assert.match(source, /normalizeEnvironmentArray\(value, 'Environments'\)/);
     assert.match(source, /normalizeKeyValueArray\(value, 'Default headers'\)/);
-    assert.match(source, /normalizeKeyValueArray\(value, 'Variables'\)/);
+    assert.match(source, /normalizeVariableArray\(value, 'Variables'\)/);
     assert.match(source, /normalizeStoredTabState\(value, 'Tab state'\)/);
     assert.match(source, /validateTabState\(value: unknown\): StoredTabState \| null/);
     assert.match(source, /applyEnvironmentVariableChanges\(/);

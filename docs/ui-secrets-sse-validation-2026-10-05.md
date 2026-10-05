@@ -17,3 +17,13 @@ JSON 토큰의 과도한 flex 간격을 줄이고 펼치기/접기를 native but
 - `after-narrow.png`, `after-ko.png`, `after-ja.png`
 
 좁은 화면 geometry·키보드·접근성 metadata·언어를 확인했다. 실제 NVDA/JAWS 음성 출력은 실행하지 않았다.
+
+## 비밀 변수
+
+환경/Workspace 변수의 명시적인 Protect·Set value·Reveal·Delete를 추가한다. 기존 변수의 자동 분류는 하지 않는다. 확인된 실제 값은 VS Code SecretStorage에 보관하고 JSON에는 안정적인 프로필·환경·변수·참조 ID와 metadata를 저장한다. 변환은 복구 표식 저장 → 키체인 저장/읽기 검증 → CAS 참조 전환 순서다. 실패/중단 시 원문은 pending 상태에 남고 실행은 차단되며 재시도/명시적 취소로 복구한다. 새 백업/환경 export는 pending 원문까지 제거하고 참조만 보존한다.
+
+집중 테스트는 키체인 오류/변환 중단·CAS 충돌, 프로필/환경/변수 ID 분리, 중복 이름과 이름 변경, 실제 StorageService JSON/백업, scope token과 늦은 Reveal 폐기, preflight metadata, HTTP/Runner/WebSocket 실행 경계를 포함한다. 전체 단위 테스트에서도 통과했다. 실제 Windows VS Code #29 E2E는 Protect·native password Set·이름 변경·실제 localhost 전송 바이트·masked cURL·history/tab JSON·참조-only 백업·Reveal 닫기·workspace 편집 명령을 통과했다.
+
+실제 화면 `e2e/.artifacts/secret-variables/workspace-variables.png`를 확인했다. 실제 통신 바이트와 서버 echo/일반 응답은 변경하지 않는다. 신뢰된 스크립트는 실행 시 비밀값을 읽을 수 있으며 임의 변환을 모두 검출할 수 없다. 과거 백업·export·history 사본의 자동 삭제나 OS 샌드박스는 보장하지 않는다. 자세한 경계는 [비밀 변수와 복구](secret-variables.md)에 기록했다.
+
+최종 통합 gate는 SSE 단계가 합쳐진 작업 트리에서 기록한다. 이 단계의 실제 secret E2E와 집중 검증은 통과했다.

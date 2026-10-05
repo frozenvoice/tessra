@@ -27,7 +27,7 @@ describe('extension source', () => {
   });
 
   it('resolves active environment variables before copying collection requests as cURL', () => {
-    assert.match(source, /RequestExportService\.resolve\(node\.item\.request, environmentProvider\.getActiveVariables\(\), \{/);
+    assert.match(source, /RequestExportService\.resolve\(node\.item\.request, previewVariables\(environmentProvider\.getActiveVariables\(\)\), \{/);
     assert.match(source, /defaultHeaders:\s*storage\.getDefaultHeaders\(\)/);
     assert.match(source, /skipDefaultHeaders:\s*node\.item\.request\.skipDefaultHeaders === true/);
   });

@@ -44,6 +44,10 @@ import {
 } from './requestPanel/messages';
 import { getRequestPanelHtml } from './requestPanel/requestPanelHtml';
 import { ExecutionContext } from './requestPanel/executionContext';
+import { SecretVariableService, SecretVariableView } from '../services/SecretVariableService';
+import { SecretRedactor } from '../services/secretVariables';
+import { SecretVariableEditor } from './requestPanel/SecretVariableEditor';
+import { previewVariables, secretDiagnostic } from './requestPanel/secretExecution';
 
 // Request webview panel manager with multi-tab support.
 export class RequestPanel {
@@ -52,6 +56,7 @@ export class RequestPanel {
   public static historyProvider: HistoryTreeProvider;
   public static collectionProvider: CollectionTreeProvider;
   public static environmentProvider: EnvironmentTreeProvider;
+  public static secretVariables: SecretVariableService;
   private static readonly viewType = 'tessra.requestPanel';
 
   private readonly panel: vscode.WebviewPanel;
@@ -60,6 +65,7 @@ export class RequestPanel {
   private readonly requestExecutor: RequestExecutor;
   private readonly collectionRunner: CollectionRunner;
   private readonly webSocketManager: WebSocketManager;
+  private readonly secretEditor: SecretVariableEditor;
   private disposables: vscode.Disposable[] = [];
   private isDisposed = false;
   private executionGeneration = 0;
@@ -71,17 +77,32 @@ export class RequestPanel {
   private pendingFlushResolvers = new Map<string, (error?: Error) => void>();
   private pendingCollectionRun: { name: string; items: CollectionItem[] } | null = null;
   private lastCollectionRunnerOptions: NormalizedCollectionRunnerOptions = { ...DEFAULT_COLLECTION_RUNNER_OPTIONS };
+  private editorLoadSequence = 0;
+  private editingVariableScope: string | null | undefined;
+  private activeVariableSequence = 0;
 
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, serializedDraft?: unknown) {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.storageProfileName = RequestPanel.storage.getWorkspaceProfileName();
     this.httpService = new HttpService();
+    this.secretEditor = new SecretVariableEditor(RequestPanel.storage, RequestPanel.secretVariables, {
+      captureExecutionContext: () => this.captureExecutionContext(),
+      isExecutionContextCurrent: (context) => this.isExecutionContextCurrent(context),
+      postMessage: (message) => this.postMessage(message),
+      variablesChanged: (environmentId) => this.variablesChanged(environmentId),
+    });
     this.webSocketManager = new WebSocketManager(new WebSocketService(), {
       postMessage: (message: unknown) => this.postMessage(message),
       getActiveVariables: () => RequestPanel.environmentProvider.getActiveVariables(),
       getDefaultHeaders: () => RequestPanel.storage.getDefaultHeaders(),
       getAllowInsecureCertificates: () => this.getAllowInsecureCertificates(),
+      captureExecutionContext: () => this.captureExecutionContext(),
+      isExecutionContextCurrent: (context: ExecutionContext) => this.isExecutionContextCurrent(context),
+      getExecutionVariables: (context: ExecutionContext) => RequestPanel.storage.getScopedVariables(
+        RequestPanel.storage.getVariableScope(context.environmentId, context.profileName)),
+      resolveSecretVariables: (context: ExecutionContext, variables: KeyValue[], texts: string[], scriptsAll: boolean) =>
+        this.resolveSecretVariables(context, variables, texts, scriptsAll),
     });
     const executionHost = {
       captureExecutionContext: () => this.captureExecutionContext(),
@@ -92,7 +113,9 @@ export class RequestPanel {
       getAllowInsecureCertificates: () => this.getAllowInsecureCertificates(),
       getScriptTimeoutMs: () => this.getScriptTimeoutMs(),
       showInformationMessage: (message: string) => vscode.window.showInformationMessage(message),
-      saveEnvironmentChanges: (context: ExecutionContext, before: KeyValue[], after: KeyValue[]) => this.saveEnvironmentChanges(context, before, after),
+      resolveSecretVariables: (context: ExecutionContext, variables: KeyValue[], texts: string[], scriptsAll: boolean) =>
+        this.resolveSecretVariables(context, variables, texts, scriptsAll),
+      saveEnvironmentChanges: (context: ExecutionContext, before: KeyValue[], after: KeyValue[], redactor?: SecretRedactor) => this.saveEnvironmentChanges(context, before, after, redactor),
       saveToHistory: (
         request: Request,
         response: { status: number; statusText: string; time: number } | null,
@@ -110,7 +133,7 @@ export class RequestPanel {
 
     this.panel.webview.onDidReceiveMessage(
       (message) => this.handleMessage(message).catch((error: unknown) => {
-        vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+        vscode.window.showErrorMessage(secretDiagnostic(error));
       }),
       null,
       this.disposables
@@ -305,30 +328,67 @@ export class RequestPanel {
     });
   }
 
-  public loadEnvironment(env: Environment) {
+  public async loadEnvironment(env: Environment, reveal = true) {
+    if (!reveal && this.editingVariableScope !== env.id) { return; }
+    this.editingVariableScope = env.id;
+    const sequence = ++this.editorLoadSequence;
+    const data = await this.secretEditor.data(env.id, !reveal);
+    if (sequence !== this.editorLoadSequence) { return; }
     this.postMessage({
       type: MessageType.LoadEnvironment,
       envId: env.id,
       envName: env.name,
-      variables: env.variables,
+      ...data,
+      reveal,
     });
+  }
+
+  public async loadWorkspaceVariables(reveal = true): Promise<void> {
+    if (!reveal && this.editingVariableScope !== null) { return; }
+    this.editingVariableScope = null;
+    const sequence = ++this.editorLoadSequence;
+    const data = await this.secretEditor.data(null, !reveal);
+    if (sequence !== this.editorLoadSequence) { return; }
+    this.postMessage({ type: 'loadWorkspaceVariables', ...data, reveal });
+  }
+
+  private variablesChanged(environmentId: string | null): void {
+    RequestPanel.environmentProvider.refresh();
+    if (environmentId === RequestPanel.environmentProvider.activeEnvId) { this.sendActiveVarsToWebview(); }
+    if (environmentId === null) {
+      void this.loadWorkspaceVariables(false).catch((error) => vscode.window.showErrorMessage(secretDiagnostic(error)));
+    } else {
+      const env = RequestPanel.storage.getEnvironments().find((candidate) => candidate.id === environmentId);
+      if (env) { void this.loadEnvironment(env, false).catch((error) => vscode.window.showErrorMessage(secretDiagnostic(error))); }
+    }
   }
 
   public loadDefaultHeaders() {
     this.sendDefaultHeadersToWebview(true);
   }
 
-  public updateActiveEnv(envName: string | null) {
+  public async updateActiveEnv(envName: string | null) {
     const envId = RequestPanel.environmentProvider.activeEnvId;
-    const variables = RequestPanel.environmentProvider.getActiveVariables();
+    this.editingVariableScope = envId;
+    const sequence = ++this.editorLoadSequence;
+    // 활성 환경 표시/치환 정보는 편집기 조회와 별개다. 뒤의 수동 편집기 열기가 이를 지연시키지 않는다.
+    this.postMessage({ type: MessageType.UpdateActiveEnv, envName, profileName: this.storageProfileName });
+    this.sendActiveVarsToWebview();
+    let data: { variables: KeyValue[]; scopeToken?: string } = { variables: [] };
+    try {
+      if (envId) { data = await this.secretEditor.data(envId); }
+    } catch (error) {
+      if (!this.isDisposed && sequence === this.editorLoadSequence) { vscode.window.showErrorMessage(secretDiagnostic(error)); }
+      return;
+    }
+    if (sequence !== this.editorLoadSequence || envId !== RequestPanel.environmentProvider.activeEnvId) { return; }
     this.postMessage({
       type: MessageType.UpdateActiveEnv,
       envId,
       envName,
-      variables,
+      ...data,
       profileName: RequestPanel.storage.getWorkspaceProfileName(),
     });
-    this.sendActiveVarsToWebview();
   }
 
   private sendDefaultHeadersToWebview(reveal = false): void {
@@ -461,7 +521,7 @@ export class RequestPanel {
           formData: message.formData ?? [],
           binaryFilePath: message.binaryFilePath ?? '',
           auth: message.auth ?? { type: 'none' },
-        }, RequestPanel.environmentProvider.getActiveVariables(), {
+        }, previewVariables(RequestPanel.environmentProvider.getActiveVariables()), {
           defaultHeaders: RequestPanel.storage.getDefaultHeaders(),
           skipDefaultHeaders: message.skipDefaultHeaders === true,
         });
@@ -483,10 +543,21 @@ export class RequestPanel {
         break;
       }
       case MessageType.SaveEnvironmentVars:
-        RequestPanel.storage.updateEnvironmentVars(message.envId, message.variables);
-        RequestPanel.environmentProvider.refresh();
-        if (message.envId === RequestPanel.environmentProvider.activeEnvId) {
-          this.sendActiveVarsToWebview();
+        try { await this.secretEditor.save(message); }
+        catch (error) { this.variablesChanged(message.envId); throw error; }
+        break;
+      case MessageType.SaveWorkspaceVariables:
+        try { await this.secretEditor.save({ ...message, envId: null }); }
+        catch (error) { this.variablesChanged(null); throw error; }
+        break;
+      case MessageType.OpenWorkspaceVariables:
+        await this.loadWorkspaceVariables();
+        break;
+      case MessageType.SecretVariableAction:
+        try { await this.secretEditor.action(message); }
+        catch (error) {
+          this.variablesChanged(message.envId);
+          throw error;
         }
         break;
       case MessageType.SaveDefaultHeaders:
@@ -603,19 +674,29 @@ export class RequestPanel {
 
   // Send active environment variables to the webview.
   private sendActiveVarsToWebview() {
-    const vars = RequestPanel.environmentProvider.getActiveVariables();
-    const varKeys = vars.filter(v => v.enabled && v.key).map(v => v.key);
-    const varValues = Object.fromEntries(
-      vars
-        .filter((variable) => variable.enabled !== false && variable.key)
-        .map((variable) => [variable.key, variable.value])
-    );
-    this.postMessage({ type: 'activeVarKeys', varKeys, varValues });
+    const sequence = ++this.activeVariableSequence;
+    try {
+      const context = this.captureExecutionContext();
+      const source = RequestPanel.environmentProvider.getActiveVariables();
+      const publish = (vars: SecretVariableView[]) => {
+        if (sequence !== this.activeVariableSequence || !this.isExecutionContextCurrent(context)
+          || context.environmentId !== RequestPanel.environmentProvider.activeEnvId) { return; }
+        const varKeys = vars.filter((row) => row.enabled && row.key).map((row) => row.key);
+        const varValues = Object.fromEntries(vars.filter((row) => row.enabled !== false && row.key).map((row) => [row.key,
+          row.secretRef || row.secretPendingRef ? (row.secretState === 'set' ? '[secret]' : `{{${row.key}}}`) : row.value]));
+        this.postMessage({ type: 'activeVarKeys', varKeys, varValues });
+      };
+      if (context.environmentId && source.some((row) => row.secretRef || row.secretPendingRef)) {
+        const scope = RequestPanel.storage.getVariableScope(context.environmentId, context.profileName);
+        void RequestPanel.secretVariables.describe(scope).then(publish).catch(() => publish(source.map((row) => ({ ...row, secretState: 'unavailable' }))));
+      } else { publish(source); }
+    } catch (error) { vscode.window.showErrorMessage(secretDiagnostic(error)); }
   }
 
   private captureExecutionContext(): ExecutionContext {
     return {
       profileName: this.storageProfileName,
+      profileId: RequestPanel.storage.getWorkspaceProfileId(this.storageProfileName),
       environmentId: RequestPanel.environmentProvider.activeEnvId,
       generation: this.executionGeneration,
     };
@@ -633,9 +714,19 @@ export class RequestPanel {
       && context.profileName === RequestPanel.storage.getWorkspaceProfileName();
   }
 
-  private saveEnvironmentChanges(context: ExecutionContext, before: KeyValue[], after: KeyValue[]): void {
+  private async resolveSecretVariables(context: ExecutionContext, variables: KeyValue[], texts: string[], scriptsAll: boolean) {
+    const scope = RequestPanel.storage.getVariableScope(context.environmentId, context.profileName);
+    if (scope.profileId !== context.profileId || !this.isExecutionContextCurrent(context)) { throw new Error(LocalizationService.t('secret.error.conflict')); }
+    if (context.environmentId === null) { return { variables, redactor: new SecretRedactor([]) }; }
+    return RequestPanel.secretVariables.resolve(scope, texts, { variables, scriptsAll });
+  }
+
+  private saveEnvironmentChanges(context: ExecutionContext, before: KeyValue[], after: KeyValue[], redactor = new SecretRedactor([])): void {
     if (!this.isExecutionContextCurrent(context) || !context.environmentId) { return; }
-    const result = RequestPanel.storage.applyEnvironmentVariableChanges(context.environmentId, before, after);
+    const protectedKeys = new Set(RequestPanel.storage.getScopedVariables(RequestPanel.storage.getVariableScope(context.environmentId, context.profileName))
+      .filter((row) => row.secretRef || row.secretPendingRef).map((row) => row.key));
+    const sanitizedAfter = after.map((row) => protectedKeys.has(row.key) ? row : { ...row, value: redactor.preserveReferences(row.value) });
+    const result = RequestPanel.storage.applyEnvironmentVariableChanges(context.environmentId, before, sanitizedAfter);
     if (result.conflicts.length > 0) {
       vscode.window.showWarningMessage(LocalizationService.t('warn.environmentVariableConflict', {
         keys: result.conflicts.join(', '),
@@ -649,6 +740,10 @@ export class RequestPanel {
 
   private invalidateExecutions(): void {
     ++this.executionGeneration;
+    ++this.editorLoadSequence;
+    ++this.activeVariableSequence;
+    this.editingVariableScope = undefined;
+    this.secretEditor.invalidate();
     this.requestExecutor.cancelAll();
     this.collectionRunner.reset();
     this.webSocketManager.disconnectAll();
@@ -784,7 +879,7 @@ export class RequestPanel {
       formData: message.formData ?? [],
       binaryFilePath: message.binaryFilePath ?? '',
       auth: message.auth ?? { type: 'none' },
-    }, RequestPanel.environmentProvider.getActiveVariables(), {
+    }, previewVariables(RequestPanel.environmentProvider.getActiveVariables()), {
       defaultHeaders: RequestPanel.storage.getDefaultHeaders(),
       skipDefaultHeaders: message.skipDefaultHeaders === true,
     });

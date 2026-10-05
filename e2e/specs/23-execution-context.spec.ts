@@ -19,7 +19,8 @@ test.describe('E2E #23 실행 중 환경과 프로필 전환', () => {
     await waitForResponseStatus(frame, /200/);
     const environments = readJson(path.join(storageRoot, 'environments.json'), []);
     expect(environments.find((env: { id: string }) => env.id === 'env-execution-b').variables)
-      .toEqual([{ key: 'envName', value: 'preserved-b', enabled: true }]);
+      .toMatchObject([{ key: 'envName', value: 'preserved-b', enabled: true }]);
+    expect(environments.find((env: { id: string }) => env.id === 'env-execution-b').variables[0].id).toMatch(/^[0-9a-f-]{36}$/i);
 
     tessra.server.clearRequests();
     await fillUrl(frame, `${tessra.baseUrl}/held`);

@@ -1044,6 +1044,9 @@ function updateStaticLocalizedText() {
   setTextContent('envEditorTitle', tr('webview.environment'));
   setTextContent('envAutoSavedLabel', tr('webview.autoSaved'));
   setTextContent('addEnvVarBtn', tr('webview.addVariable'));
+  setTextContent('workspaceVariablesNote', tr('webview.workspaceVariablesBackupOnly'));
+  setTextContent('secretConversionHelp', tr('webview.secretConversionHelp'));
+  setTextContent('openWorkspaceVariablesBtn', tr('webview.openWorkspaceVariables'));
   setTextContent('defaultHeadersTitle', tr('webview.defaultHeaders'));
   setTextContent('defaultHeadersSaveBtn', tr('webview.save'));
   setTextContent('addDefaultHeaderBtn', tr('webview.addHeader'));
@@ -1082,7 +1085,7 @@ function applyLocalizationUpdate(msg) {
     }
   });
   updateStaticLocalizedText();
-  envVarRows?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
+  refreshEnvironmentVariableLabels();
   defaultHeaderRows?.querySelectorAll('.kv-row').forEach(syncKvRowSensitivity);
   renderTabBar();
   renderContent();
@@ -2744,6 +2747,12 @@ function bindContentDelegatedEventsOnce() {
       vscode.postMessage({ type: 'openDefaultHeaders' });
       return;
     }
+    if (action === 'open-workspace-variables') {
+      flushPendingEnvironmentSave();
+      clearSecretReveals();
+      vscode.postMessage({ type: 'openWorkspaceVariables' });
+      return;
+    }
     if (action === 'switch-environment') {
       vscode.postMessage({ type: 'switchEnvironment' });
       return;
@@ -3789,8 +3798,17 @@ window.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'loadEnvironment') {
-    setEnvironmentEditorData(msg.envId, msg.envName, msg.variables || []);
-    revealEnvironmentEditor();
+    setEnvironmentEditorData(msg.envId, msg.envName, msg.variables || [], msg.scopeToken, 'environment');
+    if (msg.reveal !== false) revealEnvironmentEditor();
+  }
+
+  if (msg.type === 'loadWorkspaceVariables') {
+    setEnvironmentEditorData(null, null, msg.variables || [], msg.scopeToken, 'workspace');
+    if (msg.reveal !== false) revealEnvironmentEditor();
+  }
+
+  if (msg.type === 'secretVariableRevealed') {
+    receiveSecretVariableReveal(msg);
   }
 
   if (msg.type === 'loadDefaultHeaders') {
@@ -3805,10 +3823,11 @@ window.addEventListener('message', (event) => {
   }
 
   if (msg.type === 'updateActiveEnv') {
+    clearSecretReveals();
     currentEnvName = msg.envName;
     currentWorkspaceProfile = msg.profileName || 'default';
     if (Object.prototype.hasOwnProperty.call(msg, 'envId')) {
-      setEnvironmentEditorData(msg.envId || null, msg.envName || null, msg.variables || []);
+      setEnvironmentEditorData(msg.envId || null, msg.envName || null, msg.variables || [], msg.scopeToken, 'environment');
     }
     refreshStatusStrip(mainContent);
     refreshRequestPreflight(mainContent);

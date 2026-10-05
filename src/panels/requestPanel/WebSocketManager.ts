@@ -4,6 +4,9 @@ import { LocalizationService } from '../../services/LocalizationService';
 import { PathVariableService } from '../../services/PathVariableService';
 import { VariableService } from '../../services/VariableService';
 import { WebSocketConnection, WebSocketService } from '../../services/WebSocketService';
+import { ExecutionContext } from './executionContext';
+import { SecretExecutionHost, requestVariableTexts, secretDiagnostic } from './secretExecution';
+import { SecretRedactor } from '../../services/secretVariables';
 import {
   buildUrl,
   coalesceQueryParams,
@@ -15,7 +18,10 @@ import {
   normalizeWebSocketKeepAliveMessage,
 } from './requestUtils';
 
-export interface WebSocketManagerHost {
+export interface WebSocketManagerHost extends SecretExecutionHost {
+  captureExecutionContext?(): ExecutionContext;
+  isExecutionContextCurrent?(context: ExecutionContext): boolean;
+  getExecutionVariables?(context: ExecutionContext): KeyValue[];
   postMessage(message: unknown): void;
   getActiveVariables(): KeyValue[];
   getDefaultHeaders(): KeyValue[];
@@ -24,6 +30,10 @@ export interface WebSocketManagerHost {
 
 interface WebSocketSession {
   connection: WebSocketConnection;
+  context?: ExecutionContext;
+  variables: KeyValue[];
+  redactor: SecretRedactor;
+  keepAliveBusy?: boolean;
   keepAliveTimer?: ReturnType<typeof setInterval>;
 }
 
@@ -35,6 +45,7 @@ export interface WebSocketTimerHost {
 export class WebSocketManager {
   private readonly sessions = new Map<string, WebSocketSession>();
   private readonly manualDisconnectTabs = new Set<string>();
+  private readonly pendingConnects = new Map<string, object>();
 
   constructor(
     private readonly service: WebSocketService,
@@ -47,14 +58,35 @@ export class WebSocketManager {
 
   connect(message: WebSocketConnectMessage): void {
     this.disconnect(message.tabId, false);
+    const pending = {};
+    this.pendingConnects.set(message.tabId, pending);
     this.host.postMessage({
       type: MessageType.WebSocketStatus,
       tabId: message.tabId,
       status: 'connecting',
     });
 
+    const variables = this.host.getActiveVariables().map((row) => ({ ...row }));
+    const defaults = message.skipDefaultHeaders === true ? [] : cloneKeyValues(this.host.getDefaultHeaders());
+    const context = this.host.captureExecutionContext?.();
+    if (this.host.resolveSecretVariables && context) {
+      const texts = requestVariableTexts({ ...message, body: '', bodyType: 'none' }, defaults);
+      void this.host.resolveSecretVariables(context, variables, texts, false).then(({ variables: resolved, redactor }) => {
+        if (!this.isPendingCurrent(message.tabId, pending, context)) { return; }
+        this.connectResolved(message, resolved, defaults, variables, context, redactor);
+      }).catch((error) => {
+        if (this.isPendingCurrent(message.tabId, pending, context)) {
+          this.pendingConnects.delete(message.tabId);
+          this.postError(message.tabId, error);
+        }
+      });
+    } else {
+      this.connectResolved(message, variables, defaults, variables, context, new SecretRedactor([]));
+    }
+  }
+
+  private connectResolved(message: WebSocketConnectMessage, vars: KeyValue[], sourceDefaults: KeyValue[], sourceVariables: KeyValue[], context: ExecutionContext | undefined, redactor: SecretRedactor): void {
     try {
-      const vars = this.host.getActiveVariables();
       const pathVariableOverrides = PathVariableService.pruneOverrides(
         message.url,
         message.pathVariableOverrides
@@ -64,7 +96,7 @@ export class WebSocketManager {
       const resolvedParams = VariableService.resolveKeyValues(message.params ?? [], vars);
       const defaultHeaders = message.skipDefaultHeaders === true
         ? []
-        : VariableService.resolveKeyValues(this.host.getDefaultHeaders(), vars);
+        : VariableService.resolveKeyValues(sourceDefaults, vars);
       const requestKeySet = new Set(
         resolvedHeaders.filter((header) => header.enabled !== false && header.key).map((header) => header.key.toLowerCase())
       );
@@ -96,7 +128,8 @@ export class WebSocketManager {
         timeoutSec: normalizeCount(message.timeout),
         allowInsecureHttps: this.resolveAllowInsecureHttps(message.tlsValidation),
       });
-      this.sessions.set(message.tabId, { connection });
+      this.pendingConnects.delete(message.tabId);
+      this.sessions.set(message.tabId, { connection, context, variables: sourceVariables, redactor });
 
       connection.on('open', () => {
         if (this.sessions.get(message.tabId)?.connection !== connection) { return; }
@@ -151,18 +184,13 @@ export class WebSocketManager {
           type: MessageType.WebSocketStatus,
           tabId: message.tabId,
           status: 'error',
-          error: error.message,
-          errorDetail: this.summarizeError(error),
+          error: redactor.mask(error.message),
+          errorDetail: redactor.mask(this.summarizeError(error) ?? ''),
         });
       });
     } catch (error: unknown) {
-      this.host.postMessage({
-        type: MessageType.WebSocketStatus,
-        tabId: message.tabId,
-        status: 'error',
-        error: error instanceof Error ? error.message : String(error),
-        errorDetail: error instanceof Error ? this.summarizeError(error) : undefined,
-      });
+      this.pendingConnects.delete(message.tabId);
+      this.postError(message.tabId, error, redactor);
     }
   }
 
@@ -178,6 +206,16 @@ export class WebSocketManager {
       return;
     }
 
+    if (this.host.resolveSecretVariables && session.context) {
+      void this.resolvePayload(message.tabId, session, message.message ?? '').then((resolved) => {
+        if (!resolved) { return; }
+        try { this.sendText(message.tabId, session, resolved.payload, resolved.redactor); }
+        catch (error) { this.postError(message.tabId, error, resolved.redactor); }
+      }).catch((error) => {
+        if (this.isSessionCurrent(message.tabId, session)) { this.postError(message.tabId, error, session.redactor); }
+      });
+      return;
+    }
     try {
       const payload = VariableService.resolve(message.message ?? '', this.host.getActiveVariables());
       this.sendText(message.tabId, session, payload);
@@ -193,8 +231,12 @@ export class WebSocketManager {
   }
 
   disconnect(tabId: string, notify = true): void {
+    const wasPending = this.pendingConnects.delete(tabId);
     const session = this.sessions.get(tabId);
-    if (!session) { return; }
+    if (!session) {
+      if (wasPending && notify) { this.host.postMessage({ type: MessageType.WebSocketStatus, tabId, status: 'closed', closeSource: 'user', wasClean: true }); }
+      return;
+    }
     if (notify) {
       this.manualDisconnectTabs.add(tabId);
     }
@@ -216,7 +258,7 @@ export class WebSocketManager {
   }
 
   disconnectAll(): void {
-    for (const tabId of Array.from(this.sessions.keys())) {
+    for (const tabId of new Set([...this.sessions.keys(), ...this.pendingConnects.keys()])) {
       this.disconnect(tabId);
     }
   }
@@ -240,6 +282,19 @@ export class WebSocketManager {
       const activeSession = this.sessions.get(tabId);
       if (!activeSession || activeSession.connection !== connection) {
         this.stopKeepAlive(tabId, session, false);
+        return;
+      }
+      if (this.host.resolveSecretVariables && session.context) {
+        if (session.keepAliveBusy) { return; }
+        session.keepAliveBusy = true;
+        void this.resolvePayload(tabId, session, rawPayload).then((resolved) => {
+          if (!resolved) { return; }
+          try { connection.sendPing(resolved.payload); }
+          catch (error) { this.stopKeepAlive(tabId, session); this.postError(tabId, error, resolved.redactor); return; }
+          this.postSystemMessage(tabId, LocalizationService.t('panel.websocketKeepAlivePingSent'));
+        }).catch((error) => {
+          if (this.isSessionCurrent(tabId, session)) { this.stopKeepAlive(tabId, session); this.postError(tabId, error, session.redactor); }
+        }).finally(() => { session.keepAliveBusy = false; });
         return;
       }
       try {
@@ -273,17 +328,40 @@ export class WebSocketManager {
     }
   }
 
-  private sendText(tabId: string, session: WebSocketSession, payload: string): void {
+  private sendText(tabId: string, session: WebSocketSession, payload: string, redactor = session.redactor): void {
     session.connection.sendText(payload);
     this.host.postMessage({
       type: MessageType.WebSocketMessage,
       tabId,
       direction: 'out',
       messageType: 'text',
-      data: payload,
+      data: redactor.mask(payload),
       size: Buffer.byteLength(payload, 'utf-8'),
       timestamp: Date.now(),
     });
+  }
+
+  private isPendingCurrent(tabId: string, pending: object, context: ExecutionContext): boolean {
+    return this.pendingConnects.get(tabId) === pending && this.host.isExecutionContextCurrent?.(context) !== false;
+  }
+
+  private isSessionCurrent(tabId: string, session: WebSocketSession): boolean {
+    return this.sessions.get(tabId) === session && (!session.context || this.host.isExecutionContextCurrent?.(session.context) !== false);
+  }
+
+  private async resolvePayload(tabId: string, session: WebSocketSession, raw: string) {
+    // 각 Send/Ping은 원래 연결의 환경에서 현재 보호 metadata를 읽는다. 연결 당시 평문 snapshot으로 새 보호를 우회하지 않는다.
+    const source = this.host.getExecutionVariables?.(session.context!) ?? session.variables;
+    const result = await this.host.resolveSecretVariables!(session.context!, source, [raw], false);
+    if (!this.isSessionCurrent(tabId, session)) { return undefined; }
+    const payload = VariableService.resolve(raw, result.variables);
+    const unresolved = [...new Set([...payload.matchAll(/\{\{([^}]+)\}\}/g)].map((match) => match[1].trim()))];
+    if (unresolved.length > 0) { throw new Error(createUnresolvedVariableError(unresolved)); }
+    return { payload, redactor: result.redactor };
+  }
+
+  private postError(tabId: string, error: unknown, redactor = new SecretRedactor([])): void {
+    this.host.postMessage({ type: MessageType.WebSocketStatus, tabId, status: 'error', error: secretDiagnostic(error, redactor) });
   }
 
   private postSystemMessage(tabId: string, data: string): void {

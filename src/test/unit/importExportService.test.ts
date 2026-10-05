@@ -1,7 +1,57 @@
 import * as assert from 'assert';
+import { randomUUID } from 'crypto';
 import { ImportExportService } from '../../services/ImportExportService';
 
 describe('ImportExportService', () => {
+  it('exports only explicit secret metadata for protected and interrupted environment variables', () => {
+    const id = randomUUID(); const referenceId = randomUUID(); const pendingId = randomUUID(); const pendingReferenceId = randomUUID();
+    const exported = ImportExportService.exportEnvironment({ id: 'env', name: 'Safe export', variables: [
+      { id, key: 'token', value: 'synthetic-current-secret', enabled: false, secretRef: { id: referenceId } },
+      { id: pendingId, key: 'pending', value: 'synthetic-pending-original', enabled: true, secretPendingRef: { id: pendingReferenceId } },
+      { key: 'plain', value: 'preserve-existing-plaintext', enabled: true },
+    ] });
+    const values = exported.values as Array<Record<string, unknown>>;
+    assert.deepStrictEqual(values[0], { key: 'token', value: '', enabled: false, type: 'secret',
+      _tessraSecret: { version: 1, variableId: id, referenceId } });
+    assert.deepStrictEqual(values[1], { key: 'pending', value: '', enabled: true, type: 'secret',
+      _tessraSecret: { version: 1, variableId: pendingId, referenceId: pendingReferenceId } });
+    assert.deepStrictEqual(values[2], { key: 'plain', value: 'preserve-existing-plaintext', enabled: true, type: 'text' });
+    assert.ok(!JSON.stringify(exported).includes('synthetic-'));
+  });
+
+  it('round trips explicit Tessra references as fresh missing values while retaining variable IDs', () => {
+    const id = randomUUID(); const referenceId = randomUUID();
+    const exported = ImportExportService.exportEnvironment({ id: 'env', name: 'References', variables: [
+      { id, key: 'token', value: '', enabled: true, secretRef: { id: referenceId } },
+    ] });
+    const first = ImportExportService.importPostmanEnvironmentDocument(exported).variables[0];
+    const second = ImportExportService.importDocuments([exported]).environments[0].variables[0];
+    assert.strictEqual(first.id, id); assert.strictEqual(first.value, ''); assert.ok(first.secretRef);
+    assert.notStrictEqual(first.secretRef!.id, referenceId); assert.notStrictEqual(first.secretRef!.id, second.secretRef!.id);
+  });
+
+  it('ignores marker-bearing input values and defaults instead of storing mask strings as real secrets', () => {
+    const id = randomUUID(); const referenceId = randomUUID();
+    const imported = ImportExportService.importPostmanEnvironmentDocument({ name: 'Explicit reference', values: [
+      { key: 'token', value: '••••', default: 'synthetic-default', disabled: true,
+        _tessraSecret: { version: 1, variableId: id, referenceId } },
+    ] });
+    assert.strictEqual(imported.variables[0].value, ''); assert.strictEqual(imported.variables[0].enabled, false);
+    assert.ok(imported.variables[0].secretRef); assert.strictEqual(imported.variables[0].id, id);
+  });
+
+  it('rejects malformed explicit references without falling back to plaintext import or export', () => {
+    for (const marker of [null, {}, { version: 2, variableId: randomUUID(), referenceId: randomUUID() },
+      { version: 1, variableId: 'invalid', referenceId: randomUUID() }]) {
+      assert.throws(() => ImportExportService.importPostmanEnvironmentDocument({ name: 'Bad marker', values: [
+        { key: 'token', value: 'synthetic-secret', _tessraSecret: marker },
+      ] }), /Invalid Tessra protected variable reference/);
+    }
+    assert.throws(() => ImportExportService.exportEnvironment({ id: 'env', name: 'Bad export', variables: [
+      { key: 'token', value: 'synthetic-secret', enabled: true, secretRef: { id: randomUUID() } },
+    ] }), /requires stable IDs/);
+  });
+
   it('imports a Postman environment with enabled state and fallback values', () => {
     const postmanEnvironment = {
       id: 'postman-env-id',

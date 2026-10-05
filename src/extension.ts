@@ -31,6 +31,9 @@ import {
 } from './services/LocalizationService';
 import { RequestExportService } from './services/RequestExportService';
 import { PathVariableService } from './services/PathVariableService';
+import { SecretVariableService } from './services/SecretVariableService';
+import { stringifySecretReferences } from './services/secretVariables';
+import { previewVariables, secretDiagnostic } from './panels/requestPanel/secretExecution';
 
 const VALID_HTTP_METHODS: ReadonlySet<HttpMethod> = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 
@@ -42,6 +45,10 @@ interface ImportStats {
 export function activate(context: vscode.ExtensionContext) {
   const t = (key: string, params?: Record<string, string | number>) => LocalizationService.t(key, params);
   const storage = new StorageService(context);
+  const secretVariables = new SecretVariableService(context.secrets, {
+    getVariables: (scope) => storage.getScopedVariables(scope),
+    compareAndSave: (scope, before, after) => storage.compareAndSaveScopedVariables(scope, before, after),
+  });
   if (storage.didMigrateLegacyStorage()) {
     vscode.window.showInformationMessage('Migrated existing Arc Client data into Tessra.');
   }
@@ -125,6 +132,7 @@ export function activate(context: vscode.ExtensionContext) {
   void migrateLegacyRequestPanelTheme();
 
   RequestPanel.storage = storage;
+  RequestPanel.secretVariables = secretVariables;
   RequestPanel.historyProvider = historyProvider;
   RequestPanel.collectionProvider = collectionProvider;
   RequestPanel.environmentProvider = environmentProvider;
@@ -573,7 +581,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('tessra.copyAsCurl', (node: CollectionNode) => {
       if (node.kind === 'request' && node.item.request) {
         const curl = CurlService.generate(
-          RequestExportService.resolve(node.item.request, environmentProvider.getActiveVariables(), {
+          RequestExportService.resolve(node.item.request, previewVariables(environmentProvider.getActiveVariables()), {
             defaultHeaders: storage.getDefaultHeaders(),
             skipDefaultHeaders: node.item.request.skipDefaultHeaders === true,
           })
@@ -636,7 +644,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       try {
         const backup = storage.exportWorkspaceBackup(getTessraVersion());
-        await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(backup, null, 2), 'utf-8'));
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(stringifySecretReferences(backup), 'utf-8'));
         vscode.window.showInformationMessage(t('info.exportedWorkspaceBackup', { path: uri.fsPath }));
         vscode.window.showWarningMessage(t('warn.workspaceBackupSecrets'));
       } catch (err: unknown) {
@@ -888,7 +896,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('tessra.editEnvironment', (env: Environment) => {
       RequestPanel.show(context.extensionUri);
-      RequestPanel.currentPanel?.loadEnvironment(env);
+      void RequestPanel.currentPanel?.loadEnvironment(env).catch((error) => vscode.window.showErrorMessage(secretDiagnostic(error)));
     })
   );
 
@@ -896,6 +904,13 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('tessra.editDefaultHeaders', () => {
       RequestPanel.show(context.extensionUri);
       RequestPanel.currentPanel?.loadDefaultHeaders();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('tessra.editWorkspaceVariables', () => {
+      RequestPanel.show(context.extensionUri);
+      void RequestPanel.currentPanel?.loadWorkspaceVariables().catch((error) => vscode.window.showErrorMessage(secretDiagnostic(error)));
     })
   );
 
@@ -939,7 +954,7 @@ export function activate(context: vscode.ExtensionContext) {
           RequestPanel.currentPanel?.updateActiveEnv(env.name);
         }
         RequestPanel.show(context.extensionUri);
-        RequestPanel.currentPanel?.loadEnvironment(env);
+        void RequestPanel.currentPanel?.loadEnvironment(env).catch((error) => vscode.window.showErrorMessage(secretDiagnostic(error)));
       } else {
         // Single click: wait briefly before opening the variable editor.
         if (envClickTimer) { clearTimeout(envClickTimer); }
@@ -948,7 +963,7 @@ export function activate(context: vscode.ExtensionContext) {
           envClickTimer = null;
           envLastClickId = null;
           RequestPanel.show(context.extensionUri);
-          RequestPanel.currentPanel?.loadEnvironment(env);
+          void RequestPanel.currentPanel?.loadEnvironment(env).catch((error) => vscode.window.showErrorMessage(secretDiagnostic(error)));
         }, 300);
       }
     })

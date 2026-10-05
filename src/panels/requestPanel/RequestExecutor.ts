@@ -15,6 +15,8 @@ import { RequestBodyService } from '../../services/RequestBodyService';
 import { ScriptRunner } from '../../services/ScriptRunner';
 import { LocalizationService } from '../../services/LocalizationService';
 import { ExecutionContext, hasEnvironmentChanges } from './executionContext';
+import { SecretRedactor } from '../../services/secretVariables';
+import { SecretExecutionHost, requestVariableTexts, secretDiagnostic, createSecretHistorySnapshot } from './secretExecution';
 import {
   buildUrl,
   cloneFormDataFields,
@@ -36,7 +38,7 @@ import {
   shouldRetryResponse,
 } from './requestUtils';
 
-export interface RequestExecutorHost {
+export interface RequestExecutorHost extends SecretExecutionHost {
   captureExecutionContext(): ExecutionContext;
   isExecutionContextCurrent(context: ExecutionContext): boolean;
   postMessage(message: unknown): void;
@@ -44,7 +46,7 @@ export interface RequestExecutorHost {
   getDefaultHeaders(): KeyValue[];
   getAllowInsecureCertificates(): boolean;
   getScriptTimeoutMs(): number;
-  saveEnvironmentChanges(context: ExecutionContext, before: KeyValue[], after: KeyValue[]): void;
+  saveEnvironmentChanges(context: ExecutionContext, before: KeyValue[], after: KeyValue[], redactor?: SecretRedactor): void;
   saveToHistory(
     request: Request,
     response: { status: number; statusText: string; time: number } | null,
@@ -97,6 +99,7 @@ export class RequestExecutor {
         this.host.postMessage({ type: MessageType.RequestCanceled, tabId, ...createRequestTiming(requestStartedAt) });
       }
     };
+    let redactor = new SecretRedactor([]);
     try {
       if (!canPublish()) { return; }
       const initialMethod = normalizeMethod(message.method);
@@ -104,6 +107,8 @@ export class RequestExecutor {
       const settings = normalizeRequestSettings(message);
       const scripts = normalizeScripts(message.scripts);
       let vars = this.host.getActiveVariables();
+      const sourceVariables = vars.map((variable) => ({ ...variable }));
+      const sourceDefaults = settings.skipDefaultHeaders ? [] : this.host.getDefaultHeaders().map((header) => ({ ...header }));
       let requestState = createScriptableRequest({
         method: initialMethod,
         url: message.url,
@@ -121,16 +126,25 @@ export class RequestExecutor {
         return;
       }
 
+      if (this.host.resolveSecretVariables) {
+        const resolved = await this.host.resolveSecretVariables(context, sourceVariables,
+          requestVariableTexts({ ...requestState, pathVariableOverrides: message.pathVariableOverrides }, sourceDefaults),
+          !settings.disableScripts && !!(scripts.preRequest.trim() || scripts.test.trim()));
+        if (wasCanceled()) { publishCancellation(); return; }
+        vars = resolved.variables;
+        redactor = resolved.redactor;
+      }
+
       if (!settings.disableScripts) {
         try {
           const preRequestResult = ScriptRunner.runPreRequest(scripts, requestState, vars, this.host.getScriptTimeoutMs());
           requestState = preRequestResult.request;
           if (hasEnvironmentChanges(vars, preRequestResult.envVariables)) {
-            this.host.saveEnvironmentChanges(context, vars, preRequestResult.envVariables);
+            this.host.saveEnvironmentChanges(context, vars, preRequestResult.envVariables, redactor);
           }
           vars = preRequestResult.envVariables;
         } catch (err: unknown) {
-          this.postTimedResponseError(tabId, err instanceof Error ? err.message : String(err), requestStartedAt);
+          this.postTimedResponseError(tabId, secretDiagnostic(err, redactor), requestStartedAt);
           return;
         }
       }
@@ -155,9 +169,7 @@ export class RequestExecutor {
       }));
       const resolvedBinaryFilePath = VariableService.resolve(requestState.binaryFilePath ?? '', vars);
 
-      const defaultHeaders = settings.skipDefaultHeaders
-        ? []
-        : VariableService.resolveKeyValues(this.host.getDefaultHeaders(), vars);
+      const defaultHeaders = VariableService.resolveKeyValues(sourceDefaults, vars);
       const requestKeySet = new Set(
         resolvedHeaders.filter((header) => header.enabled && header.key).map((header) => header.key.toLowerCase())
       );
@@ -186,7 +198,7 @@ export class RequestExecutor {
       try {
         url = buildUrl(resolvedUrl, finalParams);
       } catch {
-        this.postTimedResponseError(tabId, `Invalid URL: ${resolvedUrl}`, requestStartedAt);
+        this.postTimedResponseError(tabId, redactor.mask(`Invalid URL: ${resolvedUrl}`), requestStartedAt);
         return;
       }
 
@@ -202,7 +214,7 @@ export class RequestExecutor {
         });
       } catch (err: unknown) {
         if (wasCanceled()) { publishCancellation(); return; }
-        this.postTimedResponseError(tabId, err instanceof Error ? err.message : String(err), requestStartedAt);
+        this.postTimedResponseError(tabId, secretDiagnostic(err, redactor), requestStartedAt);
         return;
       }
 
@@ -219,6 +231,10 @@ export class RequestExecutor {
         binaryFilePath: preparedBody.resolvedBinaryFilePath,
         auth: { type: 'none' },
       });
+      const historySnapshot = redactor.hasSecrets
+        ? createSecretHistorySnapshot({ ...requestState, method, bodyType, pathVariableOverrides }, sourceDefaults, settings, redactor)
+        : createHistoryRequestSnapshot(method, url, preparedBody.headers, preparedBody.resolvedBody, bodyType,
+          preparedBody.resolvedFormData, preparedBody.resolvedBinaryFilePath, settings);
 
       try {
         let response: Response | null = null;
@@ -301,7 +317,7 @@ export class RequestExecutor {
           try {
             const testResult = ScriptRunner.runTests(scripts, executedRequest, response, vars, this.host.getScriptTimeoutMs());
             if (hasEnvironmentChanges(vars, testResult.envVariables)) {
-              this.host.saveEnvironmentChanges(context, vars, testResult.envVariables);
+              this.host.saveEnvironmentChanges(context, vars, testResult.envVariables, redactor);
             }
             vars = testResult.envVariables;
             scriptResults = testResult.result;
@@ -311,7 +327,7 @@ export class RequestExecutor {
               tests: [{
                 name: LocalizationService.t('webview.testScript'),
                 passed: false,
-                error: err instanceof Error ? err.message : String(err),
+                error: secretDiagnostic(err, redactor),
               }],
             };
           }
@@ -319,16 +335,7 @@ export class RequestExecutor {
 
         if (settings.saveToHistory) {
           this.host.saveToHistory(
-            createHistoryRequestSnapshot(
-              method,
-              url,
-              preparedBody.headers,
-              preparedBody.resolvedBody,
-              bodyType,
-              preparedBody.resolvedFormData,
-              preparedBody.resolvedBinaryFilePath,
-              settings
-            ),
+            historySnapshot,
             { status: response.status, statusText: response.statusText, time: response.time },
             responseTiming,
             context
@@ -338,19 +345,24 @@ export class RequestExecutor {
 
         const resolvedHeaderPairs = preparedBody.headers
           .filter((header) => header.enabled && header.key)
-          .map((header) => ({ key: header.key, value: header.value }));
+          .map((header) => ({
+            key: header.key,
+            // Basic의 username:password 결합 인코딩은 개별 비밀값의 인코딩과 다르다.
+            value: redactor.hasSecrets && header.key.toLowerCase() === 'authorization' && /^Basic\s/i.test(header.value)
+              ? 'Basic [secret]' : header.value,
+          }));
 
         this.host.postMessage({
           type: MessageType.ReceiveResponse,
           tabId,
           response,
-          resolvedUrl: url,
-          resolvedHeaders: resolvedHeaderPairs,
-          scriptResults,
+          resolvedUrl: redactor.mask(url),
+          resolvedHeaders: redactor.map(resolvedHeaderPairs),
+          scriptResults: redactor.map(scriptResults),
           ...responseTiming,
         });
       } catch (err: unknown) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
+        const errorMsg = secretDiagnostic(err, redactor);
         const wasCanceled = this.canceledRequestRuns.delete(runKey);
         const errorTiming = createRequestTiming(requestStartedAt);
 
@@ -369,16 +381,7 @@ export class RequestExecutor {
 
         if (settings.saveToHistory) {
           this.host.saveToHistory(
-            createHistoryRequestSnapshot(
-              method,
-              url,
-              preparedBody.headers,
-              preparedBody.resolvedBody,
-              bodyType,
-              preparedBody.resolvedFormData,
-              preparedBody.resolvedBinaryFilePath,
-              settings
-            ),
+            historySnapshot,
             null,
             errorTiming,
             context
@@ -395,7 +398,7 @@ export class RequestExecutor {
       }
     } catch (error: unknown) {
       if (wasCanceled()) { publishCancellation(); return; }
-      this.postTimedResponseError(tabId, error instanceof Error ? error.message : String(error), requestStartedAt);
+      this.postTimedResponseError(tabId, secretDiagnostic(error, redactor), requestStartedAt);
     } finally {
       cancelDelay = null;
       this.canceledRequestRuns.delete(runKey);

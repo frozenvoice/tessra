@@ -26,9 +26,9 @@ Body: {"env":"{{envName}}"}
 - リクエストタブ: `Params`, `Headers`, `Body`, `Auth`, `Scripts`, `Settings`
 - ピン留めタブ付きのマルチタブ編集
 - URL 入力欄の `Enter`、または `Ctrl+Enter` / `Cmd+Enter` でアクティブなリクエストを送信します。
-- URL 下の status strip には、アクティブ Environment（`N 変数`）、Scripts、History on/off、Defaults、risk override、リクエストの `使用 N` が表示されます。
+- URL 下の status strip には、アクティブ環境の変数数、スクリプト、履歴保存、適用する既定ヘッダー数、安全設定、リクエストで参照した変数数 が表示されます。
 - Environment セグメントをクリックすると変数を編集できます。アクティブ環境がない場合は環境を選べます。
-- `使用 N`（または未解決 Vars）をクリックすると、現在のリクエストでの変数使用箇所を確認できます。
+- リクエスト変数の領域（未解決変数の警告を含む）をクリックすると、現在のリクエストでの変数使用箇所を確認できます。
 - status strip を展開すると、workspace profile、環境切り替え、Default Headers、追加詳細を確認できます。
 - 機密性のある認証値は、表示操作をするまでマスクされます。
 - ヘッダーやクエリパラメータを 1 行ずつ追加せず、一括貼り付けできます。
@@ -79,9 +79,18 @@ Body: {"env":"{{envName}}"}
 - URL 警告も同じ occurrence 規則に従います。Request-local の path 値は missing になりませんが、同じ名前が query / headers / body / auth にある場合は Environment に無ければ unresolved のままです。
 - Path override は該当 path segment にのみ適用され、query / headers / body / auth には影響しません。WebSocket URL と Collection Runner / cURL / codegen の解決にも同じ規則が適用されます。
 - URL、headers、body、auth、scripts などの入力欄で変数 autocomplete を使えます。
-- Environment の `N 変数` はアクティブ環境の変数数、リクエストの `使用 N` は現在のリクエストが使う変数数です。
+- 環境の変数数はアクティブ環境の大きさ、リクエストの変数数は現在のリクエストで参照した一意の変数名の数です。
 - workspace variables はバックアップに保持できますが、リクエスト解決は引き続きアクティブ environment に従います。
 - `Tessra: Import Environment` で `.env` / `.env.*` / `*.env` を一度だけローカル Environment として取り込みます。元ファイルは変更せず、取り込んだ環境を自動でアクティブにはしません。
+
+## 秘密変数
+
+- 環境または workspace-variable の編集画面で `保護(Protect)` を明示的に選びます。既存の変数は自動分類しません。`値を設定(Set)` は VS Code のパスワード入力欄で入力・置換し、`表示(Reveal)` は一時的に表示し、`削除(Delete)` は選択した変数と正確に対応する秘密参照を削除します。
+- 確認済みの値は VS Code SecretStorage に保存し、JSON には安定したプロファイル・環境・変数 ID と参照を残します。名前を変更しても変数 ID は変わりません。Webview は既定でマスクと値の有無だけを受け取り、プロファイル切り替え・パネル終了時に表示した値を破棄します。
+- SecretStorage への保存を確認してから現在の平文を取り除きます。中断や保存先の障害では元の値を保持した変換待ち状態になり、実行を停止します。`再試行(Retry)` で完了するか、`キャンセル(Cancel)` で平文に戻せます。未設定や保存先の障害は送信前に通知されます。
+- 新しい環境・ワークスペースのエクスポートには保護された変数の参照だけが含まれます。インポート・復元後は同じコンピューターでも `値を設定` が必要です。過去のバックアップ・エクスポート・平文変数は自動検査・削除しません。Workspace variables はバックアップ用で、リクエストの置換はアクティブ環境に従います。
+- アプリが生成するリクエストのプレビュー・コード・リクエスト履歴・エラー・スクリプトログは、既知の秘密値をマスクするか変数参照を保持します。実際のリクエストと、サーバー echo を含む受信レスポンスは変更しません。信頼したスクリプトは実行時に環境の秘密値を読めます。任意に変換された値を完全に検出する保証はなく、VM は OS サンドボックスではありません。
+- 復旧とエクスポートの詳細は [秘密変数の保存と露出の境界](docs/secret-variables.md) を参照してください。
 
 ## ワークスペースプロファイル
 
@@ -173,7 +182,7 @@ macOS では `Ctrl` の代わりに `Cmd` を使用します。
 
 ## ローカル保存
 
-すべての Tessra データは VS Code `globalStorage` 配下の JSON ファイルにローカル保存されます。default プロファイルはルートに、他のプロファイルは `profiles/<name>/` に同じファイルを置きます。
+リクエストと metadata は VS Code `globalStorage` 配下の JSON ファイルにローカル保存されます。確認済みの秘密変数の値は別の VS Code SecretStorage に保存し、JSON には参照を残します。default プロファイルはルートに、他のプロファイルは `profiles/` 配下のエンコードされたディレクトリに同じファイルを置きます。
 
 - `collections.json`
 - `history.json`

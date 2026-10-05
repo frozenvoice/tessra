@@ -302,6 +302,7 @@ function renderStatusStripExpandDetails(tab) {
     '<button type="button" class="status-strip-link" data-action="edit-environment">' + escapeHtml(tr('webview.editEnvironmentVariables')) + '</button>' +
     '<button type="button" class="status-strip-link" data-action="change-workspace-profile" title="' + escapeAttr(tr(currentWorkspaceProfile === 'default' ? 'webview.profileDefaultTooltip' : 'webview.profileCustomTooltip')) + '">' + escapeHtml(renderProfileIndicator(currentWorkspaceProfile)) + '</button>' +
     '<button type="button" class="status-strip-link" data-action="open-default-headers">' + escapeHtml(tr('webview.defaultHeaders')) + '</button>' +
+    '<button type="button" class="status-strip-link" data-action="open-workspace-variables" data-testid="workspace-variables-context">' + escapeHtml(tr('webview.openWorkspaceVariables')) + '</button>' +
   '</div>');
   if (unresolved.length > 0) {
     parts.push('<div class="status-strip-detail-block warning js-status-strip-unresolved">' +

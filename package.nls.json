@@ -62,5 +62,6 @@
   "command.changeWorkspaceProfile": "Tessra: Change Workspace Profile",
   "view.collections": "Collections",
   "view.environments": "Environments",
-  "view.history": "History"
+  "view.history": "History",
+  "command.editWorkspaceVariables": "Tessra: Edit Workspace Variables"
 }

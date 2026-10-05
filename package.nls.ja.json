@@ -62,5 +62,6 @@
   "command.changeWorkspaceProfile": "Tessra: ワークスペースプロファイルを変更",
   "view.collections": "コレクション",
   "view.environments": "環境",
-  "view.history": "履歴"
+  "view.history": "履歴",
+  "command.editWorkspaceVariables": "Tessra: Workspace 変数を編集"
 }

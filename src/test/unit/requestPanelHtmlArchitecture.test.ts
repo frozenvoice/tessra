@@ -106,7 +106,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10/11 split)', 
     assert.match(environment, /function revealEnvironmentEditor\(/);
     assert.match(environment, /function setEnvironmentEditorData\(/);
     assert.match(environment, /function envScheduleSave\(/);
-    assert.match(environment, /type: 'saveEnvironmentVars'/);
+    assert.match(environment, /type: envEditorScope === 'workspace' \? 'saveWorkspaceVariables' : 'saveEnvironmentVars'/);
     assert.match(defaultHeaders, /function revealDefaultHeadersEditor\(/);
     assert.match(defaultHeaders, /function hideDefaultHeadersEditor\(/);
     assert.match(defaultHeaders, /function setDefaultHeadersEditorData\(/);
@@ -340,7 +340,7 @@ describe('requestPanelHtml architecture (Phase 1/2/3/4/5/6/7/8/9/10/11 split)', 
     assert.match(environmentJs, /let editingEnvId = null/);
     assert.match(environmentJs, /let envEditorVariableCount = 0/);
     assert.match(environmentJs, /setTimeout\(envAutoSave, 500\)/);
-    assert.match(environmentJs, /type: 'saveEnvironmentVars'/);
+    assert.match(environmentJs, /type: envEditorScope === 'workspace' \? 'saveWorkspaceVariables' : 'saveEnvironmentVars'/);
     assert.match(environment, /getElementById\('envEditor'\)/);
     assert.match(environment, /addEnvVarBtn\.addEventListener/);
     assert.match(environment, /envVarRows\.addEventListener\('focusout'/);

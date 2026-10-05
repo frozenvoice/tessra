@@ -18,6 +18,8 @@ export async function runCommand(page: Page, commandLabel: string): Promise<void
   const option = page.locator('.quick-input-list .monaco-list-row').filter({ hasText: commandLabel }).first();
   await option.waitFor({ state: 'visible', timeout: 30000 });
   await option.click();
+  // 이전 command palette의 닫힘과 다음 quick input의 열림을 구분한다.
+  await option.waitFor({ state: 'hidden', timeout: 30000 });
 }
 
 export async function openNewRequestPanel(page: Page): Promise<FrameLocator> {

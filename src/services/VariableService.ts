@@ -24,7 +24,8 @@ export class VariableService {
     const varMap = new Map<string, string>();
     for (const v of variables) {
       if (v.enabled && v.key) {
-        varMap.set(v.key, v.value);
+        // 참조만 받은 호출자는 빈 값을 보내지 않는다. 실행 호스트가 해석한 값에는 참조 metadata가 없다.
+        varMap.set(v.key, v.secretRef || v.secretPendingRef ? `{{${v.key}}}` : v.value);
       }
     }
     return varMap;

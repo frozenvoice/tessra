@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
+import { stringifySecretReferences } from './secretVariables';
 import {
   AuthConfig,
   Collection,
@@ -49,6 +51,13 @@ export interface EnvironmentVariableChangesResult {
   changed: boolean;
   conflicts: string[];
   appliedKeys: string[];
+}
+
+export interface StoredVariableScope {
+  profileName: string;
+  profileId: string;
+  /** null은 요청 치환에 참여하지 않는 workspace 변수 저장소다. */
+  environmentId: string | null;
 }
 
 // 조회용 snapshot은 내부 중첩 객체까지 동결한다. 수정하려면 getHistory()의 복사본을 사용한다.
@@ -170,6 +179,97 @@ export class StorageService {
     );
     const trimmed = String(configured || '').trim();
     return trimmed || StorageService.DEFAULT_PROFILE_NAME;
+  }
+
+  // 이름/경로와 별도로 비밀 저장 키의 프로필 ID를 유지한다. backup import는 이를 교체하지 않는다.
+  getWorkspaceProfileId(profileName = this.getWorkspaceProfileName()): string {
+    const storagePath = this.getStoragePathForProfile(profileName);
+    const metaPath = path.join(storagePath, StorageService.PROFILE_META_FILE);
+    const meta = this.readJson<{ name?: string; id?: string }>(metaPath, {}, (raw) => {
+      const data = this.asObject(raw, 'Workspace profile');
+      if (typeof data.name !== 'undefined' && (typeof data.name !== 'string' || !data.name.trim())) {
+        throw new Error('Workspace profile name is invalid.');
+      }
+      if (typeof data.id !== 'undefined' && !StorageService.isStableVariableId(data.id)) {
+        throw new Error('Workspace profile identity is invalid.');
+      }
+      return data as { name?: string; id?: string };
+    });
+    this.requireRecoveredJson(metaPath);
+    if (meta.name && meta.name !== profileName) { throw new Error('Workspace profile identity does not match.'); }
+    if (meta.id) {
+      if (!StorageService.isStableVariableId(meta.id)) { throw new Error('Invalid workspace profile identity.'); }
+      return meta.id;
+    }
+    const id = randomUUID();
+    this.writeJsonFile(metaPath, { ...meta, name: profileName, id });
+    return id;
+  }
+
+  private getStoragePathForProfile(profileName: string): string {
+    if (profileName === StorageService.DEFAULT_PROFILE_NAME) { return this.rootStoragePath; }
+    const storagePath = this.resolveProfilePath(profileName);
+    this.ensureDir(storagePath);
+    this.ensureProfileMeta(storagePath, profileName);
+    return storagePath;
+  }
+
+  static isStableVariableId(value: unknown): value is string {
+    return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  getVariableScope(environmentId: string | null, profileName = this.getWorkspaceProfileName()): StoredVariableScope {
+    return { profileName, profileId: this.getWorkspaceProfileId(profileName), environmentId };
+  }
+
+  private scopedVariableFile(scope: StoredVariableScope): string {
+    if (this.getWorkspaceProfileId(scope.profileName) !== scope.profileId) {
+      throw new Error('Workspace profile identity changed.');
+    }
+    return path.join(this.getStoragePathForProfile(scope.profileName), scope.environmentId === null ? 'variables.json' : 'environments.json');
+  }
+
+  getScopedVariables(scope: StoredVariableScope): KeyValue[] {
+    const filePath = this.scopedVariableFile(scope);
+    if (scope.environmentId === null) {
+      const variables = this.readJson<KeyValue[]>(filePath, [], (value) => this.normalizeVariableArray(value, 'Variables'));
+      this.requireRecoveredJson(filePath);
+      return variables;
+    }
+    const environments = this.readJson<Environment[]>(filePath, [], (value) => this.normalizeEnvironmentArray(value, 'Environments'));
+    this.requireRecoveredJson(filePath);
+    const matching = environments.filter((env) => env.id === scope.environmentId);
+    if (matching.length !== 1) { throw new Error('Environment is missing or its identity is ambiguous.'); }
+    return matching[0].variables;
+  }
+
+  ensureVariableIds(scope: StoredVariableScope): KeyValue[] {
+    const before = this.getScopedVariables(scope);
+    if (before.every((variable) => variable.id)) { return before; }
+    const next = before.map((variable) => ({ ...variable, id: variable.id ?? randomUUID() }));
+    this.compareAndSaveScopedVariables(scope, before, next);
+    return next;
+  }
+
+  // 비동기 키체인 작업 후 이름/ID/값의 동시 변경을 덮어쓰지 않는다. 실제 JSON 쓰기는 기존 atomic rename을 사용한다.
+  compareAndSaveScopedVariables(scope: StoredVariableScope, expected: KeyValue[], next: KeyValue[]): void {
+    const filePath = this.scopedVariableFile(scope);
+    const normalized = this.normalizeVariableArray(next, 'Variables');
+    const serialize = (variables: KeyValue[]) => JSON.stringify(variables);
+    if (scope.environmentId === null) {
+      const current = this.getScopedVariables(scope);
+      if (serialize(current) !== serialize(expected)) { throw new Error('Variables changed during the secret operation.'); }
+      this.writeJsonFile(filePath, normalized);
+      return;
+    }
+    const environments = this.readJson<Environment[]>(filePath, [], (value) => this.normalizeEnvironmentArray(value, 'Environments'));
+    this.requireRecoveredJson(filePath);
+    const matches = environments.filter((env) => env.id === scope.environmentId);
+    if (matches.length !== 1 || serialize(matches[0].variables) !== serialize(expected)) {
+      throw new Error('Variables changed during the secret operation.');
+    }
+    matches[0].variables = normalized;
+    this.writeJsonFile(filePath, environments);
   }
 
   listProfiles(): string[] {
@@ -340,7 +440,8 @@ export class StorageService {
       `.${path.basename(filePath)}.${process.pid}.${Date.now().toString(36)}.tmp`
     );
     try {
-      fs.writeFileSync(tempPath, JSON.stringify(data, null, 2) ?? 'null', 'utf-8');
+      // 완료된 참조는 값 property도 제외하며 pending의 복구용 원본은 유지한다.
+      fs.writeFileSync(tempPath, stringifySecretReferences(data), 'utf-8');
       fs.renameSync(tempPath, filePath);
     } catch (err: unknown) {
       try {
@@ -450,6 +551,25 @@ export class StorageService {
   private normalizeOptionalKeyValueArray(value: unknown, label: string): KeyValue[] {
     if (typeof value === 'undefined' || value === null) { return []; }
     return this.normalizeKeyValueArray(value, label);
+  }
+
+  private normalizeVariableArray(value: unknown, label: string): KeyValue[] {
+    const seen = new Set<string>();
+    return this.normalizeKeyValueArray(value, label).map((variable, index) => {
+      if (variable.id !== undefined) {
+        if (!StorageService.isStableVariableId(variable.id) || seen.has(variable.id)) {
+          throw new Error(`${label}[${index}].id must be a unique UUID.`);
+        }
+        seen.add(variable.id);
+      }
+      for (const field of ['secretRef', 'secretPendingRef'] as const) {
+        const ref = variable[field];
+        if (ref !== undefined && (!ref || !StorageService.isStableVariableId(ref.id) || !variable.id)) {
+          throw new Error(`${label}[${index}].${field} requires stable variable and secret IDs.`);
+        }
+      }
+      return variable.secretRef && !variable.secretPendingRef ? { ...variable, value: '' } : variable;
+    });
   }
 
   private normalizeCollectionArray(value: unknown, label: string): Collection[] {
@@ -685,7 +805,7 @@ export class StorageService {
         ...environment,
         id: this.asString(environment.id, `${label}[${index}].id`),
         name: this.asString(environment.name, `${label}[${index}].name`),
-        variables: this.normalizeOptionalKeyValueArray(environment.variables, `${label}[${index}].variables`),
+        variables: this.normalizeVariableArray(environment.variables ?? [], `${label}[${index}].variables`),
       } as Environment;
     });
   }
@@ -954,7 +1074,7 @@ export class StorageService {
   }
 
   saveEnvironments(environments: Environment[]): void {
-    this.writeJson(this.resolveFilePath('environments.json'), environments);
+    this.writeJson(this.resolveFilePath('environments.json'), this.normalizeEnvironmentArray(environments, 'Environments'));
   }
 
   getEnvironment(id: string): Environment | undefined {
@@ -1016,6 +1136,12 @@ export class StorageService {
       const desired = next.get(key);
       if (same(before, desired)) { continue; }
 
+      // 신뢰된 script에도 키체인 참조의 삭제/평문 교체 권한을 자동으로 부여하지 않는다.
+      if (currentEntries.get(key)?.some((entry) => entry.secretRef || entry.secretPendingRef)) {
+        conflicts.push(key);
+        continue;
+      }
+
       const now = current.get(key);
       const entries = currentEntries.get(key);
       if (!allMatch(entries, before)) {
@@ -1041,9 +1167,10 @@ export class StorageService {
           appliedKeys.push(key);
         }
       } else if (existingIndex >= 0) {
+        const existingId = merged[existingIndex].id;
         if (merged.some((variable) => !same(variable, desired) && variable.key === key)) {
           merged = merged.filter((variable) => variable.key !== key);
-          merged.splice(existingIndex, 0, { ...desired });
+          merged.splice(existingIndex, 0, { ...desired, ...(existingId ? { id: existingId } : {}) });
           appliedKeys.push(key);
         }
       } else {
@@ -1091,12 +1218,27 @@ export class StorageService {
 
   getVariables(): KeyValue[] {
     return this.readJson<KeyValue[]>(this.resolveFilePath('variables.json'), [], (value) =>
-      this.normalizeKeyValueArray(value, 'Variables')
+      this.normalizeVariableArray(value, 'Variables')
     );
   }
 
   saveVariables(variables: KeyValue[]): void {
-    this.writeJson(this.resolveFilePath('variables.json'), variables);
+    this.writeJson(this.resolveFilePath('variables.json'), this.normalizeVariableArray(variables, 'Variables'));
+  }
+
+  private exportVariableReferences(variables: KeyValue[]): KeyValue[] {
+    return variables.map((variable) => {
+      const ref = variable.secretRef ?? variable.secretPendingRef;
+      if (!ref) { return { ...variable }; }
+      return { id: variable.id, key: variable.key, enabled: variable.enabled, value: '', secretRef: { ...ref } };
+    });
+  }
+
+  private importVariableReferences(variables: KeyValue[]): KeyValue[] {
+    return this.exportVariableReferences(variables).map((variable) => variable.secretRef
+      // 이동한 backup을 현재 키체인 값에 자동으로 연결하지 않는다. 사용자가 값을 다시 입력한다.
+      ? { ...variable, secretRef: { id: randomUUID() } }
+      : variable);
   }
 
   exportWorkspaceBackup(tessraVersion?: string): WorkspaceBackup {
@@ -1110,10 +1252,13 @@ export class StorageService {
       },
       data: {
         collections: this.getCollections(),
-        environments: this.getEnvironments(),
+        environments: this.getEnvironments().map((environment) => ({
+          ...environment,
+          variables: this.exportVariableReferences(environment.variables),
+        })),
         activeEnvironmentId: this.getActiveEnvironmentId(),
         defaultHeaders: this.getDefaultHeaders(),
-        variables: this.getVariables(),
+        variables: this.exportVariableReferences(this.getVariables()),
         tabState: null,
         history: null,
       },
@@ -1172,7 +1317,7 @@ export class StorageService {
         environments: this.normalizeEnvironmentArray(data.environments, 'Backup data.environments'),
         activeEnvironmentId,
         defaultHeaders: this.normalizeKeyValueArray(data.defaultHeaders, 'Backup data.defaultHeaders'),
-        variables: this.normalizeKeyValueArray(data.variables, 'Backup data.variables'),
+        variables: this.normalizeVariableArray(data.variables, 'Backup data.variables'),
         tabState,
         history,
       },
@@ -1187,9 +1332,12 @@ export class StorageService {
       && backup.data.environments.some((environment) => environment.id === importedActiveEnvironmentId);
 
     this.saveCollections(backup.data.collections);
-    this.saveEnvironments(backup.data.environments);
+    this.saveEnvironments(backup.data.environments.map((environment) => ({
+      ...environment,
+      variables: this.importVariableReferences(environment.variables),
+    })));
     this.saveDefaultHeaders(backup.data.defaultHeaders);
-    this.saveVariables(backup.data.variables);
+    this.saveVariables(this.importVariableReferences(backup.data.variables));
     this.saveActiveEnvironmentId(activeEnvironmentRestored ? importedActiveEnvironmentId : null);
 
     return {

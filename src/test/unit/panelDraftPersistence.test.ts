@@ -52,7 +52,7 @@ describe('RequestPanel draft persistence', () => {
       storageProfileName: profile, latestTabDraft: draft('/latest'), pendingRestore: null,
       pendingFlushResolvers: new Map(), pendingWebviewMessages: [], executionGeneration: 0,
       isDisposed: false, webviewReady: true, webviewSessionId: 'session', disposables: [],
-      requestExecutor: { cancelAll() {} }, collectionRunner: { reset() {} }, webSocketManager: { disconnectAll() {} },
+      requestExecutor: { cancelAll() {} }, collectionRunner: { reset() {} }, webSocketManager: { disconnectAll() {} }, secretEditor: { invalidate() {} },
       reloadWebview() {}, postMessage: (message: { type: string; requestId: string }) => posted.push(message),
     });
     Panel.currentPanel = panel as unknown as RequestPanel;
