@@ -109,7 +109,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - `Java HttpURLConnection`
 
 ### 요청별 Settings 탭
-- timeout
+- timeout은 첫 네트워크 시도부터 DNS·연결/TLS·업로드·응답 본문·리다이렉트·재시도 대기 전체에 하나의 단조 deadline을 적용한다. 0은 무제한이고 만료는 재시도하지 않는다. Body 준비·전/후 스크립트와 러너 항목 사이 대기는 제외하며 각 항목은 독립 예산을 쓴다.
 - follow redirects
 - save to history
 - TLS override
@@ -171,7 +171,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 품질 기준
 - 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다
-- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **26개 / 25파일**이며 Collection Runner, WebSocket, 환경·헤더·Auth·Scripts·Settings·Path Variables, 좁은 패널 geometry, Body scroll ownership, 응답 키보드 탐색, 초안 보존, 실행 환경·프로필 격리, HTML Preview 자산·정제·CSP, History 연속 완료·핀·필터·삭제, 응답 charset·경고를 포함한다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
+- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **27개 / 26파일**이며 Collection Runner, WebSocket, 환경·헤더·Auth·Scripts·Settings·Path Variables, 좁은 패널 geometry, Body scroll ownership, 응답 키보드 탐색, 초안 보존, 실행 환경·프로필 격리, HTML Preview 자산·정제·CSP, History 연속 완료·핀·필터·삭제, 응답 charset·경고, 전체 네트워크 deadline을 포함한다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
 - UI 품질 원칙: DOM visible만으로 layout PASS 금지, popup/menu viewport geometry 검증, variable warning은 occurrence resolution 기준, scrollable editor는 scroll owner 수 + wheel interaction 검증, Request Panel layout은 narrow-width/short-height BrowserWindow에서 검증.
 - Quiet Instrument 계약: pill wall / soft-card / Send success-green 재도입 금지
 

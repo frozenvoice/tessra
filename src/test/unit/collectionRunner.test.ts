@@ -1,4 +1,7 @@
 import * as assert from 'assert';
+import { performance } from 'perf_hooks';
+import type { HttpSendOptions } from '../../services/HttpService';
+import { RequestTimeoutError } from '../../services/RequestDeadline';
 import { CollectionItem, KeyValue, MessageType, Request, Response } from '../../models/types';
 
 const Module = require('module');
@@ -28,21 +31,24 @@ interface PlannedSend {
   status?: number;
   statusText?: string;
   delayMs?: number;
-  error?: string;
+  error?: string | Error;
   never?: boolean;
   aborted?: boolean;
   resolveLate?: () => void;
   ignoreAbort?: boolean;
+  onComplete?: () => void;
 }
 
 class FakeHttpService {
-  calls: Array<{ url: string; startedAt: number }> = [];
+  calls: Array<{ url: string; startedAt: number; options: HttpSendOptions }> = [];
+  onSend?: (options: HttpSendOptions, index: number) => void;
 
   constructor(private readonly plans: PlannedSend[] = []) {}
 
-  send(_method: string, url: string) {
+  send(_method: string, url: string, _headers: unknown, _body: unknown, options: HttpSendOptions) {
     const plan = this.plans.shift() ?? {};
-    this.calls.push({ url, startedAt: Date.now() });
+    this.calls.push({ url, startedAt: Date.now(), options });
+    this.onSend?.(options, this.calls.length - 1);
     let timer: ReturnType<typeof setTimeout> | undefined;
     let rejectPromise: ((error: Error) => void) | undefined;
 
@@ -62,8 +68,9 @@ class FakeHttpService {
         return;
       }
       timer = setTimeout(() => {
+        plan.onComplete?.();
         if (plan.error) {
-          reject(new Error(plan.error));
+          reject(plan.error instanceof Error ? plan.error : new Error(plan.error));
         } else {
           resolve(response);
         }
@@ -170,6 +177,179 @@ async function waitForCondition(condition: () => boolean): Promise<void> {
   }
   throw new Error('Timed out waiting for condition.');
 }
+
+async function withRunnerClock(run: (advance: (ms: number) => void, delays: number[]) => Promise<void>): Promise<void> {
+  let now = 0;
+  const ownNow = Object.getOwnPropertyDescriptor(performance, 'now');
+  const utils = require('../../panels/requestPanel/requestUtils') as typeof import('../../panels/requestPanel/requestUtils');
+  const originalDelay = utils.createCancelableDelay;
+  const delays: number[] = [];
+  Object.defineProperty(performance, 'now', { configurable: true, value: () => now });
+  utils.createCancelableDelay = async (ms) => { delays.push(ms); now += Math.trunc(ms); };
+  try {
+    await run((ms) => { now += ms; }, delays);
+  } finally {
+    utils.createCancelableDelay = originalDelay;
+    if (ownNow) { Object.defineProperty(performance, 'now', ownNow); }
+    else { Reflect.deleteProperty(performance, 'now'); }
+  }
+}
+
+describe('CollectionRunner shared network budget', () => {
+  for (const failure of ['network', 'status'] as const) {
+    it(`caps ${failure} retry backoff and reports one failed run when its deadline expires`, async () => {
+      await withRunnerClock(async (advance, delays) => {
+        const http = new FakeHttpService([{
+          ...(failure === 'network' ? { error: 'ECONNRESET' } : { status: 503 }),
+          onComplete: () => advance(900),
+        }]);
+        const host = new FakeRunnerHost();
+        await new CollectionRunner(http as never, host).runCollection('Expiry', items(
+          request('expires', { timeout: 1, retryCount: 5, retryDelayMs: 5000, saveToHistory: true })
+        ));
+        assert.deepStrictEqual(delays, [100]);
+        assert.strictEqual(http.calls.length, 1);
+        const progress = latestMessage<any>(host.messages, MessageType.RunCollectionProgress);
+        assert.match(progress.error, /Request timed out \(1s\)/);
+        assert.strictEqual(progress.response, null);
+        assert.strictEqual(host.histories.length, 1);
+        assert.strictEqual((host.histories[0] as any).response, null);
+        assert.strictEqual(latestMessage<any>(host.messages, MessageType.RunCollectionDone).failed, 1);
+      });
+    });
+  }
+
+  it('shares a deadline across attempts but gives each item and iteration a fresh budget', async () => {
+    await withRunnerClock(async (advance, delays) => {
+      const http = new FakeHttpService([
+        { status: 503, onComplete: () => advance(100) }, { status: 200 },
+        { status: 200 }, { status: 200 }, { status: 200 },
+      ]);
+      http.onSend = (options, index) => {
+        assert.ok(options.deadline);
+        if (index === 1) {
+          assert.strictEqual(options.deadline, http.calls[0].options.deadline);
+          assert.strictEqual(options.deadline.remainingMs(), 700);
+        } else {
+          assert.strictEqual(options.deadline.remainingMs(), 1000);
+          if (index > 1) { assert.notStrictEqual(options.deadline, http.calls[index - 1].options.deadline); }
+        }
+      };
+      const host = new FakeRunnerHost();
+      await new CollectionRunner(http as never, host).runCollection('Independent budgets', items(
+        request('one', { timeout: 1, retryCount: 1, retryDelayMs: 200 }),
+        request('two', { timeout: 1 })
+      ), { iterations: 2, delayMs: 1500 });
+      assert.deepStrictEqual(delays, [200, 1500, 1500, 1500]);
+      assert.strictEqual(http.calls.length, 5);
+      assert.strictEqual(latestMessage<any>(host.messages, MessageType.RunCollectionDone).passed, 4);
+    });
+  });
+
+  it('rounds fractional remaining time up before Node truncates the retry timer delay', async () => {
+    await withRunnerClock(async (advance, delays) => {
+      const http = new FakeHttpService([{ status: 503, onComplete: () => advance(0.5) }]);
+      const host = new FakeRunnerHost();
+      await new CollectionRunner(http as never, host).runCollection('Fractional expiry', items(
+        request('one', { timeout: 1, retryCount: 5, retryDelayMs: 5000, saveToHistory: true })
+      ));
+      assert.deepStrictEqual(delays, [1000], '999.5ms remaining must become a 1000ms timer');
+      assert.strictEqual(http.calls.length, 1);
+      const progress = latestMessage<any>(host.messages, MessageType.RunCollectionProgress);
+      assert.match(progress.error, /Request timed out/);
+      assert.strictEqual(progress.response, null);
+      assert.strictEqual(host.histories.length, 1);
+      assert.strictEqual((host.histories[0] as any).response, null);
+    });
+  });
+
+  it('does not retry a typed timeout or start another attempt at exact zero remaining time', async () => {
+    await withRunnerClock(async (advance, delays) => {
+      const http = new FakeHttpService([
+        { error: new RequestTimeoutError(1) },
+        { status: 503, onComplete: () => advance(1000) },
+      ]);
+      const host = new FakeRunnerHost();
+      await new CollectionRunner(http as never, host).runCollection('Terminal timeouts', items(
+        request('typed', { timeout: 1, retryCount: 5, retryDelayMs: 10, saveToHistory: true }),
+        request('boundary', { timeout: 1, retryCount: 5, retryDelayMs: 0, saveToHistory: true })
+      ));
+      assert.strictEqual(http.calls.length, 2);
+      assert.deepStrictEqual(delays, []);
+      const progress = host.messages.filter((message: any) => message.type === MessageType.RunCollectionProgress) as any[];
+      assert.ok(progress.every((message) => /Request timed out/.test(message.error)));
+      assert.ok(progress.every((message) => message.response === null));
+      assert.strictEqual(host.histories.length, 2);
+      assert.ok(host.histories.every((history: any) => history.response === null));
+      assert.strictEqual(latestMessage<any>(host.messages, MessageType.RunCollectionDone).failed, 2);
+    });
+  });
+
+  it('rejects a boundary response before post-script execution and respects stopOnFailure', async () => {
+    await withRunnerClock(async (advance) => {
+      const http = new FakeHttpService([{ status: 200, onComplete: () => advance(1000) }]);
+      const host = new FakeRunnerHost();
+      let changes = 0;
+      host.saveEnvironmentChanges = () => { changes++; };
+      await new CollectionRunner(http as never, host).runCollection('Boundary', items(
+        request('boundary', { timeout: 1, saveToHistory: true,
+          scripts: { preRequest: '', test: 'pm.environment.set("shouldNotRun", "value");' } }),
+        request('skipped')
+      ), { stopOnFailure: true });
+      assert.strictEqual(http.calls.length, 1);
+      assert.strictEqual(changes, 0);
+      const progress = latestMessage<any>(host.messages, MessageType.RunCollectionProgress);
+      assert.strictEqual(progress.status, 0);
+      assert.strictEqual(progress.response, null);
+      assert.strictEqual(host.histories.length, 1);
+      assert.strictEqual((host.histories[0] as any).response, null);
+      const done = latestMessage<any>(host.messages, MessageType.RunCollectionDone);
+      assert.strictEqual(done.failed, 1);
+      assert.strictEqual(done.skipped, 1);
+    });
+  });
+
+  it('excludes body preparation and pre/post script execution from the network budget', async () => {
+    await withRunnerClock(async (advance) => {
+      const body = require('../../services/RequestBodyService').RequestBodyService as typeof import('../../services/RequestBodyService').RequestBodyService;
+      const script = require('../../services/ScriptRunner').ScriptRunner as typeof import('../../services/ScriptRunner').ScriptRunner;
+      const originalPrepare = body.prepare;
+      const originalPre = script.runPreRequest;
+      const originalPost = script.runTests;
+      body.prepare = async (...args) => { advance(2000); return originalPrepare.apply(body, args); };
+      script.runPreRequest = (...args) => { advance(2000); return originalPre.apply(script, args); };
+      script.runTests = (...args) => { advance(2000); return originalPost.apply(script, args); };
+      try {
+        const http = new FakeHttpService([{ onComplete: () => advance(250) }]);
+        http.onSend = (options) => { assert.strictEqual(options.deadline?.remainingMs(), 1000); };
+        const host = new FakeRunnerHost();
+        await new CollectionRunner(http as never, host).runCollection('Scripts excluded', items(request('one', { timeout: 1 })));
+        assert.strictEqual(latestMessage<any>(host.messages, MessageType.RunCollectionDone).passed, 1);
+      } finally { body.prepare = originalPrepare; script.runPreRequest = originalPre; script.runTests = originalPost; }
+    });
+  });
+
+  it('keeps Stop precedence when canceling retry backoff at the deadline', async () => {
+    await withRunnerClock(async (advance) => {
+      const utils = require('../../panels/requestPanel/requestUtils') as typeof import('../../panels/requestPanel/requestUtils');
+      let cancel: (() => void) | null = null;
+      utils.createCancelableDelay = (_ms, register) => new Promise((_resolve, reject) => {
+        cancel = () => { advance(1000); reject(new Error('Request was canceled')); };
+        register?.(cancel);
+      });
+      const http = new FakeHttpService([{ status: 503 }]);
+      const host = new FakeRunnerHost();
+      const runner = new CollectionRunner(http as never, host);
+      const pending = runner.runCollection('Stop', items(request('one', { timeout: 1, retryCount: 2, retryDelayMs: 500 })));
+      await waitForCondition(() => !!cancel);
+      runner.stop();
+      await pending;
+      assert.strictEqual(http.calls.length, 1);
+      assert.strictEqual(host.messages.filter((message: any) => message.type === MessageType.RunCollectionProgress).length, 0);
+      assert.strictEqual(latestMessage<any>(host.messages, MessageType.RunCollectionDone).stopped, true);
+    });
+  });
+});
 
 describe('CollectionRunner', () => {
   it('WS/WSS와 변수로 해석된 WebSocket 요청을 전송 전에 거절한다', async () => {

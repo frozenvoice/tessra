@@ -1,4 +1,5 @@
 import { HttpService, SendHandle } from '../../services/HttpService';
+import { RequestDeadline, RequestTimeoutError } from '../../services/RequestDeadline';
 import { VariableService } from '../../services/VariableService';
 import { PathVariableService } from '../../services/PathVariableService';
 import {
@@ -221,8 +222,23 @@ export class RequestExecutor {
 
       try {
         let response: Response | null = null;
+        const deadline = new RequestDeadline(settings.timeout);
+        const waitForRetryDelay = async () => {
+          deadline.throwIfExpired();
+          try {
+            // Node 타이머의 소수 절삭으로 예산 만료 직전에 다음 시도가 시작되지 않게 한다.
+            await createCancelableDelay(Math.ceil(Math.min(settings.retryDelayMs, deadline.remainingMs())), (cancel) => {
+              cancelDelay = cancel;
+            });
+          } finally {
+            cancelDelay = null;
+          }
+          if (wasCanceled()) { throw new Error('Request was canceled'); }
+          deadline.throwIfExpired();
+        };
         for (let attempt = 0; attempt <= settings.retryCount; attempt++) {
           if (wasCanceled()) { publishCancellation(); return; }
+          deadline.throwIfExpired();
           currentHandle = this.httpService.send(
             method,
             url,
@@ -230,6 +246,7 @@ export class RequestExecutor {
             preparedBody.data,
             {
               timeoutSec: settings.timeout,
+              deadline,
               allowInsecureHttps: this.resolveAllowInsecureHttps(settings.tlsValidation),
               followRedirects: settings.followRedirects,
               maxResponseSizeBytes: settings.maxResponseSizeKb > 0 ? settings.maxResponseSizeKb * 1024 : 0,
@@ -242,23 +259,17 @@ export class RequestExecutor {
             currentHandle = null;
           } catch (err: unknown) {
             currentHandle = null;
-            if (wasCanceled() || attempt >= settings.retryCount) {
+            if (wasCanceled() || err instanceof RequestTimeoutError || attempt >= settings.retryCount) {
               throw err;
             }
-            await createCancelableDelay(settings.retryDelayMs, (cancel) => {
-              cancelDelay = cancel;
-            });
-            cancelDelay = null;
+            await waitForRetryDelay();
             continue;
           }
 
           if (wasCanceled()) { publishCancellation(); return; }
 
           if (response && attempt < settings.retryCount && shouldRetryResponse(response.status)) {
-            await createCancelableDelay(settings.retryDelayMs, (cancel) => {
-              cancelDelay = cancel;
-            });
-            cancelDelay = null;
+            await waitForRetryDelay();
             response = null;
             continue;
           }
@@ -282,6 +293,7 @@ export class RequestExecutor {
           throw new Error('Request did not produce a response.');
         }
         if (!canPublish()) { return; }
+        deadline.throwIfExpired();
 
         const responseTiming = createRequestTiming(requestStartedAt);
         let scriptResults: ScriptExecutionResult | undefined;

@@ -1,4 +1,5 @@
 import { HttpService, SendHandle } from '../../services/HttpService';
+import { RequestDeadline, RequestTimeoutError } from '../../services/RequestDeadline';
 import { VariableService } from '../../services/VariableService';
 import { PathVariableService } from '../../services/PathVariableService';
 import {
@@ -528,10 +529,12 @@ export class CollectionRunner {
       );
 
       const totalAttempts = Math.max(1, settings.retryCount + 1);
+      const deadline = new RequestDeadline(settings.timeout);
       for (let attempt = 0; attempt <= settings.retryCount; attempt++) {
         if (isStopped()) {
           throw new Error('Request was canceled');
         }
+        deadline.throwIfExpired();
 
         this.host.postMessage({
           type: 'runCollectionStatus',
@@ -555,6 +558,7 @@ export class CollectionRunner {
           preparedBody.data,
           {
             timeoutSec: settings.timeout,
+            deadline,
             allowInsecureHttps: this.resolveAllowInsecureHttps(settings.tlsValidation),
             followRedirects: settings.followRedirects,
             maxResponseSizeBytes: settings.maxResponseSizeKb > 0 ? settings.maxResponseSizeKb * 1024 : 0,
@@ -568,7 +572,7 @@ export class CollectionRunner {
           if (this.currentCollectionRequest === handle) { this.currentCollectionRequest = null; }
         } catch (err: unknown) {
           if (this.currentCollectionRequest === handle) { this.currentCollectionRequest = null; }
-          if (isStopped() || attempt >= settings.retryCount) {
+          if (isStopped() || err instanceof RequestTimeoutError || attempt >= settings.retryCount) {
             throw err;
           }
           this.host.postMessage({
@@ -586,7 +590,7 @@ export class CollectionRunner {
             totalAttempts,
             retryDelayMs: settings.retryDelayMs,
           });
-          await this.waitForCollectionRetryDelay(settings.retryDelayMs, input.runId);
+          await this.waitForCollectionRetryDelay(settings.retryDelayMs, input.runId, deadline);
           continue;
         }
 
@@ -608,7 +612,7 @@ export class CollectionRunner {
             totalAttempts,
             retryDelayMs: settings.retryDelayMs,
           });
-          await this.waitForCollectionRetryDelay(settings.retryDelayMs, input.runId);
+          await this.waitForCollectionRetryDelay(settings.retryDelayMs, input.runId, deadline);
           response = null;
           continue;
         }
@@ -620,6 +624,7 @@ export class CollectionRunner {
         throw new Error('Request did not produce a response.');
       }
       if (isStopped()) { return null; }
+      deadline.throwIfExpired();
       status = response.status;
       statusText = response.statusText;
       time = response.time;
@@ -637,6 +642,7 @@ export class CollectionRunner {
       }
     } catch (err: unknown) {
       if (isStopped()) { return null; }
+      if (err instanceof RequestTimeoutError) { response = null; }
       error = err instanceof Error ? err.message : String(err);
     } finally {
       if (input.runId === this.activeRunId) { this.currentCollectionRequest = null; }
@@ -667,8 +673,11 @@ export class CollectionRunner {
     };
   }
 
-  private async waitForCollectionRetryDelay(ms: number, runId: number): Promise<void> {
-    await this.waitForCancelableDelay(ms, runId);
+  private async waitForCollectionRetryDelay(ms: number, runId: number, deadline: RequestDeadline): Promise<void> {
+    deadline.throwIfExpired();
+    // Node 타이머는 소수를 절삭하므로 남은 예산까지 기다릴 때는 올림한다.
+    await this.waitForCancelableDelay(Math.ceil(Math.min(ms, deadline.remainingMs())), runId);
+    deadline.throwIfExpired();
   }
 
   private async waitForCollectionRunnerDelay(ms: number, runId: number): Promise<void> {

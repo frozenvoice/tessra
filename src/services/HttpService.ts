@@ -4,6 +4,7 @@ import * as zlib from 'zlib';
 import { URL } from 'url';
 import { HttpMethod, KeyValue, Response } from '../models/types';
 import { decodeResponseText } from './responseTextDecoder';
+import { RequestDeadline, RequestTimeoutError } from './RequestDeadline';
 
 export interface SendHandle {
   promise: Promise<Response>;
@@ -16,6 +17,8 @@ export interface HttpSendOptions {
   followRedirects?: boolean;
   maxResponseSizeBytes?: number;
   stopAfterHeaders?: boolean;
+  // 호출자의 자동 재시도도 같은 네트워크 실행 예산을 공유한다. 저장 설정에는 포함하지 않는다.
+  deadline?: RequestDeadline;
 }
 
 // Node.js 내장 http/https 모듈로 HTTP 요청 실행
@@ -55,23 +58,67 @@ export class HttpService {
     const maxResponseSizeBytes = HttpService.normalizeMaxResponseSizeBytes(options.maxResponseSizeBytes);
     const stopAfterHeaders = options.stopAfterHeaders === true;
     const startTime = Date.now();
+    const deadline = options.deadline ?? new RequestDeadline(timeoutSec);
 
     let reqRef: http.ClientRequest | undefined;
+    let resRef: http.IncomingMessage | undefined;
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    let attemptId = 0;
     let settled = false;
     let aborted = false;
+    let abortRequest: () => void = () => undefined;
 
     const promise = new Promise<Response>((resolve, reject) => {
+      const cleanup = (destroy: boolean) => {
+        clearTimeout(deadlineTimer);
+        deadlineTimer = undefined;
+        // destroy가 동기 이벤트를 발생시켜도 종료된 시도의 콜백은 무시한다.
+        attemptId++;
+        const request = reqRef;
+        const response = resRef;
+        reqRef = undefined;
+        resRef = undefined;
+        request?.setTimeout(0);
+        if (destroy) {
+          response?.destroy();
+          request?.destroy();
+        }
+      };
+
       const safeResolve = (value: Response) => {
         if (settled) { return; }
+        // 동기 압축 해제/문자 디코딩 동안 timer가 실행되지 못했어도 만료는 검사한다.
+        try { deadline.throwIfExpired(); } catch (error: unknown) { safeReject(error); return; }
         settled = true;
+        cleanup(!resRef?.complete);
         resolve(value);
       };
 
       const safeReject = (error: unknown) => {
         if (settled) { return; }
         settled = true;
+        cleanup(true);
         reject(error);
       };
+
+      const checkDeadline = (): boolean => {
+        if (settled) { return false; }
+        try { deadline.throwIfExpired(); return true; }
+        catch (error: unknown) { safeReject(error); return false; }
+      };
+
+      const armDeadline = () => {
+        if (!checkDeadline()) { return; }
+        const remaining = deadline.remainingMs();
+        if (!Number.isFinite(remaining)) { return; }
+        // Node timer의 정수 범위를 넘는 예산은 나눠 기다리며 조기 callback도 재확인한다.
+        deadlineTimer = setTimeout(() => {
+          deadlineTimer = undefined;
+          if (checkDeadline()) { armDeadline(); }
+        }, Math.min(Math.ceil(remaining), 0x7fffffff));
+      };
+
+      abortRequest = () => safeReject(new Error('Request was canceled'));
 
       const extractResponseHeaders = (rawHeaders: http.IncomingHttpHeaders): Pick<Response, 'headers' | 'rawSetCookies'> => {
         const responseHeaders: Record<string, string> = {};
@@ -173,11 +220,13 @@ export class HttpService {
         currentHeaders: Record<string, string>,
         redirectCount: number
       ) => {
-        if (settled) { return; }
+        if (!checkDeadline()) { return; }
         if (aborted) {
           safeReject(new Error('Request was canceled'));
           return;
         }
+        const currentAttempt = ++attemptId;
+        const isCurrentAttempt = () => !settled && currentAttempt === attemptId;
 
         let parsedUrl: URL;
         try {
@@ -203,17 +252,19 @@ export class HttpService {
           requestOptions.rejectUnauthorized = false;
         }
 
-        reqRef = transport.request(requestOptions, (res) => {
+        let request: http.ClientRequest;
+        const receiveResponse = (res: http.IncomingMessage) => {
+          res.on('error', (error) => {
+            if (isCurrentAttempt() && checkDeadline()) { safeReject(error); }
+          });
+          res.on('aborted', () => {
+            if (isCurrentAttempt() && checkDeadline()) { safeReject(new Error('Response aborted before completion')); }
+          });
+          if (!isCurrentAttempt() || !checkDeadline()) { res.destroy(); return; }
+          resRef = res;
           const statusCode = res.statusCode ?? 0;
           const headerInfo = extractResponseHeaders(res.headers);
           const responseHeaders = headerInfo.headers;
-          const rejectResponseStream = (error: Error) => {
-            safeReject(error);
-          };
-          res.on('error', rejectResponseStream);
-          res.on('aborted', () => {
-            rejectResponseStream(new Error('Response aborted before completion'));
-          });
 
           if (followRedirects && HttpService.REDIRECT_STATUS_CODES.has(statusCode)) {
             if (redirectCount >= HttpService.MAX_REDIRECTS) {
@@ -234,6 +285,10 @@ export class HttpService {
             if (redirectTarget) {
               res.resume();
               res.on('end', () => {
+                if (!isCurrentAttempt() || !checkDeadline()) { return; }
+                request.setTimeout(0);
+                reqRef = undefined;
+                resRef = undefined;
                 performRequest(
                   redirectTarget.nextMethod,
                   redirectTarget.nextUrl,
@@ -264,19 +319,18 @@ export class HttpService {
           let totalSize = 0;
 
           res.on('data', (chunk: Buffer) => {
+            if (!isCurrentAttempt() || !checkDeadline()) { return; }
             totalSize += chunk.length;
             if (maxResponseSizeBytes > 0 && totalSize > maxResponseSizeBytes) {
               const error = new Error(`Response exceeded max size (${Math.ceil(maxResponseSizeBytes / 1024)} KB)`);
               safeReject(error);
-              res.destroy();
-              reqRef?.destroy();
               return;
             }
             chunks.push(chunk);
           });
 
           res.on('end', () => {
-            if (aborted) { return; }
+            if (!isCurrentAttempt() || !checkDeadline()) { return; }
             const rawBuffer = Buffer.concat(chunks);
             let buffer: Buffer;
             try {
@@ -301,33 +355,41 @@ export class HttpService {
               size: buffer.length,
             });
           });
+        };
+        try {
+          request = transport.request(requestOptions, receiveResponse);
+        } catch (error: unknown) { safeReject(error); return; }
+        reqRef = request;
+
+        request.on('error', (err) => {
+          if (isCurrentAttempt() && checkDeadline()) { safeReject(err); }
         });
 
-        reqRef.on('error', (err) => {
-          safeReject(err);
-        });
+        try {
+          if (timeoutSec > 0 && timeoutSec * 1000 <= 0x7fffffff) {
+            request.setTimeout(timeoutSec * 1000, () => {
+              if (isCurrentAttempt()) { safeReject(new RequestTimeoutError(timeoutSec)); }
+            });
+          }
 
-        if (timeoutSec > 0) {
-          reqRef.setTimeout(timeoutSec * 1000, () => {
-            reqRef?.destroy(new Error(`Request timed out (${timeoutSec}s)`));
-          });
-        }
+          if (currentBody && currentMethod !== 'GET' && currentMethod !== 'HEAD') {
+            request.write(currentBody);
+          }
 
-        if (currentBody && currentMethod !== 'GET' && currentMethod !== 'HEAD') {
-          reqRef.write(currentBody);
-        }
-
-        reqRef.end();
+          request.end();
+        } catch (error: unknown) { safeReject(error); }
       };
 
+      armDeadline();
       performRequest(method, url, body, { ...baseHeaders }, 0);
     });
 
     return {
       promise,
       abort: () => {
+        if (settled) { return; }
         aborted = true;
-        reqRef?.destroy(new Error('Request was canceled'));
+        abortRequest();
       },
     };
   }

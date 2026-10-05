@@ -103,7 +103,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 공개 echo 서버는 가용성이나 idle timeout 정책이 바뀔 수 있음. `1006`으로 닫히면 다른 endpoint를 시도하거나 서버가 ping/pong을 지원할 때 keepalive를 켜서 확인
 
 ### 요청별 Settings 탭
-- 탭별 timeout
+- 요청별 전체 네트워크 timeout: DNS·연결/TLS·업로드·본문·리다이렉트·재시도와 대기가 하나의 예산을 공유함. `0`은 무제한이며 전/후 스크립트 제한은 별도. 컬렉션 항목마다 새 예산을 적용함.
 - redirect follow 여부
 - history 저장 여부
 - TLS override: `Default`, `Strict`, `Insecure`

@@ -429,6 +429,8 @@ describe('HttpService', () => {
         (res as unknown as { statusMessage: string }).statusMessage = 'OK';
         this.callback(res);
         res.emit('data', Buffer.from('ok'));
+        // 실제 IncomingMessage는 정상 end 전에 complete가 true가 된다.
+        (res as unknown as { complete: boolean }).complete = true;
         res.emit('end');
         return this;
       }

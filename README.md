@@ -101,7 +101,7 @@ Group request history by date and run collections with status summaries.
 - Public echo servers can change availability or idle timeout policies; if one closes with code `1006`, try another endpoint or enable keepalive when the server supports ping/pong
 
 ### Request settings
-- Timeout per tab
+- Timeout per logical request, shared across DNS/connection/TLS, upload, response body, redirects, retries and retry waits. `0` is unlimited; pre/post scripts keep their separate limit. Each collection item gets its own budget.
 - Follow redirects
 - Save to history toggle
 - Manage workspace default headers from the request toolbar or Headers tab

@@ -1838,9 +1838,9 @@ describe('RequestPanel Webview', () => {
   });
 
   it('cancels collection retry delays when stop is requested', () => {
-    assert.match(collectionRunnerSource, /private async waitForCollectionRetryDelay\(ms: number, runId: number\): Promise<void>/);
+    assert.match(collectionRunnerSource, /private async waitForCollectionRetryDelay\(ms: number, runId: number, deadline: RequestDeadline\): Promise<void>/);
     assert.match(collectionRunnerSource, /this\.currentCollectionDelayCancel = cancel;/);
-    assert.match(collectionRunnerSource, /await this\.waitForCollectionRetryDelay\(settings\.retryDelayMs, input\.runId\);/);
+    assert.match(collectionRunnerSource, /await this\.waitForCollectionRetryDelay\(settings\.retryDelayMs, input\.runId, deadline\);/);
     assert.match(collectionRunnerSource, /private isRunStopped\(runId: number\): boolean/);
     assert.match(collectionRunnerSource, /stop\(\): void \{[\s\S]*this\.stoppedRunIds\.add\(this\.activeRunId\);[\s\S]*this\.currentCollectionRequest\?\.abort\(\);[\s\S]*this\.currentCollectionDelayCancel\?\.\(\);[\s\S]*this\.currentCollectionDelayCancel = null;/);
     assert.match(source, /case MessageType\.StopCollectionRun:[\s\S]*this\.collectionRunner\.stop\(\);/);
