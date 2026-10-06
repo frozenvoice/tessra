@@ -40,16 +40,21 @@ VS Code 안에서 동작하는 offline-first HTTP/WebSocket API 클라이언트�
 | 목적 | 명령과 포함 범위 |
 | --- | --- |
 | 의존성 설치 | `npm ci` |
-| 코드 변경 통합 검증 | `npm run ci` = `npm run typecheck` → `npm test` → `npm run build` |
+| 로컬 코드 변경 통합 검증 | `npm run ci` = `npm run typecheck` → `npm test` → `npm run build` (E2E·패키징·게시 없음) |
 | 타입 검사 | `npm run typecheck` (`tsc --noEmit`) |
 | 단위 테스트 | `npm test` (pretest에서 테스트 컴파일 후 Mocha 실행) |
 | 빌드 / 개발 | `npm run build` / `npm run watch`; F5는 build 후 Extension Development Host 실행 |
 | 실제 VS Code UI E2E | 최신 빌드 준비 후 `npm run test:e2e` (Runner 포함, 자동 build 없음) |
 | 핵심 UI 회귀 검사 | `npm run test:e2e:ui-regressions` |
+| 수동 원격 전체 검증 | `.github/workflows/ci.yml`의 `workflow_dispatch`: Linux `unit`, Windows `unit-windows`, Linux `e2e` 모두 실행 |
 | VSIX 생성 | `npm run package` (`vscode:prepublish`를 통해 build 포함) |
 
 - 별도 lint 스크립트는 없다. `ci`에 포함된 검사를 별도 완료 단계로 중복 나열하지 않는다. `test:e2e:all`은 stable suite에 포함된 Runner를 다시 실행하므로 기본 검증 명령으로 사용하지 않는다.
-- UI 변경 시 관련 E2E를 수행한다. CI의 핵심 UI regression 별도 단계와 전체 E2E 단계는 유지한다. E2E는 격리된 임시 프로필·로컬 fixture를 사용하며 Linux 실행은 `docs/testing.md`의 xvfb 절차를 따른다.
+- 일반 작업은 변경에 필요한 로컬 typecheck·단위 테스트·build와 관련 회귀 검증 후 완료 보고한다. 원격 CI dispatch·완료 대기·watch·자동 rerun은 필수 완료 조건이 아니다. push/PR에서는 원격 빌드·테스트를 실행하지 않는다. 원격 전체 검증은 명시적 수동 요청 또는 릴리스 공개 전만 수행한다.
+- UI/Webview·상태 저장/복원·프로세스 실행 변경은 관련 단위 테스트와 해당 E2E spec을 선택한다. UI layout 변경은 핵심 UI regression을 포함한다. 무관한 내부 변경마다 전체 VS Code E2E를 요구하지 않으며, E2E를 릴리스 전으로만 미뤄 변경 동작 검증을 생략하지 않는다. 수동 전체 CI의 핵심 UI regression 별도 단계와 전체 E2E 단계는 유지한다. E2E는 격리된 임시 프로필·로컬 fixture를 사용하며 Linux 실행은 `docs/testing.md`의 xvfb 절차를 따른다.
+- 개발 중에는 `npm run watch`의 증분 빌드를 활용한다. 최신 빌드를 재사용하고 같은 검사·전체 빌드를 중복 실행하지 않는다. `npm test`는 `pretest`에서 테스트를 컴파일하며 E2E 명령은 자동 build하지 않는다. `package`만 `vscode:prepublish` build에 연결되며 일반 개발 완료에 VSIX 생성·게시를 요구하지 않는다.
+- 완료 보고는 로컬 부분 검증과 원격 전체 검증을 구분하고 실제 명령·결과·미실행 항목을 명시한다. 로컬 성공을 Windows/Linux 원격 전체 성공으로 표현하지 않는다.
+- 게시 자동화는 없다. 공개 전에는 `docs/releasing.md`에 따라 버전 변경을 포함한 최종 SHA의 수동 CI에서 `unit`·`unit-windows`·`e2e` 및 두 E2E 단계 성공을 확인하고, 그 SHA와 VSIX manifest/번들 일치를 확인한 뒤 검증한 동일 VSIX를 수동 게시한다. 수동 전체 CI 자체는 게시하지 않는다.
 - 수동 시각 QA 및 릴리스 smoke는 `docs/manual-e2e-checklist.md`의 해당 체크리스트를 따른다. 문서만 변경한 경우에는 경로·명령·diff를 검증하며 제품 빌드/E2E를 요구하지 않는다.
 - `dist/`, `*.vsix`, `.vscode-test/`, E2E artifacts는 생성 산출물이다. 직접 수정·커밋하지 않는다. 패키징 변경 시 `.vscodeignore`의 개발·테스트 파일 제외와 필요한 `dist/` 포함을 확인한다.
 

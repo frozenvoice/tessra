@@ -29,11 +29,54 @@ npm run test:e2e:ci      # CI stable suite
 npm run test:all         # unit + stable E2E
 ```
 
-`npm run ci` stays unit/typecheck/build only. GitHub Actions e2e job runs `test:e2e:ui-regressions` (named critical UI regression contracts) then `test:e2e:ci`.
+`npm run ci` keeps its existing meaning: `npm run typecheck` → `npm test` → `npm run build`. It does not include VS Code E2E, VSIX packaging, or publishing. `test:all` still means unit + stable E2E; `test:e2e:all` still means stable + focused Runner and repeats the Runner specs already in stable, so neither is the default development command.
 
 `npm run typecheck` checks the extension, browser modules, and unit tests separately. `tsconfig.webview.json` supplies DOM types with no ambient Node globals; the extension config also explicitly supplies DOM types for the shared Body conversion service's optional browser parser. `npm run build` and watch include `dist/htmlPreview.js` alongside the extension, Body conversion, and highlight.js bundles.
 
-CI also runs `npm test` on Windows. All jobs cache npm downloads; concurrency cancels older runs for the same PR or branch. Push and pull-request triggers have no path filter because unit tests also read guides, localization JSON, and E2E configuration/helpers/specs outside `src/`.
+### Local development and completion
+
+Choose checks that cover the changed behavior. Ordinary code changes use typecheck, relevant unit tests, and a current build; `npm run ci` is the existing convenience command when all three are needed. Documentation-only changes need path, command, and diff checks, without a product build or VS Code E2E. Unrelated internal changes do not require the full VS Code suite.
+
+Use `npm run watch` during development for incremental extension and browser bundles. Wait for the latest rebuild before a focused E2E; the E2E scripts do not build the extension. A current watch build can serve the focused development check. When a final production build is needed, run it once after edits converge. Do not rerun checks or full builds already completed for the same final source state without a new failure or unresolved concern. If `npm run ci` supplies the final build, do not immediately run `npm run build` again.
+
+Select regressions for UI/Webview, state persistence/restore, and process/execution changes during development:
+
+| Changed behavior | Focused coverage to select |
+| --- | --- |
+| Request layout, path resolution, Body scroll | `npm run test:e2e:ui-regressions`, plus relevant unit contracts |
+| Keyboard access, draft save/restore, profile isolation | Relevant panel/storage unit tests and `npm run test:e2e -- e2e/specs/21-accessibility-and-draft.spec.ts e2e/specs/23-execution-context.spec.ts` |
+| History persistence and sidebar updates | History/storage/provider unit tests and `npm run test:e2e -- e2e/specs/25-history-sync.spec.ts` |
+| Execution, cancellation, deadlines, process lifecycle | Relevant execution/transport/fixture tests and affected real VS Code paths, such as `npm run test:e2e -- e2e/specs/23-execution-context.spec.ts e2e/specs/27-network-deadline.spec.ts` |
+| Collection Runner | Runner unit tests and `npm run test:e2e:runner` (or the affected individual Runner spec) |
+
+These are selection examples, not a requirement to run every row for every change. Add or update coverage for a new behavior. The release full-validation policy does not defer changed UI behavior until release. On Linux, install xvfb as in `.github/workflows/ci.yml` and prefix the selected command with `xvfb-run -a`.
+
+For a focused unit run, `npm test -- --grep "History storage snapshots"` compiles tests via `pretest` and filters Mocha to that suite. `npm run test:unit -- --grep "History storage snapshots"` reuses compiled tests; use it only when those outputs are current, otherwise compile once with `npm run pretest`. Do not count a filtered run as the full unit suite.
+
+Complete an ordinary task after the necessary local checks. Report exact commands and outcomes, distinguish focused from full validation, and name relevant checks not run. Starting remote CI, waiting for it, watching it, or automatically rerunning it is not a routine completion requirement.
+
+### Script and lifecycle boundaries
+
+The source of truth is `package.json`:
+
+| Entry point | Actual work and lifecycle |
+| --- | --- |
+| `npm run typecheck` | Checks extension, browser modules, and unit tests; no emitted extension bundle |
+| `npm test` | `pretest` compiles unit tests, then Mocha runs; no E2E, packaging, or publishing |
+| `npm run build` / `npm run watch` | esbuild bundles extension and browser assets; watch rebuilds incrementally |
+| `npm run ci` | Typecheck, compiled unit tests, production build; no `preci`/`postci` hooks |
+| `npm run test:e2e` / `test:e2e:ci` / focused E2E scripts | Playwright against a previously built extension; no build or package lifecycle hooks |
+| `npm run package` | `vsce package` invokes `vscode:prepublish` → build, then writes a VSIX; no Marketplace publish |
+
+There are no install/prepare hooks that launch the full suite or publishing, and no pre/post hooks for typecheck, build, watch, or E2E. Packaging is a separate explicit action; its build is required for the packaged assets. F5 also uses the configured build prelaunch task; account for that when planning repeated development launches.
+
+### Manual full remote validation
+
+`.github/workflows/ci.yml` runs only through `workflow_dispatch`. Ordinary pushes and pull requests do not start remote build/test CI, and no scheduled or replacement automatic validation is required. An explicit full-validation request or pre-release procedure selects the final source commit and dispatches CI for that state.
+
+Every manual full run preserves all three jobs: Linux `unit` (typecheck, unit tests, build), Windows `unit-windows` (`npm test`), and Linux `e2e` (`test:e2e:ui-regressions` followed by `test:e2e:ci` under xvfb). All jobs use Node 22 and npm download caching; E2E pins VS Code `1.99.3` and retains failure artifacts. Concurrency cancels older manual runs for the same ref; a cancelled or incomplete run is not a successful full validation.
+
+Manual full CI does not publish to Marketplace. Before release, verify successful `unit`, `unit-windows`, and `e2e` results for the exact final SHA, including any version edits, and package that same source state. Follow [the release procedure](releasing.md) for SHA and VSIX consistency checks; success on another SHA or with omitted E2E is insufficient.
 
 Do **not** add a bare `**/runner/**` Playwright `testIgnore` — GitHub Actions absolute paths contain `/home/runner/work/...` and that pattern would drop every stable spec (`No tests found`). Collection Runner specs live under `e2e/specs/runner/` and are part of the default suite.
 

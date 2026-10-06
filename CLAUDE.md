@@ -178,21 +178,28 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 
 ## 품질 기준
 - 요청 패널 UI는 탭, 주요 액션, 행 삭제 버튼, 응답 액션 메뉴의 키보드 접근성과 포커스 표시를 유지한다
-- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **33개 / 30파일**이며 Collection Runner, WebSocket, 환경·헤더·Auth·Scripts·Settings·Path Variables, 좁은 패널 geometry, Body scroll ownership, 응답 키보드 탐색, 초안 보존, 실행 환경·프로필 격리, HTML Preview 자산·정제·CSP, History 연속 완료·핀·필터·삭제, 응답 charset·경고, 전체 네트워크 deadline을 포함한다. CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
+- 수동 E2E 검증 범위는 `docs/manual-e2e-checklist.md` 기준으로 관리한다 (릴리스 전 최신 버전 Smoke 섹션 포함). stable UI E2E는 `npm run test:e2e` 기준 **33개 / 30파일**이며 Collection Runner, WebSocket, 환경·헤더·Auth·Scripts·Settings·Path Variables, 좁은 패널 geometry, Body scroll ownership, 응답 키보드 탐색, 초안 보존, 실행 환경·프로필 격리, HTML Preview 자산·정제·CSP, History 연속 완료·핀·필터·삭제, 응답 charset·경고, 전체 네트워크 deadline을 포함한다. 수동 전체 CI는 `test:e2e:ui-regressions`(#18/#19/#20) critical UI regression contracts를 전체 suite 전에 별도 step으로 실행한다.
 - UI 품질 원칙: DOM visible만으로 layout PASS 금지, popup/menu viewport geometry 검증, variable warning은 occurrence resolution 기준, scrollable editor는 scroll owner 수 + wheel interaction 검증, Request Panel layout은 narrow-width/short-height BrowserWindow에서 검증.
 - Quiet Instrument 계약: pill wall / soft-card / Send success-green 재도입 금지
 
 ## 빌드 / 테스트
-`typecheck`는 extension, browser(`tsconfig.webview.json`, DOM/no Node globals), unit test를 각각 검사한다. 로컬 설치 VSIX smoke와 합성 History benchmark 절차는 `docs/testing.md`를 따른다.
+`typecheck`는 extension, browser(`tsconfig.webview.json`, DOM/no Node globals), unit test를 각각 검사한다. 로컬 설치 VSIX smoke와 합성 History benchmark 절차, 변경별 회귀 선택은 `docs/testing.md`를 따른다.
 
 ```bash
-npm run typecheck
-npm run ci
-npm run build
-npm run watch
-npm test
-npm run package
+npm run ci               # typecheck → npm test → build; E2E·패키징·게시 없음
+npm run typecheck        # 필요한 검사만 개별 실행할 때
+npm test                 # pretest에서 단위 테스트 컴파일 후 Mocha
+npm run watch            # 개발 중 증분 번들 빌드
+npm run build            # 필요한 최종 production build를 한 번 수행
+npm run test:e2e -- e2e/specs/21-accessibility-and-draft.spec.ts  # 최신 빌드로 해당 회귀
+npm run package          # 명시적 VSIX 생성; vscode:prepublish의 build 포함
 ```
+
+- 일반 코드 작업은 변경에 필요한 로컬 typecheck·단위 테스트·build 후 완료한다. `npm run ci`의 기존 범위는 유지하며 실행한 검사를 중복 수행하거나 완료 보고에서 별도 검사처럼 중복 계산하지 않는다. `npm test`의 `pretest` 외에 개발 검사가 전체 E2E·VSIX 생성·게시로 이어지는 pre/post lifecycle은 없다. E2E 명령에는 자동 build가 없다.
+- 개발 중에는 `watch`의 최신 빌드를 관련 E2E에 활용하고 최종 build가 필요하면 소스 변경 수렴 후 한 번 실행한다. F5의 build prelaunch task와 `package`의 build lifecycle도 중복 계획에 포함한다.
+- UI/Webview·저장/복원·프로세스/실행 변경에는 관련 단위 회귀와 영향을 받는 실제 VS Code 경로를 선택한다. Runner 변경은 관련 Runner spec을 포함한다. 문서만 수정하면 경로·명령·diff를 확인하고 제품 build/E2E는 요구하지 않는다. 무관한 내부 변경마다 전체 VS Code E2E를 요구하지 않는다.
+- 원격 `.github/workflows/ci.yml`은 `workflow_dispatch`만 사용한다. 일반 push/PR에서 실행하지 않으며 원격 CI 시작·완료 대기·watch·자동 rerun을 일반 작업 완료 조건으로 두지 않는다. 명시적 수동 요청 또는 공개 전 검증은 Linux `unit`, Windows `unit-windows`, Linux `e2e`를 모두 수행한다.
+- 완료 보고는 실제 로컬 명령·결과, 부분/전체 검증 범위와 미실행 항목을 구분한다. 수동 전체 CI는 Marketplace 게시를 수행하지 않는다. 공개 전 최종 버전 변경을 포함한 동일 SHA의 세 job 성공과 패키징 VSIX 일치는 `docs/releasing.md` 절차로 확인한다.
 
 ## 작업 원칙 메모
 - 기존 기능 회귀가 가장 큰 리스크라서, webview 문자열 수정 후에는 반드시 파싱/빌드/테스트를 확인한다

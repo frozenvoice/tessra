@@ -350,6 +350,10 @@ macOS에서는 `Cmd`를 사용합니다.
 - macOS: `~/Library/Application Support/Code/User/globalStorage/tessra.tessra/`
 - Linux: `~/.config/Code/User/globalStorage/tessra.tessra/`
 
+## 개발 검증
+
+개발 검증은 `npm run ci`로 로컬 타입 검사·단위 테스트·빌드를 수행하고, [Testing](./docs/testing.md)에 따라 관련 UI 회귀를 선택합니다. 원격 전체 CI는 명시적 수동 요청 또는 릴리스 공개 전에만 [게시 전 검증 절차](./docs/releasing.md)에 따라 실행합니다.
+
 ## 원칙
 
 - 텔레메트리 없음

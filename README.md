@@ -349,6 +349,10 @@ Typical locations:
 - macOS: `~/Library/Application Support/Code/User/globalStorage/tessra.tessra/`
 - Linux: `~/.config/Code/User/globalStorage/tessra.tessra/`
 
+## Development
+
+Contributor validation: use `npm run ci` for local typecheck, unit tests, and build; choose relevant UI regressions as described in [Testing](./docs/testing.md). Remote full CI runs only on explicit manual dispatch or before release, following the [release verification procedure](./docs/releasing.md).
+
 ## Principles
 
 - No telemetry
