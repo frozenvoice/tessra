@@ -57,7 +57,7 @@ So the README uses two pieces, both hosted in `frozenvoice/frozenvoice-assets` u
 Rebuild the WebP after a new render:
 
 ```bash
-ffmpeg -i demo/promo/tessra-promo.mp4 -vf "fps=15,scale=1280:-1:flags=lanczos" -an -c:v libwebp_anim -lossless 0 -q:v 70 -compression_level 6 -loop 0 tessra-demo.webp
+python3 demo/promo/encode-webp.py demo/promo/tessra-promo.mp4 tessra-demo.webp
 ```
 
-Encoding takes several minutes at `-compression_level 6`. The Marketplace listing only changes when a new VSIX is published, because it renders the README packaged in the VSIX.
+Do not use ffmpeg's `libwebp_anim` for this. It writes one keyframe and then only lossy sub-frame deltas, so errors build up across the 44s loop: earlier text ghosts behind later panels and the dark gradients turn into blocks. `encode-webp.py` uses Pillow's WebPAnimEncoder and forces a keyframe every 10–20 frames (`--kmin` / `--kmax`). Its defaults are 1280px, 20fps and quality 82. It needs `ffmpeg`, plus Pillow with WebP support and numpy (`pip install pillow numpy`). Encoding takes several minutes. The Marketplace listing only changes when a new VSIX is published, because it renders the README packaged in the VSIX.
