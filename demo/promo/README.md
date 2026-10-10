@@ -24,10 +24,10 @@ The capture writes a JPEG frame sequence plus timing marks to `demo/promo/.captu
 
 Keep unpublished media under the ignored `.capture/preview/` directory.
 
-To reuse an already validated VSIX without invoking package/build again (PowerShell):
+To reuse an existing VSIX without invoking package/build again (PowerShell). Point `PROMO_VSIX` at the VSIX from the [installed VSIX smoke](../../docs/testing.md#installed-vsix-smoke) (`tmp/tessra-smoke.vsix`), or at `demo/promo/.capture/tessra-promo.vsix` that an earlier capture packaged, when you re-record from the same source:
 
 ```powershell
-$env:PROMO_VSIX = (Resolve-Path 'tmp/tessra-validated.vsix').Path
+$env:PROMO_VSIX = (Resolve-Path 'demo/promo/.capture/tessra-promo.vsix').Path
 npx playwright test -c demo/promo/capture/playwright.config.ts
 Remove-Item Env:PROMO_VSIX
 node demo/promo/check-camera.cjs
