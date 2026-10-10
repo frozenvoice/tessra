@@ -48,6 +48,10 @@ const wav = path.join(work, 'soundtrack.wav');
   }
 
   const timeline = await page.evaluate(() => window.TIMELINE);
+  if (!timeline) {
+    const missing = await page.evaluate(() => window.CLIP ? MISSING : null);
+    throw new Error(missing ? `Capture is from an older recording script (missing marks: ${missing.join(', ')}) — record a new session (see README.md)` : 'Missing .capture/session — run the capture first (see README.md)');
+  }
   fs.writeFileSync(path.join(work, 'timeline.json'), JSON.stringify(timeline, null, 2));
 
   if (!audioOnly) {

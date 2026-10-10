@@ -128,7 +128,10 @@ test('record promo footage', async () => {
   rec.mark('rerun-done');
   await pause(1200);
 
-  // --- scene: server-sent events (opening the tab and filling the URL fall between cuts) ---
+  // --- scene: server-sent events (closing the runner, opening the tab and filling the URL fall between cuts) ---
+  // The runner overlay covers the request editor until it is closed.
+  await runner.locator('[data-testid="runner-close"]').click();
+  await expect(runner.locator('.runner-overlay')).toHaveCount(0);
   await runCommand(page, 'Tessra: New Request');
   const sse = await waitForRequestWebview(page);
   await fillUrl(sse, '{{baseUrl}}/events');

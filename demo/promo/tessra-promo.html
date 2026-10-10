@@ -189,8 +189,13 @@ function floor(ctx,t,alpha){
 const BEAT=.5;
 const T_FOOT=2.0, CUTS=[2.0,6.0,9.0,13.0,16.0], T_MAN=16.0, T_END=18.0, DURATION=20.0;
 
-const C=window.CLIP;
-if(!C)document.body.insertAdjacentHTML('beforeend','<p style="position:absolute;top:20px;left:20px;color:#e06c75;font-size:28px">Missing .capture/session — run the capture first (see README.md).</p>');
+// Marks the edit depends on; a session from an older capture script lacks some of them.
+const NEED=['click-url','tab-1','tab-2','send-1','response-1','palette','pick-staging','env-switched','send-2','response-2',
+  'right-click-collection','runner-open','runner-go','runner-done','rerun-failed','rerun-done','sse-send','sse-first','sse-done'];
+const MISSING=window.CLIP?NEED.filter(n=>!window.CLIP.marks[n]):NEED;
+const C=MISSING.length?null:window.CLIP;
+if(!C)document.body.insertAdjacentHTML('beforeend','<p style="position:absolute;top:20px;left:20px;color:#e06c75;font-size:28px">'+
+  (window.CLIP?'Capture is from an older recording script (missing marks: '+MISSING.join(', ')+') — record a new session (see README.md).':'Missing .capture/session — run the capture first (see README.md).')+'</p>');
 const M=n=>C.marks[n].t;
 const CLIP_END=C?C.frames/C.fps:0;
 const CLICK_DELAY=.65;           // harness pauses this long between mark and click
