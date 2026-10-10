@@ -111,10 +111,12 @@ test('record promo footage', async () => {
   if (box) rec.mark('menu-run-all', { x: box.x + box.width / 2, y: box.y + box.height / 2 });
   await pause(650);
   await press('Enter').catch(() => undefined);
-  // Park the pointer on empty runner space so no sidebar hover tooltip lingers.
-  await page.mouse.move(1100, 700);
   const runner = getRequestWebview(page);
   await runner.locator('[data-testid="runner-start"]').waitFor({ state: 'visible' });
+  // Park the pointer on empty runner space so no sidebar hover tooltip lingers. A single jump into the
+  // webview leaves the row under the closed menu hovered, so sweep out through empty sidebar space first.
+  await page.mouse.move(150, 270, { steps: 4 });
+  await page.mouse.move(1100, 700, { steps: 8 });
   rec.mark('runner-open');
   await pause(1600);
   await click(runner.locator('[data-testid="runner-start"]'), 'runner-go');

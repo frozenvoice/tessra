@@ -18,7 +18,7 @@ node demo/promo/check-camera.cjs
 node demo/promo/render.cjs
 ```
 
-The capture writes a JPEG frame sequence plus timing marks to `demo/promo/.capture/session/` (git-ignored; the previous 44s capture was about 170MB). The composition reads those marks from `clip.js`, so captions, camera, the pointer and key hints stay in sync after a re-record. A full render takes a while: 1,200 frames at 2560×1440. `ffmpeg` needs libx264 (`scoop install ffmpeg` on Windows).
+The capture writes a JPEG frame sequence plus timing marks to `demo/promo/.capture/session/` (git-ignored; a 39s capture at 30fps is about 250MB). The composition reads those marks from `clip.js`, so captions, camera, the pointer and key hints stay in sync after a re-record. A full render takes a while: 1,200 frames at 2560×1440. `ffmpeg` needs libx264 (`scoop install ffmpeg` on Windows).
 
 ## Local preview and camera checks
 
