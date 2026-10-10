@@ -50,7 +50,7 @@ Claims are limited to what `PRODUCT.md` confirms. `demo/**` is excluded by `.vsc
 
 The Marketplace keeps `<video>` with an absolute https `src`, but its sanitizer strips `muted`, `playsinline`, and `controls` (only `src`, `poster`, `autoplay`, `loop`, and `width` survive). Chrome and Edge only autoplay muted media, and a video without an audio track still needs `muted`, so a README video can never autoplay there. Relative paths are not rewritten either (microsoft/vsmarketplace#494), and GitHub `user-attachments` URLs only play for signed-in GitHub users.
 
-So the README uses two pieces, both hosted in `frozenvoice/frozenvoice-assets` under `tessra/video/` and served through jsDelivr for correct content types:
+So the README uses two pieces, both hosted in `frozenvoice/frozenvoice-assets` under `tessra/video/` and served through jsDelivr for correct content types. Since 2026-10-11 they hold the request-log cut (`tessra-promo-v2.html`, below), the same video as the dtype.one page:
 
 - `tessra-demo.webp`: an animated WebP at the top, encoded from the MP4 by `encode-webp.py`. Images animate without a click everywhere, including VS Code's extension page and GitHub. It links to the MP4.
 - `tessra-demo.mp4` with `tessra-demo-poster.jpg`: the full video with sound, as a `<video controls>` in the Screenshots section.
@@ -58,7 +58,7 @@ So the README uses two pieces, both hosted in `frozenvoice/frozenvoice-assets` u
 Rebuild the WebP after a new render:
 
 ```bash
-python3 demo/promo/encode-webp.py demo/promo/tessra-promo.mp4 tessra-demo.webp
+python3 demo/promo/encode-webp.py demo/promo/.capture/v2/tessra-promo-v2.mp4 tessra-demo.webp
 ```
 
 Do not use ffmpeg's `libwebp_anim` for this. It writes one keyframe and then only lossy sub-frame deltas, so errors build up across the loop: earlier text ghosts behind later panels and the dark gradients turn into blocks. `encode-webp.py` uses Pillow's WebPAnimEncoder and forces a keyframe every 10–20 frames (`--kmin` / `--kmax`). Its defaults are 1280px, 20fps and quality 82. It needs `ffmpeg`, plus Pillow with WebP support and numpy (`pip install pillow numpy`). Encoding takes several minutes. The Marketplace listing only changes when a new VSIX is published, because it renders the README packaged in the VSIX.
@@ -71,4 +71,4 @@ Do not use ffmpeg's `libwebp_anim` for this. It writes one keyframe and then onl
 node demo/promo/render-v2.cjs --html tessra-promo-v2.html --soundtrack ./soundtrack-v2.cjs --out demo/promo/.capture/v2/tessra-promo-v2.mp4
 ```
 
-The published copy is `tessra/site-v2/tessra-demo.mp4` in `frozenvoice/frozenvoice-assets`; the README and Marketplace keep `tessra/video/`.
+It is published twice in `frozenvoice/frozenvoice-assets`: `tessra/site-v2/` for the dtype.one page, and `tessra/video/` (MP4, animated WebP and poster) for the README. After uploading to `tessra/video/`, purge jsDelivr's `@main` cache for the three files (`https://purge.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/<file>`). The Marketplace shows the new video after the next VSIX publish. `tessra-promo.mp4` here remains the first cut.
