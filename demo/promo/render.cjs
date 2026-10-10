@@ -1,5 +1,5 @@
 // Renders tessra-promo.html frame-by-frame, synthesizes the soundtrack, and muxes both into an MP4.
-// Usage: node demo/promo/render.cjs [--preview] [--fps 30] [--width 1920] [--out demo/promo/tessra-promo.mp4] [--stills 1,8,12.8] [--audio-only]
+// Usage: node demo/promo/render.cjs [--preview] [--fps 60] [--width 2560] [--out demo/promo/tessra-promo.mp4] [--stills 1,8,12.8] [--audio-only]
 //   --audio-only  reuse the last rendered picture (.capture/video.mp4) and only rebuild the audio.
 // Needs demo/promo/.capture/session from the capture step (see README.md) and ffmpeg with libx264 on PATH.
 const { chromium } = require('playwright');
@@ -11,8 +11,8 @@ const { renderSoundtrack } = require('./soundtrack.cjs');
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const preview = args.includes('--preview');
-const fps = Number(opt('--fps', preview ? 15 : 30));
-const width = Number(opt('--width', preview ? 1280 : 1920));
+const fps = Number(opt('--fps', preview ? 15 : 60));
+const width = Number(opt('--width', preview ? 1280 : 2560));
 const stills = opt('--stills', null);
 const audioOnly = args.includes('--audio-only');
 const work = path.join(__dirname, '.capture');
@@ -32,7 +32,8 @@ const wav = path.join(work, 'soundtrack.wav');
   fs.mkdirSync(path.dirname(out), { recursive: true });
   // Fall back to installed Chrome/Edge when Playwright's bundled Chromium isn't downloaded.
   const browser = await chromium.launch().catch(() => chromium.launch({ channel: 'chrome' })).catch(() => chromium.launch({ channel: 'msedge' }));
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+  // The composition is laid out at 1920×1080; larger outputs render at a higher device scale instead of upscaling.
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: Math.max(1, width / 1920) });
   await page.goto(require('url').pathToFileURL(path.join(__dirname, 'tessra-promo.html')).href);
   await page.evaluate(() => document.fonts.ready);
 
@@ -47,6 +48,10 @@ const wav = path.join(work, 'soundtrack.wav');
   }
 
   const timeline = await page.evaluate(() => window.TIMELINE);
+  if (!timeline) {
+    const missing = await page.evaluate(() => window.CLIP ? MISSING : null);
+    throw new Error(missing ? `Capture is from an older recording script (missing marks: ${missing.join(', ')}) — record a new session (see README.md)` : 'Missing .capture/session — run the capture first (see README.md)');
+  }
   fs.writeFileSync(path.join(work, 'timeline.json'), JSON.stringify(timeline, null, 2));
 
   if (!audioOnly) {
@@ -75,4 +80,12 @@ const wav = path.join(work, 'soundtrack.wav');
     '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', out], { stdio: 'inherit' });
   if (mux.status !== 0) throw new Error('ffmpeg mux failed');
   console.log('wrote', out);
+  if (!preview) {
+    // Poster for web embeds: the settled end card.
+    const poster = out.replace(/\.mp4$/i, '') + '-poster.jpg';
+    const still = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(timeline.end + 1.2), '-i', out,
+      '-frames:v', '1', '-vf', 'scale=1920:-2:flags=lanczos', '-q:v', '3', poster], { stdio: 'inherit' });
+    if (still.status !== 0) throw new Error('ffmpeg poster failed');
+    console.log('wrote', poster);
+  }
 })();
