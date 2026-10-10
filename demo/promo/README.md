@@ -61,7 +61,7 @@ Rebuild the WebP after a new render:
 python3 demo/promo/encode-webp.py demo/promo/.capture/v2/tessra-promo-v2.mp4 tessra-demo.webp
 ```
 
-Do not use ffmpeg's `libwebp_anim` for this. It writes one keyframe and then only lossy sub-frame deltas, so errors build up across the loop: earlier text ghosts behind later panels and the dark gradients turn into blocks. `encode-webp.py` uses Pillow's WebPAnimEncoder and forces a keyframe every 10–20 frames (`--kmin` / `--kmax`). Its defaults are 1280px, 20fps and quality 82. It needs `ffmpeg`, plus Pillow with WebP support and numpy (`pip install pillow numpy`). Encoding takes several minutes. The Marketplace listing only changes when a new VSIX is published, because it renders the README packaged in the VSIX.
+Do not use ffmpeg's `libwebp_anim` for this. It writes one keyframe and then only lossy sub-frame deltas, so errors build up across the loop: earlier text ghosts behind later panels and the dark gradients turn into blocks. `encode-webp.py` uses Pillow's WebPAnimEncoder and forces a keyframe every 10–20 frames (`--kmin` / `--kmax`). Its defaults are 1280px, 20fps and quality 82. It needs `ffmpeg`, plus Pillow with WebP support and numpy (`pip install pillow numpy`). Encoding takes several minutes. The Marketplace renders the README text packaged in the VSIX, so text changes wait for the next publish; the media load from the absolute jsDelivr `@main` URLs, so a new WebP, MP4 or poster shows there as soon as the CDN serves it.
 
 ## Site cut (v2)
 
@@ -71,4 +71,4 @@ Do not use ffmpeg's `libwebp_anim` for this. It writes one keyframe and then onl
 node demo/promo/render-v2.cjs --html tessra-promo-v2.html --soundtrack ./soundtrack-v2.cjs --out demo/promo/.capture/v2/tessra-promo-v2.mp4
 ```
 
-It is published twice in `frozenvoice/frozenvoice-assets`: `tessra/site-v2/` for the dtype.one page, and `tessra/video/` (MP4, animated WebP and poster) for the README. After uploading to `tessra/video/`, purge jsDelivr's `@main` cache for the three files (`https://purge.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/<file>`). The Marketplace shows the new video after the next VSIX publish. `tessra-promo.mp4` here remains the first cut.
+It is published twice in `frozenvoice/frozenvoice-assets`: `tessra/site-v2/` for the dtype.one page, and `tessra/video/` (MP4, animated WebP and poster) for the README. After uploading to `tessra/video/`, purge jsDelivr's `@main` cache for the three files (`https://purge.jsdelivr.net/gh/frozenvoice/frozenvoice-assets@main/tessra/video/<file>`). The Marketplace page loads the same URLs, so it shows the new media without a new VSIX (checked 2026-10-11: it served the new WebP and poster). `tessra-promo.mp4` here remains the first cut.
