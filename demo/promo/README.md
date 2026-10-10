@@ -62,3 +62,13 @@ python3 demo/promo/encode-webp.py demo/promo/tessra-promo.mp4 tessra-demo.webp
 ```
 
 Do not use ffmpeg's `libwebp_anim` for this. It writes one keyframe and then only lossy sub-frame deltas, so errors build up across the loop: earlier text ghosts behind later panels and the dark gradients turn into blocks. `encode-webp.py` uses Pillow's WebPAnimEncoder and forces a keyframe every 10–20 frames (`--kmin` / `--kmax`). Its defaults are 1280px, 20fps and quality 82. It needs `ffmpeg`, plus Pillow with WebP support and numpy (`pip install pillow numpy`). Encoding takes several minutes. The Marketplace listing only changes when a new VSIX is published, because it renders the README packaged in the VSIX.
+
+## Site cut (v2)
+
+`tessra-promo-v2.html` is a second composition of the same capture for the dtype.one project page: flat footage on a paper background with a request log that types each real event when it is on screen, and `soundtrack-v2.cjs` (half-time groove, no risers). Render it with:
+
+```bash
+node demo/promo/render-v2.cjs --html tessra-promo-v2.html --soundtrack ./soundtrack-v2.cjs --out demo/promo/.capture/v2/tessra-promo-v2.mp4
+```
+
+The published copy is `tessra/site-v2/tessra-demo.mp4` in `frozenvoice/frozenvoice-assets`; the README and Marketplace keep `tessra/video/`.
