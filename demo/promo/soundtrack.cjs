@@ -13,8 +13,8 @@ function build(tl) {
   const verbL = new Float32Array(N), verbR = new Float32Array(N); // reverb send
   const duck = new Float32Array(N).fill(1);                      // sidechain gain
 
-  // Tempo is chosen so the drop lands exactly on the first footage frame (16 beats in).
-  const B = tl.s3In / 16;
+  // Fixed tempo: the edit puts every cut on this beat grid (tl.beat seconds per beat).
+  const B = tl.beat;
   const beat = (i) => i * B;
   let seed = 1;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
@@ -35,11 +35,9 @@ function build(tl) {
   const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
   // ---------- song map ----------
-  const T = tl;
-  const endHit = T.t7;
-  const dropAt = T.s3In;
-  const breakdown = [T.t6, T.t7];
-  const grooveOn = (t) => t >= dropAt && !inRange(t, breakdown[0], breakdown[1]) && t < endHit;
+  const endHit = tl.end;
+  const dropAt = tl.drop;
+  const grooveOn = (t) => t >= dropAt && t < tl.man;
   // Am – F – C – G, one chord per bar.
   const CHORDS = [[57, 60, 64], [53, 57, 60], [48, 55, 64], [55, 59, 62]];
   const ROOTS = [33, 29, 36, 31];
@@ -144,64 +142,58 @@ function build(tl) {
   };
 
   // ---------- arrangement ----------
-  const totalBeats = Math.ceil(tl.duration / B) + 8;
+  const totalBeats = Math.ceil(tl.duration / B);
 
-  // Intro pad swell and sparkle arp (beats 0-15), manifesto hits on beat.
-  padChord(0, CHORDS[0], 4 * B, 1.5, 0.014);
-  padChord(4 * B, CHORDS[1], 4 * B, 1.6, 0.02);
-  padChord(8 * B, CHORDS[2], 4 * B, 1.6, 0.026);
-  padChord(12 * B, CHORDS[3], 4 * B - 0.12, 1.7, 0.035);
-  // Low drone under the intro so it isn't just air.
-  bassNote(0, 33, 4 * B); bassNote(4 * B, 29, 4 * B);
-  const sparkle = [81, 84, 88, 91, 88, 84];
-  for (let i = 0; i < 32; i++) {
-    const t = i * B / 2;
-    if (t > dropAt - 0.2) break;
-    pluck(t, sparkle[i % 6], 0.35 + 0.35 * (i / 32), i % 2 ? 0.5 : -0.5, 0.12);
-  }
-  impact(1.2, 0.45);
-  whoosh(4.2, 0.7, 0.8);
-  // Manifesto: kick + clap stab on each "No" line, soft hat pulse under it.
-  tl.lines.forEach((t) => { kick(t, 0.9); clap(t, 0.6); bassNote(t, rootAt(t) + 12, 0.35); });
-  for (let i = 8; i < 16; i++) hat(beat(i) + B / 2, false, 0.7);
-  riser(dropAt - 4 * B, dropAt - 0.05, 1);
+  // Intro bar: pad swell, rising sparkle, riser into the drop.
+  padChord(0, CHORDS[0], dropAt, 1.6, 0.02);
+  bassNote(0, 33, dropAt);
+  const sparkle = [81, 84, 88, 91, 93, 96, 100, 103];
+  for (let i = 0; i < dropAt / (B / 2); i++) pluck(i * B / 2, sparkle[i % 8], 0.3 + 0.5 * (i / 8), i % 2 ? 0.5 : -0.5, 0.12);
+  impact(B * 2 - 0.05, 0.35);
+  riser(B, dropAt - 0.03, 1);
+  whoosh(dropAt - 0.08, 0.5, 0.9);
 
-  // Groove from the drop.
-  for (let i = 16; i < totalBeats; i++) {
+  // Groove from the drop to the manifesto.
+  for (let i = Math.round(dropAt / B); i < totalBeats; i++) {
     const t = beat(i);
-    if (t >= tl.duration) break;
-    const on = grooveOn(t);
-    const bd = inRange(t, breakdown[0], breakdown[1]);
-    if (on) {
-      kick(t);
-      if (i % 2 === 1) clap(t);
-      hat(t + B / 2, true, 0.8);
-      hat(t + B / 4, false, 0.55, -0.2);
-      hat(t + (3 * B) / 4, false, 0.55, 0.25);
-      // Offbeat bass, root / octave
-      bassNote(t + B / 2, rootAt(t) + (i % 4 === 3 ? 12 : 0), B / 2);
-      if (i % 4 === 2) bassNote(t + B * 0.75, rootAt(t) + 7, B / 4);
-    }
-    if (on || bd) {
-      // 16th-note arp through the chord, brighter in the groove.
-      const ch = chordAt(t);
-      const seq = [ch[0] + 12, ch[1] + 12, ch[2] + 12, ch[1] + 24];
-      for (let s = 0; s < 4; s++) {
-        pluck(t + (s * B) / 4, seq[s], bd ? 0.55 : 0.6, s % 2 ? 0.45 : -0.45, bd ? 0.06 : 0.2);
-      }
-    }
-    if (i % 4 === 0 && t < endHit) padChord(t, chordAt(t), Math.min(4 * B, endHit - t), bd ? 2.2 : 0.75, bd ? 0.024 : 0.03);
-    if (bd && i % 4 === 0) bassNote(t, rootAt(t), 4 * B);
+    if (!grooveOn(t)) continue;
+    kick(t);
+    if (i % 2 === 1) clap(t);
+    hat(t + B / 2, true, 0.8);
+    hat(t + B / 4, false, 0.55, -0.2);
+    hat(t + (3 * B) / 4, false, 0.55, 0.25);
+    bassNote(t + B / 2, rootAt(t) + (i % 4 === 3 ? 12 : 0), B / 2);
+    if (i % 4 === 2) bassNote(t + B * 0.75, rootAt(t) + 7, B / 4);
+    const ch = chordAt(t);
+    const seq = [ch[0] + 12, ch[1] + 12, ch[2] + 12, ch[1] + 24];
+    for (let s = 0; s < 4; s++) pluck(t + (s * B) / 4, seq[s], 0.6, s % 2 ? 0.45 : -0.45, 0.2);
+    if (i % 4 === 0) padChord(t, ch, Math.min(4 * B, tl.man - t), 0.75, 0.03);
   }
-  // Scene transitions.
-  whoosh(tl.t5, 0.6); whoosh(tl.t6, 0.7);
-  riser(tl.t7 - 2 * B, tl.t7 - 0.03, 0.7);
+  impact(dropAt, 1);
+  // Beat changes: a short clap fill into each cut, then a crash.
+  tl.cuts.forEach((t) => {
+    [0.375, 0.25, 0.125].forEach((d, j) => clap(t - d * B * 2, 0.35 + j * 0.15));
+    whoosh(t, 0.45, 0.8);
+    impact(t, 0.3);
+    hat(t, true, 1.4, 0);
+  });
+  riser(tl.man - 2 * B, tl.man - 0.03, 0.8);
+
+  // Manifesto: everything drops out except a slam on each line.
+  tl.slams.forEach((t, i) => {
+    kick(t, 1); clap(t, 0.8); impact(t, 0.45 + i * 0.15);
+    bassNote(t, [33, 29, 36][i] + 12, 0.45);
+    padChord(t, CHORDS[i], B * 0.95, 1.2, 0.04);
+  });
+  bell(tl.slams[2] + 2 * B, 88, 0.6);
+
   // End card: impact and a held Am chord with a bell on top.
   impact(endHit, 0.9);
   kick(endHit, 1);
   padChord(endHit, [57, 60, 64, 69], tl.duration - endHit + 0.4, 1.4, 0.02);
-  bassNote(endHit, 33, 2.5);
-  bell(endHit + 0.7, 81, 0.8);
+  bassNote(endHit, 33, tl.duration - endHit);
+  bell(endHit + 0.5, 81, 0.8);
+  bell(endHit + 0.75, 88, 0.5, 0.3);
 
   // ---------- UI sound effects ----------
   tl.keys.forEach(keyTick);
@@ -209,13 +201,12 @@ function build(tl) {
   tl.success.forEach((t) => { bell(t, 88, 0.9, -0.2); bell(t + 0.09, 95, 0.75, 0.2); });
   tl.failure.forEach((t) => { bell(t, 76, 0.7); bell(t + 0.12, 72, 0.7); });
   tl.swaps.forEach((t) => whoosh(t + 0.15, 0.35, 0.6));
-  tl.cards.forEach((t, i) => pluck(t, [88, 91, 93, 95, 98, 100][i], 0.45, (i % 3 - 1) * 0.5, 0.3));
 
   // ---------- mix ----------
   // Sidechain the music bus to the kick, keep a quieter bed under the footage so UI ticks read.
   for (let k = 0; k < N; k++) {
     const t = k / SR;
-    const bed = t >= dropAt && t < tl.s3Out ? 0.78 : 1;
+    const bed = t >= dropAt && t < tl.man ? 0.78 : 1;
     L[k] *= duck[k] * bed; R[k] *= duck[k] * bed;
     verbL[k] *= duck[k]; verbR[k] *= duck[k];
   }
