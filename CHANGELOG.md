@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.7
+
+### Docs
+
+- The README demo is a new 20-second cut recorded in VS Code: send a request, switch environments, run a collection and rerun only the failed request, and watch server-sent events stream in.
+
 ## 1.2.6
 
 ### Fixed

@@ -67,6 +67,15 @@ Use the local fixture server in an isolated VS Code host; do not use paid stream
 - With retry enabled, serve a stream that starts with HTTP 500 or POST and then fails. Confirm a single request and no automatic resend after stream start.
 - Repeat ordinary HTTP charset/binary, History cache, TLS and redirect credential regressions. Proxy behavior is only checked when reproducible with a local fixture and isolated host.
 
+## 1.2.7 Smoke (~3 min)
+
+README demo media only. Run this pass on the packaged VSIX before Marketplace publish.
+
+- Install the 1.2.7 VSIX and send a normal GET; confirm status, headers, and body render as before.
+- Open the extension page in VS Code's Extensions view; confirm the animated demo loops without a click and shows the 20-second cut, including the server-sent events scene.
+- Select the demo or "Watch the full demo with sound" and confirm the full video with sound opens.
+- Inspect the VSIX contents (`npx vsce ls`) and confirm no `.kilo`, `demo`, or test output is included.
+
 ## 1.2.6 Smoke (~5 min)
 
 Headers-only stream cleanup. Run this pass on the packaged VSIX before Marketplace publish.
