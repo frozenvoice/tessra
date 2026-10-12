@@ -3,6 +3,21 @@ import { AuthService } from '../../services/AuthService';
 import { AuthConfig, KeyValue } from '../../models/types';
 
 describe('AuthService', () => {
+  it('실제로 적용한 인증 헤더명만 전송 보호 metadata로 반환한다', () => {
+    const cases: Array<{ auth: AuthConfig; expected: string[] }> = [
+      { auth: { type: 'none' }, expected: [] },
+      { auth: { type: 'basic', basic: { username: 'user', password: 'synthetic' } }, expected: ['Authorization'] },
+      { auth: { type: 'bearer', bearer: { token: 'synthetic' } }, expected: ['Authorization'] },
+      { auth: { type: 'apikey', apikey: { key: '{{name}}', value: 'synthetic', addTo: 'header' } }, expected: ['X-Secret'] },
+      { auth: { type: 'apikey', apikey: { key: '{{name}}', value: 'synthetic', addTo: 'query' } }, expected: [] },
+      { auth: { type: 'apikey', apikey: { key: '', value: 'synthetic', addTo: 'header' } }, expected: [] },
+      { auth: { type: 'basic' }, expected: [] },
+    ];
+    for (const { auth, expected } of cases) {
+      assert.deepStrictEqual(AuthService.applyAuth(auth, [], [], [{ key: 'name', value: 'X-Secret', enabled: true }]), expected);
+    }
+  });
+
   const vars: KeyValue[] = [
     { key: 'token', value: 'resolved-token', enabled: true },
     { key: 'apiKey', value: 'X-API-Key', enabled: true },

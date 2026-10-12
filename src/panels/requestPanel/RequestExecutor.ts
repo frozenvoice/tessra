@@ -193,7 +193,7 @@ export class RequestExecutor {
         return;
       }
 
-      AuthService.applyAuth(requestState.auth, finalHeaders, finalParams, vars);
+      const credentialHeaderNames = AuthService.applyAuth(requestState.auth, finalHeaders, finalParams, vars);
 
       let url: string;
       try {
@@ -279,6 +279,7 @@ export class RequestExecutor {
               deadline,
               allowInsecureHttps: this.resolveAllowInsecureHttps(settings.tlsValidation),
               followRedirects: settings.followRedirects,
+              credentialHeaderNames,
               maxResponseSizeBytes: settings.maxResponseSizeKb > 0 ? settings.maxResponseSizeKb * 1024 : 0,
               stopAfterHeaders: settings.stopAfterHeaders,
               onSseUpdate: publishSseUpdate,

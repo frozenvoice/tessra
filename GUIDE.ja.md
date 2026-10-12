@@ -79,7 +79,7 @@ Body: {"env":"{{envName}}"}
 - URL 警告も同じ occurrence 規則に従います。Request-local の path 値は missing になりませんが、同じ名前が query / headers / body / auth にある場合は Environment に無ければ unresolved のままです。
 - Path override は該当 path segment にのみ適用され、query / headers / body / auth には影響しません。WebSocket URL と Collection Runner / cURL / codegen の解決にも同じ規則が適用されます。
 - URL、headers、body、auth、scripts などの入力欄で変数 autocomplete を使えます。
-- 環境の変数数はアクティブ環境の大きさ、リクエストの変数数は現在のリクエストで参照した一意の変数名の数です。
+- 環境の変数数（`N 変数`）はアクティブ環境の大きさ、リクエストの変数数（`リクエスト変数 N`）は現在のリクエストで参照した一意の変数名の数です。
 - workspace variables はバックアップに保持できますが、リクエスト解決は引き続きアクティブ environment に従います。
 - `Tessra: Import Environment` で `.env` / `.env.*` / `*.env` を一度だけローカル Environment として取り込みます。元ファイルは変更せず、取り込んだ環境を自動でアクティブにはしません。
 

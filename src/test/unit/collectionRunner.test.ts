@@ -40,14 +40,14 @@ interface PlannedSend {
 }
 
 class FakeHttpService {
-  calls: Array<{ url: string; startedAt: number; options: HttpSendOptions }> = [];
+  calls: Array<{ url: string; headers: KeyValue[]; startedAt: number; options: HttpSendOptions }> = [];
   onSend?: (options: HttpSendOptions, index: number) => void;
 
   constructor(private readonly plans: PlannedSend[] = []) {}
 
-  send(_method: string, url: string, _headers: unknown, _body: unknown, options: HttpSendOptions) {
+  send(_method: string, url: string, headers: KeyValue[], _body: unknown, options: HttpSendOptions) {
     const plan = this.plans.shift() ?? {};
-    this.calls.push({ url, startedAt: Date.now(), options });
+    this.calls.push({ url, headers, startedAt: Date.now(), options });
     this.onSend?.(options, this.calls.length - 1);
     let timer: ReturnType<typeof setTimeout> | undefined;
     let rejectPromise: ((error: Error) => void) | undefined;
@@ -352,6 +352,20 @@ describe('CollectionRunner shared network budget', () => {
 });
 
 describe('CollectionRunner', () => {
+  it('변수로 지정한 API Key 헤더명과 보호 metadata를 실제 HTTP 호출에 전달한다', async () => {
+    const http = new FakeHttpService();
+    const host = new FakeRunnerHost();
+    host.getActiveVariables = () => [{ key: 'name', value: 'Ocp-Apim-Subscription-Key', enabled: true }];
+    await new CollectionRunner(http as never, host).runCollection('Credential metadata', items(request('key', {
+      followRedirects: true,
+      auth: { type: 'apikey', apikey: { key: '{{name}}', value: 'synthetic-key', addTo: 'header' } },
+    })));
+    assert.strictEqual(http.calls.length, 1);
+    assert.deepStrictEqual(http.calls[0].options.credentialHeaderNames, ['Ocp-Apim-Subscription-Key']);
+    assert.strictEqual(http.calls[0].options.followRedirects, true);
+    assert.strictEqual(http.calls[0].headers.find((header) => header.key === 'Ocp-Apim-Subscription-Key')?.value, 'synthetic-key');
+  });
+
   it('WS/WSS와 변수로 해석된 WebSocket 요청을 전송 전에 거절한다', async () => {
     const http = new FakeHttpService();
     const host = new FakeRunnerHost();

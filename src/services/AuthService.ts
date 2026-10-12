@@ -3,7 +3,9 @@ import { VariableService } from './VariableService';
 
 // 인증 헤더/파라미터를 적용하되 동일 키 중복 전송은 방지
 export class AuthService {
-  static applyAuth(auth: AuthConfig, headers: KeyValue[], params: KeyValue[], vars: KeyValue[]): void {
+  // 실제 적용한 인증 헤더명을 반환해 사용자 지정 이름도 리다이렉트에서 보호한다.
+  static applyAuth(auth: AuthConfig, headers: KeyValue[], params: KeyValue[], vars: KeyValue[]): string[] {
+    const credentialHeaderNames: string[] = [];
     switch (auth.type) {
       case 'basic':
         if (auth.basic) {
@@ -15,6 +17,7 @@ export class AuthService {
             value: `Basic ${Buffer.from(`${u}:${p}`).toString('base64')}`,
             enabled: true,
           });
+          credentialHeaderNames.push('Authorization');
         }
         break;
       case 'bearer':
@@ -26,6 +29,7 @@ export class AuthService {
             value: `Bearer ${t}`,
             enabled: true,
           });
+          credentialHeaderNames.push('Authorization');
         }
         break;
       case 'apikey':
@@ -39,10 +43,12 @@ export class AuthService {
           } else {
             this.removeHeader(headers, key);
             headers.push({ key, value, enabled: true });
+            credentialHeaderNames.push(key);
           }
         }
         break;
     }
+    return credentialHeaderNames;
   }
 
   private static removeHeader(headers: KeyValue[], key: string): void {

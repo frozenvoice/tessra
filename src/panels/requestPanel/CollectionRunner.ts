@@ -506,7 +506,7 @@ export class CollectionRunner {
         throw new Error(createUnresolvedVariableError(unresolvedVariables));
       }
 
-      AuthService.applyAuth(requestState.auth, finalHeaders, finalParams, vars);
+      const credentialHeaderNames = AuthService.applyAuth(requestState.auth, finalHeaders, finalParams, vars);
       const url = buildUrl(resolvedUrl, finalParams);
       progressMethod = method;
       progressUrl = redactor.mask(url);
@@ -591,6 +591,7 @@ export class CollectionRunner {
             deadline,
             allowInsecureHttps: this.resolveAllowInsecureHttps(settings.tlsValidation),
             followRedirects: settings.followRedirects,
+            credentialHeaderNames,
             maxResponseSizeBytes: settings.maxResponseSizeKb > 0 ? settings.maxResponseSizeKb * 1024 : 0,
             stopAfterHeaders: settings.stopAfterHeaders,
             onSseUpdate: publishSseUpdate,

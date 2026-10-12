@@ -10,6 +10,8 @@
 
 Unit tests remain valuable. UI E2E does **not** replace them.
 
+Credential redirect regressions use two loopback HTTP servers and only synthetic credentials. They verify custom API Key header names, case-insensitive matching, same-origin preservation, cross-origin removal, and no reattachment after a return hop. AuthService tests check the resolved header-name metadata; RequestExecutor and CollectionRunner tests verify that their actual HTTP calls receive it. This transport-only change uses these focused tests and the local `npm run ci` gate; it does not change UI interaction or require a new VS Code E2E scenario.
+
 ## UI E2E prerequisites
 
 - Node 22+ (`@vscode/test-electron` requires Node 22; all CI jobs use Node 22)
