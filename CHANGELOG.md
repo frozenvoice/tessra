@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Custom header-based API Key credentials are removed on cross-origin HTTP redirects in both request tabs and Collection Runner. Same-origin redirects retain them, and a later return to the original origin does not reattach them.
+
 ## 1.2.7
 
 ### Docs

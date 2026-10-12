@@ -3,7 +3,7 @@ import Module = require('module');
 import { HttpService, HttpSendOptions, SendHandle } from '../../services/HttpService';
 import { performance } from 'perf_hooks';
 import { RequestDeadline, RequestTimeoutError } from '../../services/RequestDeadline';
-import { MessageType, Response, SendRequestMessage } from '../../models/types';
+import { KeyValue, MessageType, Response, SendRequestMessage } from '../../models/types';
 import type { RequestExecutor, RequestExecutorHost } from '../../panels/requestPanel/RequestExecutor';
 
 let RequestExecutorCtor: new (
@@ -71,11 +71,11 @@ class DeferredHandle implements SendHandle {
 
 class FakeHttpService {
   readonly handles: DeferredHandle[] = [];
-  readonly sent: Array<{ method: string; url: string; options: HttpSendOptions }> = [];
+  readonly sent: Array<{ method: string; url: string; headers: KeyValue[]; options: HttpSendOptions }> = [];
   onSend?: (handle: DeferredHandle, options: HttpSendOptions, index: number) => void;
 
-  send(method: string, url: string, _headers: unknown, _body: unknown, options: HttpSendOptions): SendHandle {
-    this.sent.push({ method, url, options });
+  send(method: string, url: string, headers: KeyValue[], _body: unknown, options: HttpSendOptions): SendHandle {
+    this.sent.push({ method, url, headers, options });
     const handle = new DeferredHandle();
     this.handles.push(handle);
     this.onSend?.(handle, options, this.handles.length - 1);
@@ -127,6 +127,22 @@ async function waitForHandle(service: FakeHttpService, index: number): Promise<D
 }
 
 describe('RequestExecutor query URL building', () => {
+  it('변수로 지정한 API Key 헤더명과 보호 metadata를 실제 HTTP 호출에 전달한다', async () => {
+    const service = new FakeHttpService();
+    service.onSend = (handle) => handle.resolve(successfulResponse);
+    const { host, posted } = createHost();
+    host.getActiveVariables = () => [{ key: 'name', value: 'X-Secret', enabled: true }];
+    await new RequestExecutorCtor(service as unknown as HttpService, host).execute({
+      ...createMessage(), followRedirects: true,
+      auth: { type: 'apikey', apikey: { key: '{{name}}', value: 'synthetic-key', addTo: 'header' } },
+    });
+    assert.strictEqual(service.sent.length, 1);
+    assert.deepStrictEqual(service.sent[0].options.credentialHeaderNames, ['X-Secret']);
+    assert.strictEqual(service.sent[0].options.followRedirects, true);
+    assert.strictEqual(service.sent[0].headers.find((header) => header.key === 'X-Secret')?.value, 'synthetic-key');
+    assert.ok(posted.some((message) => message.type === MessageType.ReceiveResponse));
+  });
+
   it('does not duplicate mirrored URL query params in the HTTP request URL or resolved display', async () => {
     const service = new FakeHttpService();
     const { host, posted } = createHost();

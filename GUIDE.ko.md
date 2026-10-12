@@ -79,7 +79,7 @@ Body: {"env":"{{envName}}"}
 - URL 경고도 같은 occurrence 규칙을 따릅니다. Request-local path 값은 missing으로 표시되지 않고, 같은 이름이 query / headers / body / auth에 있으면 Environment에 없을 때 unresolved로 남을 수 있습니다.
 - Path override는 해당 path segment에만 적용되며 query / headers / body / auth에는 영향을 주지 않습니다. WebSocket URL과 Collection Runner / cURL / codegen 해석에도 동일하게 적용됩니다.
 - URL, headers, body, auth, scripts 등 입력 필드에서 변수 autocomplete를 사용할 수 있습니다.
-- 환경 변수 수는 활성 환경의 크기이고, 요청 변수 수는 현재 요청에서 참조한 고유 변수 이름 수입니다.
+- 환경 변수 수(`변수 N개`)는 활성 환경의 크기이고, 요청 변수 수(`요청 변수 N`)는 현재 요청에서 참조한 고유 변수 이름 수입니다.
 - workspace variables는 백업에 보존될 수 있지만, 요청 해석은 여전히 활성 environment를 따릅니다.
 - `Tessra: Import Environment`로 `.env` / `.env.*` / `*.env` 파일을 한 번만 로컬 Environment로 가져옵니다. 원본 파일을 수정하지 않으며, 가져온 환경을 자동으로 활성으로 바꾸지 않습니다.
 

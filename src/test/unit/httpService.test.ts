@@ -5,6 +5,60 @@ import * as zlib from 'zlib';
 import { EventEmitter } from 'events';
 import type { RequestOptions as HttpsRequestOptions } from 'https';
 import { HttpService, HttpSendOptions } from '../../services/HttpService';
+import { AuthService } from '../../services/AuthService';
+import type { KeyValue } from '../../models/types';
+
+describe('HttpService credential redirect boundary', () => {
+  for (const key of ['X-Secret', 'Ocp-Apim-Subscription-Key']) {
+    it(`사용자 지정 ${key} 인증을 같은 origin에는 유지하고 교차 origin 이후 재부착하지 않는다`, async () => {
+      const observed: Array<{ step: string; headers: http.IncomingHttpHeaders }> = [];
+      let sourceUrl = '';
+      let targetUrl = '';
+      const target = http.createServer((req, res) => {
+        observed.push({ step: 'cross', headers: req.headers });
+        res.writeHead(308, { Location: `${sourceUrl}/returned` });
+        res.end();
+      });
+      const source = http.createServer((req, res) => {
+        observed.push({ step: req.url!, headers: req.headers });
+        if (req.url === '/start') {
+          res.writeHead(302, { Location: '/same' });
+        } else if (req.url === '/same') {
+          res.writeHead(307, { Location: targetUrl });
+        } else {
+          res.writeHead(200);
+        }
+        res.end();
+      });
+      try {
+        await new Promise<void>((resolve) => source.listen(0, '127.0.0.1', resolve));
+        await new Promise<void>((resolve) => target.listen(0, '127.0.0.1', resolve));
+        sourceUrl = `http://127.0.0.1:${(source.address() as net.AddressInfo).port}`;
+        targetUrl = `http://127.0.0.1:${(target.address() as net.AddressInfo).port}/cross`;
+        const headers: KeyValue[] = [{ key: 'X-Trace-Id', value: 'synthetic-trace', enabled: true }];
+        const credentialHeaderNames = AuthService.applyAuth({
+          type: 'apikey', apikey: { key: '{{credentialName}}', value: 'synthetic-key', addTo: 'header' },
+        }, headers, [], [{ key: 'credentialName', value: key, enabled: true }]);
+        // 이름 대소문자가 달라도 동일한 인증 헤더로 취급한다.
+        const response = await new HttpService().send('GET', `${sourceUrl}/start`, headers, '', {
+          followRedirects: true, timeoutSec: 2,
+          credentialHeaderNames: credentialHeaderNames.map((name) => name.toLowerCase()),
+        }).promise;
+        assert.strictEqual(response.status, 200);
+        assert.deepStrictEqual(observed.map((entry) => entry.step), ['/start', '/same', 'cross', '/returned']);
+        assert.deepStrictEqual(observed.map((entry) => entry.headers[key.toLowerCase()]),
+          ['synthetic-key', 'synthetic-key', undefined, undefined]);
+        assert.ok(observed.every((entry) => entry.headers['x-trace-id'] === 'synthetic-trace'));
+        assert.strictEqual(headers.find((header) => header.key === key)?.value, 'synthetic-key');
+      } finally {
+        await Promise.all([source, target].map((server) => new Promise<void>((resolve, reject) => {
+          if (!server.listening) { resolve(); return; }
+          server.close((error) => error ? reject(error) : resolve());
+        })));
+      }
+    });
+  }
+});
 
 describe('HttpService protocol boundary', () => {
   it('지원하지 않는 프로토콜은 소켓 연결 전에 거절한다', async () => {

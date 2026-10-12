@@ -118,6 +118,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 ### 요청별 Settings 탭
 - timeout은 첫 네트워크 시도부터 DNS·연결/TLS·업로드·응답 본문·리다이렉트·재시도 대기 전체에 하나의 단조 deadline을 적용한다. 0은 무제한이고 만료는 재시도하지 않는다. Body 준비·전/후 스크립트와 러너 항목 사이 대기는 제외하며 각 항목은 독립 예산을 쓴다.
 - follow redirects
+- 헤더 인증은 실제 적용한 헤더명 metadata로 사용자 지정 API Key 이름도 보호한다. 같은 origin에서는 유지하며 교차 origin에서 제거한 뒤 원래 origin으로 돌아와도 재부착하지 않는다.
 - save to history
 - TLS override
 - 안전 기본값이 있는 max response size

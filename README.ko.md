@@ -107,6 +107,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 ### 요청별 Settings 탭
 - 요청별 전체 네트워크 timeout: DNS·연결/TLS·업로드·본문·리다이렉트·재시도와 대기가 하나의 예산을 공유함. `0`은 무제한이며 전/후 스크립트 제한은 별도. 컬렉션 항목마다 새 예산을 적용함.
 - redirect follow 여부
+- Auth에서 설정한 Basic/Bearer 인증과 API Key 헤더는 사용자 지정 API Key 이름까지 같은 origin 리다이렉트에서 유지하고, 다른 origin으로 이동하면 제거합니다. 원래 origin으로 돌아와도 인증을 다시 붙이지 않습니다.
 - history 저장 여부
 - TLS override: `Default`, `Strict`, `Insecure`
 - 대용량 응답 보호를 위한 안전한 기본값이 적용된 최대 응답 크기 제한

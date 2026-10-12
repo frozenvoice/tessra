@@ -17,6 +17,8 @@ export interface HttpSendOptions {
   timeoutSec?: number;
   allowInsecureHttps?: boolean;
   followRedirects?: boolean;
+  // AuthService가 실제 적용한 인증 헤더명이다. 값이나 저장 설정은 포함하지 않는다.
+  credentialHeaderNames?: readonly string[];
   maxResponseSizeBytes?: number;
   stopAfterHeaders?: boolean;
   // 호출자의 자동 재시도도 같은 네트워크 실행 예산을 공유한다. 저장 설정에는 포함하지 않는다.
@@ -60,6 +62,7 @@ export class HttpService {
     const timeoutSec = Math.max(0, options.timeoutSec ?? 0);
     const allowInsecureHttps = options.allowInsecureHttps === true;
     const followRedirects = options.followRedirects === true;
+    const credentialHeaderNames = new Set((options.credentialHeaderNames ?? []).map((name) => name.toLowerCase()));
     const maxResponseSizeBytes = HttpService.normalizeMaxResponseSizeBytes(options.maxResponseSizeBytes);
     const stopAfterHeaders = options.stopAfterHeaders === true;
     const startTime = Date.now();
@@ -171,7 +174,8 @@ export class HttpService {
 
       const isSensitiveRedirectHeader = (headerName: string): boolean => {
         const normalized = headerName.toLowerCase();
-        return normalized === 'authorization'
+        return credentialHeaderNames.has(normalized)
+          || normalized === 'authorization'
           || normalized === 'proxy-authorization'
           || normalized === 'cookie'
           || normalized === 'x-api-key'

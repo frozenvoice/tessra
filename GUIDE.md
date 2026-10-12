@@ -79,7 +79,7 @@ Body: {"env":"{{envName}}"}
 - URL warnings follow the same occurrence-level rule: a Request-local path value is not marked missing, but the same name in query, headers, body, or auth can still be unresolved
 - Path overrides apply only to matching path segments — not query, headers, body, or auth — and they also apply to WebSocket URLs and Collection Runner / cURL / codegen resolution
 - Variable autocomplete works in URL, headers, body, auth, scripts, and other editable fields
-- The environment count is the active environment size; the request-variable count is the number of unique variable names referenced by this request
+- The environment count (`N vars`) is the active environment size; the request-variable count (`Request vars N`) is the number of unique variable names referenced by this request
 - Workspace variables can be preserved in backups, but request resolution still follows the active environment
 - Import `.env` / `.env.*` / `*.env` files with `Tessra: Import Environment` as a one-time local copy; Tessra does not modify the source file or auto-activate the imported environment
 

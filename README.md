@@ -105,6 +105,7 @@ Group request history by date and run collections with status summaries.
 ### Request settings
 - Timeout per logical request, shared across DNS/connection/TLS, upload, response body, redirects, retries and retry waits. `0` is unlimited; pre/post scripts keep their separate limit. Each collection item gets its own budget.
 - Follow redirects
+- Basic/Bearer authentication and API Key headers configured in Auth stay on same-origin redirects and are removed when a redirect crosses origins, including custom API Key names. Returning to the original origin does not reattach them.
 - Save to history toggle
 - Manage workspace default headers from the request toolbar or Headers tab
 - TLS override: `Default`, `Strict`, `Insecure`
