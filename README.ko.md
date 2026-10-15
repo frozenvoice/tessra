@@ -353,7 +353,7 @@ macOS에서는 `Cmd`를 사용합니다.
 
 ## 개발 검증
 
-개발 검증은 `npm run ci`로 로컬 타입 검사·단위 테스트·빌드를 수행하고, [Testing](./docs/testing.md)에 따라 관련 UI 회귀를 선택합니다. 원격 전체 CI는 명시적 수동 요청 또는 릴리스 공개 전에만 [게시 전 검증 절차](./docs/releasing.md)에 따라 실행합니다.
+개발 검증은 `npm run ci`로 로컬 타입 검사·단위 테스트·빌드를 수행하고, [Testing](./docs/testing.md)에 따라 관련 UI 회귀를 선택합니다. 원격 전체 CI dispatch·watch·rerun은 릴리스 공개 전에도 사용자가 해당 Actions 실행을 명시적으로 요청한 경우에만 [게시 전 검증 절차](./docs/releasing.md)에 따라 수행합니다. 릴리스 준비·게시 요청만으로 Actions 실행을 승인받은 것으로 해석하지 않으며, 승인이나 정확한 SHA의 성공 근거가 없으면 공개 게이트 미충족으로 보고합니다.
 
 ## 원칙
 

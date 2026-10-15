@@ -352,7 +352,7 @@ Typical locations:
 
 ## Development
 
-Contributor validation: use `npm run ci` for local typecheck, unit tests, and build; choose relevant UI regressions as described in [Testing](./docs/testing.md). Remote full CI runs only on explicit manual dispatch or before release, following the [release verification procedure](./docs/releasing.md).
+Contributor validation: use `npm run ci` for local typecheck, unit tests, and build; choose relevant UI regressions as described in [Testing](./docs/testing.md). Remote full CI dispatch/watch/rerun requires the user's explicit request for that Actions execution, including before release, following the [release verification procedure](./docs/releasing.md). A release-preparation or publication request alone does not authorize Actions execution; without authorization or exact-SHA success evidence, report the unmet release gate.
 
 ## Principles
 
