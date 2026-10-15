@@ -6,7 +6,7 @@
 
 1. 릴리스 버전, `package.json`/`package-lock.json`, Changelog, README 및 필요한 릴리스 문서까지 최종 커밋에 포함한다. 버전 변경 이전 SHA의 검증을 재사용하지 않는다.
 2. 패키징에 사용할 checkout이 깨끗한지 `git status --porcelain --untracked-files=all`로 확인하고 `git rev-parse HEAD`의 전체 SHA를 기록한다. `.vscodeignore`로 제외되지 않은 untracked/ignored 파일도 VSIX에 섞이지 않도록 archive 목록을 확인한다.
-3. 그 최종 커밋을 원격에 push한 다음, 해당 SHA를 가리키는 브랜치를 선택해 Actions의 **CI → Run workflow**를 명시적으로 실행한다. CLI 예시는 아래와 같다. 일반 개발 중에는 이 절차를 실행하거나 완료를 기다릴 필요가 없다.
+3. 그 최종 커밋을 원격에 push한 다음, 사용자가 해당 Actions 실행을 명시적으로 요청한 경우에만 해당 SHA를 가리키는 브랜치에서 **CI → Run workflow**를 실행한다. 릴리스 준비·게시 요청만으로 dispatch·watch·rerun을 승인받은 것으로 해석하지 않는다. 승인이나 해당 SHA의 성공 근거가 없으면 미충족 게이트를 보고하고 공개를 보류한다. 승인된 CLI 예시는 아래와 같다. 일반 개발 중에는 이 절차를 실행하거나 완료를 기다릴 필요가 없다.
 
 ```bash
 gh workflow run ci.yml --repo frozenvoice/tessra --ref <release-branch>
@@ -14,7 +14,7 @@ gh run list --repo frozenvoice/tessra --workflow ci.yml --event workflow_dispatc
 gh run view <run-id> --repo frozenvoice/tessra --json headSha,event,workflowName,status,conclusion,attempt,jobs,url
 ```
 
-브랜치가 이동했더라도 실제 실행의 `headSha`가 최종 SHA와 같아야 한다. 다르면 최종 소스에 대한 새 전체 검증을 수행한다. SHA가 같다는 이유만으로 로컬 부분 검증이나 다른 workflow의 성공을 전체 검증으로 취급하지 않는다.
+브랜치가 이동했더라도 실제 실행의 `headSha`가 최종 SHA와 같아야 한다. 다르면 최종 소스에 대한 새 전체 검증이 필요하며 해당 Actions 실행에 대한 명시적 사용자 요청 전에는 dispatch·watch·rerun하지 않는다. SHA가 같다는 이유만으로 로컬 부분 검증이나 다른 workflow의 성공을 전체 검증으로 취급하지 않는다.
 
 ## 수동 공개 게이트
 
