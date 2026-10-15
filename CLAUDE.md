@@ -199,7 +199,7 @@ npm run package          # 명시적 VSIX 생성; vscode:prepublish의 build 포
 - 일반 코드 작업은 변경에 필요한 로컬 typecheck·단위 테스트·build 후 완료한다. `npm run ci`의 기존 범위는 유지하며 실행한 검사를 중복 수행하거나 완료 보고에서 별도 검사처럼 중복 계산하지 않는다. `npm test`의 `pretest` 외에 개발 검사가 전체 E2E·VSIX 생성·게시로 이어지는 pre/post lifecycle은 없다. E2E 명령에는 자동 build가 없다.
 - 개발 중에는 `watch`의 최신 빌드를 관련 E2E에 활용하고 최종 build가 필요하면 소스 변경 수렴 후 한 번 실행한다. F5의 build prelaunch task와 `package`의 build lifecycle도 중복 계획에 포함한다.
 - UI/Webview·저장/복원·프로세스/실행 변경에는 관련 단위 회귀와 영향을 받는 실제 VS Code 경로를 선택한다. Runner 변경은 관련 Runner spec을 포함한다. 문서만 수정하면 경로·명령·diff를 확인하고 제품 build/E2E는 요구하지 않는다. 무관한 내부 변경마다 전체 VS Code E2E를 요구하지 않는다.
-- 원격 `.github/workflows/ci.yml`은 `workflow_dispatch`만 사용한다. 일반 push/PR에서 실행하지 않으며 원격 CI 시작·완료 대기·watch·자동 rerun을 일반 작업 완료 조건으로 두지 않는다. 명시적 수동 요청 또는 공개 전 검증은 Linux `unit`, Windows `unit-windows`, Linux `e2e`를 모두 수행한다.
+- 원격 `.github/workflows/ci.yml`은 `AGENTS.md`의 수동 실행 정책을 따른다. 기존·신규 workflow의 시작은 `workflow_dispatch`만 허용하고 `workflow_call`은 명시적 수동 root에서만 도달해야 한다. 자동 이벤트·Git hook·스크립트·에이전트 설정의 자동 dispatch는 금지한다. 일반 작업 완료에는 관련 로컬 검증을 수행하고 원격 CI로 대체하지 않는다. 공개 전에도 실제 dispatch·watch·rerun에는 사용자의 해당 원격 실행에 대한 명시적 요청이 필요하다. 승인된 전체 검증은 Linux `unit`, Windows `unit-windows`, Linux `e2e`를 모두 수행하며 미충족 공개 게이트는 그대로 보고한다.
 - 완료 보고는 실제 로컬 명령·결과, 부분/전체 검증 범위와 미실행 항목을 구분한다. 수동 전체 CI는 Marketplace 게시를 수행하지 않는다. 공개 전 최종 버전 변경을 포함한 동일 SHA의 세 job 성공과 패키징 VSIX 일치는 `docs/releasing.md` 절차로 확인한다.
 
 ## 작업 원칙 메모

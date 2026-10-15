@@ -1,5 +1,12 @@
 # Tessra — 프로젝트 규칙
 
+## GitHub Actions 수동 실행 정책
+
+- GitHub hosted CI는 기본 개발 검증 수단이 아니다. 기존·신규 workflow의 시작 이벤트는 `workflow_dispatch`만 허용한다. `workflow_call`은 명시적 수동 root에서만 도달하는 재사용 workflow에 한정한다.
+- `push`, `pull_request`, `pull_request_target`, `workflow_run`, `repository_dispatch`, `schedule` 등 자동 시작 이벤트와 우회용 경량 job·가짜 성공 job을 추가하지 않는다. Git hook·스크립트·에이전트 설정의 자동 dispatch도 금지한다.
+- 실제 Actions dispatch·watch·rerun은 사용자의 해당 원격 실행에 대한 명시적 요청이 있어야 한다. 릴리스 준비·게시 요청이나 기존 릴리스 게이트만으로 실행을 승인받은 것으로 해석하지 않는다. 승인이나 정확한 SHA의 성공 근거가 없으면 미충족 게이트를 보고하며 공개하지 않는다. 아래 전체 검증·VSIX·최종 SHA 계약은 유지한다.
+- 코드 변경에는 관련 로컬 lint·타입 검사·단위 테스트·빌드·핵심 회귀 검증을 반드시 수행한다. 실패는 원인 분석·수정 후 관련 검사를 재실행한다. 실행하지 못한 검사는 명령과 구체적 이유를 보고하며 원격 CI로 대체하지 않는다.
+
 VS Code 안에서 동작하는 offline-first HTTP/WebSocket API 클라이언트다. 제품 범위는 `PRODUCT.md`, 요청 패널 시각 계약은 `DESIGN.md`를 따른다.
 
 ## 기본 제약과 구조
@@ -50,7 +57,7 @@ VS Code 안에서 동작하는 offline-first HTTP/WebSocket API 클라이언트�
 | VSIX 생성 | `npm run package` (`vscode:prepublish`를 통해 build 포함) |
 
 - 별도 lint 스크립트는 없다. `ci`에 포함된 검사를 별도 완료 단계로 중복 나열하지 않는다. `test:e2e:all`은 stable suite에 포함된 Runner를 다시 실행하므로 기본 검증 명령으로 사용하지 않는다.
-- 일반 작업은 변경에 필요한 로컬 typecheck·단위 테스트·build와 관련 회귀 검증 후 완료 보고한다. 원격 CI dispatch·완료 대기·watch·자동 rerun은 필수 완료 조건이 아니다. push/PR에서는 원격 빌드·테스트를 실행하지 않는다. 원격 전체 검증은 명시적 수동 요청 또는 릴리스 공개 전만 수행한다.
+- 일반 작업은 변경에 필요한 로컬 typecheck·단위 테스트·build와 관련 회귀 검증 후 완료 보고한다. 원격 CI dispatch·완료 대기·watch·자동 rerun은 필수 완료 조건이 아니다. push/PR에서는 원격 빌드·테스트를 실행하지 않는다. 릴리스 공개 전에도 해당 Actions 실행에 대한 사용자의 명시적 요청이 있어야 원격 전체 검증을 수행한다.
 - UI/Webview·상태 저장/복원·프로세스 실행 변경은 관련 단위 테스트와 해당 E2E spec을 선택한다. UI layout 변경은 핵심 UI regression을 포함한다. 무관한 내부 변경마다 전체 VS Code E2E를 요구하지 않으며, E2E를 릴리스 전으로만 미뤄 변경 동작 검증을 생략하지 않는다. 수동 전체 CI의 핵심 UI regression 별도 단계와 전체 E2E 단계는 유지한다. E2E는 격리된 임시 프로필·로컬 fixture를 사용하며 Linux 실행은 `docs/testing.md`의 xvfb 절차를 따른다.
 - 개발 중에는 `npm run watch`의 증분 빌드를 활용한다. 최신 빌드를 재사용하고 같은 검사·전체 빌드를 중복 실행하지 않는다. `npm test`는 `pretest`에서 테스트를 컴파일하며 E2E 명령은 자동 build하지 않는다. `package`만 `vscode:prepublish` build에 연결되며 일반 개발 완료에 VSIX 생성·게시를 요구하지 않는다.
 - 완료 보고는 로컬 부분 검증과 원격 전체 검증을 구분하고 실제 명령·결과·미실행 항목을 명시한다. 로컬 성공을 Windows/Linux 원격 전체 성공으로 표현하지 않는다.

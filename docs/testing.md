@@ -74,7 +74,7 @@ There are no install/prepare hooks that launch the full suite or publishing, and
 
 ### Manual full remote validation
 
-`.github/workflows/ci.yml` runs only through `workflow_dispatch`. Ordinary pushes and pull requests do not start remote build/test CI, and no scheduled or replacement automatic validation is required. An explicit full-validation request or pre-release procedure selects the final source commit and dispatches CI for that state.
+`.github/workflows/ci.yml` runs only through `workflow_dispatch`. Ordinary pushes and pull requests do not start remote build/test CI, and no scheduled or replacement automatic validation is allowed. Dispatch/watch/rerun requires the user's explicit request for that Actions execution, including before release; a release-preparation or publication request alone is insufficient. Select the final source commit only after that authorization. Required local checks remain mandatory, and missing authorization or exact-SHA success evidence leaves the release gate unmet.
 
 Every manual full run preserves all three jobs: Linux `unit` (typecheck, unit tests, build), Windows `unit-windows` (`npm test`), and Linux `e2e` (`test:e2e:ui-regressions` followed by `test:e2e:ci` under xvfb). All jobs use Node 22 and npm download caching; E2E pins VS Code `1.99.3` and retains failure artifacts. Concurrency cancels older manual runs for the same ref; a cancelled or incomplete run is not a successful full validation.
 
