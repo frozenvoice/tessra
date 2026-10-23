@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import * as crypto from 'crypto';
 import * as net from 'net';
 import * as tls from 'tls';
+import { validateHeaderName, validateHeaderValue } from 'http';
 import { URL } from 'url';
 import { KeyValue } from '../models/types';
 
@@ -34,6 +35,8 @@ export declare interface WebSocketConnection {
 }
 
 export class WebSocketConnection extends EventEmitter {
+  static readonly MAX_HANDSHAKE_SIZE_BYTES = 16 * 1024;
+  static readonly DEFAULT_HANDSHAKE_TIMEOUT_MS = 30_000;
   static readonly DEFAULT_MAX_FRAME_SIZE_BYTES = 1024 * 1024;
   static readonly DEFAULT_MAX_MESSAGE_SIZE_BYTES = 10 * 1024 * 1024;
   static readonly MAX_CONFIGURABLE_SIZE_BYTES = 50 * 1024 * 1024;
@@ -45,6 +48,7 @@ export class WebSocketConnection extends EventEmitter {
   private fragmentOpcode: number | null = null;
   private fragmentSize = 0;
   private lastPongAt: number | undefined;
+  private handshakeTimer: NodeJS.Timeout | undefined;
 
   constructor(
     private readonly socket: net.Socket | tls.TLSSocket,
@@ -74,6 +78,7 @@ export class WebSocketConnection extends EventEmitter {
     if (this.closed) { return; }
     if (!this.handshakeComplete) {
       this.closed = true;
+      this.releaseBuffers();
       this.socket.destroy();
       return;
     }
@@ -86,6 +91,11 @@ export class WebSocketConnection extends EventEmitter {
   }
 
   private bindSocket(): void {
+    // 수신이 계속되어도 upgrade 전체 대기 시간에는 상한이 있다.
+    this.handshakeTimer = setTimeout(() => {
+      this.fail(new Error('WebSocket handshake timed out'));
+    }, this.timeoutMs > 0 ? this.timeoutMs : WebSocketConnection.DEFAULT_HANDSHAKE_TIMEOUT_MS);
+    this.handshakeTimer.unref();
     if (this.timeoutMs > 0) {
       this.socket.setTimeout(this.timeoutMs, () => {
         this.fail(new Error('WebSocket connection timed out'));
@@ -93,9 +103,25 @@ export class WebSocketConnection extends EventEmitter {
     }
 
     this.socket.on('data', (chunk) => {
-      this.buffer = Buffer.concat([this.buffer, chunk]);
+      if (this.closed) { return; }
       if (!this.handshakeComplete) {
+        // 거대한 단일 chunk도 헤더 확인 전에 전부 복사하지 않는다.
+        const headerBytes = Math.min(chunk.length, WebSocketConnection.MAX_HANDSHAKE_SIZE_BYTES - this.buffer.length);
+        this.buffer = Buffer.concat([this.buffer, chunk.subarray(0, headerBytes)]);
         this.consumeHandshake();
+        if (this.closed) { return; }
+        if (!this.handshakeComplete) {
+          if (this.buffer.length >= WebSocketConnection.MAX_HANDSHAKE_SIZE_BYTES) {
+            this.fail(new Error('WebSocket handshake headers exceeded 16 KiB'));
+          }
+          return;
+        }
+        // 같은 chunk의 upgrade 이후 프레임에는 별도의 frame/message 상한을 적용한다.
+        if (headerBytes < chunk.length) {
+          this.buffer = Buffer.concat([this.buffer, chunk.subarray(headerBytes)]);
+        }
+      } else {
+        this.buffer = Buffer.concat([this.buffer, chunk]);
       }
       if (this.handshakeComplete) {
         this.consumeFrames();
@@ -106,6 +132,7 @@ export class WebSocketConnection extends EventEmitter {
     this.socket.on('close', (hadError) => {
       if (this.closed) { return; }
       this.closed = true;
+      this.releaseBuffers();
       this.emit('close', {
         code: 1006,
         reason: hadError ? 'Socket closed with error' : 'Abnormal Closure',
@@ -140,6 +167,8 @@ export class WebSocketConnection extends EventEmitter {
     }
 
     this.handshakeComplete = true;
+    clearTimeout(this.handshakeTimer);
+    this.handshakeTimer = undefined;
     this.socket.setTimeout(0);
     this.emit('open');
   }
@@ -195,6 +224,7 @@ export class WebSocketConnection extends EventEmitter {
       const reason = payload.length > 2 ? payload.subarray(2).toString('utf-8') : '';
       if (!this.closed) {
         this.closed = true;
+        this.releaseBuffers();
         this.emit('close', { code, reason, wasClean: true });
       }
       this.socket.end();
@@ -295,11 +325,20 @@ export class WebSocketConnection extends EventEmitter {
   }
 
   private fail(error: Error): void {
-    if (!this.closed) {
-      this.emit('error', error);
-    }
+    if (this.closed) { return; }
     this.closed = true;
+    this.releaseBuffers();
     this.socket.destroy();
+    this.emit('error', error);
+  }
+
+  private releaseBuffers(): void {
+    clearTimeout(this.handshakeTimer);
+    this.handshakeTimer = undefined;
+    this.buffer = Buffer.alloc(0);
+    this.fragments = [];
+    this.fragmentOpcode = null;
+    this.fragmentSize = 0;
   }
 }
 
@@ -314,6 +353,8 @@ export class WebSocketService {
     const port = Number(url.port || (isSecure ? 443 : 80));
     const key = crypto.randomBytes(16).toString('base64');
     const expectedAccept = crypto.createHash('sha1').update(key + WS_GUID).digest('base64');
+    // 변수 치환이 끝난 최종 헤더를 transport 생성 전에 검증한다.
+    const requestHeaders = this.buildHandshakeHeaders(url, key, headers);
     const socket = isSecure
       ? tls.connect({
         host: url.hostname,
@@ -336,9 +377,8 @@ export class WebSocketService {
       )
     );
 
-    const requestHeaders = this.buildHandshakeHeaders(url, key, headers);
     socket.once(isSecure ? 'secureConnect' : 'connect', () => {
-      socket.write(requestHeaders);
+      if (!socket.destroyed) { socket.write(requestHeaders); }
     });
 
     return connection;
@@ -366,6 +406,8 @@ export class WebSocketService {
     ]);
     for (const header of headers) {
       if (header.enabled === false || !header.key) { continue; }
+      validateHeaderName(header.key);
+      validateHeaderValue(header.key, header.value);
       if (reserved.has(header.key.toLowerCase())) { continue; }
       lines.push(`${header.key}: ${header.value}`);
     }

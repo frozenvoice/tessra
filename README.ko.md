@@ -100,6 +100,7 @@ Tessra는 계정, 동기화, 요금제 제약 없이 VS Code 안에서 빠르게
 - 기본 액션 버튼으로 연결 / 연결 해제, Body 탭은 전송할 텍스트 메시지 작성기로 사용
 - 전송 / 수신 / close 진단 메시지를 WebSocket 로그로 표시하고, 수신한 binary frame은 base64로 표시
 - WebSocket frame/message size limit으로 과도하게 큰 text/binary 메시지로부터 확장을 보호
+- Upgrade 응답 헤더는 16KiB로 제한하며 전체 handshake에는 요청 timeout 또는 기본 30초 상한을 적용. 잘못된 요청 헤더 이름·제어 문자는 socket 생성 전에 거절
 - 요청별 protocol-level ping keepalive 옵션 제공. 기본값은 꺼짐
 - 공개 echo 스모크 테스트에는 `wss://ws.ifelse.io`를 권장
 - 공개 echo 서버는 가용성이나 idle timeout 정책이 바뀔 수 있음. `1006`으로 닫히면 다른 endpoint를 시도하거나 서버가 ping/pong을 지원할 때 keepalive를 켜서 확인

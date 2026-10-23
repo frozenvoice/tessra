@@ -98,6 +98,7 @@ Group request history by date and run collections with status summaries.
 - Connect and disconnect from the primary action; the Body tab acts as the outgoing text message composer
 - Inbound, outbound, and close diagnostic messages render in a dedicated WebSocket log, with inbound binary frames shown as base64
 - WebSocket frame/message size limits protect the extension from oversized text or binary messages
+- Upgrade response headers are limited to 16 KiB, with a total handshake deadline (request timeout, or 30 seconds by default). Invalid request header names and control characters are rejected before opening a socket.
 - Optional protocol-level ping keepalive can run at a per-request interval; it is off by default
 - For a public echo smoke test, try `wss://ws.ifelse.io`
 - Public echo servers can change availability or idle timeout policies; if one closes with code `1006`, try another endpoint or enable keepalive when the server supports ping/pong

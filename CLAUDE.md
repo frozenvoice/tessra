@@ -132,6 +132,7 @@ Tessra는 VS Code 안에서 동작하는 local-first API 클라이언트다.
 - handshake에 headers, query params, auth, default headers, 환경 변수, TLS override 적용
 - Body 탭을 전송 메시지 작성기로 사용
 - frame/message size limit 적용
+- upgrade 응답 헤더 16KiB 및 전체 handshake deadline(요청 timeout 또는 기본 30초), 최종 요청 헤더 이름·값의 transport 생성 전 검증 유지
 - 기본 OFF인 protocol-level ping keepalive 옵션 제공
 - 수신 / 전송 / close 진단 메시지 로그 표시
 - 수신 binary frame은 base64로 표시
