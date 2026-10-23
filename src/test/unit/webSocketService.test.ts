@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as crypto from 'crypto';
 import * as net from 'net';
-import { WebSocketCloseInfo, WebSocketMessage, WebSocketService } from '../../services/WebSocketService';
+import { WebSocketCloseInfo, WebSocketConnection, WebSocketMessage, WebSocketService } from '../../services/WebSocketService';
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
@@ -73,6 +73,77 @@ function closeServer(server: net.Server): Promise<void> {
 }
 
 describe('WebSocketService', () => {
+  it('거대한 미완성 upgrade 응답을 거절하고 이후 수신도 무시한다', () => {
+    const socket = new net.Socket();
+    const connection = new WebSocketConnection(socket, 'accept', 1000);
+    const errors: Error[] = [];
+    connection.on('error', error => errors.push(error));
+    socket.emit('data', Buffer.alloc(4 * 1024 * 1024, 'a'));
+    socket.emit('data', Buffer.alloc(1024, 'a'));
+    assert.strictEqual(socket.destroyed, true);
+    assert.strictEqual(errors.length, 1);
+    assert.match(errors[0].message, /handshake headers exceeded/);
+  });
+
+  it('헤더가 여러 chunk에 나뉘어도 upgrade 상한을 적용한다', () => {
+    const socket = new net.Socket();
+    const connection = new WebSocketConnection(socket, 'accept', 1000);
+    let error: Error | undefined;
+    connection.on('error', value => { error = value; });
+    socket.emit('data', Buffer.alloc(10 * 1024, 'a'));
+    assert.strictEqual(socket.destroyed, false);
+    socket.emit('data', Buffer.alloc(7 * 1024, 'a'));
+    assert.strictEqual(socket.destroyed, true);
+    assert.match(error!.message, /handshake headers exceeded/);
+  });
+
+  it('upgrade와 같은 chunk에 온 정상 대형 프레임은 헤더 상한으로 거절하지 않는다', () => {
+    const socket = new net.Socket();
+    const connection = new WebSocketConnection(socket, 'accept', 1000);
+    let opened = false;
+    let message: WebSocketMessage | undefined;
+    connection.on('open', () => { opened = true; });
+    connection.on('message', value => { message = value; });
+    connection.on('error', error => { throw error; });
+    const payload = Buffer.alloc(32 * 1024, 'a');
+    socket.emit('data', Buffer.concat([
+      Buffer.from('HTTP/1.1 101 Switching Protocols\r\nSec-WebSocket-Accept: accept\r\n\r\n'),
+      createServerFrame(0x1, payload),
+    ]));
+    assert.strictEqual(opened, true);
+    assert.strictEqual(message?.data, payload.toString());
+    connection.close();
+    socket.destroy();
+  });
+
+  it('응답 조각이 계속 와도 전체 handshake deadline에 연결을 닫는다', async () => {
+    const socket = new net.Socket();
+    const connection = new WebSocketConnection(socket, 'accept', 50);
+    const drip = setInterval(() => socket.emit('data', Buffer.from('a')), 5);
+    try {
+      const error = await new Promise<Error>((resolve, reject) => {
+        const guard = setTimeout(() => reject(new Error('handshake deadline did not fire')), 1000);
+        connection.on('error', value => { clearTimeout(guard); resolve(value); });
+      });
+      assert.match(error.message, /handshake timed out/);
+      assert.strictEqual(socket.destroyed, true);
+    } finally {
+      clearInterval(drip);
+      socket.destroy();
+    }
+  });
+
+  it('최종 요청 헤더의 줄바꿈·잘못된 이름을 socket 생성 전에 거절한다', () => {
+    for (const header of [
+      { key: 'X-Test', value: 'ok\r\nX-Injected: yes' },
+      { key: 'Bad\r\nName', value: 'yes' },
+      { key: 'Bad Name', value: 'yes' },
+      { key: 'X-Test', value: 'bad\0value' },
+    ]) {
+      assert.throws(() => new WebSocketService().connect('ws://127.0.0.1:9/', [{ ...header, enabled: true }]), /header|token|Invalid/i);
+    }
+  });
+
   it('performs a WebSocket handshake and exchanges text frames', async () => {
     let handshake = '';
     let receivedText = '';
