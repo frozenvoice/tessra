@@ -22,6 +22,17 @@ function rmrf(target: string): void {
   fs.rmSync(target, { recursive: true, force: true });
 }
 
+// 진행 중 상태 캡처용. Windows에서 page.screenshot(CDP) 이후 webview로 마우스 입력이
+// 전달되지 않아 이어지는 Stop 등 클릭이 조용히 유실되므로 Electron capturePage를 사용한다.
+export async function captureWindow(app: ElectronApplication, filePath: string): Promise<void> {
+  const png = await app.evaluate(async ({ BrowserWindow }) => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows().find((item: { isVisible(): boolean }) => item.isVisible());
+    if (!win) { throw new Error('No visible VS Code window to capture'); }
+    return (await win.webContents.capturePage()).toPNG().toString('base64');
+  });
+  fs.writeFileSync(filePath, Buffer.from(png, 'base64'));
+}
+
 export async function launchTessraHarness(testId: string, options: { userSettings?: Record<string, unknown> } = {}): Promise<TessraHarness> {
   const vsixPath = process.env.TESSRA_E2E_VSIX ? path.resolve(process.env.TESSRA_E2E_VSIX) : undefined;
   if (vsixPath && (!vsixPath.toLowerCase().endsWith('.vsix') || !fs.statSync(vsixPath).isFile())) {

@@ -3,6 +3,7 @@ import * as path from 'path';
 import type { FrameLocator, Page } from '@playwright/test';
 import { test, expect } from '../fixtures';
 import { openNewRequestPanel, fillUrl, openHeadersTab, clickSend, waitForResponseStatus, runCommand } from '../helpers/webview';
+import { captureWindow } from '../helpers/vscode';
 
 const SECRET = 'synthetic-secret-ui-9348-LOCAL-FIXTURE';
 const REPLACEMENT = 'synthetic-secret-rotated-9348-LOCAL-FIXTURE';
@@ -147,6 +148,6 @@ test.describe('E2E #29 Explicit secret variables', () => {
     await expect(frame.locator('[data-testid="environment-add-variable"]')).toBeEnabled();
     const dir = path.resolve('e2e/.artifacts/secret-variables');
     fs.mkdirSync(dir, { recursive: true });
-    await tessra.page.screenshot({ path: path.join(dir, 'workspace-variables.png') });
+    await captureWindow(tessra.app, path.join(dir, 'workspace-variables.png'));
   });
 });
