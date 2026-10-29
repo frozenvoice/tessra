@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures';
 import { openNewRequestPanel, openParamsTab, openHeadersTab, fillUrl, clickSend, waitForResponseStatus, runCommand } from '../helpers/webview';
+import { captureWindow } from '../helpers/vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -17,14 +18,14 @@ test.describe('E2E #28 UI clarity', () => {
     await expect(frame.locator('[data-testid="request-params"] .kv-row')).toHaveCount(0);
     await frame.locator('.js-add-param').click();
     await expect(frame.locator('[data-testid="request-params"] .kv-row')).toHaveCount(1);
-    await tessra.page.screenshot({ path: path.join(dir, phase + '-params.png') });
+    await captureWindow(tessra.app, path.join(dir, phase + '-params.png'));
     await openHeadersTab(frame);
     await frame.locator('.js-add-header').click();
-    await tessra.page.screenshot({ path: path.join(dir, phase + '-headers.png') });
+    await captureWindow(tessra.app, path.join(dir, phase + '-headers.png'));
     await clickSend(frame);
     await waitForResponseStatus(frame, '200');
     await expect(frame.locator('[data-testid="response-body-tree"]')).toBeVisible();
-    await tessra.page.screenshot({ path: path.join(dir, phase + '-json-sidebar.png') });
+    await captureWindow(tessra.app, path.join(dir, phase + '-json-sidebar.png'));
     if (phase === 'before') return;
     await expect(frame.locator('.status-strip-seg[data-meta="settings:save-history"]')).toContainText('Record history');
     await expect(frame.locator('[data-testid="status-variable-usage"]')).toContainText('Request vars');
@@ -78,7 +79,7 @@ test.describe('E2E #28 UI clarity', () => {
     await expect(frame.getByRole('checkbox', { name: 'Enable row' }).first()).toBeVisible();
     await expect(frame.locator('[data-testid="request-params"] input').nth(1)).toHaveAttribute('aria-label', 'Key');
     await expect(frame.locator('[data-testid="request-params"] .js-kv-value')).toHaveAttribute('aria-label', 'Value');
-    await tessra.page.screenshot({ path: path.join(dir, phase + '-narrow.png') });
+    await captureWindow(tessra.app, path.join(dir, phase + '-narrow.png'));
     await openHeadersTab(frame);
     await expect(frame.locator('[data-testid="headers-column-headings"]')).toContainText('Value');
     await frame.locator('.js-open-default-headers').first().click();
@@ -112,7 +113,7 @@ test.describe('E2E #28 UI clarity', () => {
       });
       expect(manageGeometry.right).toBeLessThanOrEqual(manageGeometry.width);
       expect(manageGeometry.nowrap).toBe('nowrap');
-      await tessra.page.screenshot({ path: path.join(dir, phase + '-' + (locale.option.startsWith('Korean') ? 'ko' : 'ja') + '.png') });
+      await captureWindow(tessra.app, path.join(dir, phase + '-' + (locale.option.startsWith('Korean') ? 'ko' : 'ja') + '.png'));
     }
   });
 });

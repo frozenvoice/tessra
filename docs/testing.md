@@ -200,6 +200,8 @@ Prefer `data-testid` (locale-independent). Do not bind E2E to nth-child CSS or E
 
 Core ids include: `request-url`, `send-request`, `stop-request`, `status-environment`, `status-variable-usage`, `environment-disclosure`, `variable-usage-disclosure`, `request-body-editor`, `body-type`, `response-status`, `response-pin`, `response-compare`, `response-overflow`, `runner-selected-count`, `runner-start`, `runner-stop`.
 
+Capture mid-test evidence with `captureWindow(tessra.app, file)` (Electron `capturePage`), not `page.screenshot()`. On Windows, a CDP `page.screenshot()` can stop later mouse input from reaching the webview while Playwright still reports the click as successful, so a following Stop or button click is silently lost. Failure diagnostics may still use `page.screenshot()` because nothing interacts afterwards. `runCommand` reopens the Command Palette (up to 3 attempts) when a late webview focus closes it before the command is typed.
+
 ## Failure diagnostics
 
 On failure, artifacts land in `e2e/.artifacts/` (screenshot + meta including fixture request log). CI uploads that folder. Runner context-menu failures also write a scoped diagnostics JSON (visible menu text, focus summary, webview iframe counts) — no secret dumps.
