@@ -1,16 +1,34 @@
 # Changelog
 
-## Unreleased
+## 1.2.8
 
 ### Fixed
 
 - Custom header-based API Key credentials are removed on cross-origin HTTP redirects in both request tabs and Collection Runner. Same-origin redirects retain them, and a later return to the original origin does not reattach them.
+- WebSocket handshakes limit upgrade response headers to 16 KiB and apply one total handshake deadline (the request timeout, or 30 seconds when the timeout is `0`), so a server that never finishes or keeps dripping its upgrade response cannot hold the connection open. Final request header names and values are validated before a socket is opened; invalid names and control characters are rejected.
+
+### Reliability
+
+- Mid-test UI E2E captures use Electron `capturePage` instead of a CDP screenshot, which on Windows could silently drop the next webview click (such as SSE Stop). The Command Palette helper reopens the palette when a late webview focus closes it.
+- Update development tools (esbuild 0.28, mocha 12, Playwright 1.64). Extension bundles are rebuilt with the new esbuild; no runtime dependency changes.
 
 ## 1.2.7
 
 ### Docs
 
 - The README demo is a new 20-second cut recorded in VS Code: send a request, switch environments, run a collection and rerun only the failed request, and watch server-sent events stream in.
+
+### Also included (listed after release)
+
+The 1.2.7 entry originally said it had no extension code changes. The 1.2.7 package was built from a tree that already contained these changes since 1.2.6:
+
+- Incremental `text/event-stream` (SSE) responses with Events/Raw views, Receiving/Completed/Aborted/Timeout/Error states, retained partial data, and explicit line, buffer, event, and Raw limits. No automatic reconnect or resend after a stream starts. See [SSE](docs/sse.md).
+- Explicit secret variables: Protect, Set value, temporary Reveal, and Delete for environment and workspace variables, with confirmed values in VS Code SecretStorage and reference-only exports. See [Secret variables](docs/secret-variables.md).
+- Text response charset decoding (including EUC-KR and Shift_JIS) with translated warnings and the original bytes kept for unsupported charsets or invalid bytes. See [HTTP response encoding](docs/http-response-encoding.md).
+- One total network deadline per request across DNS, connection/TLS, upload, response body, redirects, retries, and retry waits.
+- History reuses validated snapshots and counts, and no longer pairs freshly saved in-memory content with a file replaced externally right after the save.
+- HTML Preview sanitization moved to a type-checked browser module with stricter hostile-HTML handling.
+- Clearer request panel wording and table, JSON, and sidebar readability.
 
 ## 1.2.6
 

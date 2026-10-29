@@ -67,6 +67,18 @@ Use the local fixture server in an isolated VS Code host; do not use paid stream
 - With retry enabled, serve a stream that starts with HTTP 500 or POST and then fails. Confirm a single request and no automatic resend after stream start.
 - Repeat ordinary HTTP charset/binary, History cache, TLS and redirect credential regressions. Proxy behavior is only checked when reproducible with a local fixture and isolated host.
 
+## 1.2.8 Smoke (~8 min)
+
+Cross-origin API Key redirects and WebSocket handshake limits. Run this pass on the packaged VSIX before Marketplace publish, with local fixtures and synthetic keys only.
+
+- Install the 1.2.8 VSIX and send a normal GET; confirm status, headers, and body render as before.
+- Set Auth → API Key (header) with a custom name such as `X-Team-Key` and enable Settings → Follow redirects. Redirect to the same origin and confirm the echo endpoint receives the header; redirect from `localhost` to `127.0.0.1` (or another port) and confirm it does not. In a chain that returns to the original origin, confirm the header is not sent again.
+- Repeat the cross-origin case from Collection Runner and confirm the same result.
+- Connect to a local WebSocket echo server, send a text message, and disconnect; confirm the log shows send, receive, and close as before.
+- Against a local server that never finishes its upgrade response, connect with timeout `0` and confirm the handshake fails after about 30 seconds; with timeout `3`, confirm it fails after about 3 seconds. Set a WebSocket header value to a `{{variable}}` whose value contains a line break, and confirm the connection fails before reaching the server.
+- Receive a slow SSE stream, press Stop, and confirm the state shows Stopped with the partial response retained and the fixture socket closed.
+- Inspect the VSIX contents (`npx vsce ls`) and confirm no `.kilo`, `demo`, or test output is included.
+
 ## 1.2.7 Smoke (~3 min)
 
 README demo media only. Run this pass on the packaged VSIX before Marketplace publish.
