@@ -81,6 +81,8 @@ export async function launchTessraHarness(testId: string, options: { userSetting
     '--locale=en',
     '--new-window',
     '--window-size=1600,1000',
+    // xvfb CI에는 OS 키체인이 없어 SecretStorage 쓰기가 실패한다. 격리 프로필의 synthetic 값만 쓰므로 basic 저장소를 쓴다.
+    ...(process.platform === 'linux' ? ['--password-store=basic'] : []),
   ];
 
   const app = await electron.launch({

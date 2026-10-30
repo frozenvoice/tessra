@@ -77,6 +77,7 @@ Cross-origin API Key redirects and WebSocket handshake limits. Run this pass on 
 - Connect to a local WebSocket echo server, send a text message, and disconnect; confirm the log shows send, receive, and close as before.
 - Against a local server that never finishes its upgrade response, connect with timeout `0` and confirm the handshake fails after about 30 seconds; with timeout `3`, confirm it fails after about 3 seconds. Set a WebSocket header value to a `{{variable}}` whose value contains a line break, and confirm the connection fails before reaching the server.
 - Receive a slow SSE stream, press Stop, and confirm the state shows Stopped with the partial response retained and the fixture socket closed.
+- Edit an environment variable value and move focus away; confirm the "Auto-saved" cue stays visible for about two seconds. Switch to another environment right after a save and confirm the cue clears.
 - Inspect the VSIX contents (`npx vsce ls`) and confirm no `.kilo`, `demo`, or test output is included.
 
 ## 1.2.7 Smoke (~3 min)

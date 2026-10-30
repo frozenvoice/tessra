@@ -171,7 +171,10 @@ function hideEnvironmentEditor() {
 function setEnvironmentEditorData(envId, envName, variables, scopeToken, scope) {
   flushPendingEnvironmentSave();
   clearSecretReveals();
-  envEditorScope = scope === 'workspace' ? 'workspace' : 'environment';
+  var nextScope = scope === 'workspace' ? 'workspace' : 'environment';
+  // 저장 직후 같은 대상의 갱신이면 방금 켠 Auto-saved 표시를 지우지 않는다.
+  var sameEditorTarget = envEditorScope === nextScope && editingEnvId === (envId || null);
+  envEditorScope = nextScope;
   envEditorScopeToken = scopeToken || null;
   editingEnvId = envId || null;
   envEditorEnvName = envName || null;
@@ -182,7 +185,10 @@ function setEnvironmentEditorData(envId, envName, variables, scopeToken, scope) 
   var workspaceNote = document.getElementById('workspaceVariablesNote');
   if (workspaceNote) workspaceNote.classList.toggle('hidden', envEditorScope !== 'workspace');
   envDirtyDot?.classList.remove('show');
-  envAutoSaved?.classList.remove('show');
+  if (!sameEditorTarget) {
+    clearTimeout(envAutoSavedTimer);
+    envAutoSaved?.classList.remove('show');
+  }
   refreshEnvironmentEditorSummary();
   syncEnvironmentEditorControls();
   if (!canEditEnvironmentVariables()) {

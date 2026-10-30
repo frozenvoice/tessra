@@ -6,9 +6,11 @@
 
 - Custom header-based API Key credentials are removed on cross-origin HTTP redirects in both request tabs and Collection Runner. Same-origin redirects retain them, and a later return to the original origin does not reattach them.
 - WebSocket handshakes limit upgrade response headers to 16 KiB and apply one total handshake deadline (the request timeout, or 30 seconds when the timeout is `0`), so a server that never finishes or keeps dripping its upgrade response cannot hold the connection open. Final request header names and values are validated before a socket is opened; invalid names and control characters are rejected.
+- The environment editor's "Auto-saved" cue stays visible for its full two seconds after a save. Since 1.2.7 the editor refresh that follows each save cleared it almost immediately; switching to another environment or to Workspace variables still clears it.
 
 ### Reliability
 
+- Linux UI E2E launches VS Code with `--password-store=basic`, because xvfb hosts have no OS keyring for SecretStorage. Manual CI now uploads E2E failure artifacts; `e2e/.artifacts/` starts with a dot and was skipped by the upload step's default.
 - Mid-test UI E2E captures use Electron `capturePage` instead of a CDP screenshot, which on Windows could silently drop the next webview click (such as SSE Stop). The Command Palette helper reopens the palette when a late webview focus closes it.
 - Update development tools (esbuild 0.28, mocha 12, Playwright 1.64). Extension bundles are rebuilt with the new esbuild; no runtime dependency changes.
 
