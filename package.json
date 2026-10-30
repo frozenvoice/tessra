@@ -1,0 +1,544 @@
+{
+  "name": "tessra",
+  "displayName": "Tessra - API Client",
+  "description": "A streamlined, offline-first API testing tool for VS Code. No login, no cloud, no limits.",
+  "version": "1.2.8",
+  "publisher": "frozenvoice",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/frozenvoice/tessra.git"
+  },
+  "homepage": "https://github.com/frozenvoice/tessra#readme",
+  "bugs": {
+    "url": "https://github.com/frozenvoice/tessra/issues"
+  },
+  "icon": "images/icon.png",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Testing",
+    "Other"
+  ],
+  "keywords": [
+    "rest",
+    "api",
+    "http",
+    "https",
+    "rest-client",
+    "api-client",
+    "request",
+    "curl",
+    "postman",
+    "offline",
+    "local-first",
+    "collection",
+    "environment",
+    "api-testing"
+  ],
+  "activationEvents": [
+    "onWebviewPanel:tessra.requestPanel"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "%displayName%",
+      "properties": {
+        "tessra.historyMaxItems": {
+          "type": "number",
+          "default": 500,
+          "minimum": 50,
+          "maximum": 5000,
+          "description": "%configuration.historyMaxItems.description%"
+        },
+        "tessra.allowInsecureCertificates": {
+          "type": "boolean",
+          "default": false,
+          "description": "%configuration.allowInsecureCertificates.description%"
+        },
+        "tessra.scriptTimeoutMs": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 100,
+          "maximum": 30000,
+          "description": "%configuration.scriptTimeoutMs.description%"
+        },
+        "tessra.displayLanguage": {
+          "type": "string",
+          "scope": "window",
+          "default": "en",
+          "enum": [
+            "en",
+            "ko",
+            "ja"
+          ],
+          "enumItemLabels": [
+            "%configuration.displayLanguage.enumLabel.en%",
+            "%configuration.displayLanguage.enumLabel.ko%",
+            "%configuration.displayLanguage.enumLabel.ja%"
+          ],
+          "enumDescriptions": [
+            "%configuration.displayLanguage.enumDescription.en%",
+            "%configuration.displayLanguage.enumDescription.ko%",
+            "%configuration.displayLanguage.enumDescription.ja%"
+          ],
+          "description": "%configuration.displayLanguage.description%"
+        },
+        "tessra.requestPanelTheme": {
+          "type": "string",
+          "scope": "window",
+          "default": "default",
+          "enum": [
+            "default",
+            "minimal-cool",
+            "product",
+            "bold-color"
+          ],
+          "enumItemLabels": [
+            "%configuration.requestPanelTheme.enumLabel.default%",
+            "%configuration.requestPanelTheme.enumLabel.minimalCool%",
+            "%configuration.requestPanelTheme.enumLabel.product%",
+            "%configuration.requestPanelTheme.enumLabel.boldColor%"
+          ],
+          "enumDescriptions": [
+            "%configuration.requestPanelTheme.enumDescription.default%",
+            "%configuration.requestPanelTheme.enumDescription.minimalCool%",
+            "%configuration.requestPanelTheme.enumDescription.product%",
+            "%configuration.requestPanelTheme.enumDescription.boldColor%"
+          ],
+          "description": "%configuration.requestPanelTheme.description%"
+        },
+        "tessra.workspaceProfile": {
+          "type": "string",
+          "scope": "window",
+          "default": "default",
+          "description": "%configuration.workspaceProfile.description%"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "tessra.newRequest",
+        "title": "%command.newRequest%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "tessra.createCollection",
+        "title": "%command.createCollection%",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "tessra.createFolder",
+        "title": "%command.createFolder%",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "tessra.rename",
+        "title": "%command.rename%"
+      },
+      {
+        "command": "tessra.delete",
+        "title": "%command.delete%"
+      },
+      {
+        "command": "tessra.duplicateRequest",
+        "title": "%command.duplicate%"
+      },
+      {
+        "command": "tessra.saveRequestAs",
+        "title": "%command.saveAs%"
+      },
+      {
+        "command": "tessra.clearHistory",
+        "title": "%command.clearHistory%",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "tessra.openHistorySettings",
+        "title": "%command.openHistorySettings%",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "tessra.pinHistory",
+        "title": "%command.pin%",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "tessra.unpinHistory",
+        "title": "%command.unpin%",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "tessra.deletePinnedHistory",
+        "title": "%command.deletePinned%",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "tessra.createEnvironment",
+        "title": "%command.createEnvironment%",
+        "icon": "$(add)"
+      },
+      {
+        "command": "tessra.renameEnvironment",
+        "title": "%command.rename%"
+      },
+      {
+        "command": "tessra.deleteEnvironment",
+        "title": "%command.delete%"
+      },
+      {
+        "command": "tessra.editEnvironment",
+        "title": "%command.editVariables%"
+      },
+      {
+        "command": "tessra.setActiveEnvironment",
+        "title": "%command.setActive%",
+        "icon": "$(pass-filled)"
+      },
+      {
+        "command": "tessra.deactivateEnvironment",
+        "title": "%command.deactivate%",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "tessra.switchEnvironment",
+        "title": "%command.switchEnvironment%"
+      },
+      {
+        "command": "tessra.changeDisplayLanguage",
+        "title": "%command.changeDisplayLanguage%"
+      },
+      {
+        "command": "tessra.changeRequestPanelTheme",
+        "title": "%command.changeRequestPanelTheme%"
+      },
+      {
+        "command": "tessra.editDefaultHeaders",
+        "title": "%command.defaultHeaders%",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "tessra.editWorkspaceVariables",
+        "title": "%command.editWorkspaceVariables%"
+      },
+      {
+        "command": "tessra.importData",
+        "title": "%command.importData%",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "tessra.importCurl",
+        "title": "%command.importCurl%",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "tessra.importCollection",
+        "title": "%command.importCollection%",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "tessra.importOpenApi",
+        "title": "%command.importOpenApi%",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "tessra.importEnvironment",
+        "title": "%command.importEnvironment%",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "tessra.exportCollection",
+        "title": "%command.exportCollection%",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "tessra.exportEnvironment",
+        "title": "%command.exportEnvironment%",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "tessra.exportWorkspaceBackup",
+        "title": "%command.exportWorkspaceBackup%",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "tessra.importWorkspaceBackup",
+        "title": "%command.importWorkspaceBackup%",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "tessra.collapseAll",
+        "title": "%command.collapseAll%",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "tessra.filterCollections",
+        "title": "%command.filterCollections%",
+        "icon": "$(search)"
+      },
+      {
+        "command": "tessra.clearCollectionFilter",
+        "title": "%command.clearFilter%",
+        "icon": "$(close)"
+      },
+      {
+        "command": "tessra.filterHistory",
+        "title": "%command.filterHistory%",
+        "icon": "$(search)"
+      },
+      {
+        "command": "tessra.clearHistoryFilter",
+        "title": "%command.clearFilter%",
+        "icon": "$(close)"
+      },
+      {
+        "command": "tessra.copyAsCurl",
+        "title": "%command.copyAsCurl%"
+      },
+      {
+        "command": "tessra.runCollection",
+        "title": "%command.runCollection%",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "tessra.openGuide",
+        "title": "%command.openGuide%",
+        "icon": "$(book)"
+      },
+      {
+        "command": "tessra.changeWorkspaceProfile",
+        "title": "%command.changeWorkspaceProfile%"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tessra-sidebar",
+          "title": "%displayName%",
+          "icon": "images/tessra-activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "tessra-sidebar": [
+        {
+          "id": "tessra-collections",
+          "name": "%view.collections%"
+        },
+        {
+          "id": "tessra-environments",
+          "name": "%view.environments%"
+        },
+        {
+          "id": "tessra-history",
+          "name": "%view.history%"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "tessra.newRequest",
+          "when": "view == tessra-collections",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.clearCollectionFilter",
+          "when": "view == tessra-collections && tessra.collectionFilterActive",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.filterCollections",
+          "when": "view == tessra-collections",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.createCollection",
+          "when": "view == tessra-collections",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.createEnvironment",
+          "when": "view == tessra-environments",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.importEnvironment",
+          "when": "view == tessra-environments",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.editDefaultHeaders",
+          "when": "view == tessra-environments",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.importData",
+          "when": "view == tessra-collections",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.createCollection",
+          "when": "view == tessra-collections",
+          "group": "1_create@1"
+        },
+        {
+          "command": "tessra.importCollection",
+          "when": "view == tessra-collections",
+          "group": "2_import@1"
+        },
+        {
+          "command": "tessra.importCurl",
+          "when": "view == tessra-collections",
+          "group": "2_import@2"
+        },
+        {
+          "command": "tessra.collapseAll",
+          "when": "view == tessra-collections",
+          "group": "3_collapse@1"
+        },
+        {
+          "command": "tessra.openGuide",
+          "when": "view == tessra-collections",
+          "group": "4_help@1"
+        },
+        {
+          "command": "tessra.clearHistoryFilter",
+          "when": "view == tessra-history && tessra.historyFilterActive",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.filterHistory",
+          "when": "view == tessra-history",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.clearHistory",
+          "when": "view == tessra-history",
+          "group": "navigation"
+        },
+        {
+          "command": "tessra.openHistorySettings",
+          "when": "view == tessra-history",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tessra.createFolder",
+          "when": "viewItem == collection || viewItem == folder",
+          "group": "1_actions@1"
+        },
+        {
+          "command": "tessra.duplicateRequest",
+          "when": "viewItem == request || viewItem == folder",
+          "group": "1_actions@2"
+        },
+        {
+          "command": "tessra.saveRequestAs",
+          "when": "viewItem == request || viewItem == folder",
+          "group": "1_actions@3"
+        },
+        {
+          "command": "tessra.copyAsCurl",
+          "when": "viewItem == request",
+          "group": "1_actions@4"
+        },
+        {
+          "command": "tessra.exportCollection",
+          "when": "viewItem == collection",
+          "group": "1_actions@5"
+        },
+        {
+          "command": "tessra.runCollection",
+          "when": "viewItem == collection || viewItem == folder",
+          "group": "0_run@1"
+        },
+        {
+          "command": "tessra.rename",
+          "when": "viewItem == collection || viewItem == folder || viewItem == request",
+          "group": "2_edit@1"
+        },
+        {
+          "command": "tessra.delete",
+          "when": "viewItem == collection || viewItem == folder || viewItem == request",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "tessra.setActiveEnvironment",
+          "when": "viewItem == environment",
+          "group": "0_active@1"
+        },
+        {
+          "command": "tessra.deactivateEnvironment",
+          "when": "viewItem == environment-active",
+          "group": "0_active@1"
+        },
+        {
+          "command": "tessra.renameEnvironment",
+          "when": "viewItem == environment || viewItem == environment-active",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "tessra.deleteEnvironment",
+          "when": "viewItem == environment || viewItem == environment-active",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "tessra.exportEnvironment",
+          "when": "viewItem == environment || viewItem == environment-active",
+          "group": "1_edit@3"
+        },
+        {
+          "command": "tessra.pinHistory",
+          "when": "viewItem == history",
+          "group": "inline"
+        },
+        {
+          "command": "tessra.unpinHistory",
+          "when": "viewItem == history-pinned",
+          "group": "inline"
+        },
+        {
+          "command": "tessra.deletePinnedHistory",
+          "when": "viewItem == history-pinned",
+          "group": "2_delete@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "watch": "node esbuild.config.js --watch",
+    "typecheck": "npm run typecheck:extension && npm run typecheck:webview && npm run typecheck:tests",
+    "typecheck:extension": "tsc --noEmit",
+    "typecheck:webview": "tsc -p tsconfig.webview.json",
+    "typecheck:tests": "tsc -p src/test/tsconfig.test.json --noEmit",
+    "ci": "npm run typecheck && npm test && npm run build",
+    "vscode:prepublish": "npm run build",
+    "package": "npx @vscode/vsce package --no-rewrite-relative-links",
+    "pretest": "tsc -p src/test/tsconfig.test.json",
+    "test": "mocha dist/test/test/unit/**/*.test.js --timeout 10000",
+    "test:unit": "mocha dist/test/test/unit/**/*.test.js --timeout 10000",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts",
+    "test:e2e:runner": "playwright test -c e2e/playwright.runner.config.ts",
+    "test:e2e:ci": "playwright test -c e2e/playwright.config.ts",
+    "test:e2e:ui-regressions": "playwright test -c e2e/playwright.config.ts e2e/specs/18-request-more-narrow.spec.ts e2e/specs/19-path-variable-resolution-ui.spec.ts e2e/specs/20-body-scroll-ownership.spec.ts",
+    "test:e2e:all": "npm run test:e2e && npm run test:e2e:runner",
+    "test:all": "npm test && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.74.0",
+    "@vscode/test-electron": "^3.1.0",
+    "esbuild": "^0.28.2",
+    "mocha": "^12.0.3",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1"
+  }
+}

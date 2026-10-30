@@ -1,0 +1,235 @@
+# Tessra Testing
+
+## Layers
+
+| Layer | Command | What it proves |
+| --- | --- | --- |
+| Unit | `npm test` | Fast logic, localization, HTML contracts, CollectionRunner selection math |
+| UI E2E | `npm run test:e2e` | Real VS Code Electron + Tessra webview click paths / discoverability (**33 tests in 30 files**, including Collection Runner, WebSocket, Environment autosave, Default Headers save/apply, Auth Bearer, Scripts, Settings, Path Variables, narrow geometry, Body scroll ownership, keyboard navigation, immediate draft preservation, execution context isolation, HTML preview bundle/sanitization/CSP, History updates, response charsets, network deadlines, explicit secret variables, and incremental SSE responses) |
+| Manual | `docs/manual-e2e-checklist.md` | Visual quality, themes, OS quirks, Marketplace screenshots |
+
+Unit tests remain valuable. UI E2E does **not** replace them.
+
+Credential redirect regressions use two loopback HTTP servers and only synthetic credentials. They verify custom API Key header names, case-insensitive matching, same-origin preservation, cross-origin removal, and no reattachment after a return hop. AuthService tests check the resolved header-name metadata; RequestExecutor and CollectionRunner tests verify that their actual HTTP calls receive it. This transport-only change uses these focused tests and the local `npm run ci` gate; it does not change UI interaction or require a new VS Code E2E scenario.
+
+## UI E2E prerequisites
+
+- Node 22+ (`@vscode/test-electron` requires Node 22; all CI jobs use Node 22)
+- Built extension: `npm run build`
+- First run downloads a pinned VS Code desktop build via `@vscode/test-electron` (default `1.99.3`, override with `VSCODE_E2E_VERSION`)
+- Windows local and Linux CI (xvfb) are supported
+
+## Commands
+
+```bash
+npm test                 # unit only (also used by npm run ci)
+npm run test:e2e         # stable VS Code UI E2E (33 tests in 30 files)
+npm run test:e2e:ui-regressions  # critical UI contracts (#18/#19/#20): narrow geometry + path occurrence resolution + body scroll ownership
+npm run test:e2e:runner  # focused Collection Runner suite (3 specs; same paths as stable)
+npm run test:e2e:all     # stable suite then focused runner suite
+npm run test:e2e:ci      # CI stable suite
+npm run test:all         # unit + stable E2E
+```
+
+`npm run ci` keeps its existing meaning: `npm run typecheck` → `npm test` → `npm run build`. It does not include VS Code E2E, VSIX packaging, or publishing. `test:all` still means unit + stable E2E; `test:e2e:all` still means stable + focused Runner and repeats the Runner specs already in stable, so neither is the default development command.
+
+`npm run typecheck` checks the extension, browser modules, and unit tests separately. `tsconfig.webview.json` supplies DOM types with no ambient Node globals; the extension config also explicitly supplies DOM types for the shared Body conversion service's optional browser parser. `npm run build` and watch include `dist/htmlPreview.js` alongside the extension, Body conversion, and highlight.js bundles.
+
+### Local development and completion
+
+Choose checks that cover the changed behavior. Ordinary code changes use typecheck, relevant unit tests, and a current build; `npm run ci` is the existing convenience command when all three are needed. Documentation-only changes need path, command, and diff checks, without a product build or VS Code E2E. Unrelated internal changes do not require the full VS Code suite.
+
+Use `npm run watch` during development for incremental extension and browser bundles. Wait for the latest rebuild before a focused E2E; the E2E scripts do not build the extension. A current watch build can serve the focused development check. When a final production build is needed, run it once after edits converge. Do not rerun checks or full builds already completed for the same final source state without a new failure or unresolved concern. If `npm run ci` supplies the final build, do not immediately run `npm run build` again.
+
+Select regressions for UI/Webview, state persistence/restore, and process/execution changes during development:
+
+| Changed behavior | Focused coverage to select |
+| --- | --- |
+| Request layout, path resolution, Body scroll | `npm run test:e2e:ui-regressions`, plus relevant unit contracts |
+| Keyboard access, draft save/restore, profile isolation | Relevant panel/storage unit tests and `npm run test:e2e -- e2e/specs/21-accessibility-and-draft.spec.ts e2e/specs/23-execution-context.spec.ts` |
+| History persistence and sidebar updates | History/storage/provider unit tests and `npm run test:e2e -- e2e/specs/25-history-sync.spec.ts` |
+| Execution, cancellation, deadlines, process lifecycle | Relevant execution/transport/fixture tests and affected real VS Code paths, such as `npm run test:e2e -- e2e/specs/23-execution-context.spec.ts e2e/specs/27-network-deadline.spec.ts` |
+| Collection Runner | Runner unit tests and `npm run test:e2e:runner` (or the affected individual Runner spec) |
+
+These are selection examples, not a requirement to run every row for every change. Add or update coverage for a new behavior. The release full-validation policy does not defer changed UI behavior until release. On Linux, install xvfb as in `.github/workflows/ci.yml` and prefix the selected command with `xvfb-run -a`.
+
+For a focused unit run, `npm test -- --grep "History storage snapshots"` compiles tests via `pretest` and filters Mocha to that suite. `npm run test:unit -- --grep "History storage snapshots"` reuses compiled tests; use it only when those outputs are current, otherwise compile once with `npm run pretest`. Do not count a filtered run as the full unit suite.
+
+Complete an ordinary task after the necessary local checks. Report exact commands and outcomes, distinguish focused from full validation, and name relevant checks not run. Starting remote CI, waiting for it, watching it, or automatically rerunning it is not a routine completion requirement.
+
+### Script and lifecycle boundaries
+
+The source of truth is `package.json`:
+
+| Entry point | Actual work and lifecycle |
+| --- | --- |
+| `npm run typecheck` | Checks extension, browser modules, and unit tests; no emitted extension bundle |
+| `npm test` | `pretest` compiles unit tests, then Mocha runs; no E2E, packaging, or publishing |
+| `npm run build` / `npm run watch` | esbuild bundles extension and browser assets; watch rebuilds incrementally |
+| `npm run ci` | Typecheck, compiled unit tests, production build; no `preci`/`postci` hooks |
+| `npm run test:e2e` / `test:e2e:ci` / focused E2E scripts | Playwright against a previously built extension; no build or package lifecycle hooks |
+| `npm run package` | `vsce package` invokes `vscode:prepublish` → build, then writes a VSIX; no Marketplace publish |
+
+There are no install/prepare hooks that launch the full suite or publishing, and no pre/post hooks for typecheck, build, watch, or E2E. Packaging is a separate explicit action; its build is required for the packaged assets. F5 also uses the configured build prelaunch task; account for that when planning repeated development launches.
+
+### Manual full remote validation
+
+`.github/workflows/ci.yml` runs only through `workflow_dispatch`. Ordinary pushes and pull requests do not start remote build/test CI, and no scheduled or replacement automatic validation is allowed. Dispatch/watch/rerun requires the user's explicit request for that Actions execution, including before release; a release-preparation or publication request alone is insufficient. Select the final source commit only after that authorization. Required local checks remain mandatory, and missing authorization or exact-SHA success evidence leaves the release gate unmet.
+
+Every manual full run preserves all three jobs: Linux `unit` (typecheck, unit tests, build), Windows `unit-windows` (`npm test`), and Linux `e2e` (`test:e2e:ui-regressions` followed by `test:e2e:ci` under xvfb). All jobs use Node 22 and npm download caching; E2E pins VS Code `1.99.3` and retains failure artifacts. Concurrency cancels older manual runs for the same ref; a cancelled or incomplete run is not a successful full validation.
+
+Manual full CI does not publish to Marketplace. Before release, verify successful `unit`, `unit-windows`, and `e2e` results for the exact final SHA, including any version edits, and package that same source state. Follow [the release procedure](releasing.md) for SHA and VSIX consistency checks; success on another SHA or with omitted E2E is insufficient.
+
+Do **not** add a bare `**/runner/**` Playwright `testIgnore` — GitHub Actions absolute paths contain `/home/runner/work/...` and that pattern would drop every stable spec (`No tests found`). Collection Runner specs live under `e2e/specs/runner/` and are part of the default suite.
+
+### Collection Runner E2E
+
+Runner specs exercise the real user path: Tessra Activity Bar → Collections tree → context menu → **Run All Requests** → Runner webview overlay.
+
+Automation strategy (no production backdoors):
+
+- Scope the Collections tree via `.monaco-list[aria-label="Collections"]` (not every workbench monaco list)
+- Focus the collection `treeitem` (accessible name may include the `N req` description)
+- Open the menu with `Shift+F10` (right-click fallback)
+- Activate the command inside the visible `.context-view.monaco-menu-container` with **Enter** (Monaco menus often focus on mouse click without running the action under Electron automation)
+- Wait for Runner UI via `data-testid` (`runner-start`, `runner-selected-count`), not CSS-class-only coupling
+
+`npm run test:e2e:runner` remains available for fast local re-runs of the three Runner specs.
+
+## Isolation
+
+Each E2E run uses:
+
+- temporary `--user-data-dir`
+- temporary `--extensions-dir`
+- temporary workspace
+- seeded Tessra `globalStorage` under `frozenvoice.tessra`
+- only the extension under development (`--disable-extensions` + `--extensionDevelopmentPath`)
+
+User machine settings / other extensions / real Tessra storage are never reused.
+
+Specs can supply `test.use({ userSettings: { ... } })` to seed settings before VS Code launches; defaults stay unchanged for other specs. History #25 uses `window.dialogStyle: 'custom'` so Windows Delete confirmation runs through the real VS Code dialog DOM instead of an OS-native modal.
+
+### Installed VSIX smoke
+
+Set `TESSRA_E2E_VSIX` to an existing local VSIX to run the same specs against an installed extension. The harness installs it into each test's temporary extensions directory and omits `--extensionDevelopmentPath` and `--disable-extensions`. The default development-host mode is unchanged. This checks packaged asset loading, not just the files in the checkout.
+
+```powershell
+New-Item -ItemType Directory -Force tmp | Out-Null
+npm run package -- -o tmp/tessra-smoke.vsix
+$env:TESSRA_E2E_VSIX = (Resolve-Path tmp/tessra-smoke.vsix).Path
+npm run test:e2e -- e2e/specs/24-html-preview.spec.ts --retries=0
+Remove-Item Env:TESSRA_E2E_VSIX
+```
+
+Inspect the VSIX archive for `dist/extension.js`, `dist/htmlPreview.js`, `dist/bodyConversion.js`, and `dist/hljs.js`. Development sources, browser/test configs, benchmark scripts, E2E files, and promo assets must remain excluded. The preview spec checks the new bundle's webview URI and nonce and exercises its real sanitizer/rendering path.
+
+## Local fixture server
+
+E2E never calls public demo APIs. A Node `http` server binds `127.0.0.1` on a random port and serves deterministic `/users`, `/echo`, `/html`, `/xml`, `/headers`, `/status/500`, `/slow`, `/large`.
+
+Request logs are asserted from the same process.
+
+WebSocket E2E (#11) starts a separate local echo fixture (`e2e/fixtures/websocketServer.ts`) on `127.0.0.1` with a random port. It uses Node built-ins only (HTTP Upgrade + text echo + close) and never calls public WebSocket endpoints.
+
+Environment autosave E2E (#12) edits a seeded variable, waits for the Auto-saved indicator, asserts `environments.json` under the temp user-data dir, reopens the disclosure, and checks Status `N vars` after adding a variable.
+
+Default Headers E2E (#13) opens the editor via Headers banner Manage, adds a deterministic header, clicks explicit Save (not autosave), asserts `default-headers.json`, reopens for persistence, Sends to local `/headers`, and checks the applied request header.
+
+Auth Bearer E2E (#14) opens the Auth tab, selects Bearer, fills a deterministic token (password-masked by default), toggles Reveal/Hide (password ↔ text), Sends to local `/headers`, and checks `Authorization: Bearer …` on the fixture request.
+
+Scripts template E2E (#15) opens the Scripts tab, clicks pre-request/test template buttons, asserts representative template fragments and append-not-overwrite behavior, and checks the request dirty-dot.
+
+Settings editor E2E (#16) opens the Settings tab, asserts HTTP transport/behavior controls and absent WebSocket keepalive controls, changes representative values, checks dirty-dot, roundtrips via another request tab, flips the URL to `ws://` to assert keepalive controls, and checks keepalive values after a second tab roundtrip (no TLS/retry/WS connect runtime).
+
+Path Variables E2E (#17) fills `{{baseUrl}}/mz-chat/{{customerId}}/customer.do`, asserts only `customerId` appears under Path Variables, Overrides to `1111` and Sends, verifies Environment `customerId` stays `9000`, Resets to env fallback `9000`, then switches to an unregistered path variable and Sends `2222`.
+
+Request More narrow geometry E2E (#18) forces a ~430–500px Request Webview width, asserts Method/URL/Send/More stay visible with Send+More adjacent (no left-orphan More), opens Request overflow, and asserts menu `getBoundingClientRect()` stays inside the webview viewport with padding (not merely `.toBeVisible()`).
+
+Path Variable resolution UI E2E (#19) uses Environment-missing `dsgIdn` with Request-local Path Variables `1111`, asserts path occurrence is not unresolved/red and preview source/value is Request/`1111`, Sends `/mz-chat/1111/customer.do`, then adds `?echo={{dsgIdn}}` and asserts path stays resolved while query stays unresolved (occurrence-level, not name-global).
+
+Body scroll ownership E2E (#20) loads a long JSON body, forces short BrowserWindow + Playwright viewport heights, asserts text Body hierarchy has exactly one vertically scrollable owner (textarea), wheels content and checks outer panel stays at `scrollTop=0` with highlight mirror sync, then JSON→Raw→JSON and Form Data class cleanup.
+
+Response keyboard E2E (#21) checks roving tabindex, Arrow/Home/End navigation, selected states, and actual focus. Draft preservation E2E (#22) closes and reopens the VS Code request editor immediately after editing, before its disk-save debounce.
+
+Execution context E2E (#23) holds a real HTTP response in the local `/held` fixture, switches environments, and checks the new environment remains unchanged. It then switches profiles while another response is held and confirms late completion cannot populate the new profile's history or restored tabs. The fixture controls response completion; production code has no test backdoor.
+
+HTML preview E2E (#24) serves hostile and ordinary markup from a local fixture. It checks the local `htmlPreview.js` asset URI/nonce, dangerous tags, consecutive event attributes, external HTML/SVG URLs (including SMIL animated links), the blocked-asset count, and nonce CSP enforcement in the real webview while preserving static content, rendered embedded images, and fragment links. Unit tests import the actual browser module and execute sanitizer, payload, localization, and preview DOM synchronization behavior against DOM fixtures.
+
+History E2E (#25) completes two local HTTP requests, checks disk history and sidebar counts, pins an entry, applies a pinned filter, clears unpinned entries, then unpins and clears the remainder.
+
+Response charset E2E (#26) serves fixed EUC-KR/Shift_JIS bytes, gzip and BOM responses, and invalid/unsupported text. It checks decoded text, escaped warnings, and warning/pin state through response and request tab changes. Unit tests also cover split multibyte chunks, XML declaration/charset/BOM precedence, raw-byte saving metadata, invalid byte sequences, and binary preservation. See the [encoding policy and runtime probes](http-response-encoding.md).
+
+Network deadline E2E (#27) uses a local server that continuously streams a body, returns a retryable status, or holds a response. It verifies one shared timeout across body reception/retry waits, no extra attempt after expiry, Stop cleanup, and a successful subsequent request. Controlled-clock/transport unit tests cover uploads, redirect chains, exact/fractional deadline boundaries, unlimited timeout, synchronous decompression overruns, timer cleanup, and late callbacks; local sockets cover delayed DNS callbacks and stalled TLS. Both RequestExecutor and CollectionRunner tests cover shared retry budgets, per-item budgets, script exclusion, and cancellation/profile isolation. Test safety deadlines are separate from request deadlines.
+
+UI clarity E2E (#28) checks request-context meanings, empty Params/Add behavior, column headings, JSON keyboard folding/copy preservation, and narrow geometry with EN/KO/JA display languages. It captures the real VS Code window in `e2e/.artifacts/ui-clarity/`. Accessible names, native buttons, and sidebar accessibility labels are checked; actual NVDA/JAWS speech output is a separate manual check.
+
+Secret variables E2E (#29) protects an existing synthetic variable, sets a replacement through the native password input, checks stable reference IDs after renaming, and verifies actual localhost request bytes, masked request messages/cURL, ref-only backup JSON, temporary Reveal cleanup, and the workspace-variable editor command.
+
+SSE fixtures exercise incremental UTF-8/BOM and CR/LF framing, multiline fields/comments, incomplete EOF, individual/pending/retained bounds, bounded Raw saving, normal/error EOF distinction, batch delivery, Stop/deadline/profile disposal, and no retry after streaming starts (including POST and HTTP 500). Parser/transport tests use synthetic bytes and actual localhost sockets; real VS Code Webview checks (#30, three tests) and Runner SSE Stop (#09) cover intermediate Events, terminal Raw/partial state, inert untrusted data, retention, and cleanup. Results are recorded in [the dated validation record](ui-secrets-sse-validation-2026-10-05.md). Configured request deadlines and response limits stay independent of fixture/test safety deadlines.
+
+Request timeouts use a monotonic clock from the first network attempt through the final response, including DNS, connection/TLS, upload, redirects, automatic retries and retry waits. Body preparation and pre/post scripts are outside this budget; scripts retain their existing separate time limit. Collection items each get a new budget and inter-item delays are excluded. `timeout=0` remains unlimited. A deadline error is terminal and is not retried. Timers cannot preempt synchronous JavaScript/decompression, so completion also checks the deadline; this is not a hard real-time guarantee.
+
+### Execution and data regression tests
+
+Secret-variable fixtures use synthetic values only. `secretVariableService.test.ts` covers verified keychain writes, durable pending conversion, Retry/Cancel, CAS conflicts, serialized conversion/cancel races, scoped identities, replacement/deletion/restore, and missing/unavailable values. `secretStorageIntegration.test.ts` uses real temporary StorageService JSON to check stable profile UUIDs, ref-only current files/new backups, fresh missing imports, and conversion completion in the captured profile after a switch. `secretExecution.test.ts` checks actual Path override/body usage, typed reference-preserving history, and duplicate-name precedence. `secretVariableEditor.test.ts` checks scope tokens, forged save rejection, metadata-only data, late Reveal suppression, and native-input invalidation. Postman tests preserve legacy plaintext imports while validating explicit Tessra reference exports/imports.
+
+The secret fixtures run against fake SecretStorage failures and local HTTP/WebSocket echo only. They do not use real tokens, proxy credentials, or paid APIs. Actual Windows VS Code Webview checks and the final integrated results are recorded in [the dated validation record](ui-secrets-sse-validation-2026-10-05.md).
+
+`scriptUtilities.test.ts` runs the real `ScriptRunner` in both pre-request and test phases. It covers SHA-256/HMAC known vectors, Unicode and block boundaries, primitive coercion, invalid inputs, Base64 padding/whitespace, UUID pool format/exhaustion, and Unix timestamps. Expected hashes and encodings come from Node built-ins in the test process only; no host utility functions are passed into the script realm.
+
+`executionLifecycle.test.ts` combines the real storage merge and RequestPanel execution-context methods with deferred HTTP/body preparation. It checks zero environment writes for empty scripts, changes applied to the original environment, set/unset conflicts preserving newer user edits, zero sends after cancellation during preparation, and zero history/UI writes from obsolete executions. Collection Runner has corresponding reset, empty-script, and WebSocket rejection tests.
+
+Storage validation tests load syntactically valid but malformed nested data from temporary files and assert original bytes, corrupt backups, and in-memory fallback behavior. Conversion tests execute generated fetch code with real FormData and compare multipart/auth/file semantics; transport tests assert unsupported initial and redirect protocols make no target connection. Script boundary tests cover constructor chains, errors, dynamic compilation, result serialization, and timeout behavior. These tests do not establish an OS security sandbox; see [script security limits](script-security.md).
+
+`historyStorage.test.ts` and `historyTreeProvider.test.ts` exercise path-specific snapshots, nested ownership, external replacement/deletion/recovery, profile changes, corrupt-file protection, atomic-save failure, pinned pruning, filtering/sorting, and consistent count notifications. Deterministic filesystem tests replace history immediately after the local atomic rename (before save returns) and immediately after save returns, covering valid data, invalid JSON, and invalid structure. They check external-entry preservation on the next completion, corrupt backups/write blocking/recovery, and unchanged snapshot reuse without additional reads/parses. Successful saves invalidate the cache; the next read validates disk contents once. History saves remain synchronous; no pending debounce queue needs flushing.
+
+Run `node scripts/history-benchmark.cjs` for a repeatable synthetic comparison. It drives the real extension activation callbacks, RequestPanel history save, StorageService, and HistoryTreeProvider using a minimal VS Code API fixture and an isolated temporary store. Defaults are 500 entries with 1 KiB request bodies, 100 completions per run, and three runs. `TESSRA_BENCH_ITEMS`, `TESSRA_BENCH_COMPLETIONS`, and `TESSRA_BENCH_RUNS` override these dimensions. Initialization/cold reads are outside the measured loop. Compare the same script and fixture on both revisions with no concurrent CPU-heavy jobs; report reads, parses, metadata checks, atomic writes/renames, notifications, and elapsed-time range/median. This measures the synthetic persistence/refresh path, not network or real Electron UI performance.
+
+### Critical UI regression quality principles
+
+1. UI element가 DOM상 visible인 것만으로 layout PASS 처리하지 않는다.
+2. popup/menu는 viewport geometry를 검증한다.
+3. variable warning은 source 존재 여부가 아니라 실제 occurrence resolution을 검증한다.
+4. scrollable editor는 실제 scroll owner 수와 wheel interaction을 검증한다.
+5. Request Panel layout 변경은 narrow-width와 short-height 실제 BrowserWindow에서 검증한다.
+
+## Stable selectors
+
+Prefer `data-testid` (locale-independent). Do not bind E2E to nth-child CSS or English-only labels.
+
+Core ids include: `request-url`, `send-request`, `stop-request`, `status-environment`, `status-variable-usage`, `environment-disclosure`, `variable-usage-disclosure`, `request-body-editor`, `body-type`, `response-status`, `response-pin`, `response-compare`, `response-overflow`, `runner-selected-count`, `runner-start`, `runner-stop`.
+
+Capture mid-test evidence with `captureWindow(tessra.app, file)` (Electron `capturePage`), not `page.screenshot()`. On Windows, a CDP `page.screenshot()` can stop later mouse input from reaching the webview while Playwright still reports the click as successful, so a following Stop or button click is silently lost. Failure diagnostics may still use `page.screenshot()` because nothing interacts afterwards. `runCommand` reopens the Command Palette (up to 3 attempts) when a late webview focus closes it before the command is typed.
+
+## Failure diagnostics
+
+On failure, artifacts land in `e2e/.artifacts/` (screenshot + meta including fixture request log). CI uploads that folder. Runner context-menu failures also write a scoped diagnostics JSON (visible menu text, focus summary, webview iframe counts) — no secret dumps.
+
+## VS Code version strategy
+
+Pin a known-good desktop version with `VSCODE_E2E_VERSION` (default `1.99.3`). Do not float on daily `stable` for this suite. Multi-version matrices are out of scope for the foundation.
+
+## Adding a new E2E
+
+1. Keep production behavior unchanged; add inert `data-testid` / aria only if needed.
+2. Put specs under `e2e/specs/` (Collection Runner under `e2e/specs/runner/`).
+3. Reuse `e2e/helpers/*` and the local fixture server.
+4. Use condition-based waits (`expect` / `waitFor` / server request log). No arbitrary `sleep(5000)`.
+5. Update this doc and mark automated rows in `docs/manual-e2e-checklist.md` when a manual item is covered.
+6. When changing Collection Runner UI, update `e2e/specs/runner/*` and keep the stable suite at **33 tests** (or intentionally adjust the count here).
+7. Layout / variable-resolution / scroll-ownership regressions that users can see immediately should also stay in `npm run test:e2e:ui-regressions` (#18/#19/#20).
+
+### Native file dialogs (`.env` import)
+
+`Tessra: Import Environment` uses the OS / VS Code open dialog. Automating that path under Playwright + Electron is flaky and must not introduce production backdoors. Cover `.env` import with unit tests (`DotEnvService`) plus the 1.0.13 manual smoke checklist instead of forcing a CI E2E.
+
+## Draft and script regressions
+
+The close-editor E2E verifies the restored value after filling the URL and immediately using the native close shortcut. It does not require the whole Playwright/workbench round trip to finish within one second. Unit tests hold the disk timer, verify that the latest draft is already in webview state and host messages, and exercise real panel disposal before any debounce callback. Panel tests also cover direct profile changes, delayed/missing flush acknowledgements, late replies, and storage write failures.
+
+Script regression tests execute the real `ScriptRunner`, compare malformed UTF-8 output against Node Buffer for 1,806 byte sequences, and compare deep assertion outcomes against Node assertions. Storage tests verify that automatic history recording and ordinary saves cannot replace unreadable originals, and that incomplete pre-import backups stop replacement before any store is changed.
+
+## Bundle hygiene
+
+`e2e/**`, `.vscode-test/**`, and artifacts are excluded from the VSIX via `.vscodeignore`. E2E deps are `devDependencies` only.

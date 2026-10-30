@@ -1,0 +1,20 @@
+node_modules/
+dist/
+*.vsix
+.claude/settings.local.json
+
+# UI E2E local artifacts / downloaded VS Code
+e2e/.artifacts/
+demo/promo/.capture/
+.vscode-test/
+
+# Local staging (marketplace screenshots, scratch exports — do not commit)
+tmp/
+
+# Impeccable skill vendor clones (not Tessra product; prior releases excluded these trees)
+.agents/skills/impeccable/
+.github/skills/impeccable/
+.github/agents/impeccable-*
+
+# Impeccable design-tool workspace (local only; reference images have no clear license for public release)
+.impeccable/

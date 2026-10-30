@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tessra Promo v2 — Request log</title>
+<style>
+  :root{
+    --paper:#f2efe8; --paper2:#e9e5dc; --ink:#121212; --ink2:#3b3a36; --muted:#7b776d; --rule:#d6d0c3;
+    --blue:#1f6fff; --ok:#14945a; --bad:#d23b2c; --violet:#7c4dcc;
+    --ui:"Segoe UI Variable Display","Segoe UI","Inter",sans-serif;
+    --mono:"Cascadia Mono","Consolas","DejaVu Sans Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--ui)}
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:var(--paper)}
+  .grain{position:absolute;inset:0;background-image:radial-gradient(rgba(0,0,0,.035) 1px,transparent 1px);background-size:4px 4px;pointer-events:none}
+  .scene{position:absolute;inset:0;opacity:0}
+
+  /* top bar */
+  .bar{position:absolute;left:80px;right:80px;top:56px;height:28px;display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:18px;letter-spacing:.12em;color:var(--muted);border-bottom:1px solid var(--rule);padding-bottom:14px}
+  .bar b{color:var(--ink);font-weight:600}
+  .ticks{display:flex;gap:8px}
+  .ticks i{display:block;width:28px;height:6px;border:1px solid var(--ink);border-radius:1px;position:relative;overflow:hidden}
+  .ticks i::after{content:"";position:absolute;inset:0;background:var(--ink);transform-origin:0 50%;transform:scaleX(var(--p,0))}
+
+  /* intro */
+  #intro .type{position:absolute;left:80px;top:430px;font-family:var(--mono);font-size:44px;color:var(--ink2)}
+  #intro .caret{display:inline-block;width:.55em;height:1.05em;background:var(--blue);vertical-align:-.18em;margin-left:4px}
+  #intro .word{position:absolute;left:72px;top:500px;font-size:210px;font-weight:800;letter-spacing:-.05em;line-height:1}
+  #intro .tag{position:absolute;left:84px;top:740px;font-size:40px;color:var(--ink2)}
+
+  /* footage */
+  #foot .panel{position:absolute;left:560px;top:132px;width:1280px;height:720px;border-radius:10px;overflow:hidden;background:#1f1f1f;
+               box-shadow:0 0 0 1px rgba(0,0,0,.12),0 30px 80px rgba(40,30,10,.22);will-change:transform,clip-path}
+  .cam{position:absolute;left:0;top:0;width:1600px;height:900px;transform-origin:0 0;will-change:transform}
+  .cam img{position:absolute;inset:0;width:1600px;height:900px;display:block}
+  .pointer{position:absolute;left:0;top:0;width:22px;height:30px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+  .ripple{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:3px solid var(--blue);opacity:0}
+  .stamp{position:absolute;left:560px;top:874px;font-family:var(--mono);font-size:16px;color:var(--muted);letter-spacing:.06em}
+
+  .side{position:absolute;left:80px;top:132px;width:430px}
+  .num{font-family:var(--mono);font-size:120px;font-weight:600;line-height:.9;letter-spacing:-.04em;color:var(--ink)}
+  .num small{font-size:28px;color:var(--muted);letter-spacing:.1em;margin-left:10px}
+  .title{position:relative;height:150px;margin-top:22px}
+  .title h2{position:absolute;left:0;top:0;font-size:56px;font-weight:750;letter-spacing:-.03em;line-height:1.04;opacity:0}
+  .log{position:absolute;left:80px;top:470px;width:460px;font-family:var(--mono);font-size:21px;line-height:1.55}
+  .log .row{display:flex;gap:12px;opacity:0;white-space:nowrap}
+  .log .row + .row{margin-top:10px}
+  .log .k{width:22px;flex:none;font-weight:700}
+  .log .v{overflow:hidden;color:var(--ink2)}
+  .log .row.ok .k{color:var(--ok)} .log .row.bad .k{color:var(--bad)} .log .row.go .k{color:var(--blue)} .log .row.env .k{color:var(--violet)}
+  .log .sep{height:1px;background:var(--rule);margin:14px 0;opacity:0}
+
+  /* outro */
+  #out{background:var(--ink);color:var(--paper)}
+  #out .lines{position:absolute;left:80px;top:250px;font-family:var(--mono);font-size:52px;line-height:1.5}
+  #out .lines div{opacity:0;white-space:pre}
+  #out .lines b{color:#7fd3a0;font-weight:500}
+  #out .word{position:absolute;left:72px;top:600px;font-size:150px;font-weight:800;letter-spacing:-.05em;opacity:0}
+  #out .tag{position:absolute;left:84px;top:782px;font-size:36px;color:#c9c4b8;opacity:0}
+  #out .cmd{position:absolute;left:84px;top:860px;font-family:var(--mono);font-size:28px;color:#8ec5ff;opacity:0}
+  .wipe{position:absolute;inset:0;background:var(--ink);transform-origin:0 50%;transform:scaleX(0);z-index:5}
+</style>
+<script src=".capture/session/clip.js"></script>
+</head>
+<body>
+<div id="stage">
+  <div class="grain"></div>
+
+  <div class="scene" id="intro">
+    <div class="type"><span id="typed"></span><span class="caret" id="caret"></span></div>
+    <div class="word" id="iword">Tessra</div>
+    <div class="tag" id="itag">The local-first API client for VS Code.</div>
+  </div>
+
+  <div class="scene" id="foot">
+    <div class="bar"><span><b>TESSRA</b> &nbsp;/&nbsp; REQUEST LOG</span><span class="ticks" id="ticks"><i></i><i></i><i></i><i></i></span></div>
+    <div class="side">
+      <div class="num" id="num">01<small>/04</small></div>
+      <div class="title">
+        <h2 id="t0">Variables<br>autocomplete.</h2>
+        <h2 id="t1">Same request,<br>now staging.</h2>
+        <h2 id="t2">Rerun only<br>what failed.</h2>
+        <h2 id="t3">Streams<br>land live.</h2>
+      </div>
+    </div>
+    <div class="log" id="log"></div>
+    <div class="panel" id="panel">
+      <div class="cam" id="cam">
+        <img id="frame" alt="">
+        <div class="ripple" id="ripple"></div>
+        <svg class="pointer" id="pointer" viewBox="0 0 22 30"><path d="M2 2v22l6-5.5 4 9 4-1.8-4-8.7h8.2Z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+    <div class="stamp" id="stamp">RECORDED IN VS CODE · TESSRA EXTENSION · LOCAL DEMO APIS</div>
+  </div>
+
+  <div class="scene" id="out">
+    <div class="lines">
+      <div id="o0">login        <b>none</b></div>
+      <div id="o1">cloud sync   <b>none</b></div>
+      <div id="o2">telemetry    <b>none</b></div>
+    </div>
+    <div class="word" id="oword">Tessra</div>
+    <div class="tag" id="otag">The local-first API client for VS Code</div>
+    <div class="cmd" id="ocmd">ext install frozenvoice.tessra</div>
+  </div>
+  <div class="wipe" id="wipe"></div>
+</div>
+
+<script>
+const cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const P=(t,a,b)=>cl((t-a)/(b-a));
+const eo=x=>1-Math.pow(1-x,3);
+const eo5=x=>1-Math.pow(1-x,5);
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const lerp=(a,b,x)=>a+(b-a)*x;
+const $=id=>document.getElementById(id);
+
+const BEAT=.5;
+const CUTS=[2.0,6.0,9.0,13.0,16.0], T_OUT=16.0, DURATION=20.0;
+const NEED=['click-url','tab-1','tab-2','send-1','response-1','palette','pick-staging','env-switched','send-2','response-2',
+  'right-click-collection','runner-open','runner-go','runner-done','rerun-failed','rerun-done','sse-send','sse-first','sse-done'];
+const C=window.CLIP&&NEED.every(n=>window.CLIP.marks[n])?window.CLIP:null;
+if(!C)document.body.insertAdjacentHTML('beforeend','<p style="position:absolute;top:20px;left:20px;color:#d23b2c;font-size:28px">Missing or older capture — run the capture (see README.md).</p>');
+const M=n=>C.marks[n].t;
+const CLICK_DELAY=.65;
+const R=n=>C&&C.regions&&C.regions[n]||null;
+
+// Same footage mapping as the first cut: typing and waits play fast, results near real time, nothing reordered.
+const BEATS=C?[
+  [[2.0,M('click-url')-.3],[4.55,M('send-1')+CLICK_DELAY],[4.95,M('response-1')+.05],[6.0,M('response-1')+1.1]],
+  [[6.0,M('palette')-.1],[7.45,M('pick-staging')+CLICK_DELAY],[7.75,M('env-switched')+.15],[8.25,M('send-2')+CLICK_DELAY],[8.55,M('response-2')+.05],[9.0,M('response-2')+.6]],
+  [[9.0,M('right-click-collection')-.15],[9.95,M('runner-open')+.1],[10.4,M('runner-go')+CLICK_DELAY],[11.35,M('runner-done')+.1],[11.95,M('rerun-failed')+CLICK_DELAY],[12.45,M('rerun-done')+.05],[13.0,M('rerun-done')+.6]],
+  [[13.0,M('sse-send')+.25],[13.4,M('sse-send')+CLICK_DELAY],[15.6,Math.max(M('sse-done'),M('sse-send')+CLICK_DELAY+1.8)+.2],[16.0,Math.max(M('sse-done'),M('sse-send')+CLICK_DELAY+1.8)+.5]],
+]:[];
+const SPLINES=BEATS.map(k=>{
+  for(let i=1;i<k.length;i++)k[i][1]=Math.max(k[i][1],k[i-1][1]+.01);
+  const n=k.length,d=[],m=[];
+  for(let i=0;i<n-1;i++)d.push((k[i+1][1]-k[i][1])/(k[i+1][0]-k[i][0]));
+  m[0]=d[0];m[n-1]=d[n-2];
+  for(let i=1;i<n-1;i++)m[i]=d[i-1]*d[i]<=0?0:3*(d[i-1]+d[i])/((2*d[i]+d[i-1])/d[i-1]+(d[i]+2*d[i-1])/d[i]);
+  return {k,m};
+});
+function evalSpline({k,m},v){
+  if(v<=k[0][0])return k[0][1];
+  for(let i=0;i<k.length-1;i++){const [x0,y0]=k[i],[x1,y1]=k[i+1];
+    if(v<=x1){const h=x1-x0,s=(v-x0)/h,s2=s*s,s3=s2*s;return (2*s3-3*s2+1)*y0+(s3-2*s2+s)*h*m[i]+(-2*s3+3*s2)*y1+(s3-s2)*h*m[i+1]}}
+  return k[k.length-1][1];
+}
+const beatAt=t=>{for(let i=0;i<4;i++)if(t>=CUTS[i]&&t<CUTS[i+1])return i;return -1};
+const clipAt=t=>{const b=beatAt(t);return b<0?0:evalSpline(SPLINES[b],t)};
+function videoAt(c){
+  for(let b=0;b<4;b++){const k=SPLINES[b].k;if(c<k[0][1]||c>k[k.length-1][1])continue;
+    let lo=CUTS[b],hi=CUTS[b+1];for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(clipAt(mid)<c)lo=mid;else hi=mid}return (lo+hi)/2}
+  return null;
+}
+
+// Flat camera, framed from the recorded UI boxes.
+const FULL=[800,450,1];
+function fit(name,pad,maxS,fb){const r=R(name);if(!r)return fb;const s=cl(Math.min(1600/(r.width+pad*2),900/(r.height+pad*2)),1,maxS),hw=800/s,hh=450/s;
+  return [cl(r.x+r.width/2,hw,1600-hw),cl(r.y+r.height/2,hh,900-hh),s]}
+const CAM=C?(()=>{
+  const bar=fit('request-bar',40,1.45,[975,350,1.4]),r1=fit('response-1',30,1.4,[970,540,1.3]);
+  const pal=fit('palette',40,1.6,[800,300,1.5]),env=fit('env',40,1.4,[895,452,1.2]),r2=fit('response-2',30,1.4,[970,540,1.3]);
+  const run=fit('runner',24,1.25,[975,450,1.2]),sse=fit('sse',30,1.35,[970,540,1.25]);
+  return [
+    [[M('click-url')-.3,...bar],[M('send-1')+CLICK_DELAY+.1,...bar],[M('response-1')+.4,...r1]],
+    [[M('palette')-.1,...pal],[M('pick-staging')+CLICK_DELAY+.1,...pal],[M('env-switched')+.4,...env],[M('send-2')+CLICK_DELAY+.1,...env],[M('response-2')+.4,...r2]],
+    [[M('right-click-collection')-.15,...FULL],[M('runner-open'),...FULL],[M('runner-open')+.5,...run]],
+    [[M('sse-send')+.25,...sse]],
+  ];
+})():[];
+function camAt(c,b){const K=CAM[b]||[[0,...FULL]];if(c<=K[0][0])return K[0].slice(1);
+  for(let i=1;i<K.length;i++)if(c<=K[i][0]){const a=K[i-1],z=K[i],e=eio(P(c,a[0],z[0]));return [1,2,3].map(j=>a[j]+(z[j]-a[j])*e)}
+  return K[K.length-1].slice(1)}
+const CLICKS=C?Object.entries(C.marks).filter(([,m])=>m.x!==undefined).map(([,m])=>({t:m.t,x:m.x,y:m.y})).sort((a,b)=>a.t-b.t):[];
+function pointerAt(c){let px=1200,py=860,last=null;
+  for(const k of CLICKS){if(c<k.t)break;const e=eio(P(c,k.t+.05,k.t+CLICK_DELAY-.05));px=px+(k.x-px)*e;py=py+(k.y-py)*e;last=k;
+    if(c<k.t+CLICK_DELAY)return {x:px,y:py,ripple:null};px=k.x;py=k.y}
+  return {x:px,y:py,ripple:last?c-(last.t+CLICK_DELAY):null}}
+
+// The log on the left: one line per real event, at the moment it is on screen.
+const LOG=C?[
+  ['go','→','GET {{baseUrl}}/users/{{userId}}','send-1',CLICK_DELAY],
+  ['ok','←','200 OK · env local','response-1',0],
+  ['env','~','env  local → staging','env-switched',0],
+  ['ok','←','200 OK · env staging','response-2',0],
+  ['go','▶','Run collection · 4 requests','runner-go',CLICK_DELAY],
+  ['bad','✕','DELETE /users/7 · 503','runner-done',0],
+  ['ok','↻','Rerun failed → passed','rerun-done',0],
+  ['go','→','GET {{baseUrl}}/events','sse-send',CLICK_DELAY],
+  ['ok','←','text/event-stream · live','sse-first',0],
+].map(([cls,k,v,mark,d])=>({cls,k,v,t:videoAt(M(mark)+d)})):[];
+const SEPS=[1,3,6];
+$('log').innerHTML=LOG.map((l,i)=>`<div class="row ${l.cls}" id="l${i}"><span class="k">${l.k}</span><span class="v" data-text="${l.v.replace(/"/g,'&quot;')}"></span></div>`+(SEPS.includes(i)?`<div class="sep" id="s${i}"></div>`:'')).join('');
+
+let frameIdx=-1;
+function showFrame(i){if(!C||i===frameIdx)return Promise.resolve();frameIdx=i;const img=$('frame');
+  img.src=`.capture/session/${String(i).padStart(5,'0')}.jpg`;return img.decode().catch(()=>undefined)}
+
+function seek(t){
+  // ---- intro: a caret types the name, then the wordmark lands
+  const txt='tessra',n=Math.floor(cl((t-.2)/.09,0,txt.length));
+  $('typed').textContent=txt.slice(0,n);$('caret').style.opacity=(t<1.0&&Math.floor(t*4)%2===0)||n<txt.length?1:0;
+  const iw=eo5(P(t,.85,1.25));$('iword').style.opacity=iw;$('iword').style.transform=`translateY(${(1-iw)*40}px)`;
+  const it=eo(P(t,1.15,1.5));$('itag').style.opacity=it;
+  $('intro').style.opacity=t<2.0?1:0;
+
+  // wipe between sections (ink bar sweeps across)
+  const w1=P(t,1.75,2.0),w1o=P(t,2.0,2.25);
+  const w2=P(t,15.75,16.0);
+  const wipe=$('wipe');
+  if(t<2.0){wipe.style.transformOrigin='0 50%';wipe.style.transform=`scaleX(${eio(w1)})`}
+  else if(t<2.25){wipe.style.transformOrigin='100% 50%';wipe.style.transform=`scaleX(${1-eio(w1o)})`}
+  else if(t<16.0){wipe.style.transformOrigin='0 50%';wipe.style.transform=`scaleX(${eio(w2)})`}
+  else wipe.style.transform='scaleX(0)';
+
+  // ---- footage
+  let pending=Promise.resolve();
+  const inFoot=t>=2.0&&t<16.0;$('foot').style.opacity=inFoot?1:0;
+  if(inFoot&&C){
+    const b=beatAt(t),c=clipAt(t);
+    pending=showFrame(Math.min(C.frames-1,Math.max(0,Math.round(c*C.fps))));
+    // panel slides up on entry; each cut is a quick horizontal reveal
+    const enter=eo5(P(t,2.0,2.6));
+    let clip=0;for(const cut of CUTS.slice(1,4)){const k=t-cut;if(k>=0&&k<.35)clip=1-eo5(k/.35)}
+    $('panel').style.transform=`translateY(${(1-enter)*80}px)`;
+    $('panel').style.clipPath=`inset(0 0 0 ${clip*100}%)`;
+    const [cx,cy,s]=camAt(c,b),kk=1280/1600;
+    $('cam').style.transform=`scale(${kk*s}) translate(${-(cx-800/s)}px,${-(cy-450/s)}px)`;
+    const p=pointerAt(c);
+    $('pointer').style.transformOrigin='2px 2px';$('pointer').style.transform=`translate(${p.x-2}px,${p.y-2}px) scale(${1/s})`;
+    const r=p.ripple;$('ripple').style.opacity=r!==null&&r>=0&&r<.5?(1-r/.5)*.9:0;
+    $('ripple').style.transform=`translate(${p.x}px,${p.y}px) scale(${(.4+1.4*cl((r||0)/.5))/s})`;
+    // side: number counts with the beat, title swaps with a short rise
+    $('num').firstChild.textContent=String(b+1).padStart(2,'0');
+    for(let i=0;i<4;i++){const h=$('t'+i),vis=i===b;h.style.opacity=vis?eo(P(t,CUTS[i]+.05,CUTS[i]+.35)):0;
+      h.style.transform=`translateY(${vis?(1-eo5(P(t,CUTS[i]+.05,CUTS[i]+.45)))*24:0}px)`}
+    [...$('ticks').children].forEach((d,i)=>d.style.setProperty('--p',P(t,CUTS[i],CUTS[i+1])));
+    // log: rows type out at their real moment
+    LOG.forEach((l,i)=>{const row=$('l'+i),v=row.querySelector('.v'),full=v.dataset.text;
+      if(l.t===null||t<l.t){row.style.opacity=0;return}
+      row.style.opacity=1;v.textContent=full.slice(0,Math.ceil(full.length*eo(P(t,l.t,l.t+.35))));
+      const s=$('s'+i);if(s)s.style.opacity=eo(P(t,l.t+.2,l.t+.5));
+    });
+    $('stamp').style.opacity=eo(P(t,2.6,3.2));
+  }
+
+  // ---- outro: three log lines, then the wordmark
+  const inOut=t>=16.0;$('out').style.opacity=inOut?1:0;
+  [0,1,2].forEach(i=>{const a=16.15+i*.5,e=eo(P(t,a,a+.25)),el=$('o'+i);el.style.opacity=e;el.style.transform=`translateX(${(1-e)*-20}px)`});
+  const ow=eo5(P(t,18.0,18.45));$('oword').style.opacity=ow;$('oword').style.transform=`translateY(${(1-ow)*30}px)`;
+  $('otag').style.opacity=eo(P(t,18.3,18.7));$('ocmd').style.opacity=eo(P(t,18.7,19.1));
+  return pending;
+}
+window.seek=seek;window.DURATION=DURATION;
+const vis=a=>a.map(videoAt).filter(v=>v!==null);
+window.TIMELINE=C?{
+  duration:DURATION,beat:BEAT,drop:2.0,cuts:CUTS.slice(1,4),man:T_OUT,end:18.0,
+  slams:[16.15,16.65,17.15],keys:vis(C.keys||[]),
+  clicks:vis(CLICKS.map(k=>k.t+CLICK_DELAY)),
+  success:vis(['response-1','response-2','rerun-done','sse-done'].map(M)),
+  failure:vis([M('runner-done')]),swaps:vis([M('env-switched'),M('runner-open')]),
+  introKeys:[...'tessra'].map((_,i)=>.2+i*.09),
+}:null;
+const q=new URLSearchParams(location.search);
+seek(parseFloat(q.get('t')||'0'));
+if(q.has('play')){const t0=performance.now();(function loop(){seek(((performance.now()-t0)/1000)%DURATION);requestAnimationFrame(loop)})()}
+</script>
+</body>
+</html>
