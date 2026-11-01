@@ -347,9 +347,9 @@ If a stored JSON file cannot be parsed or fails structural validation, Tessra at
 
 Typical locations:
 
-- Windows: `%APPDATA%\Code\User\globalStorage\tessra.tessra\`
-- macOS: `~/Library/Application Support/Code/User/globalStorage/tessra.tessra/`
-- Linux: `~/.config/Code/User/globalStorage/tessra.tessra/`
+- Windows: `%APPDATA%\Code\User\globalStorage\frozenvoice.tessra\`
+- macOS: `~/Library/Application Support/Code/User/globalStorage/frozenvoice.tessra/`
+- Linux: `~/.config/Code/User/globalStorage/frozenvoice.tessra/`
 
 ## Development
 

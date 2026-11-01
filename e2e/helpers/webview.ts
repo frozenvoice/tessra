@@ -10,11 +10,19 @@ const RUN_ALL_REQUESTS = 'Run All Requests';
 export async function runCommand(page: Page, commandLabel: string): Promise<void> {
   await page.keyboard.press('Escape').catch(() => undefined);
   await page.locator('.monaco-workbench').click({ position: { x: 400, y: 240 }, timeout: 10000 }).catch(() => undefined);
-  await page.keyboard.press(isMac ? 'Meta+Shift+P' : 'Control+Shift+P');
   // Prefer `.input` class — a bare `input` also matches the hidden quick-input checkbox.
   const input = page.locator('.quick-input-widget .input');
-  await input.waitFor({ state: 'visible', timeout: 20000 });
-  await input.fill(`> ${commandLabel}`);
+  // 위 클릭 지점이 webview면 늦게 도착한 focus가 막 열린 palette를 닫을 수 있어 다시 연다.
+  for (let attempt = 1; ; attempt++) {
+    await page.keyboard.press(isMac ? 'Meta+Shift+P' : 'Control+Shift+P');
+    try {
+      await input.waitFor({ state: 'visible', timeout: 20000 });
+      await input.fill(`> ${commandLabel}`, { timeout: 5000 });
+      break;
+    } catch (error) {
+      if (attempt >= 3) { throw error; }
+    }
+  }
   const option = page.locator('.quick-input-list .monaco-list-row').filter({ hasText: commandLabel }).first();
   await option.waitFor({ state: 'visible', timeout: 30000 });
   await option.click();

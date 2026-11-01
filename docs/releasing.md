@@ -49,4 +49,4 @@ Windows 테스트를 Linux 결과로 대체하지 않는다. 실패하면 원인
 
 push/PR 자동 실행을 제거할 때 branch protection/ruleset에 `unit`, `unit-windows`, `e2e`가 required status checks로 남아 있으면 일반 PR이 대기할 수 있다. 실제 설정에서 확인된 해당 CI 항목만 해제하고 리뷰/기타 보호 규칙은 유지한다. 가짜 성공 job, 우회 병합, 보호 규칙 전체 해제를 사용하지 않는다. 릴리스 공개 게이트는 위의 최종 SHA 전체 검증으로 유지한다.
 
-2026-10-06 확인: 기본/유일 브랜치는 `main`이며 branches API의 `protected`는 `false`다. 인증된 계정에는 repository admin 권한이 있지만 rulesets 및 main protection 상세 API는 비공개 저장소의 GitHub 플랜 제한으로 HTTP 403을 반환했다. 따라서 required-check 상세 목록은 확인하지 못했고 원격 설정은 변경하지 않았다. 필요 시 저장소 관리자가 Settings에서 확인할 대상 CI 이름은 `unit`, `unit-windows`, `e2e`다. API에서 실제 required 이름/app ID가 확인되면 그 항목만 조정한다. 유료 플랜 도입은 이 변경에 포함하지 않는다.
+기본/유일 브랜치는 `main`이며 2026-10-30 기준 branches API의 `protected`는 `false`다. 비공개 저장소였을 때는 rulesets 및 main protection 상세 API가 GitHub 플랜 제한으로 HTTP 403을 반환해 required-check 상세 목록을 확인하지 못했다. 공개 저장소에서는 같은 API로 확인할 수 있으므로, 보호 규칙을 추가하거나 바꿀 때 실제 required 이름/app ID를 확인하고 대상 CI 이름 `unit`, `unit-windows`, `e2e`만 조정한다. 원격 설정 변경은 저장소 관리자의 명시적 요청이 있을 때만 수행한다.

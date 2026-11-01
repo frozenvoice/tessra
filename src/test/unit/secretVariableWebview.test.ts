@@ -133,4 +133,29 @@ describe('Secret variable Webview boundary', () => {
     assert.match(source, /window\.addEventListener\('pagehide', clearSecretReveals\)/);
     assert.doesNotThrow(() => new vm.Script(getRequestPanelEnvironmentClientScript() + source));
   });
+
+  it('keeps the Auto-saved cue across the post-save refresh of the same editor target only', () => {
+    const { context } = setup([row(false).result]);
+    const cue = new Set<string>();
+    vm.runInContext(`
+      envAutoSaved = { classList: { add: (name) => cueAdd(name), remove: (name) => cueRemove(name) } };
+      renderEnvironmentVariableRows = function() {};
+      refreshEnvironmentEditorSummary = function() {};
+      syncEnvironmentEditorControls = function() {};
+      refreshEnvironmentEditorLayout = function() {};
+      hideEnvironmentEditor = function() {};
+      canEditEnvironmentVariables = function() { return true; };
+    `, Object.assign(context, { cueAdd: (name: string) => cue.add(name), cueRemove: (name: string) => cue.delete(name) }));
+    vm.runInContext('envAutoSave()', context);
+    assert.ok(cue.has('show'));
+    // 저장 후 host가 같은 환경 데이터를 다시 보내도 표시는 유지된다.
+    vm.runInContext("setEnvironmentEditorData('env-a', 'Env A', [], 'profile-a-view-2', 'environment')", context);
+    assert.ok(cue.has('show'), 'same-target refresh keeps the cue');
+    // 다른 환경으로 바뀌면 이전 저장 표시는 지운다.
+    vm.runInContext("setEnvironmentEditorData('env-b', 'Env B', [], 'profile-a-view-3', 'environment')", context);
+    assert.ok(!cue.has('show'), 'switching environments clears the cue');
+    vm.runInContext('envAutoSave()', context);
+    vm.runInContext("setEnvironmentEditorData(null, null, [], 'profile-a-view-4', 'workspace')", context);
+    assert.ok(!cue.has('show'), 'switching to workspace variables clears the cue');
+  });
 });

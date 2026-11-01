@@ -71,6 +71,17 @@ VS Code 안에서 동작하는 offline-first HTTP/WebSocket API 클라이언트�
 - 이번 작업에서 만든 임시 빌드·스테이징·캡처 폴더는 완료 보고 전에 삭제한다. 다른 작업이나 실행 중인 프로세스의 출력은 건드리지 않는다.
 - 근거로 남길 것은 로그·요약·최소 파일로 줄인다. 1GB 이상이 남으면 경로와 크기를 완료 보고에 적는다.
 
+## Git 커밋 이메일 보호
+
+커밋 작성자·커미터 이메일은 반드시 `5353351+frozenvoice@users.noreply.github.com`이다. 다른 PC, 클라우드 개발 환경, worktree, 에이전트 세션에서도 같다.
+
+- 모든 커밋 전에 실제로 기록될 값을 `git var GIT_AUTHOR_IDENT`와 `git var GIT_COMMITTER_IDENT`로 확인한다. 이 값은 설정과 환경변수가 모두 반영된 결과다.
+- 이메일이 noreply가 아니면 해당 저장소의 로컬 설정만 수정한다: `git config --local user.email 5353351+frozenvoice@users.noreply.github.com`. 전역(`--global`)·시스템 Git 설정은 수정하지 않는다.
+- `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_EMAIL`, `EMAIL` 환경변수도 확인한다. 다른 값이면 로컬 설정보다 우선하므로, 커밋 명령에서 해당 변수를 noreply로 지정하거나 해제한다. `--author`, `-c user.email=`으로 다른 이메일을 지정하지 않는다.
+- 커밋 직후 `git log -1 --format='%ae %ce'`로 두 값이 모두 noreply인지 확인한다.
+- 기존 커밋 이력은 변경하지 않는다. 다른 이메일로 만든 커밋을 발견하면 amend·rebase·filter로 고치지 말고 push 전에 사용자에게 보고한다. GitHub의 "Block command line pushes that expose my email" 설정으로 push가 거부되어도 같다.
+- 이 규칙은 커밋 신원에만 적용한다. GitHub Actions 정책과 제품 코드는 이 규칙 때문에 바꾸지 않는다.
+
 ## 문서 동기화
 
 사용자 기능·설정 변경 시 `README.md`, `README.ko.md`, `CLAUDE.md`와 관련 가이드를 검토하고 영향 있는 문서를 함께 갱신한다. `AGENTS.md`에는 지속적으로 필요한 프로젝트 규칙의 변경만 반영한다.

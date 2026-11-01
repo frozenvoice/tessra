@@ -348,9 +348,9 @@ macOS에서는 `Cmd`를 사용합니다.
 
 일반적인 경로:
 
-- Windows: `%APPDATA%\Code\User\globalStorage\tessra.tessra\`
-- macOS: `~/Library/Application Support/Code/User/globalStorage/tessra.tessra/`
-- Linux: `~/.config/Code/User/globalStorage/tessra.tessra/`
+- Windows: `%APPDATA%\Code\User\globalStorage\frozenvoice.tessra\`
+- macOS: `~/Library/Application Support/Code/User/globalStorage/frozenvoice.tessra/`
+- Linux: `~/.config/Code/User/globalStorage/frozenvoice.tessra/`
 
 ## 개발 검증
 

@@ -214,3 +214,11 @@ npm run package          # 명시적 VSIX 생성; vscode:prepublish의 build 포
 - 검증·실험용 빌드, 스테이징, 캡처 출력을 작업이나 재시도마다 새 이름의 폴더로 만들지 않는다(예: `.vscode-test-<작업명>`, `dist-<작업명>`, 실행마다 새 E2E artifacts 폴더). 기본 출력 위치를 재사용하고, 격리가 꼭 필요하면 고정된 폴더 하나를 덮어쓴다.
 - 이번 작업에서 만든 임시 빌드·스테이징·캡처 폴더는 완료 보고 전에 삭제한다. 다른 작업이나 실행 중인 프로세스의 출력은 건드리지 않는다.
 - 근거로 남길 것은 로그·요약·최소 파일로 줄인다. 1GB 이상이 남으면 경로와 크기를 완료 보고에 적는다.
+
+## Git 커밋 이메일 보호
+
+- 커밋 작성자·커미터 이메일은 항상 `5353351+frozenvoice@users.noreply.github.com`이다. 다른 PC·클라우드 개발 환경·worktree에서도 같다.
+- 모든 커밋 전에 `git var GIT_AUTHOR_IDENT` / `git var GIT_COMMITTER_IDENT`로 실제 기록될 값을 확인하고, `GIT_AUTHOR_EMAIL`·`GIT_COMMITTER_EMAIL`·`EMAIL` 환경변수의 덮어쓰기도 확인한다.
+- noreply가 아니면 `git config --local user.email 5353351+frozenvoice@users.noreply.github.com`으로 저장소 로컬 설정만 고친다. 전역 Git 설정은 수정하지 않는다. 환경변수가 다르면 커밋 명령에서 noreply로 지정하거나 해제한다.
+- 커밋 직후 `git log -1 --format='%ae %ce'`로 확인한다. 기존 커밋 이력은 변경하지 않으며, 다른 이메일의 커밋은 push 전에 사용자에게 보고한다.
+- 세부 규칙은 `AGENTS.md`의 "Git 커밋 이메일 보호"를 따른다.

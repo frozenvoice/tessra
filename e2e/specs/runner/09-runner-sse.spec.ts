@@ -4,6 +4,7 @@ import * as http from 'http';
 import * as net from 'net';
 import { test, expect } from '../../fixtures';
 import { openNewRequestPanel, fillUrl, openSettingsTab, runCollectionFromSidebar } from '../../helpers/webview';
+import { captureWindow } from '../../helpers/vscode';
 
 test.describe('E2E #9 Collection Runner SSE', () => {
   test('keeps bounded live POST events and aborted partial data after Stop without replay or history spam', async ({ tessra }) => {
@@ -65,7 +66,7 @@ test.describe('E2E #9 Collection Runner SSE', () => {
       expect(historyCount()).toBe(initialHistoryCount);
       expect(hits).toEqual([{ method: 'POST', route: '/runner-stream' }]);
       const artifactDir = path.resolve('e2e/.artifacts/sse-streaming'); fs.mkdirSync(artifactDir, { recursive: true });
-      await tessra.page.screenshot({ path: path.join(artifactDir, 'runner-receiving.png') });
+      await captureWindow(tessra.app, path.join(artifactDir, 'runner-receiving.png'));
 
       await frame.getByTestId('runner-stop').click();
       await expect(frame.getByTestId('runner-close')).toBeVisible();
@@ -79,7 +80,7 @@ test.describe('E2E #9 Collection Runner SSE', () => {
       await expect.poll(() => sockets.size).toBe(0);
       expect(historyCount()).toBe(initialHistoryCount);
       expect(hits).toEqual([{ method: 'POST', route: '/runner-stream' }]);
-      await tessra.page.screenshot({ path: path.join(artifactDir, 'runner-stopped-partial.png') });
+      await captureWindow(tessra.app, path.join(artifactDir, 'runner-stopped-partial.png'));
       await frame.getByTestId('runner-close').click();
       await expect(stream).toHaveCount(0);
     } finally {

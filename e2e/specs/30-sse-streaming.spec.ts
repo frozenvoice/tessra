@@ -5,6 +5,7 @@ import * as net from 'net';
 import type { FrameLocator } from '@playwright/test';
 import { test, expect } from '../fixtures';
 import { clickSend, fillUrl, openNewRequestPanel, openSettingsTab, waitForResponseStatus, runCommand, getRequestWebview } from '../helpers/webview';
+import { captureWindow } from '../helpers/vscode';
 
 async function sseFixture() {
   const sockets = new Set<net.Socket>();
@@ -108,7 +109,7 @@ test.describe('E2E #30 SSE incremental responses', () => {
       await expect(frame.getByTestId('sse-raw')).toContainText(/available|receiving|finish/i);
       await frame.locator('.js-sse-events').click();
       const screenshotDir = path.resolve('e2e/.artifacts/sse-streaming'); fs.mkdirSync(screenshotDir, { recursive: true });
-      await tessra.page.screenshot({ path: path.join(screenshotDir, 'receiving.png') });
+      await captureWindow(tessra.app, path.join(screenshotDir, 'receiving.png'));
       await frame.getByTestId('stop-request').click();
       await expect(frame.getByTestId('sse-state')).toContainText(/stopped|aborted|canceled/i);
       await expect(frame.getByTestId('sse-state')).toContainText(/partial/i);
@@ -116,7 +117,7 @@ test.describe('E2E #30 SSE incremental responses', () => {
       await expect.poll(() => fixture.timers.size).toBe(0);
       await expect.poll(() => fixture.sockets.size).toBe(0);
       expect(fixture.hits.filter(hit => hit.route === '/slow')).toEqual([{ route: '/slow', method: 'POST' }]);
-      await tessra.page.screenshot({ path: path.join(screenshotDir, 'stopped-partial.png') });
+      await captureWindow(tessra.app, path.join(screenshotDir, 'stopped-partial.png'));
       await fillUrl(frame, fixture.baseUrl + '/ordinary');
       await clickSend(frame);
       await waitForResponseStatus(frame, /200/);
