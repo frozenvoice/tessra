@@ -76,7 +76,7 @@ There are no install/prepare hooks that launch the full suite or publishing, and
 
 `.github/workflows/ci.yml` runs only through `workflow_dispatch`. Ordinary pushes and pull requests do not start remote build/test CI, and no scheduled or replacement automatic validation is allowed. Dispatch/watch/rerun requires the user's explicit request for that Actions execution, including before release; a release-preparation or publication request alone is insufficient. Select the final source commit only after that authorization. Required local checks remain mandatory, and missing authorization or exact-SHA success evidence leaves the release gate unmet.
 
-Every manual full run preserves all three jobs: Linux `unit` (typecheck, unit tests, build), Windows `unit-windows` (`npm test`), and Linux `e2e` (`test:e2e:ui-regressions` followed by `test:e2e:ci` under xvfb). All jobs use Node 22 and npm download caching; E2E pins VS Code `1.99.3` and retains failure artifacts (`include-hidden-files: true`, since `e2e/.artifacts/` starts with a dot and upload-artifact skips hidden paths by default). Concurrency cancels older manual runs for the same ref; a cancelled or incomplete run is not a successful full validation.
+Every manual full run preserves all three jobs: Linux `unit` (typecheck, unit tests, build), Windows `unit-windows` (`npm test`), and Linux `e2e` (`test:e2e:ui-regressions` followed by `test:e2e:ci` under xvfb). All jobs use Node 22 and npm download caching; E2E pins VS Code `1.99.3` and uploads failure artifacts kept for 7 days (`retention-days: 7`, `include-hidden-files: true`, since `e2e/.artifacts/` starts with a dot and upload-artifact skips hidden paths by default). See [CI artifact policy](ci-artifact-policy.md). Concurrency cancels older manual runs for the same ref; a cancelled or incomplete run is not a successful full validation.
 
 Manual full CI does not publish to Marketplace. Before release, verify successful `unit`, `unit-windows`, and `e2e` results for the exact final SHA, including any version edits, and package that same source state. Follow [the release procedure](releasing.md) for SHA and VSIX consistency checks; success on another SHA or with omitted E2E is insufficient.
 
@@ -204,7 +204,7 @@ Capture mid-test evidence with `captureWindow(tessra.app, file)` (Electron `capt
 
 ## Failure diagnostics
 
-On failure, artifacts land in `e2e/.artifacts/` (screenshot + meta including fixture request log). CI uploads that folder. Runner context-menu failures also write a scoped diagnostics JSON (visible menu text, focus summary, webview iframe counts) — no secret dumps.
+On failure, artifacts land in `e2e/.artifacts/` (screenshot + meta including fixture request log). CI uploads that folder and GitHub keeps the artifact for 7 days. Runner context-menu failures also write a scoped diagnostics JSON (visible menu text, focus summary, webview iframe counts) — no secret dumps.
 
 ## VS Code version strategy
 
