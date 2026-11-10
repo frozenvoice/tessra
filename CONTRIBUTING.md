@@ -40,7 +40,7 @@ In the pull request, list the commands you ran and their results, and note anyth
 
 ## Continuous integration
 
-GitHub Actions runs only when a maintainer starts it manually (`workflow_dispatch`). Pull requests do not trigger CI automatically, so local verification is required. Do not add workflows or triggers that start automatically.
+GitHub Actions runs only when a maintainer starts it manually (`workflow_dispatch`). Pull requests do not trigger CI automatically, so local verification is required. Do not add workflows or triggers that start automatically. Every `actions/upload-artifact` step needs `retention-days` (E2E failure artifacts use 7). Check with `python3 scripts/check-artifact-retention.py`. See [CI artifact policy](docs/ci-artifact-policy.md).
 
 ## Guidelines
 
